@@ -3,12 +3,14 @@
 
 #pragma once
 
-/* Generated with cbindgen:0.29.2 */
+/* Generated with cbindgen:0.29.3 */
 
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+
+#define RC_ABI_VERSION 1
 
 typedef enum RcShapeType {
   Ball = 0,
@@ -224,6 +226,12 @@ uint32_t rc_query_intersect_aabb_rigid_bodies(const struct RcWorldHandle *world,
                                               struct RcQueryFilterDesc filter,
                                               RcRigidBodyHandle *out_handles,
                                               uint32_t capacity);
+
+uint32_t rc_abi_version(void);
+
+struct RcBool rc_abi_supports_ffm(void);
+
+struct RcBool rc_abi_supports_jni(void);
 
 struct RcColliderBuilderHandle *rc_collider_builder_create(enum RcShapeType shape_type,
                                                            struct RcVec3 shape_data);

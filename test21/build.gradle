@@ -1,0 +1,46 @@
+plugins {
+    id 'java'
+}
+
+def repoRoot = layout.projectDirectory.dir('..')
+def nativeLibraryDir = repoRoot.dir('target/release')
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.fork = true
+    options.forkOptions.memoryInitialSize = '16m'
+    options.forkOptions.memoryMaximumSize = '64m'
+    options.forkOptions.jvmArgs = [
+            '-XX:+UseSerialGC',
+            '-XX:ReservedCodeCacheSize=32m'
+    ]
+}
+
+tasks.register('cargoBuildRelease', Exec) {
+    workingDir = repoRoot.asFile
+    environment 'CARGO_BUILD_JOBS', '1'
+    commandLine 'cargo', 'build', '--release'
+}
+
+tasks.register('runJniTest', JavaExec) {
+    group = 'verification'
+    description = 'Runs the Java 21 JNI smoke test against the Rust cdylib.'
+    dependsOn tasks.named('classes'), tasks.named('cargoBuildRelease')
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'team.dove.rigidbody.JniSmokeTest'
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+    jvmArgs '-Xmx64m', '-XX:+UseSerialGC', '-XX:ReservedCodeCacheSize=32m'
+    systemProperty 'rigidbody.native.path', nativeLibraryDir.file(System.mapLibraryName('rigid_body')).asFile.absolutePath
+    systemProperty 'java.library.path', nativeLibraryDir.asFile.absolutePath
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('runJniTest')
+}

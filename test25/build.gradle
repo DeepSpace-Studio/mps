@@ -1,0 +1,58 @@
+plugins {
+    id 'java'
+}
+
+def repoRoot = layout.projectDirectory.dir('..')
+def nativeLibrary = providers.provider {
+    def os = System.getProperty('os.name').toLowerCase(Locale.ROOT)
+    if (os.contains('win')) {
+        return repoRoot.file('target/release/rigid_body.dll').asFile.absolutePath
+    }
+    if (os.contains('mac') || os.contains('darwin')) {
+        return repoRoot.file('target/release/librigid_body.dylib').asFile.absolutePath
+    }
+    return repoRoot.file('target/release/librigid_body.so').asFile.absolutePath
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.fork = true
+    options.forkOptions.memoryInitialSize = '16m'
+    options.forkOptions.memoryMaximumSize = '64m'
+    options.forkOptions.jvmArgs = [
+            '-XX:+UseSerialGC',
+            '-XX:ReservedCodeCacheSize=32m'
+    ]
+}
+
+tasks.withType(JavaExec).configureEach {
+    def java25Launcher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(25)
+    }.get()
+    executable = java25Launcher.executablePath.asFile.absolutePath
+    jvmArgs '--enable-native-access=ALL-UNNAMED', '-Xmx64m', '-XX:+UseSerialGC', '-XX:ReservedCodeCacheSize=32m'
+    systemProperty 'rigidbody.native.path', nativeLibrary.get()
+}
+
+tasks.register('cargoBuildRelease', Exec) {
+    workingDir = repoRoot.asFile
+    environment 'CARGO_BUILD_JOBS', '1'
+    commandLine 'cargo', 'build', '--release'
+}
+
+tasks.register('runFfmTest', JavaExec) {
+    group = 'verification'
+    description = 'Runs the Java 25 FFM smoke test against the Rust C ABI.'
+    dependsOn tasks.named('classes'), tasks.named('cargoBuildRelease')
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'team.dove.rigidbody.ffm.FfmSmokeTest'
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('runFfmTest')
+}

@@ -7,7 +7,7 @@ edition = "2024"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-rapier3d = { package = "rapier3d-f64", version = "0.32.0", features = ["parallel"] }
+rapier3d = { package = "rapier3d-f64", version = "0.33.0", features = ["parallel"] }
 
 [build-dependencies]
-cbindgen = "0.29.2"
+cbindgen = "0.29.3"

@@ -230,6 +230,17 @@ pub type RcRigidBodyHandle = u64;
 pub type RcColliderHandle = u64;
 pub type RcImpulseJointHandle = u64;
 
+const INVALID_HANDLE_RAW: u64 = u64::MAX;
+
+fn pack_handle_parts(id: u32, generation: u32) -> u64 {
+    (((generation as u64) << 32) | (id as u64)).wrapping_add(1)
+}
+
+fn unpack_handle_parts(handle: u64) -> (u32, u32) {
+    let raw = handle.checked_sub(1).unwrap_or(INVALID_HANDLE_RAW);
+    ((raw & 0xffff_ffff) as u32, (raw >> 32) as u32)
+}
+
 pub(crate) fn vec3_to_rapier(value: RcVec3) -> Vector {
     Vector::new(value.x, value.y, value.z)
 }
@@ -261,34 +272,31 @@ pub(crate) fn isometry_from_parts(translation: RcVec3, rotation: RcQuat) -> Pose
 
 pub(crate) fn pack_rigid_body_handle(handle: RigidBodyHandle) -> RcRigidBodyHandle {
     let (id, generation) = handle.into_raw_parts();
-    ((generation as u64) << 32) | (id as u64)
+    pack_handle_parts(id, generation)
 }
 
 pub(crate) fn unpack_rigid_body_handle(handle: RcRigidBodyHandle) -> RigidBodyHandle {
-    let id = (handle & 0xffff_ffff) as u32;
-    let generation = (handle >> 32) as u32;
+    let (id, generation) = unpack_handle_parts(handle);
     RigidBodyHandle::from_raw_parts(id, generation)
 }
 
 pub(crate) fn pack_collider_handle(handle: ColliderHandle) -> RcColliderHandle {
     let (id, generation) = handle.into_raw_parts();
-    ((generation as u64) << 32) | (id as u64)
+    pack_handle_parts(id, generation)
 }
 
 pub(crate) fn unpack_collider_handle(handle: RcColliderHandle) -> ColliderHandle {
-    let id = (handle & 0xffff_ffff) as u32;
-    let generation = (handle >> 32) as u32;
+    let (id, generation) = unpack_handle_parts(handle);
     ColliderHandle::from_raw_parts(id, generation)
 }
 
 pub(crate) fn pack_impulse_joint_handle(handle: ImpulseJointHandle) -> RcImpulseJointHandle {
     let (id, generation) = handle.into_raw_parts();
-    ((generation as u64) << 32) | (id as u64)
+    pack_handle_parts(id, generation)
 }
 
 pub(crate) fn unpack_impulse_joint_handle(handle: RcImpulseJointHandle) -> ImpulseJointHandle {
-    let id = (handle & 0xffff_ffff) as u32;
-    let generation = (handle >> 32) as u32;
+    let (id, generation) = unpack_handle_parts(handle);
     ImpulseJointHandle::from_raw_parts(id, generation)
 }
 
@@ -383,5 +391,34 @@ pub(crate) fn joint_axis_to_rapier(axis: RcJointAxis) -> JointAxis {
         RcJointAxis::AngX => JointAxis::AngX,
         RcJointAxis::AngY => JointAxis::AngY,
         RcJointAxis::AngZ => JointAxis::AngZ,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn packed_arena_handles_reserve_zero_for_null() {
+        let body = RigidBodyHandle::from_raw_parts(0, 0);
+        let collider = ColliderHandle::from_raw_parts(0, 0);
+        let joint = ImpulseJointHandle::from_raw_parts(0, 0);
+
+        assert_ne!(pack_rigid_body_handle(body), 0);
+        assert_ne!(pack_collider_handle(collider), 0);
+        assert_ne!(pack_impulse_joint_handle(joint), 0);
+
+        assert_eq!(
+            unpack_rigid_body_handle(pack_rigid_body_handle(body)).into_raw_parts(),
+            (0, 0)
+        );
+        assert_eq!(
+            unpack_collider_handle(pack_collider_handle(collider)).into_raw_parts(),
+            (0, 0)
+        );
+        assert_eq!(
+            unpack_impulse_joint_handle(pack_impulse_joint_handle(joint)).into_raw_parts(),
+            (0, 0)
+        );
     }
 }
