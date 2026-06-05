@@ -51,6 +51,25 @@ public final class JniSmokeTest {
             RigidBodyNative.worldDestroy(world);
         }
 
+        long tree = RigidBodyNative.crbTreeCreate();
+        if (tree == 0L) {
+            throw new AssertionError("crbTreeCreate returned null");
+        }
+        try {
+            if (!RigidBodyNative.crbTreeInsert(tree, 10L, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0)) {
+                throw new AssertionError("crbTreeInsert 10 failed");
+            }
+            if (!RigidBodyNative.crbTreeInsert(tree, 20L, 2.0, 2.0, 2.0, 3.0, 3.0, 3.0)) {
+                throw new AssertionError("crbTreeInsert 20 failed");
+            }
+            int hitCount = RigidBodyNative.crbTreeQueryAabbCount(tree, 0.5, 0.5, 0.5, 2.5, 2.5, 2.5);
+            if (hitCount != 2) {
+                throw new AssertionError("crbTreeQueryAabbCount expected 2, got " + hitCount);
+            }
+        } finally {
+            RigidBodyNative.crbTreeDestroy(tree);
+        }
+
         System.out.println("JNI smoke test passed on Java " + javaVersion);
     }
 

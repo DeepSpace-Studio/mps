@@ -2,19 +2,19 @@ use std::ffi::c_void;
 
 use crate::abi::ffm as abi;
 use crate::ffi::{
-    AabbDesc, BodyStatus, Bool, Capsule, CharacterCollision, CharacterControllerHandle as CCH,
-    ColliderBuilderHandle as CBH, ColliderHandleRaw as CRaw, CollisionEventRecord as CER,
-    ContactForceEventRecord, Cylinder, EffectiveCharacterMovement, Ellipsoid,
-    ImpulseJointHandleRaw as JRaw, InteractionGroupsDesc, JointAxisDesc, JointBuilderHandle as JBH,
-    JointTypeDesc, KdopPreset, NeuralActivation, NeuralBoundsDesc, Obb, Prism, Quat,
-    QueryFilterDesc, RTreeHandle as RTH, RayHit, RigidBodyBuilderHandle as RBH,
+    AabbDesc, BodyStatus, Bool, CRbTreeHandle as CRTH, Capsule, CharacterCollision,
+    CharacterControllerHandle as CCH, ColliderBuilderHandle as CBH, ColliderHandleRaw as CRaw,
+    CollisionEventRecord as CER, ContactForceEventRecord, Cylinder, EffectiveCharacterMovement,
+    Ellipsoid, ImpulseJointHandleRaw as JRaw, InteractionGroupsDesc, JointAxisDesc,
+    JointBuilderHandle as JBH, JointTypeDesc, KdopPreset, NeuralActivation, NeuralBoundsDesc, Obb,
+    Prism, Quat, QueryFilterDesc, RTreeHandle as RTH, RayHit, RigidBodyBuilderHandle as RBH,
     RigidBodyHandleRaw as RRaw, ShapeCastHit, ShapeCastOptionsDesc, ShapeDesc, ShapeType, Sphere,
     SphericalShell, Ssv, Vec3, VoxelColliderMode, VoxelColliderOptions, WorldHandle as WH,
 };
 use crate::{
-    bounds as bo, collider as col, compat as com, controller as cc, dop, events as ev,
-    joints as jo, neural as neu, query as qu, rigid_body as rb, rtree as rt, voxel as vx,
-    world as wo,
+    bounds as bo, collider as col, compat as com, controller as cc, crbtree as crt, dop,
+    events as ev, joints as jo, neural as neu, query as qu, rigid_body as rb, rtree as rt,
+    voxel as vx, world as wo,
 };
 use ev::{ContactPairFilterCallback, IntersectionPairFilterCallback};
 
@@ -292,6 +292,27 @@ jni!(long colliderBuilderCreateObb(double cx, double cy, double cz, double hx, d
 
 jni!(long colliderBuilderCreateConvexHull(long points_xyz, int point_count) {
     to_jlong(col::collider_builder_create_convex_hull(p::<f64>(points_xyz), point_count as u32))
+});
+jni!(long colliderBuilderCreatePointCloudBounds(long points_xyz, int point_count) {
+    to_jlong(col::collider_builder_create_point_cloud_bounds(p::<f64>(points_xyz), point_count as u32))
+});
+jni!(long colliderBuilderCreateDoubleBv(double a_min_x, double a_min_y, double a_min_z, double a_max_x, double a_max_y, double a_max_z, double b_min_x, double b_min_y, double b_min_z, double b_max_x, double b_max_y, double b_max_z) {
+    to_jlong(col::collider_builder_create_double_bv(aa(a_min_x,a_min_y,a_min_z,a_max_x,a_max_y,a_max_z), aa(b_min_x,b_min_y,b_min_z,b_max_x,b_max_y,b_max_z)))
+});
+jni!(long colliderBuilderCreateSkewedObb(double cx, double cy, double cz, double ax_x, double ax_y, double ax_z, double ay_x, double ay_y, double ay_z, double az_x, double az_y, double az_z) {
+    to_jlong(col::collider_builder_create_skewed_obb(v3(cx,cy,cz), v3(ax_x,ax_y,ax_z), v3(ay_x,ay_y,ay_z), v3(az_x,az_y,az_z)))
+});
+jni!(long colliderBuilderCreateDiscreteObb(long points_xyz, int point_count, int axis) {
+    to_jlong(col::collider_builder_create_discrete_obb(p::<f64>(points_xyz), point_count as u32, axis as u32))
+});
+jni!(long colliderBuilderCreateFusedCollapsingBounds(long points_xyz, int point_count, double padding) {
+    to_jlong(col::collider_builder_create_fused_collapsing_bounds(p::<f64>(points_xyz), point_count as u32, padding))
+});
+jni!(long colliderBuilderCreateEdgeBvh(long vertices_xyz, int vertex_count, long edges, int edge_count, double radius) {
+    to_jlong(col::collider_builder_create_edge_bvh(p::<f64>(vertices_xyz), vertex_count as u32, p::<u32>(edges), edge_count as u32, radius))
+});
+jni!(long colliderBuilderCreateMedialSpheres(long spheres_xyzw, int sphere_count) {
+    to_jlong(col::collider_builder_create_medial_spheres(p::<f64>(spheres_xyzw), sphere_count as u32))
 });
 
 jni!(void colliderBuilderDestroy(long builder) {
@@ -609,3 +630,13 @@ jni!(boolean rtreeRemove(long tree, long id) { rt::rtree_remove(m::<RTH>(tree), 
 jni!(void rtreeRebuild(long tree) { rt::rtree_rebuild(m::<RTH>(tree)); });
 jni!(int rtreeQueryAabbCount(long tree, double min_x, double min_y, double min_z, double max_x, double max_y, double max_z) { rt::rtree_query_aabb_count(m::<RTH>(tree), aa(min_x,min_y,min_z,max_x,max_y,max_z)) as JInt });
 jni!(int rtreeQueryAabb(long tree, double min_x, double min_y, double min_z, double max_x, double max_y, double max_z, long out_ids, int capacity) { rt::rtree_query_aabb(m::<RTH>(tree), aa(min_x,min_y,min_z,max_x,max_y,max_z), pm::<u64>(out_ids), capacity as u32) as JInt });
+
+jni!(long crbTreeCreate() { to_jlong(crt::crb_tree_create()) });
+jni!(void crbTreeDestroy(long tree) { crt::crb_tree_destroy(m::<CRTH>(tree)); });
+jni!(void crbTreeClear(long tree) { crt::crb_tree_clear(m::<CRTH>(tree)); });
+jni!(int crbTreeLen(long tree) { crt::crb_tree_len(cp::<CRTH>(tree)) as JInt });
+jni!(boolean crbTreeInsert(long tree, long id, double min_x, double min_y, double min_z, double max_x, double max_y, double max_z) { crt::crb_tree_insert(m::<CRTH>(tree), id as u64, aa(min_x,min_y,min_z,max_x,max_y,max_z)).0 as JByte });
+jni!(boolean crbTreeUpdate(long tree, long id, double min_x, double min_y, double min_z, double max_x, double max_y, double max_z) { crt::crb_tree_update(m::<CRTH>(tree), id as u64, aa(min_x,min_y,min_z,max_x,max_y,max_z)).0 as JByte });
+jni!(boolean crbTreeRemove(long tree, long id) { crt::crb_tree_remove(m::<CRTH>(tree), id as u64).0 as JByte });
+jni!(int crbTreeQueryAabbCount(long tree, double min_x, double min_y, double min_z, double max_x, double max_y, double max_z) { crt::crb_tree_query_aabb_count(cp::<CRTH>(tree), aa(min_x,min_y,min_z,max_x,max_y,max_z)) as JInt });
+jni!(int crbTreeQueryAabb(long tree, double min_x, double min_y, double min_z, double max_x, double max_y, double max_z, long out_ids, int capacity) { crt::crb_tree_query_aabb(cp::<CRTH>(tree), aa(min_x,min_y,min_z,max_x,max_y,max_z), pm::<u64>(out_ids), capacity as u32) as JInt });

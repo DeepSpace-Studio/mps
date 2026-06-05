@@ -365,6 +365,10 @@ pub struct RTreeHandle {
     pub(crate) inner: crate::rtree::RTreeIndex,
 }
 
+pub struct CRbTreeHandle {
+    pub(crate) inner: crate::crbtree::CRbTreeIndex,
+}
+
 pub type RigidBodyHandleRaw = u64;
 pub type ColliderHandleRaw = u64;
 pub type ImpulseJointHandleRaw = u64;

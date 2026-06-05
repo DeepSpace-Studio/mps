@@ -71,6 +71,8 @@ typedef enum VoxelColliderMode {
   SurfaceMesh = 3,
 } VoxelColliderMode;
 
+typedef struct CRbTreeHandle CRbTreeHandle;
+
 typedef struct CharacterControllerHandle CharacterControllerHandle;
 
 typedef struct ColliderBuilderHandle ColliderBuilderHandle;
@@ -425,6 +427,34 @@ struct ColliderBuilderHandle *collider_builder_create_sphere(struct Sphere spher
 struct ColliderBuilderHandle *collider_builder_create_convex_hull(const double *points_xyz,
                                                                   uint32_t point_count);
 
+struct ColliderBuilderHandle *collider_builder_create_point_cloud_bounds(const double *points_xyz,
+                                                                         uint32_t point_count);
+
+struct ColliderBuilderHandle *collider_builder_create_double_bv(struct AabbDesc first,
+                                                                struct AabbDesc second);
+
+struct ColliderBuilderHandle *collider_builder_create_skewed_obb(struct Vec3 center,
+                                                                 struct Vec3 axis_x,
+                                                                 struct Vec3 axis_y,
+                                                                 struct Vec3 axis_z);
+
+struct ColliderBuilderHandle *collider_builder_create_discrete_obb(const double *points_xyz,
+                                                                   uint32_t point_count,
+                                                                   uint32_t axis);
+
+struct ColliderBuilderHandle *collider_builder_create_fused_collapsing_bounds(const double *points_xyz,
+                                                                              uint32_t point_count,
+                                                                              double padding);
+
+struct ColliderBuilderHandle *collider_builder_create_edge_bvh(const double *vertices_xyz,
+                                                               uint32_t vertex_count,
+                                                               const uint32_t *edges,
+                                                               uint32_t edge_count,
+                                                               double radius);
+
+struct ColliderBuilderHandle *collider_builder_create_medial_spheres(const double *spheres_xyzw,
+                                                                     uint32_t sphere_count);
+
 void collider_builder_destroy(struct ColliderBuilderHandle *builder);
 
 void collider_builder_set_translation(struct ColliderBuilderHandle *builder,
@@ -595,6 +625,27 @@ struct Bool character_controller_solve_impulses(struct WorldHandle *world,
                                                 double dt,
                                                 struct ShapeDesc shape_desc,
                                                 double character_mass);
+
+struct CRbTreeHandle *crb_tree_create(void);
+
+void crb_tree_destroy(struct CRbTreeHandle *tree);
+
+void crb_tree_clear(struct CRbTreeHandle *tree);
+
+uint32_t crb_tree_len(const struct CRbTreeHandle *tree);
+
+struct Bool crb_tree_insert(struct CRbTreeHandle *tree, uint64_t id, struct AabbDesc aabb);
+
+struct Bool crb_tree_update(struct CRbTreeHandle *tree, uint64_t id, struct AabbDesc aabb);
+
+struct Bool crb_tree_remove(struct CRbTreeHandle *tree, uint64_t id);
+
+uint32_t crb_tree_query_aabb_count(const struct CRbTreeHandle *tree, struct AabbDesc aabb);
+
+uint32_t crb_tree_query_aabb(const struct CRbTreeHandle *tree,
+                             struct AabbDesc aabb,
+                             uint64_t *out_ids,
+                             uint32_t capacity);
 
 struct ColliderBuilderHandle *collider_builder_create_kdop(const double *points_xyz,
                                                            uint32_t point_count,

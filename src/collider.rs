@@ -1,16 +1,133 @@
-use rapier3d::prelude::ColliderBuilder;
+use rapier3d::math::{Pose, Rotation, Vector};
+use rapier3d::prelude::{ColliderBuilder, SharedShape};
 use std::slice;
 
 use crate::ffi::{
-    Bool, ColliderBuilderHandle, ColliderHandleRaw, InteractionGroupsDesc, Obb, Quat,
+    AabbDesc, Bool, ColliderBuilderHandle, ColliderHandleRaw, InteractionGroupsDesc, Obb, Quat,
     RigidBodyHandleRaw, ShapeDesc, ShapeType, Sphere, Vec3, WorldHandle, active_events_from_bits,
     active_hooks_from_bits, interaction_groups_to_rapier, isometry_from_parts,
     pack_collider_handle, quat_from_rapier, shape_from_desc, unpack_collider_handle,
     unpack_rigid_body_handle, vec3_from_rapier, vec3_to_rapier,
 };
 
+const MIN_HALF_EXTENT: f64 = 1.0e-9;
+
 fn default_builder(shape_desc: ShapeDesc) -> ColliderBuilder {
     ColliderBuilder::new(shape_from_desc(shape_desc))
+}
+
+fn valid_aabb(mins: Vec3, maxs: Vec3) -> bool {
+    mins.x.is_finite()
+        && mins.y.is_finite()
+        && mins.z.is_finite()
+        && maxs.x.is_finite()
+        && maxs.y.is_finite()
+        && maxs.z.is_finite()
+        && mins.x <= maxs.x
+        && mins.y <= maxs.y
+        && mins.z <= maxs.z
+}
+
+fn builder_from_aabb(mins: Vec3, maxs: Vec3) -> *mut ColliderBuilderHandle {
+    if !valid_aabb(mins, maxs) {
+        return std::ptr::null_mut();
+    }
+
+    let center = Vec3 {
+        x: (mins.x + maxs.x) * 0.5,
+        y: (mins.y + maxs.y) * 0.5,
+        z: (mins.z + maxs.z) * 0.5,
+    };
+    let half = Vec3 {
+        x: ((maxs.x - mins.x) * 0.5).max(MIN_HALF_EXTENT),
+        y: ((maxs.y - mins.y) * 0.5).max(MIN_HALF_EXTENT),
+        z: ((maxs.z - mins.z) * 0.5).max(MIN_HALF_EXTENT),
+    };
+
+    Box::into_raw(Box::new(ColliderBuilderHandle {
+        inner: ColliderBuilder::cuboid(half.x, half.y, half.z).translation(vec3_to_rapier(center)),
+    }))
+}
+
+fn vec3_finite(value: Vec3) -> bool {
+    value.x.is_finite() && value.y.is_finite() && value.z.is_finite()
+}
+
+fn vec3_add(a: Vec3, b: Vec3) -> Vec3 {
+    Vec3 {
+        x: a.x + b.x,
+        y: a.y + b.y,
+        z: a.z + b.z,
+    }
+}
+
+fn vec3_sub(a: Vec3, b: Vec3) -> Vec3 {
+    Vec3 {
+        x: a.x - b.x,
+        y: a.y - b.y,
+        z: a.z - b.z,
+    }
+}
+
+fn vec3_len2(value: Vec3) -> f64 {
+    value.x * value.x + value.y * value.y + value.z * value.z
+}
+
+fn points_from_xyz(points_xyz: *const f64, point_count: u32) -> Option<Vec<Vec3>> {
+    if points_xyz.is_null() || point_count == 0 {
+        return None;
+    }
+    let value_count = (point_count as usize).checked_mul(3)?;
+    let values = unsafe { slice::from_raw_parts(points_xyz, value_count) };
+    let mut points = Vec::with_capacity(point_count as usize);
+    for chunk in values.chunks_exact(3) {
+        let point = Vec3 {
+            x: chunk[0],
+            y: chunk[1],
+            z: chunk[2],
+        };
+        if !vec3_finite(point) {
+            return None;
+        }
+        points.push(point);
+    }
+    Some(points)
+}
+
+fn builder_from_points(points: Vec<Vec3>) -> *mut ColliderBuilderHandle {
+    if points.len() < 4 {
+        return std::ptr::null_mut();
+    }
+    let points: Vec<_> = points.into_iter().map(vec3_to_rapier).collect();
+    let Some(builder) = ColliderBuilder::convex_hull(&points) else {
+        return std::ptr::null_mut();
+    };
+    Box::into_raw(Box::new(ColliderBuilderHandle { inner: builder }))
+}
+
+fn bounds_from_points(points: &[Vec3]) -> Option<(Vec3, Vec3)> {
+    let mut iter = points.iter();
+    let first = *iter.next()?;
+    let mut mins = first;
+    let mut maxs = first;
+    for point in iter {
+        mins.x = mins.x.min(point.x);
+        mins.y = mins.y.min(point.y);
+        mins.z = mins.z.min(point.z);
+        maxs.x = maxs.x.max(point.x);
+        maxs.y = maxs.y.max(point.y);
+        maxs.z = maxs.z.max(point.z);
+    }
+    Some((mins, maxs))
+}
+
+fn builder_from_compound(parts: Vec<(Pose, SharedShape)>) -> *mut ColliderBuilderHandle {
+    if parts.is_empty() {
+        return std::ptr::null_mut();
+    }
+    Box::into_raw(Box::new(ColliderBuilderHandle {
+        inner: ColliderBuilder::compound(parts),
+    }))
 }
 
 #[unsafe(no_mangle)]
@@ -65,30 +182,236 @@ pub extern "C" fn collider_builder_create_convex_hull(
     points_xyz: *const f64,
     point_count: u32,
 ) -> *mut ColliderBuilderHandle {
-    if points_xyz.is_null() || point_count < 4 {
+    let Some(points) = points_from_xyz(points_xyz, point_count) else {
+        return std::ptr::null_mut();
+    };
+    builder_from_points(points)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn collider_builder_create_point_cloud_bounds(
+    points_xyz: *const f64,
+    point_count: u32,
+) -> *mut ColliderBuilderHandle {
+    let Some(points) = points_from_xyz(points_xyz, point_count) else {
+        return std::ptr::null_mut();
+    };
+    let mut mins = Vec3 {
+        x: f64::INFINITY,
+        y: f64::INFINITY,
+        z: f64::INFINITY,
+    };
+    let mut maxs = Vec3 {
+        x: f64::NEG_INFINITY,
+        y: f64::NEG_INFINITY,
+        z: f64::NEG_INFINITY,
+    };
+
+    for point in points {
+        mins.x = mins.x.min(point.x);
+        mins.y = mins.y.min(point.y);
+        mins.z = mins.z.min(point.z);
+        maxs.x = maxs.x.max(point.x);
+        maxs.y = maxs.y.max(point.y);
+        maxs.z = maxs.z.max(point.z);
+    }
+
+    builder_from_aabb(mins, maxs)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn collider_builder_create_double_bv(
+    first: AabbDesc,
+    second: AabbDesc,
+) -> *mut ColliderBuilderHandle {
+    if !valid_aabb(first.mins, first.maxs) || !valid_aabb(second.mins, second.maxs) {
         return std::ptr::null_mut();
     }
 
-    let Some(value_count) = (point_count as usize).checked_mul(3) else {
+    builder_from_aabb(
+        Vec3 {
+            x: first.mins.x.min(second.mins.x),
+            y: first.mins.y.min(second.mins.y),
+            z: first.mins.z.min(second.mins.z),
+        },
+        Vec3 {
+            x: first.maxs.x.max(second.maxs.x),
+            y: first.maxs.y.max(second.maxs.y),
+            z: first.maxs.z.max(second.maxs.z),
+        },
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn collider_builder_create_skewed_obb(
+    center: Vec3,
+    axis_x: Vec3,
+    axis_y: Vec3,
+    axis_z: Vec3,
+) -> *mut ColliderBuilderHandle {
+    if !vec3_finite(center)
+        || !vec3_finite(axis_x)
+        || !vec3_finite(axis_y)
+        || !vec3_finite(axis_z)
+        || vec3_len2(axis_x) <= MIN_HALF_EXTENT
+        || vec3_len2(axis_y) <= MIN_HALF_EXTENT
+        || vec3_len2(axis_z) <= MIN_HALF_EXTENT
+    {
+        return std::ptr::null_mut();
+    }
+
+    let mut points = Vec::with_capacity(8);
+    for sx in [-1.0, 1.0] {
+        for sy in [-1.0, 1.0] {
+            for sz in [-1.0, 1.0] {
+                points.push(vec3_add(
+                    center,
+                    Vec3 {
+                        x: axis_x.x * sx + axis_y.x * sy + axis_z.x * sz,
+                        y: axis_x.y * sx + axis_y.y * sy + axis_z.y * sz,
+                        z: axis_x.z * sx + axis_y.z * sy + axis_z.z * sz,
+                    },
+                ));
+            }
+        }
+    }
+    builder_from_points(points)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn collider_builder_create_discrete_obb(
+    points_xyz: *const f64,
+    point_count: u32,
+    axis: u32,
+) -> *mut ColliderBuilderHandle {
+    let Some(mut points) = points_from_xyz(points_xyz, point_count) else {
         return std::ptr::null_mut();
     };
-    let values = unsafe { slice::from_raw_parts(points_xyz, value_count) };
-    let points: Vec<_> = values
-        .chunks_exact(3)
-        .map(|chunk| {
-            vec3_to_rapier(Vec3 {
-                x: chunk[0],
-                y: chunk[1],
-                z: chunk[2],
-            })
-        })
-        .collect();
-
-    let Some(builder) = ColliderBuilder::convex_hull(&points) else {
+    if axis % 3 == 1 {
+        for point in &mut points {
+            std::mem::swap(&mut point.x, &mut point.y);
+        }
+    } else if axis % 3 == 2 {
+        for point in &mut points {
+            std::mem::swap(&mut point.x, &mut point.z);
+        }
+    }
+    let Some((mins, maxs)) = bounds_from_points(&points) else {
         return std::ptr::null_mut();
     };
+    builder_from_aabb(mins, maxs)
+}
 
-    Box::into_raw(Box::new(ColliderBuilderHandle { inner: builder }))
+#[unsafe(no_mangle)]
+pub extern "C" fn collider_builder_create_fused_collapsing_bounds(
+    points_xyz: *const f64,
+    point_count: u32,
+    padding: f64,
+) -> *mut ColliderBuilderHandle {
+    let Some(points) = points_from_xyz(points_xyz, point_count) else {
+        return std::ptr::null_mut();
+    };
+    if !padding.is_finite() || padding < 0.0 {
+        return std::ptr::null_mut();
+    }
+    let mut mins = Vec3 {
+        x: f64::INFINITY,
+        y: f64::INFINITY,
+        z: f64::INFINITY,
+    };
+    let mut maxs = Vec3 {
+        x: f64::NEG_INFINITY,
+        y: f64::NEG_INFINITY,
+        z: f64::NEG_INFINITY,
+    };
+    for point in points {
+        mins.x = mins.x.min(point.x);
+        mins.y = mins.y.min(point.y);
+        mins.z = mins.z.min(point.z);
+        maxs.x = maxs.x.max(point.x);
+        maxs.y = maxs.y.max(point.y);
+        maxs.z = maxs.z.max(point.z);
+    }
+    builder_from_aabb(
+        Vec3 {
+            x: mins.x - padding,
+            y: mins.y - padding,
+            z: mins.z - padding,
+        },
+        Vec3 {
+            x: maxs.x + padding,
+            y: maxs.y + padding,
+            z: maxs.z + padding,
+        },
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn collider_builder_create_edge_bvh(
+    vertices_xyz: *const f64,
+    vertex_count: u32,
+    edges: *const u32,
+    edge_count: u32,
+    radius: f64,
+) -> *mut ColliderBuilderHandle {
+    if edges.is_null() || edge_count == 0 || !radius.is_finite() || radius <= 0.0 {
+        return std::ptr::null_mut();
+    }
+    let Some(vertices) = points_from_xyz(vertices_xyz, vertex_count) else {
+        return std::ptr::null_mut();
+    };
+    let Some(index_count) = (edge_count as usize).checked_mul(2) else {
+        return std::ptr::null_mut();
+    };
+    let indices = unsafe { slice::from_raw_parts(edges, index_count) };
+    let mut parts = Vec::with_capacity(edge_count as usize);
+    for edge in indices.chunks_exact(2) {
+        let Some(a) = vertices.get(edge[0] as usize).copied() else {
+            return std::ptr::null_mut();
+        };
+        let Some(b) = vertices.get(edge[1] as usize).copied() else {
+            return std::ptr::null_mut();
+        };
+        if vec3_len2(vec3_sub(b, a)) <= MIN_HALF_EXTENT {
+            continue;
+        }
+        parts.push((
+            Pose::from_parts(Vector::ZERO, Rotation::IDENTITY),
+            SharedShape::capsule(vec3_to_rapier(a), vec3_to_rapier(b), radius),
+        ));
+    }
+    builder_from_compound(parts)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn collider_builder_create_medial_spheres(
+    spheres_xyzw: *const f64,
+    sphere_count: u32,
+) -> *mut ColliderBuilderHandle {
+    if spheres_xyzw.is_null() || sphere_count == 0 {
+        return std::ptr::null_mut();
+    }
+    let Some(value_count) = (sphere_count as usize).checked_mul(4) else {
+        return std::ptr::null_mut();
+    };
+    let values = unsafe { slice::from_raw_parts(spheres_xyzw, value_count) };
+    let mut parts = Vec::with_capacity(sphere_count as usize);
+    for chunk in values.chunks_exact(4) {
+        let center = Vec3 {
+            x: chunk[0],
+            y: chunk[1],
+            z: chunk[2],
+        };
+        let radius = chunk[3];
+        if !vec3_finite(center) || !radius.is_finite() || radius <= 0.0 {
+            return std::ptr::null_mut();
+        }
+        parts.push((
+            Pose::from_parts(vec3_to_rapier(center), Rotation::IDENTITY),
+            SharedShape::ball(radius),
+        ));
+    }
+    builder_from_compound(parts)
 }
 
 #[unsafe(no_mangle)]
@@ -567,6 +890,26 @@ pub extern "C" fn collider_get_density(
 mod tests {
     use super::*;
 
+    fn aabb(min: f64, max: f64) -> AabbDesc {
+        AabbDesc {
+            mins: Vec3 {
+                x: min,
+                y: min,
+                z: min,
+            },
+            maxs: Vec3 {
+                x: max,
+                y: max,
+                z: max,
+            },
+        }
+    }
+
+    fn assert_builder(builder: *mut ColliderBuilderHandle) {
+        assert!(!builder.is_null());
+        collider_builder_destroy(builder);
+    }
+
     #[test]
     fn convex_hull_builder_accepts_cube_points() {
         let points = [
@@ -580,8 +923,77 @@ mod tests {
             1.0, 1.0, 1.0,
         ];
 
-        let builder = collider_builder_create_convex_hull(points.as_ptr(), 8);
-        assert!(!builder.is_null());
-        collider_builder_destroy(builder);
+        assert_builder(collider_builder_create_convex_hull(points.as_ptr(), 8));
+    }
+
+    #[test]
+    fn point_cloud_bounds_builder_accepts_points() {
+        let points = [
+            -2.0, 1.0, 0.5, //
+            3.0, -4.0, 2.0, //
+            1.0, 2.0, -6.0,
+        ];
+
+        assert_builder(collider_builder_create_point_cloud_bounds(
+            points.as_ptr(),
+            3,
+        ));
+    }
+
+    #[test]
+    fn broad_volume_builders_accept_valid_inputs() {
+        let points = [
+            -2.0, 1.0, 0.5, //
+            3.0, -4.0, 2.0, //
+            1.0, 2.0, -6.0, //
+            0.0, 0.0, 0.0,
+        ];
+        let vertices = [
+            0.0, 0.0, 0.0, //
+            1.0, 0.0, 0.0, //
+            1.0, 1.0, 0.0,
+        ];
+        let edges = [0u32, 1, 1, 2];
+        let spheres = [
+            0.0, 0.0, 0.0, 0.5, //
+            1.0, 0.0, 0.0, 0.25,
+        ];
+
+        assert_builder(collider_builder_create_double_bv(
+            aabb(0.0, 1.0),
+            aabb(2.0, 3.0),
+        ));
+        assert_builder(collider_builder_create_skewed_obb(
+            Vec3::default(),
+            Vec3 {
+                x: 1.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            Vec3 {
+                x: 0.25,
+                y: 1.0,
+                z: 0.0,
+            },
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 1.0,
+            },
+        ));
+        assert_builder(collider_builder_create_discrete_obb(points.as_ptr(), 4, 1));
+        assert_builder(collider_builder_create_fused_collapsing_bounds(
+            points.as_ptr(),
+            4,
+            0.1,
+        ));
+        assert_builder(collider_builder_create_edge_bvh(
+            vertices.as_ptr(),
+            3,
+            edges.as_ptr(),
+            2,
+            0.05,
+        ));
+        assert_builder(collider_builder_create_medial_spheres(spheres.as_ptr(), 2));
     }
 }
