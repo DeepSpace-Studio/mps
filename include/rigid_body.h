@@ -50,6 +50,13 @@ typedef enum JointAxisDesc {
   AngZ = 5,
 } JointAxisDesc;
 
+typedef enum NeuralActivation {
+  Relu = 0,
+  Tanh = 1,
+  Sin = 2,
+  Linear = 3,
+} NeuralActivation;
+
 typedef enum BodyStatus {
   Dynamic = 0,
   Fixed = 1,
@@ -69,6 +76,8 @@ typedef struct CharacterControllerHandle CharacterControllerHandle;
 typedef struct ColliderBuilderHandle ColliderBuilderHandle;
 
 typedef struct JointBuilderHandle JointBuilderHandle;
+
+typedef struct RTreeHandle RTreeHandle;
 
 typedef struct RigidBodyBuilderHandle RigidBodyBuilderHandle;
 
@@ -216,6 +225,18 @@ typedef struct Bool (*IntersectionPairFilterCallback)(uintptr_t,
                                                       RigidBodyHandleRaw);
 
 typedef uint64_t ImpulseJointHandleRaw;
+
+typedef struct NeuralBoundsDesc {
+  struct Vec3 center;
+  struct Vec3 half_extents;
+  struct Quat rotation;
+  uint32_t sample_resolution;
+  uint32_t hidden_width;
+  uint32_t hidden_layers;
+  enum NeuralActivation activation;
+  double output_scale;
+  double padding;
+} NeuralBoundsDesc;
 
 typedef struct RayHit {
   ColliderHandleRaw collider;
@@ -647,6 +668,38 @@ struct Bool world_remove_impulse_joint(struct WorldHandle *world,
                                        ImpulseJointHandleRaw handle,
                                        struct Bool wake_up);
 
+uint32_t neural_bounds_required_weight_count(uint32_t hidden_width, uint32_t hidden_layers);
+
+struct ColliderBuilderHandle *collider_builder_create_neural_bounds(struct NeuralBoundsDesc desc,
+                                                                    const double *weights,
+                                                                    uint32_t weight_count);
+
+uint32_t query_intersect_neural_bounds_count(const struct WorldHandle *world,
+                                             struct NeuralBoundsDesc desc,
+                                             const double *weights,
+                                             uint32_t weight_count,
+                                             struct QueryFilterDesc filter);
+
+uint32_t query_intersect_neural_bounds_count_all(const struct WorldHandle *world,
+                                                 struct NeuralBoundsDesc desc,
+                                                 const double *weights,
+                                                 uint32_t weight_count);
+
+uint32_t query_intersect_neural_bounds(const struct WorldHandle *world,
+                                       struct NeuralBoundsDesc desc,
+                                       const double *weights,
+                                       uint32_t weight_count,
+                                       struct QueryFilterDesc filter,
+                                       ColliderHandleRaw *out_handles,
+                                       uint32_t capacity);
+
+uint32_t query_intersect_neural_bounds_all(const struct WorldHandle *world,
+                                           struct NeuralBoundsDesc desc,
+                                           const double *weights,
+                                           uint32_t weight_count,
+                                           ColliderHandleRaw *out_handles,
+                                           uint32_t capacity);
+
 struct RayHit query_cast_ray(const struct WorldHandle *world,
                              struct Vec3 origin,
                              struct Vec3 direction,
@@ -871,6 +924,29 @@ uint8_t rigid_body_wake_up_flag(struct WorldHandle *world,
 struct Bool rigid_body_is_sleeping(const struct WorldHandle *world, RigidBodyHandleRaw handle);
 
 uint8_t rigid_body_is_sleeping_flag(const struct WorldHandle *world, RigidBodyHandleRaw handle);
+
+struct RTreeHandle *rtree_create(void);
+
+void rtree_destroy(struct RTreeHandle *tree);
+
+void rtree_clear(struct RTreeHandle *tree);
+
+uint32_t rtree_len(const struct RTreeHandle *tree);
+
+struct Bool rtree_insert(struct RTreeHandle *tree, uint64_t id, struct AabbDesc aabb);
+
+struct Bool rtree_update(struct RTreeHandle *tree, uint64_t id, struct AabbDesc aabb);
+
+struct Bool rtree_remove(struct RTreeHandle *tree, uint64_t id);
+
+void rtree_rebuild(struct RTreeHandle *tree);
+
+uint32_t rtree_query_aabb_count(struct RTreeHandle *tree, struct AabbDesc aabb);
+
+uint32_t rtree_query_aabb(struct RTreeHandle *tree,
+                          struct AabbDesc aabb,
+                          uint64_t *out_ids,
+                          uint32_t capacity);
 
 struct ColliderBuilderHandle *collider_builder_create_voxels(const uint8_t *voxels,
                                                              uint32_t size_x,

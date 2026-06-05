@@ -240,6 +240,35 @@ pub struct SphericalShell {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NeuralActivation {
+    Relu = 0,
+    Tanh = 1,
+    Sin = 2,
+    Linear = 3,
+}
+
+impl Default for NeuralActivation {
+    fn default() -> Self {
+        Self::Relu
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NeuralBoundsDesc {
+    pub center: Vec3,
+    pub half_extents: Vec3,
+    pub rotation: Quat,
+    pub sample_resolution: u32,
+    pub hidden_width: u32,
+    pub hidden_layers: u32,
+    pub activation: NeuralActivation,
+    pub output_scale: f64,
+    pub padding: f64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum KdopPreset {
     K6 = 6,
     K14 = 14,
@@ -330,6 +359,10 @@ pub struct JointBuilderHandle {
 
 pub struct CharacterControllerHandle {
     pub(crate) inner: crate::controller::CharacterControllerState,
+}
+
+pub struct RTreeHandle {
+    pub(crate) inner: crate::rtree::RTreeIndex,
 }
 
 pub type RigidBodyHandleRaw = u64;
