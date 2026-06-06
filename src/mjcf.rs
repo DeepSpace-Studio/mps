@@ -31,6 +31,15 @@ struct ImportOptions {
     restitution: f64,
 }
 
+struct OutputBuffers {
+    body_handles: *mut RigidBodyHandleRaw,
+    body_capacity: u32,
+    collider_handles: *mut ColliderHandleRaw,
+    collider_capacity: u32,
+    joint_handles: *mut ImpulseJointHandleRaw,
+    joint_capacity: u32,
+}
+
 impl From<MjcfImportOptions> for ImportOptions {
     fn from(value: MjcfImportOptions) -> Self {
         let defaults = MjcfImportOptions::default();
@@ -215,12 +224,7 @@ fn import_model(
     world: &mut WorldHandle,
     model: Model,
     options: ImportOptions,
-    out_body_handles: *mut RigidBodyHandleRaw,
-    body_capacity: u32,
-    out_collider_handles: *mut ColliderHandleRaw,
-    collider_capacity: u32,
-    out_joint_handles: *mut ImpulseJointHandleRaw,
-    joint_capacity: u32,
+    output: OutputBuffers,
 ) -> MjcfImportResult {
     let mut world_poses = vec![MjcfPose::IDENTITY; model.bodies.len()];
     for id in 1..model.bodies.len() {
@@ -241,7 +245,7 @@ fn import_model(
             .joints
             .iter()
             .any(|joint| joint.type_ == JointType::Free);
-        let fixed = (is_root && options.make_roots_fixed) || (is_root && !has_free_joint);
+        let fixed = is_root && (options.make_roots_fixed || !has_free_joint);
         let builder = if fixed {
             RigidBodyBuilder::fixed()
         } else {
@@ -290,20 +294,20 @@ fn import_model(
 
     write_packed_handles(
         &body_handles,
-        out_body_handles,
-        body_capacity,
+        output.body_handles,
+        output.body_capacity,
         pack_rigid_body_handle,
     );
     write_packed_handles(
         &collider_handles,
-        out_collider_handles,
-        collider_capacity,
+        output.collider_handles,
+        output.collider_capacity,
         pack_collider_handle,
     );
     write_packed_handles(
         &joint_handles,
-        out_joint_handles,
-        joint_capacity,
+        output.joint_handles,
+        output.joint_capacity,
         pack_impulse_joint_handle,
     );
 
@@ -353,12 +357,14 @@ pub extern "C" fn world_insert_mjcf_from_bytes_ex(
         world,
         model,
         options.into(),
-        out_body_handles,
-        body_capacity,
-        out_collider_handles,
-        collider_capacity,
-        out_joint_handles,
-        joint_capacity,
+        OutputBuffers {
+            body_handles: out_body_handles,
+            body_capacity,
+            collider_handles: out_collider_handles,
+            collider_capacity,
+            joint_handles: out_joint_handles,
+            joint_capacity,
+        },
     )
 }
 

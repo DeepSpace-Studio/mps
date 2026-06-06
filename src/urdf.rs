@@ -32,6 +32,15 @@ struct ImportOptions {
     restitution: f64,
 }
 
+struct OutputBuffers {
+    body_handles: *mut RigidBodyHandleRaw,
+    body_capacity: u32,
+    collider_handles: *mut ColliderHandleRaw,
+    collider_capacity: u32,
+    joint_handles: *mut ImpulseJointHandleRaw,
+    joint_capacity: u32,
+}
+
 impl From<UrdfImportOptions> for ImportOptions {
     fn from(value: UrdfImportOptions) -> Self {
         let defaults = UrdfImportOptions::default();
@@ -179,12 +188,7 @@ fn import_robot(
     world: &mut WorldHandle,
     robot: urdf_rs::Robot,
     options: ImportOptions,
-    out_body_handles: *mut RigidBodyHandleRaw,
-    body_capacity: u32,
-    out_collider_handles: *mut ColliderHandleRaw,
-    collider_capacity: u32,
-    out_joint_handles: *mut ImpulseJointHandleRaw,
-    joint_capacity: u32,
+    output: OutputBuffers,
 ) -> UrdfImportResult {
     let mut parent_joint_by_child = HashMap::new();
     let mut child_joints_by_parent: HashMap<&str, Vec<usize>> = HashMap::new();
@@ -342,20 +346,20 @@ fn import_robot(
 
     write_packed_handles(
         &handles,
-        out_body_handles,
-        body_capacity,
+        output.body_handles,
+        output.body_capacity,
         pack_rigid_body_handle,
     );
     write_packed_handles(
         &collider_handles,
-        out_collider_handles,
-        collider_capacity,
+        output.collider_handles,
+        output.collider_capacity,
         pack_collider_handle,
     );
     write_packed_handles(
         &joint_handles,
-        out_joint_handles,
-        joint_capacity,
+        output.joint_handles,
+        output.joint_capacity,
         pack_impulse_joint_handle,
     );
 
@@ -428,12 +432,14 @@ pub extern "C" fn world_insert_urdf_from_bytes_ex(
         world,
         robot,
         options.into(),
-        out_body_handles,
-        body_capacity,
-        out_collider_handles,
-        collider_capacity,
-        out_joint_handles,
-        joint_capacity,
+        OutputBuffers {
+            body_handles: out_body_handles,
+            body_capacity,
+            collider_handles: out_collider_handles,
+            collider_capacity,
+            joint_handles: out_joint_handles,
+            joint_capacity,
+        },
     )
 }
 
