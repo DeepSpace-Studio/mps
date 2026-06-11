@@ -1,34 +1,28 @@
 package org.polaris2023.msp_rigid_body.util;
 
-import org.polaris2023.msp_rigid_body.RigidBody;
+
+import org.polaris2023.msp_rigid_body.RigidBodyNative;
 
 public final class PhysicsWorld implements AutoCloseable {
     Long handle;
     double deltaSeconds = 1.0 / 60.0;
-    Long build, rigidBody;
+    RigidBody.Builder builder;
+    RigidBody rigidBody;
     public PhysicsWorld(double gravityX, double gravityY, double gravityZ) {
-        handle = RigidBody.worldCreate(gravityX, gravityY, gravityZ);
+        handle = RigidBodyNative.worldCreate(gravityX, gravityY, gravityZ);
     }
 
     public boolean isEmpty() {
         return handle == 0L;
     }
 
-    public boolean bodyEmpty() {
-        return build == 0L;
-    }
-    public boolean physicsEmpty() {
-        return rigidBody == 0L;
-    }
-
-
     public PhysicsWorld translation(double x, double y, double z) {
-        RigidBody.rigidBodyBuilderSetTranslation(build, x, y, z);
+        builder.translation(x, y, z);
         return this;
     }
 
     public double[] translation() {
-        return RigidBody.rigidBodyGetTranslation(handle, rigidBody);
+        return rigidBody.translation(this);
     }
     public double translationX() {
         return translation()[0];
@@ -40,19 +34,18 @@ public final class PhysicsWorld implements AutoCloseable {
         return translation()[2];
     }
 
-
-
-    public long build() {
-        return build;
+    public RigidBody.Builder body() {
+        builder = RigidBody.Builder.builder(this).build();
+        return builder;
     }
 
-    public PhysicsWorld body(int status) {
-        build = RigidBody.rigidBodyBuilderCreate(status);
-        return this;
+    public RigidBody.Builder body(int status) {
+        builder = RigidBody.Builder.builder(this).status(status).build();
+        return builder;
     }
 
     public PhysicsWorld insert() {
-        rigidBody = RigidBody.worldInsertRigidBody(handle, build);
+        rigidBody = builder.body(this);
         return this;
     }
 
@@ -61,7 +54,7 @@ public final class PhysicsWorld implements AutoCloseable {
     }
 
     public double[] gravity() {
-        return RigidBody.worldGetGravity(handle);
+        return RigidBodyNative.worldGetGravity(handle);
     }
 
     public double gravityX() {
@@ -79,12 +72,12 @@ public final class PhysicsWorld implements AutoCloseable {
 
 
     public PhysicsWorld set(double gravityX, double gravityY, double gravityZ) {
-        RigidBody.worldSetGravity(handle, gravityX, gravityY, gravityZ);
+        RigidBodyNative.worldSetGravity(handle, gravityX, gravityY, gravityZ);
         return this;
     }
 
     public PhysicsWorld step() {
-        RigidBody.worldStep(handle, deltaSeconds);
+        RigidBodyNative.worldStep(handle, deltaSeconds);
         return this;
     }
 
@@ -95,9 +88,8 @@ public final class PhysicsWorld implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
-        RigidBody.worldDestroy(handle);
-        RigidBody.rigidBodyBuilderDestroy(build);
-        build = null;
+        RigidBodyNative.worldDestroy(handle);
+        builder.close();
         handle = null;
     }
 }

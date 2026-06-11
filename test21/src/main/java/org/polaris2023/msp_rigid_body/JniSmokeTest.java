@@ -2,6 +2,8 @@ package org.polaris2023.msp_rigid_body;
 
 import org.polaris2023.msp_rigid_body.util.PhysicsWorld;
 
+import org.polaris2023.msp_rigid_body.util.RigidBody;
+
 public final class JniSmokeTest {
     private static final double EPSILON = 1.0e-9;
 
@@ -14,7 +16,7 @@ public final class JniSmokeTest {
             throw new AssertionError("test21 must run on Java 21, got Java " + javaVersion);
         }
 
-        int abiVersion = RigidBody.abiVersion();
+        int abiVersion = RigidBodyNative.abiVersion();
         if (abiVersion < 1) {
             throw new AssertionError("invalid ABI version: " + abiVersion);
         }
@@ -29,8 +31,8 @@ public final class JniSmokeTest {
         assertClose(2.0, world.gravityY(), "gravity y");
         assertClose(3.0, world.gravityZ(), "gravity z");
 
-        world.body(0);
-        if (world.bodyEmpty()) {
+        RigidBody.Builder body = world.body(0);
+        if (body.isEmpty()) {
             throw new AssertionError("rigidBodyBuilderCreate returned null");
         }
 
