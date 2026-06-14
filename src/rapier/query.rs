@@ -2,6 +2,7 @@ use rapier3d::geometry::{Aabb, Ray};
 use rapier3d::parry::shape::FeatureId;
 use rapier3d::prelude::SharedShape;
 
+use crate::rapier::error::{ERR_CAPACITY, ERR_NULL_POINTER, clear_error, set_error};
 use crate::rapier::ffi::{
     AabbDesc, Bool, ColliderHandleRaw, MAX_OUTPUT_CAPACITY, Obb, PointProjection, QueryFilterDesc,
     RayHit, ShapeCastHit, ShapeCastOptionsDesc, ShapeDesc, Sphere, Vec3, WorldHandle,
@@ -98,6 +99,62 @@ pub extern "C" fn query_cast_ray(
             feature: feature_id_to_u32(hit.feature),
         })
         .unwrap_or_default()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn query_cast_rays(
+    world: *const WorldHandle,
+    rays: *const f64,
+    ray_count: u32,
+    max_toi: f64,
+    solid: Bool,
+    filter: QueryFilterDesc,
+    out_hits: *mut RayHit,
+    capacity: u32,
+) -> u32 {
+    let Some(world) = (unsafe { world.as_ref() }) else {
+        set_error(ERR_NULL_POINTER, "world is null");
+        return 0;
+    };
+    if rays.is_null() || out_hits.is_null() {
+        set_error(ERR_NULL_POINTER, "ray input or output is null");
+        return 0;
+    }
+    if ray_count == 0 || capacity < ray_count || ray_count > MAX_OUTPUT_CAPACITY {
+        set_error(ERR_CAPACITY, "invalid ray batch capacity");
+        return 0;
+    }
+    let Some(ray_value_count) = (ray_count as usize).checked_mul(6) else {
+        set_error(ERR_CAPACITY, "ray batch input capacity overflow");
+        return 0;
+    };
+
+    let rays = unsafe { std::slice::from_raw_parts(rays, ray_value_count) };
+    let hits = unsafe { std::slice::from_raw_parts_mut(out_hits, capacity as usize) };
+    let mut written = 0usize;
+    for index in 0..ray_count as usize {
+        let offset = index * 6;
+        hits[index] = query_cast_ray(
+            world,
+            Vec3 {
+                x: rays[offset],
+                y: rays[offset + 1],
+                z: rays[offset + 2],
+            },
+            Vec3 {
+                x: rays[offset + 3],
+                y: rays[offset + 4],
+                z: rays[offset + 5],
+            },
+            max_toi,
+            solid,
+            filter,
+        );
+        written += 1;
+    }
+
+    clear_error();
+    written as u32
 }
 
 #[unsafe(no_mangle)]
@@ -530,6 +587,72 @@ mod tests {
             1
         );
         assert_eq!(handles[0], collider);
+
+        crate::rapier::world::world_destroy(world);
+    }
+
+    #[test]
+    fn point_projection_and_batch_rays_hit_inserted_sphere() {
+        let world = crate::rapier::world::world_create(Vec3::default());
+        let sphere = Sphere {
+            center: Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            radius: 1.0,
+        };
+        let builder = crate::rapier::collider::collider_builder_build(
+            crate::rapier::collider::collider_builder_create_sphere(sphere),
+        );
+        let collider = crate::rapier::collider::world_insert_collider(world, builder);
+        crate::rapier::world::world_step(world, 1.0 / 60.0);
+
+        let mut projected_collider = 0;
+        let projection = query_project_point(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            10.0,
+            Bool::TRUE,
+            QueryFilterDesc::default(),
+            &mut projected_collider,
+        );
+        assert_eq!(projected_collider, collider);
+        assert_eq!(projection.is_inside, Bool::TRUE);
+        assert_eq!(
+            query_intersect_point_count(
+                world,
+                Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                QueryFilterDesc::default()
+            ),
+            1
+        );
+
+        let rays = [0.0, 3.0, 0.0, 0.0, -1.0, 0.0, 3.0, 3.0, 0.0, 0.0, -1.0, 0.0];
+        let mut hits = [RayHit::default(); 2];
+        assert_eq!(
+            query_cast_rays(
+                world,
+                rays.as_ptr(),
+                2,
+                10.0,
+                Bool::TRUE,
+                QueryFilterDesc::default(),
+                hits.as_mut_ptr(),
+                hits.len() as u32,
+            ),
+            2
+        );
+        assert_eq!(hits[0].collider, collider);
+        assert_eq!(hits[1].collider, 0);
 
         crate::rapier::world::world_destroy(world);
     }

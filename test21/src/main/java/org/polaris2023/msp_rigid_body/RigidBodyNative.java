@@ -48,6 +48,9 @@ public final class RigidBodyNative {
     public static native int abiVersion();
     public static native boolean abiSupportsFfm();
     public static native boolean abiSupportsJni();
+    public static native int abiLastErrorCode();
+    public static native String abiLastErrorMessage();
+    public static native void abiClearLastError();
 
     public static native long worldCreate(double gravityX, double gravityY, double gravityZ);
     public static native void worldDestroy(long world);
@@ -59,6 +62,12 @@ public final class RigidBodyNative {
     public static native int worldGetColliderSetSize(long world);
     public static native int worldDynamicBodySnapshotCount(long world);
     public static native int worldDynamicBodySnapshot(long world, long outHandles, long outValues, int capacity);
+    public static native boolean worldSetIntegrationParameters(long world, double dt, int solverIterations, int ccdSubsteps);
+    public static native int worldGetIntegrationParameters(long world, long outValues, int capacity);
+    public static native int worldBodySnapshotCount(long world);
+    public static native int worldBodySnapshot(long world, long outHandles, long outValues, int capacity);
+    public static native int worldUpdateBodyPoses(long world, long handles, long values, int count, int wakeUp);
+    public static native int worldUpdateBodyVelocities(long world, long handles, long values, int count, int wakeUp);
 
     /*
      * Ownership rules for raw pointers:
@@ -199,6 +208,20 @@ public final class RigidBodyNative {
             double maxToi, int solid, int flags, int memberships, int filter, int useGroups,
             long excludeCollider, int useExcludeCollider, long excludeRigidBody, int useExcludeRigidBody,
             long outHit);
+    public static native int queryCastRays(
+            long world, long rays, int rayCount, double maxToi, int solid,
+            int flags, int memberships, int filter, int useGroups,
+            long excludeCollider, int useExcludeCollider, long excludeRigidBody, int useExcludeRigidBody,
+            long outHits, int capacity);
+    public static native long queryProjectPoint(
+            long world, double x, double y, double z, double maxDist, int solid,
+            int flags, int memberships, int filter, int useGroups,
+            long excludeCollider, int useExcludeCollider, long excludeRigidBody, int useExcludeRigidBody,
+            long outProjection);
+    public static native int queryIntersectPointCount(
+            long world, double x, double y, double z,
+            int flags, int memberships, int filter, int useGroups,
+            long excludeCollider, int useExcludeCollider, long excludeRigidBody, int useExcludeRigidBody);
     public static native int queryIntersectAabbCount(
             long world, double minX, double minY, double minZ, double maxX, double maxY, double maxZ,
             int flags, int memberships, int filter, int useGroups,
@@ -263,8 +286,10 @@ public final class RigidBodyNative {
     public static native void worldClearEvents(long world);
     public static native int worldCollisionEventCount(long world);
     public static native long worldGetCollisionEvent(long world, int index, long outEvent);
+    public static native int worldGetCollisionEvents(long world, long outEvents, int capacity);
     public static native int worldContactForceEventCount(long world);
     public static native long worldGetContactForceEvent(long world, int index, long outEvent);
+    public static native int worldGetContactForceEvents(long world, long outEvents, int capacity);
     public static native void worldClearContactPairFilterCallback(long world);
     public static native void worldClearIntersectionPairFilterCallback(long world);
 

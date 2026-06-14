@@ -5,17 +5,18 @@ use crate::rapier::ffi::{
     CharacterControllerHandle as CCH, ColliderBuilderHandle as CBH, ColliderHandleRaw as CRaw,
     CollisionEventRecord as CER, ContactForceEventRecord, Cylinder, EffectiveCharacterMovement,
     Ellipsoid, ImpulseJointHandleRaw as JRaw, InteractionGroupsDesc, JointBuilderHandle as JBH,
-    NeuralBoundsDesc, Obb, Prism, Quat, QueryFilterDesc, RTreeHandle as RTH, RayHit,
-    RigidBodyBuilderHandle as RBH, RigidBodyHandleRaw as RRaw, ShapeCastHit, ShapeCastOptionsDesc,
-    ShapeDesc, Sphere, SphericalShell, Ssv, Vec3, VoxelColliderOptions, WorldHandle as WH,
+    NeuralBoundsDesc, Obb, PointProjection, Prism, Quat, QueryFilterDesc, RTreeHandle as RTH,
+    RayHit, RigidBodyBuilderHandle as RBH, RigidBodyHandleRaw as RRaw, ShapeCastHit,
+    ShapeCastOptionsDesc, ShapeDesc, Sphere, SphericalShell, Ssv, Vec3, VoxelColliderOptions,
+    WorldHandle as WH,
 };
 use crate::rapier::{
     bounds as bo, collider as col, compat as com, controller as cc, crbtree as crt, dop,
-    events as ev, joints as jo, neural as neu, query as qu, rigid_body as rb, rtree as rt,
-    voxel as vx, world as wo,
+    error as er, events as ev, joints as jo, neural as neu, query as qu, rigid_body as rb,
+    rtree as rt, voxel as vx, world as wo,
 };
 use ljni::JNIEnv;
-use ljni::sys::{jbyte, jclass, jdouble, jdoubleArray, jint, jlong};
+use ljni::sys::{jbyte, jclass, jdouble, jdoubleArray, jint, jlong, jstring};
 use rapier3d::prelude::{Collider as CB, RigidBody as RB};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
@@ -224,6 +225,26 @@ macro_rules! jni_e_c {
 jni!(int abiVersion() { abi::abi_version() as jint });
 jni!(boolean abiSupportsFfm() { abi::abi_supports_ffm().0 as jbyte });
 jni!(boolean abiSupportsJni() { abi::abi_supports_jni().0 as jbyte });
+jni!(int abiLastErrorCode() { er::last_error_code() as jint });
+jni!(void abiClearLastError() { er::last_error_clear(); });
+
+#[unsafe(export_name = "Java_org_polaris2023_msp_1rigid_1body_RigidBodyNative_abiLastErrorMessage")]
+#[allow(non_snake_case)]
+pub extern "system" fn abiLastErrorMessage(env: JNIEnv, _class: jclass) -> jstring {
+    catch_unwind(AssertUnwindSafe(|| {
+        let ptr = er::last_error_message();
+        if ptr.is_null() {
+            return std::ptr::null_mut();
+        }
+        let message = unsafe { std::ffi::CStr::from_ptr(ptr) }
+            .to_string_lossy()
+            .into_owned();
+        env.new_string(message)
+            .map(|value| value.as_raw())
+            .unwrap_or(std::ptr::null_mut())
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
 
 //世界管理
 jni!(long worldCreate(double gravity_x, double gravity_y, double gravity_z) { to_jlong(wo::world_create(v3(gravity_x, gravity_y, gravity_z))) });
@@ -239,6 +260,12 @@ jni!(int worldGetColliderSetSize(long world) { wo::world_get_collider_set_size(c
 
 jni!(int worldDynamicBodySnapshotCount(long world) { wo::world_dynamic_body_snapshot_count(cp::<WH>(world)) as jint });
 jni!(int worldDynamicBodySnapshot(long world, long out_handles, long out_values, int capacity) { wo::world_dynamic_body_snapshot(cp::<WH>(world),pm::<RRaw>(out_handles),pm::<f64>(out_values),u32_from_jint(capacity)) as jint });
+jni!(boolean worldSetIntegrationParameters(long world, double dt, int solver_iterations, int ccd_substeps) { wo::world_set_integration_parameters(m::<WH>(world), dt, u32_from_jint(solver_iterations), u32_from_jint(ccd_substeps)).0 as jbyte });
+jni!(int worldGetIntegrationParameters(long world, long out_values, int capacity) { wo::world_get_integration_parameters(cp::<WH>(world), pm::<f64>(out_values), u32_from_jint(capacity)) as jint });
+jni!(int worldBodySnapshotCount(long world) { wo::world_body_snapshot_count(cp::<WH>(world)) as jint });
+jni!(int worldBodySnapshot(long world, long out_handles, long out_values, int capacity) { wo::world_body_snapshot(cp::<WH>(world), pm::<RRaw>(out_handles), pm::<f64>(out_values), u32_from_jint(capacity)) as jint });
+jni!(int worldUpdateBodyPoses(long world, long handles, long values, int count, int wake_up) { wo::world_update_body_poses(m::<WH>(world), p::<RRaw>(handles), p::<f64>(values), u32_from_jint(count), jb(wake_up)) as jint });
+jni!(int worldUpdateBodyVelocities(long world, long handles, long values, int count, int wake_up) { wo::world_update_body_velocities(m::<WH>(world), p::<RRaw>(handles), p::<f64>(values), u32_from_jint(count), jb(wake_up)) as jint });
 
 //世界插入
 jni!(long worldInsertRigidBody(long world, long memory_handle) { rb::world_insert_rigid_body(m::<WH>(world), m::<RB>(memory_handle)) as jlong });
@@ -378,6 +405,21 @@ jni!(long queryCastRay(long world, double ox, double oy, double oz, double dx, d
     hit.collider as jlong
 });
 
+jni!(int queryCastRays(long world, long rays, int ray_count, double max_toi, int solid, int flags, int memberships, int filter, int use_groups, long exclude_collider, int use_exclude_collider, long exclude_rigid_body, int use_exclude_rigid_body, long out_hits, int capacity) {
+    qu::query_cast_rays(cp::<WH>(world), p::<f64>(rays), u32_from_jint(ray_count), max_toi, jb(solid), query_filter_args!(flags,memberships,filter,use_groups,exclude_collider,use_exclude_collider,exclude_rigid_body,use_exclude_rigid_body), pm::<RayHit>(out_hits), u32_from_jint(capacity)) as jint
+});
+
+jni!(long queryProjectPoint(long world, double x, double y, double z, double max_dist, int solid, int flags, int memberships, int filter, int use_groups, long exclude_collider, int use_exclude_collider, long exclude_rigid_body, int use_exclude_rigid_body, long out_projection) {
+    let mut collider: CRaw = 0;
+    let projection = qu::query_project_point(cp::<WH>(world), v3(x, y, z), max_dist, jb(solid), query_filter_args!(flags,memberships,filter,use_groups,exclude_collider,use_exclude_collider,exclude_rigid_body,use_exclude_rigid_body), &mut collider as *mut CRaw);
+    if let Some(out) = unsafe { pm::<PointProjection>(out_projection).as_mut() } { *out = projection; }
+    collider as jlong
+});
+
+jni!(int queryIntersectPointCount(long world, double x, double y, double z, int flags, int memberships, int filter, int use_groups, long exclude_collider, int use_exclude_collider, long exclude_rigid_body, int use_exclude_rigid_body) {
+    qu::query_intersect_point_count(cp::<WH>(world), v3(x, y, z), query_filter_args!(flags,memberships,filter,use_groups,exclude_collider,use_exclude_collider,exclude_rigid_body,use_exclude_rigid_body)) as jint
+});
+
 jni!(int queryIntersectAabbCount(long world, double min_x, double min_y, double min_z, double max_x, double max_y, double max_z, int flags, int memberships, int filter, int use_groups, long exclude_collider, int use_exclude_collider, long exclude_rigid_body, int use_exclude_rigid_body) {
     qu::query_intersect_aabb_count(cp::<WH>(world), aa(min_x,min_y,min_z,max_x,max_y,max_z), query_filter_args!(flags,memberships,filter,use_groups,exclude_collider,use_exclude_collider,exclude_rigid_body,use_exclude_rigid_body)) as jint
 });
@@ -459,11 +501,17 @@ jni!(long worldGetCollisionEvent(long world, int index, long out_event) {
     if let Some(out) = unsafe { pm::<CER>(out_event).as_mut() } { *out = event; }
     event.collider1 as jlong
 });
+jni!(int worldGetCollisionEvents(long world, long out_events, int capacity) {
+    ev::world_get_collision_events(cp::<WH>(world), pm::<CER>(out_events), u32_from_jint(capacity)) as jint
+});
 jni!(int worldContactForceEventCount(long world) { ev::world_contact_force_event_count(cp::<WH>(world)) as jint });
 jni!(long worldGetContactForceEvent(long world, int index, long out_event) {
     let event = ev::world_get_contact_force_event(cp::<WH>(world), u32_from_jint(index));
     if let Some(out) = unsafe { pm::<ContactForceEventRecord>(out_event).as_mut() } { *out = event; }
     event.collider1 as jlong
+});
+jni!(int worldGetContactForceEvents(long world, long out_events, int capacity) {
+    ev::world_get_contact_force_events(cp::<WH>(world), pm::<ContactForceEventRecord>(out_events), u32_from_jint(capacity)) as jint
 });
 jni!(void worldClearContactPairFilterCallback(long world) { ev::world_clear_contact_pair_filter_callback(m::<WH>(world)); });
 jni!(void worldClearIntersectionPairFilterCallback(long world) { ev::world_clear_intersection_pair_filter_callback(m::<WH>(world)); });

@@ -100,9 +100,29 @@ public final class JniSmokeTest {
         try (PhysicsWorld world = new PhysicsWorld(0.0, -9.81, 0.0);
              RigidBody.Builder bodyBuilder = RigidBody.Builder.builder(world).status(0).build().translation(0.0, 4.0, 0.0);
              RigidBody.Builder otherBuilder = RigidBody.Builder.builder(world).status(0).build().translation(0.0, 6.0, 0.0)) {
+            world.integrationParameters(1.0 / 120.0, 8, 2);
+            double[] integration = world.integrationParameters();
+            assertClose(1.0 / 120.0, integration[0], "integration dt");
+            assertClose(8.0, integration[1], "integration solver iterations");
+            assertClose(2.0, integration[2], "integration ccd substeps");
+
             RigidBody body = world.insert(bodyBuilder)
                     .linvel(world, 0.0, -1.0, 0.0, true);
             RigidBody other = world.insert(otherBuilder);
+            PhysicsWorld.BodySnapshot[] before = world.bodySnapshot();
+            if (before.length != 2) {
+                throw new AssertionError("body snapshot expected 2 bodies, got " + before.length);
+            }
+            if (world.updateBodyPoses(new PhysicsWorld.BodyPoseUpdate[] {
+                    new PhysicsWorld.BodyPoseUpdate(body.handle(), new double[] {1.0, 4.0, 0.0}, new double[] {0.0, 0.0, 0.0, 1.0})
+            }, true) != 1) {
+                throw new AssertionError("batch body pose update failed");
+            }
+            if (world.updateBodyVelocities(new PhysicsWorld.BodyVelocityUpdate[] {
+                    new PhysicsWorld.BodyVelocityUpdate(body.handle(), new double[] {0.0, -2.0, 0.0}, new double[] {0.0, 0.0, 0.0})
+            }, true) != 1) {
+                throw new AssertionError("batch body velocity update failed");
+            }
 
             org.polaris2023.msp_rigid_body.util.Collider collider = world.cuboidCollider(0.5, 0.5, 0.5)
                     .density(1.0)
@@ -124,6 +144,31 @@ public final class JniSmokeTest {
             Query.RayHit rayHit = world.query().castRay(0.0, 8.0, 0.0, 0.0, -1.0, 0.0, 20.0);
             if (rayHit.isEmpty()) {
                 throw new AssertionError("query raycast returned no hit");
+            }
+            Query.RayHit[] rayHits = world.query().castRays(new double[] {
+                    0.0, 8.0, 0.0, 0.0, -1.0, 0.0,
+                    2.0, 8.0, 0.0, 0.0, -1.0, 0.0
+            }, 20.0);
+            if (rayHits.length != 2 || rayHits[0].isEmpty()) {
+                throw new AssertionError("batch raycast wrapper failed");
+            }
+            if (world.query().countPoint(0.0, 4.0, 0.0) < 1) {
+                throw new AssertionError("point intersection count returned no hits");
+            }
+            Query.PointProjection projection = world.query().projectPoint(0.0, 4.0, 0.0, 10.0, true);
+            if (projection.isEmpty()) {
+                throw new AssertionError("point projection returned no collider");
+            }
+
+            if (world.collisionEvents().length != world.collisionEventCount()) {
+                throw new AssertionError("bulk collision event read count mismatch");
+            }
+            if (world.contactForceEvents().length != world.contactForceEventCount()) {
+                throw new AssertionError("bulk contact force event read count mismatch");
+            }
+            RigidBodyNative.abiClearLastError();
+            if (RigidBodyNative.worldGetCollisionEvents(world.handle(), 0L, 1) != 0 || RigidBodyNative.abiLastErrorCode() == 0) {
+                throw new AssertionError("bulk event invalid output did not set last error");
             }
 
             try (org.polaris2023.msp_rigid_body.util.Joint.Builder jointBuilder = world.fixedJoint()) {

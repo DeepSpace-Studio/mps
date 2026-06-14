@@ -39,6 +39,63 @@ public final class Query {
         }
     }
 
+    public RayHit[] castRays(double[] rays, double maxToi) {
+        if (rays == null || rays.length == 0) {
+            return new RayHit[0];
+        }
+        if (rays.length % 6 != 0) {
+            throw new IllegalArgumentException("ray array must contain origin and direction vec3 values");
+        }
+        int count = rays.length / 6;
+        try (NativeMemory rayMemory = new NativeMemory((long) rays.length * Double.BYTES);
+             NativeMemory hitMemory = new NativeMemory((long) count * 48L)) {
+            for (int i = 0; i < rays.length; i++) {
+                rayMemory.putDouble((long) i * Double.BYTES, rays[i]);
+            }
+            int written = RigidBodyNative.queryCastRays(
+                    world.handle(),
+                    rayMemory.address(),
+                    count,
+                    maxToi,
+                    1,
+                    0, 0xffff, 0xffff, 0,
+                    0L, 0, 0L, 0,
+                    hitMemory.address(), count);
+            RayHit[] hits = new RayHit[written];
+            for (int i = 0; i < written; i++) {
+                long offset = (long) i * 48L;
+                hits[i] = new RayHit(
+                        hitMemory.getLong(offset),
+                        hitMemory.getDouble(offset + 8),
+                        hitMemory.getVec3(offset + 16),
+                        hitMemory.getInt(offset + 40));
+            }
+            return hits;
+        }
+    }
+
+    public PointProjection projectPoint(double x, double y, double z, double maxDist, boolean solid) {
+        try (NativeMemory out = new NativeMemory(32)) {
+            long collider = RigidBodyNative.queryProjectPoint(
+                    world.handle(),
+                    x, y, z,
+                    maxDist,
+                    solid ? 1 : 0,
+                    0, 0xffff, 0xffff, 0,
+                    0L, 0, 0L, 0,
+                    out.address());
+            return new PointProjection(collider, out.getVec3(0), out.getBool(24));
+        }
+    }
+
+    public int countPoint(double x, double y, double z) {
+        return RigidBodyNative.queryIntersectPointCount(
+                world.handle(),
+                x, y, z,
+                0, 0xffff, 0xffff, 0,
+                0L, 0, 0L, 0);
+    }
+
     public int countAabb(double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
         return RigidBodyNative.queryIntersectAabbCount(
                 world.handle(),
@@ -122,6 +179,12 @@ public final class Query {
             return new RayHit(0L, 0.0, new double[] {0.0, 0.0, 0.0}, 0);
         }
 
+        public boolean isEmpty() {
+            return collider == 0L;
+        }
+    }
+
+    public record PointProjection(long collider, double[] point, boolean inside) {
         public boolean isEmpty() {
             return collider == 0L;
         }

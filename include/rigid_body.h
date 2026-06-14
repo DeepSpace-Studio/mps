@@ -659,6 +659,12 @@ struct ColliderBuilderHandle *collider_builder_create_fdh(const double *points_x
                                                           const double *directions_xyz,
                                                           uint32_t direction_count);
 
+uint32_t last_error_code(void);
+
+const char *last_error_message(void);
+
+void last_error_clear(void);
+
 void world_clear_events(struct WorldHandle *world);
 
 uint32_t world_collision_event_count(const struct WorldHandle *world);
@@ -666,10 +672,18 @@ uint32_t world_collision_event_count(const struct WorldHandle *world);
 struct CollisionEventRecord world_get_collision_event(const struct WorldHandle *world,
                                                       uint32_t index);
 
+uint32_t world_get_collision_events(const struct WorldHandle *world,
+                                    struct CollisionEventRecord *out_events,
+                                    uint32_t capacity);
+
 uint32_t world_contact_force_event_count(const struct WorldHandle *world);
 
 struct ContactForceEventRecord world_get_contact_force_event(const struct WorldHandle *world,
                                                              uint32_t index);
+
+uint32_t world_get_contact_force_events(const struct WorldHandle *world,
+                                        struct ContactForceEventRecord *out_events,
+                                        uint32_t capacity);
 
 void world_set_contact_pair_filter_callback(struct WorldHandle *world,
                                             uintptr_t _callback,
@@ -760,6 +774,15 @@ struct RayHit query_cast_ray(const struct WorldHandle *world,
                              double max_toi,
                              struct Bool solid,
                              struct QueryFilterDesc filter);
+
+uint32_t query_cast_rays(const struct WorldHandle *world,
+                         const double *rays,
+                         uint32_t ray_count,
+                         double max_toi,
+                         struct Bool solid,
+                         struct QueryFilterDesc filter,
+                         struct RayHit *out_hits,
+                         uint32_t capacity);
 
 struct PointProjection query_project_point(const struct WorldHandle *world,
                                            struct Vec3 point,
@@ -1040,6 +1063,15 @@ void world_destroy(struct WorldHandle *world);
 
 void world_step(struct WorldHandle *world, double delta_seconds);
 
+struct Bool world_set_integration_parameters(struct WorldHandle *world,
+                                             double dt,
+                                             uint32_t solver_iterations,
+                                             uint32_t ccd_substeps);
+
+uint32_t world_get_integration_parameters(const struct WorldHandle *world,
+                                          double *out_values,
+                                          uint32_t capacity);
+
 void world_set_gravity(struct WorldHandle *world, struct Vec3 gravity);
 
 struct Vec3 world_get_gravity(const struct WorldHandle *world);
@@ -1056,6 +1088,25 @@ uint32_t world_dynamic_body_snapshot(const struct WorldHandle *world,
                                      RigidBodyHandleRaw *out_handles,
                                      double *out_values,
                                      uint32_t capacity);
+
+uint32_t world_body_snapshot_count(const struct WorldHandle *world);
+
+uint32_t world_body_snapshot(const struct WorldHandle *world,
+                             RigidBodyHandleRaw *out_handles,
+                             double *out_values,
+                             uint32_t capacity);
+
+uint32_t world_update_body_poses(struct WorldHandle *world,
+                                 const RigidBodyHandleRaw *handles,
+                                 const double *values,
+                                 uint32_t count,
+                                 struct Bool wake_up);
+
+uint32_t world_update_body_velocities(struct WorldHandle *world,
+                                      const RigidBodyHandleRaw *handles,
+                                      const double *values,
+                                      uint32_t count,
+                                      struct Bool wake_up);
 
 #ifdef __cplusplus
 }  // extern "C"

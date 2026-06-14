@@ -60,6 +60,26 @@ public final class PhysicsWorld implements AutoCloseable {
         return this;
     }
 
+    public PhysicsWorld integrationParameters(double dt, int solverIterations, int ccdSubsteps) {
+        requireOpen();
+        if (!RigidBodyNative.worldSetIntegrationParameters(handle, dt, solverIterations, ccdSubsteps)) {
+            throw new IllegalArgumentException(RigidBodyNative.abiLastErrorMessage());
+        }
+        this.deltaSeconds = dt;
+        return this;
+    }
+
+    public double[] integrationParameters() {
+        requireOpen();
+        try (NativeMemory out = new NativeMemory(3L * Double.BYTES)) {
+            int written = RigidBodyNative.worldGetIntegrationParameters(handle, out.address(), 3);
+            if (written != 3) {
+                throw new IllegalStateException(RigidBodyNative.abiLastErrorMessage());
+            }
+            return new double[] {out.getDouble(0), out.getDouble(8), out.getDouble(16)};
+        }
+    }
+
     public PhysicsWorld step() {
         requireOpen();
         RigidBodyNative.worldStep(handle, deltaSeconds);
@@ -179,6 +199,28 @@ public final class PhysicsWorld implements AutoCloseable {
         }
     }
 
+    public CollisionEvent[] collisionEvents() {
+        requireOpen();
+        int count = collisionEventCount();
+        if (count <= 0) {
+            return new CollisionEvent[0];
+        }
+        try (NativeMemory out = new NativeMemory((long) count * 32L)) {
+            int written = RigidBodyNative.worldGetCollisionEvents(handle, out.address(), count);
+            CollisionEvent[] events = new CollisionEvent[written];
+            for (int i = 0; i < written; i++) {
+                long offset = (long) i * 32L;
+                events[i] = new CollisionEvent(
+                        out.getBool(offset),
+                        out.getLong(offset + 8),
+                        out.getLong(offset + 16),
+                        out.getBool(offset + 24),
+                        out.getBool(offset + 25));
+            }
+            return events;
+        }
+    }
+
     public int contactForceEventCount() {
         requireOpen();
         return RigidBodyNative.worldContactForceEventCount(handle);
@@ -195,6 +237,93 @@ public final class PhysicsWorld implements AutoCloseable {
                     out.getDouble(40),
                     out.getVec3(48),
                     out.getDouble(72));
+        }
+    }
+
+    public ContactForceEvent[] contactForceEvents() {
+        requireOpen();
+        int count = contactForceEventCount();
+        if (count <= 0) {
+            return new ContactForceEvent[0];
+        }
+        try (NativeMemory out = new NativeMemory((long) count * 80L)) {
+            int written = RigidBodyNative.worldGetContactForceEvents(handle, out.address(), count);
+            ContactForceEvent[] events = new ContactForceEvent[written];
+            for (int i = 0; i < written; i++) {
+                long offset = (long) i * 80L;
+                events[i] = new ContactForceEvent(
+                        out.getLong(offset),
+                        out.getLong(offset + 8),
+                        out.getVec3(offset + 16),
+                        out.getDouble(offset + 40),
+                        out.getVec3(offset + 48),
+                        out.getDouble(offset + 72));
+            }
+            return events;
+        }
+    }
+
+    public BodySnapshot[] bodySnapshot() {
+        requireOpen();
+        int count = RigidBodyNative.worldBodySnapshotCount(handle);
+        if (count <= 0) {
+            return new BodySnapshot[0];
+        }
+        try (NativeMemory handles = NativeMemory.longs(count);
+             NativeMemory values = new NativeMemory((long) count * 13L * Double.BYTES)) {
+            int written = RigidBodyNative.worldBodySnapshot(handle, handles.address(), values.address(), count);
+            BodySnapshot[] snapshots = new BodySnapshot[written];
+            for (int i = 0; i < written; i++) {
+                long valueOffset = (long) i * 13L * Double.BYTES;
+                snapshots[i] = new BodySnapshot(
+                        handles.getLong((long) i * Long.BYTES),
+                        values.getVec3(valueOffset),
+                        new double[] {
+                                values.getDouble(valueOffset + 24),
+                                values.getDouble(valueOffset + 32),
+                                values.getDouble(valueOffset + 40),
+                                values.getDouble(valueOffset + 48)
+                        },
+                        values.getVec3(valueOffset + 56),
+                        values.getVec3(valueOffset + 80));
+            }
+            return snapshots;
+        }
+    }
+
+    public int updateBodyPoses(BodyPoseUpdate[] updates, boolean wakeUp) {
+        requireOpen();
+        if (updates == null || updates.length == 0) {
+            return 0;
+        }
+        try (NativeMemory handles = NativeMemory.longs(updates.length);
+             NativeMemory values = new NativeMemory((long) updates.length * 7L * Double.BYTES)) {
+            for (int i = 0; i < updates.length; i++) {
+                BodyPoseUpdate update = updates[i];
+                handles.putLong((long) i * Long.BYTES, update.handle());
+                long offset = (long) i * 7L * Double.BYTES;
+                putVec3(values, offset, update.translation());
+                putQuat(values, offset + 24, update.rotation());
+            }
+            return RigidBodyNative.worldUpdateBodyPoses(handle, handles.address(), values.address(), updates.length, wakeUp ? 1 : 0);
+        }
+    }
+
+    public int updateBodyVelocities(BodyVelocityUpdate[] updates, boolean wakeUp) {
+        requireOpen();
+        if (updates == null || updates.length == 0) {
+            return 0;
+        }
+        try (NativeMemory handles = NativeMemory.longs(updates.length);
+             NativeMemory values = new NativeMemory((long) updates.length * 6L * Double.BYTES)) {
+            for (int i = 0; i < updates.length; i++) {
+                BodyVelocityUpdate update = updates[i];
+                handles.putLong((long) i * Long.BYTES, update.handle());
+                long offset = (long) i * 6L * Double.BYTES;
+                putVec3(values, offset, update.linvel());
+                putVec3(values, offset + 24, update.angvel());
+            }
+            return RigidBodyNative.worldUpdateBodyVelocities(handle, handles.address(), values.address(), updates.length, wakeUp ? 1 : 0);
         }
     }
 
@@ -243,6 +372,25 @@ public final class PhysicsWorld implements AutoCloseable {
         }
     }
 
+    private static void putVec3(NativeMemory memory, long offset, double[] value) {
+        if (value == null || value.length < 3) {
+            throw new IllegalArgumentException("vec3 requires at least 3 values");
+        }
+        memory.putDouble(offset, value[0]);
+        memory.putDouble(offset + 8, value[1]);
+        memory.putDouble(offset + 16, value[2]);
+    }
+
+    private static void putQuat(NativeMemory memory, long offset, double[] value) {
+        if (value == null || value.length < 4) {
+            throw new IllegalArgumentException("quat requires at least 4 values");
+        }
+        memory.putDouble(offset, value[0]);
+        memory.putDouble(offset + 8, value[1]);
+        memory.putDouble(offset + 16, value[2]);
+        memory.putDouble(offset + 24, value[3]);
+    }
+
     public record CollisionEvent(boolean started, long collider1, long collider2, boolean sensor, boolean removed) {
     }
 
@@ -253,5 +401,19 @@ public final class PhysicsWorld implements AutoCloseable {
             double totalForceMagnitude,
             double[] maxForceDirection,
             double maxForceMagnitude) {
+    }
+
+    public record BodySnapshot(
+            long handle,
+            double[] translation,
+            double[] rotation,
+            double[] linvel,
+            double[] angvel) {
+    }
+
+    public record BodyPoseUpdate(long handle, double[] translation, double[] rotation) {
+    }
+
+    public record BodyVelocityUpdate(long handle, double[] linvel, double[] angvel) {
     }
 }

@@ -4,6 +4,7 @@ pub(crate) mod compat;
 pub(crate) mod controller;
 pub(crate) mod crbtree;
 pub(crate) mod dop;
+pub(crate) mod error;
 pub(crate) mod events;
 pub(crate) mod ffi;
 pub(crate) mod joints;

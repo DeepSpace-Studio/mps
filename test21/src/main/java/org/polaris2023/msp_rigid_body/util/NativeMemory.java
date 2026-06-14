@@ -63,6 +63,14 @@ final class NativeMemory implements AutoCloseable {
         UNSAFE.putByte(address() + offset, (byte) value);
     }
 
+    void putLong(long offset, long value) {
+        UNSAFE.putLong(address() + offset, value);
+    }
+
+    void putDouble(long offset, double value) {
+        UNSAFE.putDouble(address() + offset, value);
+    }
+
     double[] getVec3(long offset) {
         return new double[] {
                 getDouble(offset),

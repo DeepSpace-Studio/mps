@@ -4,9 +4,12 @@ use rapier3d::prelude::{
     ColliderSet, ContactForceEvent, EventHandler, PhysicsHooks, Real, RigidBodySet,
 };
 
-use crate::rapier::ffi::WorldHandle;
+use crate::rapier::error::{
+    ERR_CAPACITY, ERR_NULL_POINTER, ERR_UNSUPPORTED, clear_error, set_error,
+};
 use crate::rapier::ffi::{
-    Bool, CollisionEventRecord, ContactForceEventRecord, pack_collider_handle, vec3_from_rapier,
+    Bool, CollisionEventRecord, ContactForceEventRecord, MAX_OUTPUT_CAPACITY, WorldHandle,
+    pack_collider_handle, vec3_from_rapier,
 };
 
 const MAX_EVENT_RECORDS: usize = 16_384;
@@ -31,12 +34,26 @@ impl CollectingEventHandler {
         self.collision_events.lock().get(index).copied()
     }
 
+    pub(crate) fn collision_events(&self, out: &mut [CollisionEventRecord]) -> u32 {
+        let events = self.collision_events.lock();
+        let count = out.len().min(events.len());
+        out[..count].copy_from_slice(&events[..count]);
+        count as u32
+    }
+
     pub(crate) fn contact_force_event_count(&self) -> usize {
         self.contact_force_events.lock().len()
     }
 
     pub(crate) fn contact_force_event(&self, index: usize) -> Option<ContactForceEventRecord> {
         self.contact_force_events.lock().get(index).copied()
+    }
+
+    pub(crate) fn contact_force_events(&self, out: &mut [ContactForceEventRecord]) -> u32 {
+        let events = self.contact_force_events.lock();
+        let count = out.len().min(events.len());
+        out[..count].copy_from_slice(&events[..count]);
+        count as u32
     }
 }
 
@@ -147,6 +164,30 @@ pub extern "C" fn world_get_collision_event(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn world_get_collision_events(
+    world: *const WorldHandle,
+    out_events: *mut CollisionEventRecord,
+    capacity: u32,
+) -> u32 {
+    let Some(world) = (unsafe { world.as_ref() }) else {
+        set_error(ERR_NULL_POINTER, "world is null");
+        return 0;
+    };
+    if out_events.is_null() {
+        set_error(ERR_NULL_POINTER, "collision event output is null");
+        return 0;
+    }
+    if capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
+        set_error(ERR_CAPACITY, "invalid collision event output capacity");
+        return 0;
+    }
+
+    clear_error();
+    let out = unsafe { std::slice::from_raw_parts_mut(out_events, capacity as usize) };
+    world.inner.events.collision_events(out)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn world_contact_force_event_count(world: *const WorldHandle) -> u32 {
     let Some(world) = (unsafe { world.as_ref() }) else {
         return 0;
@@ -170,14 +211,43 @@ pub extern "C" fn world_get_contact_force_event(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn world_get_contact_force_events(
+    world: *const WorldHandle,
+    out_events: *mut ContactForceEventRecord,
+    capacity: u32,
+) -> u32 {
+    let Some(world) = (unsafe { world.as_ref() }) else {
+        set_error(ERR_NULL_POINTER, "world is null");
+        return 0;
+    };
+    if out_events.is_null() {
+        set_error(ERR_NULL_POINTER, "contact force event output is null");
+        return 0;
+    }
+    if capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
+        set_error(ERR_CAPACITY, "invalid contact force event output capacity");
+        return 0;
+    }
+
+    clear_error();
+    let out = unsafe { std::slice::from_raw_parts_mut(out_events, capacity as usize) };
+    world.inner.events.contact_force_events(out)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn world_set_contact_pair_filter_callback(
     world: *mut WorldHandle,
     _callback: usize,
     _user_data: usize,
 ) {
     let Some(world) = (unsafe { world.as_mut() }) else {
+        set_error(ERR_NULL_POINTER, "world is null");
         return;
     };
+    set_error(
+        ERR_UNSUPPORTED,
+        "external contact pair callbacks are disabled for ABI safety",
+    );
     world.inner.hooks = CallbackPhysicsHooks::default();
 }
 
@@ -188,8 +258,13 @@ pub extern "C" fn world_set_intersection_pair_filter_callback(
     _user_data: usize,
 ) {
     let Some(world) = (unsafe { world.as_mut() }) else {
+        set_error(ERR_NULL_POINTER, "world is null");
         return;
     };
+    set_error(
+        ERR_UNSUPPORTED,
+        "external intersection callbacks are disabled for ABI safety",
+    );
     world.inner.hooks = CallbackPhysicsHooks::default();
 }
 
