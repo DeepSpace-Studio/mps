@@ -17,3 +17,9 @@ mimalloc = "0.1.52"
 
 [build-dependencies]
 cbindgen = "0.29.4"
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"

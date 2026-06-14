@@ -5,7 +5,7 @@ use std::slice;
 
 use crate::rapier::ffi::{
     AabbDesc, Bool, ColliderBuilderHandle, ColliderHandleRaw, InteractionGroupsDesc, Obb, Quat,
-    RigidBodyHandleRaw, ShapeDesc, ShapeType, Sphere, Vec3, WorldHandle, active_events_from_bits,
+    RigidBodyHandleRaw, ShapeDesc, Sphere, Vec3, WorldHandle, active_events_from_bits,
     active_hooks_from_bits, interaction_groups_to_rapier, isometry_from_parts,
     pack_collider_handle, quat_finite, quat_from_rapier, shape_desc_valid, shape_from_desc,
     unpack_collider_handle, unpack_rigid_body_handle, vec3_from_rapier, vec3_to_rapier,
@@ -137,7 +137,7 @@ fn builder_from_compound(parts: Vec<(Pose, SharedShape)>) -> *mut ColliderBuilde
 
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create(
-    shape_type: ShapeType,
+    shape_type: u32,
     shape_data: Vec3,
 ) -> *mut ColliderBuilderHandle {
     let shape_desc = ShapeDesc {
@@ -513,6 +513,9 @@ pub extern "C" fn collider_builder_set_translation(
     let Some(builder) = (unsafe { builder.as_mut() }) else {
         return;
     };
+    if !vec3_finite(translation) {
+        return;
+    }
 
     let inner = std::mem::replace(&mut builder.inner, ColliderBuilder::ball(0.5));
     builder.inner = inner.translation(vec3_to_rapier(translation));
@@ -526,6 +529,9 @@ pub extern "C" fn collider_builder_set_rotation(
     let Some(builder) = (unsafe { builder.as_mut() }) else {
         return;
     };
+    if !vec3_finite(rotation_axis_angle) {
+        return;
+    }
 
     let inner = std::mem::replace(&mut builder.inner, ColliderBuilder::ball(0.5));
     builder.inner = inner.rotation(vec3_to_rapier(rotation_axis_angle));
@@ -540,6 +546,9 @@ pub extern "C" fn collider_builder_set_pose(
     let Some(builder) = (unsafe { builder.as_mut() }) else {
         return;
     };
+    if !vec3_finite(translation) || !quat_finite(rotation) {
+        return;
+    }
 
     let inner = std::mem::replace(&mut builder.inner, ColliderBuilder::ball(0.5));
     builder.inner = inner.position(isometry_from_parts(translation, rotation));
@@ -563,6 +572,9 @@ pub extern "C" fn collider_builder_set_friction(
     let Some(builder) = (unsafe { builder.as_mut() }) else {
         return;
     };
+    if !friction.is_finite() || friction < 0.0 {
+        return;
+    }
 
     let inner = std::mem::replace(&mut builder.inner, ColliderBuilder::ball(0.5));
     builder.inner = inner.friction(friction);
@@ -576,6 +588,9 @@ pub extern "C" fn collider_builder_set_restitution(
     let Some(builder) = (unsafe { builder.as_mut() }) else {
         return;
     };
+    if !restitution.is_finite() || restitution < 0.0 {
+        return;
+    }
 
     let inner = std::mem::replace(&mut builder.inner, ColliderBuilder::ball(0.5));
     builder.inner = inner.restitution(restitution);
@@ -586,6 +601,9 @@ pub extern "C" fn collider_builder_set_density(builder: *mut ColliderBuilderHand
     let Some(builder) = (unsafe { builder.as_mut() }) else {
         return;
     };
+    if !density.is_finite() || density < 0.0 {
+        return;
+    }
 
     let inner = std::mem::replace(&mut builder.inner, ColliderBuilder::ball(0.5));
     builder.inner = inner.density(density);
@@ -651,6 +669,9 @@ pub extern "C" fn collider_builder_set_contact_force_event_threshold(
     let Some(builder) = (unsafe { builder.as_mut() }) else {
         return;
     };
+    if !threshold.is_finite() || threshold < 0.0 {
+        return;
+    }
 
     let inner = std::mem::replace(&mut builder.inner, ColliderBuilder::ball(0.5));
     builder.inner = inner.contact_force_event_threshold(threshold);
@@ -823,6 +844,9 @@ pub extern "C" fn collider_set_pose(
     else {
         return Bool::FALSE;
     };
+    if !vec3_finite(translation) || !quat_finite(rotation) {
+        return Bool::FALSE;
+    }
 
     collider.set_position(isometry_from_parts(translation, rotation));
     Bool::TRUE
@@ -865,6 +889,9 @@ pub extern "C" fn collider_set_friction(
     else {
         return Bool::FALSE;
     };
+    if !friction.is_finite() || friction < 0.0 {
+        return Bool::FALSE;
+    }
 
     collider.set_friction(friction);
     Bool::TRUE
@@ -886,6 +913,9 @@ pub extern "C" fn collider_set_restitution(
     else {
         return Bool::FALSE;
     };
+    if !restitution.is_finite() || restitution < 0.0 {
+        return Bool::FALSE;
+    }
 
     collider.set_restitution(restitution);
     Bool::TRUE
@@ -991,6 +1021,9 @@ pub extern "C" fn collider_set_contact_force_event_threshold(
     else {
         return Bool::FALSE;
     };
+    if !threshold.is_finite() || threshold < 0.0 {
+        return Bool::FALSE;
+    }
 
     collider.set_contact_force_event_threshold(threshold);
     Bool::TRUE

@@ -3,8 +3,9 @@ use rapier3d::prelude::{MassProperties, RigidBodyBuilder};
 
 use crate::rapier::ffi::{
     BodyStatus, Bool, Quat, RigidBodyBuilderHandle, RigidBodyHandleRaw, Vec3, WorldHandle,
-    body_status_from_rapier, body_status_to_rapier, isometry_from_parts, pack_rigid_body_handle,
-    quat_from_rapier, quat_to_rapier, unpack_rigid_body_handle, vec3_from_rapier, vec3_to_rapier,
+    body_status_from_rapier, body_status_from_raw, body_status_to_rapier, body_status_to_raw,
+    isometry_from_parts, pack_rigid_body_handle, quat_finite, quat_from_rapier, quat_to_rapier,
+    unpack_rigid_body_handle, vec3_finite, vec3_from_rapier, vec3_to_rapier,
 };
 
 fn builder_from_status(status: BodyStatus) -> RigidBodyBuilder {
@@ -17,9 +18,9 @@ fn builder_from_status(status: BodyStatus) -> RigidBodyBuilder {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn rigid_body_builder_create(status: BodyStatus) -> *mut RigidBodyBuilderHandle {
+pub extern "C" fn rigid_body_builder_create(status: u32) -> *mut RigidBodyBuilderHandle {
     Box::into_raw(Box::new(RigidBodyBuilderHandle {
-        inner: builder_from_status(status),
+        inner: builder_from_status(body_status_from_raw(status)),
     }))
 }
 
@@ -64,6 +65,9 @@ pub extern "C" fn rigid_body_builder_set_translation(
     let Some(builder) = (unsafe { builder.as_mut() }) else {
         return;
     };
+    if !vec3_finite(translation) {
+        return;
+    }
 
     let inner = std::mem::replace(&mut builder.inner, RigidBodyBuilder::dynamic());
     builder.inner = inner.translation(vec3_to_rapier(translation));
@@ -77,6 +81,9 @@ pub extern "C" fn rigid_body_builder_set_rotation(
     let Some(builder) = (unsafe { builder.as_mut() }) else {
         return;
     };
+    if !vec3_finite(rotation_axis_angle) {
+        return;
+    }
 
     let inner = std::mem::replace(&mut builder.inner, RigidBodyBuilder::dynamic());
     builder.inner = inner.rotation(vec3_to_rapier(rotation_axis_angle));
@@ -91,6 +98,9 @@ pub extern "C" fn rigid_body_builder_set_pose(
     let Some(builder) = (unsafe { builder.as_mut() }) else {
         return;
     };
+    if !vec3_finite(translation) || !quat_finite(rotation) {
+        return;
+    }
 
     let inner = std::mem::replace(&mut builder.inner, RigidBodyBuilder::dynamic());
     builder.inner = inner.pose(isometry_from_parts(translation, rotation));
@@ -106,6 +116,16 @@ pub extern "C" fn rigid_body_builder_set_additional_mass_properties(
     let Some(builder) = (unsafe { builder.as_mut() }) else {
         return;
     };
+    if !vec3_finite(center)
+        || !vec3_finite(inertia)
+        || !mass.is_finite()
+        || mass < 0.0
+        || inertia.x < 0.0
+        || inertia.y < 0.0
+        || inertia.z < 0.0
+    {
+        return;
+    }
 
     let inner = std::mem::replace(&mut builder.inner, RigidBodyBuilder::dynamic());
     builder.inner = inner.additional_mass_properties(MassProperties::new(
@@ -123,6 +143,9 @@ pub extern "C" fn rigid_body_builder_set_linvel(
     let Some(builder) = (unsafe { builder.as_mut() }) else {
         return;
     };
+    if !vec3_finite(linvel) {
+        return;
+    }
 
     let inner = std::mem::replace(&mut builder.inner, RigidBodyBuilder::dynamic());
     builder.inner = inner.linvel(vec3_to_rapier(linvel));
@@ -136,6 +159,9 @@ pub extern "C" fn rigid_body_builder_set_angvel(
     let Some(builder) = (unsafe { builder.as_mut() }) else {
         return;
     };
+    if !vec3_finite(angvel) {
+        return;
+    }
 
     let inner = std::mem::replace(&mut builder.inner, RigidBodyBuilder::dynamic());
     builder.inner = inner.angvel(vec3_to_rapier(angvel));
@@ -149,6 +175,9 @@ pub extern "C" fn rigid_body_builder_set_gravity_scale(
     let Some(builder) = (unsafe { builder.as_mut() }) else {
         return;
     };
+    if !gravity_scale.is_finite() {
+        return;
+    }
 
     let inner = std::mem::replace(&mut builder.inner, RigidBodyBuilder::dynamic());
     builder.inner = inner.gravity_scale(gravity_scale);
@@ -162,6 +191,9 @@ pub extern "C" fn rigid_body_builder_set_linear_damping(
     let Some(builder) = (unsafe { builder.as_mut() }) else {
         return;
     };
+    if !linear_damping.is_finite() || linear_damping < 0.0 {
+        return;
+    }
 
     let inner = std::mem::replace(&mut builder.inner, RigidBodyBuilder::dynamic());
     builder.inner = inner.linear_damping(linear_damping);
@@ -175,6 +207,9 @@ pub extern "C" fn rigid_body_builder_set_angular_damping(
     let Some(builder) = (unsafe { builder.as_mut() }) else {
         return;
     };
+    if !angular_damping.is_finite() || angular_damping < 0.0 {
+        return;
+    }
 
     let inner = std::mem::replace(&mut builder.inner, RigidBodyBuilder::dynamic());
     builder.inner = inner.angular_damping(angular_damping);
@@ -231,6 +266,9 @@ pub extern "C" fn rigid_body_builder_set_additional_mass(
     let Some(builder) = (unsafe { builder.as_mut() }) else {
         return;
     };
+    if !mass.is_finite() || mass < 0.0 {
+        return;
+    }
 
     let inner = std::mem::replace(&mut builder.inner, RigidBodyBuilder::dynamic());
     builder.inner = inner.additional_mass(mass);
@@ -311,24 +349,24 @@ pub extern "C" fn world_remove_rigid_body_flag(
 pub extern "C" fn rigid_body_get_status(
     world: *const WorldHandle,
     handle: RigidBodyHandleRaw,
-) -> BodyStatus {
+) -> u32 {
     let Some(world) = (unsafe { world.as_ref() }) else {
-        return BodyStatus::Fixed;
+        return body_status_to_raw(BodyStatus::Fixed);
     };
 
     world
         .inner
         .bodies
         .get(unpack_rigid_body_handle(handle))
-        .map(|body| body_status_from_rapier(body.body_type()))
-        .unwrap_or(BodyStatus::Fixed)
+        .map(|body| body_status_to_raw(body_status_from_rapier(body.body_type())))
+        .unwrap_or(body_status_to_raw(BodyStatus::Fixed))
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn rigid_body_set_status(
     world: *mut WorldHandle,
     handle: RigidBodyHandleRaw,
-    status: BodyStatus,
+    status: u32,
     wake_up: Bool,
 ) -> Bool {
     let Some(world) = (unsafe { world.as_mut() }) else {
@@ -339,7 +377,10 @@ pub extern "C" fn rigid_body_set_status(
         return Bool::FALSE;
     };
 
-    body.set_body_type(body_status_to_rapier(status), wake_up.0 != 0);
+    body.set_body_type(
+        body_status_to_rapier(body_status_from_raw(status)),
+        wake_up.0 != 0,
+    );
     Bool::TRUE
 }
 
@@ -417,6 +458,9 @@ pub extern "C" fn rigid_body_set_pose(
     let Some(body) = world.inner.bodies.get_mut(unpack_rigid_body_handle(handle)) else {
         return Bool::FALSE;
     };
+    if !vec3_finite(translation) || !quat_finite(rotation) {
+        return Bool::FALSE;
+    }
 
     body.set_position(isometry_from_parts(translation, rotation), wake_up.0 != 0);
     Bool::TRUE
@@ -435,6 +479,9 @@ pub extern "C" fn rigid_body_set_translation(
     let Some(body) = world.inner.bodies.get_mut(unpack_rigid_body_handle(handle)) else {
         return Bool::FALSE;
     };
+    if !vec3_finite(translation) {
+        return Bool::FALSE;
+    }
 
     body.set_translation(vec3_to_rapier(translation), wake_up.0 != 0);
     Bool::TRUE
@@ -453,6 +500,9 @@ pub extern "C" fn rigid_body_set_rotation(
     let Some(body) = world.inner.bodies.get_mut(unpack_rigid_body_handle(handle)) else {
         return Bool::FALSE;
     };
+    if !quat_finite(rotation) {
+        return Bool::FALSE;
+    }
 
     body.set_rotation(quat_to_rapier(rotation), wake_up.0 != 0);
     Bool::TRUE
@@ -512,6 +562,9 @@ pub extern "C" fn rigid_body_set_linvel(
     let Some(body) = world.inner.bodies.get_mut(unpack_rigid_body_handle(handle)) else {
         return Bool::FALSE;
     };
+    if !vec3_finite(linvel) {
+        return Bool::FALSE;
+    }
 
     body.set_linvel(vec3_to_rapier(linvel), wake_up.0 != 0);
     Bool::TRUE
@@ -570,6 +623,9 @@ pub extern "C" fn rigid_body_set_angvel(
     let Some(body) = world.inner.bodies.get_mut(unpack_rigid_body_handle(handle)) else {
         return Bool::FALSE;
     };
+    if !vec3_finite(angvel) {
+        return Bool::FALSE;
+    }
 
     body.set_angvel(vec3_to_rapier(angvel), wake_up.0 != 0);
     Bool::TRUE
@@ -588,6 +644,9 @@ pub extern "C" fn rigid_body_add_force(
     let Some(body) = world.inner.bodies.get_mut(unpack_rigid_body_handle(handle)) else {
         return Bool::FALSE;
     };
+    if !vec3_finite(force) {
+        return Bool::FALSE;
+    }
 
     body.add_force(vec3_to_rapier(force), wake_up.0 != 0);
     Bool::TRUE
@@ -616,6 +675,9 @@ pub extern "C" fn rigid_body_add_torque(
     let Some(body) = world.inner.bodies.get_mut(unpack_rigid_body_handle(handle)) else {
         return Bool::FALSE;
     };
+    if !vec3_finite(torque) {
+        return Bool::FALSE;
+    }
 
     body.add_torque(vec3_to_rapier(torque), wake_up.0 != 0);
     Bool::TRUE
@@ -634,6 +696,9 @@ pub extern "C" fn rigid_body_apply_impulse(
     let Some(body) = world.inner.bodies.get_mut(unpack_rigid_body_handle(handle)) else {
         return Bool::FALSE;
     };
+    if !vec3_finite(impulse) {
+        return Bool::FALSE;
+    }
 
     body.apply_impulse(vec3_to_rapier(impulse), wake_up.0 != 0);
     Bool::TRUE
@@ -652,6 +717,9 @@ pub extern "C" fn rigid_body_apply_torque_impulse(
     let Some(body) = world.inner.bodies.get_mut(unpack_rigid_body_handle(handle)) else {
         return Bool::FALSE;
     };
+    if !vec3_finite(torque_impulse) {
+        return Bool::FALSE;
+    }
 
     body.apply_torque_impulse(vec3_to_rapier(torque_impulse), wake_up.0 != 0);
     Bool::TRUE

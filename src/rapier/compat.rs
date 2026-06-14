@@ -7,7 +7,7 @@ use rapier3d::prelude::{ColliderBuilder, RigidBodyBuilder};
 use crate::rapier::ffi::{
     AabbDesc, InteractionGroupsDesc, MAX_OUTPUT_CAPACITY, Quat, QueryFilterDesc,
     RigidBodyHandleRaw, Vec3, WorldHandle, interaction_groups_to_rapier, isometry_from_parts,
-    pack_rigid_body_handle, query_filter_from_desc, vec3_finite, vec3_to_rapier,
+    pack_rigid_body_handle, quat_finite, query_filter_from_desc, vec3_finite, vec3_to_rapier,
 };
 
 const DYNAMIC_LINEAR_DAMPING: f64 = 0.4;
@@ -42,6 +42,18 @@ pub extern "C" fn world_insert_dynamic_cuboids(
         return 0;
     };
     if cuboids.is_null() || cuboid_count == 0 || cuboid_count > MAX_DYNAMIC_CUBOIDS {
+        return 0;
+    }
+    if !vec3_finite(translation)
+        || !quat_finite(rotation)
+        || !vec3_finite(linvel)
+        || !density.is_finite()
+        || !friction.is_finite()
+        || !restitution.is_finite()
+        || density < 0.0
+        || friction < 0.0
+        || restitution < 0.0
+    {
         return 0;
     }
     let Some(value_count) = (cuboid_count as usize).checked_mul(6) else {
@@ -127,6 +139,9 @@ pub extern "C" fn world_insert_static_trimesh(
     }
     let vertex_count = vertex_xyz_len / 3;
     if vertex_count > MAX_TRIMESH_VERTICES || index_len > MAX_TRIMESH_INDICES {
+        return 0;
+    }
+    if !friction.is_finite() || !restitution.is_finite() || friction < 0.0 || restitution < 0.0 {
         return 0;
     }
 

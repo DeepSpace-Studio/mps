@@ -1,14 +1,13 @@
 use crate::abi::ffm as abi;
 use crate::helper::helper::jdoublearray_to_array;
 use crate::rapier::ffi::{
-    AabbDesc, BodyStatus, Bool, CRbTreeHandle as CRTH, Capsule, CharacterCollision,
+    AabbDesc, Bool, CRbTreeHandle as CRTH, Capsule, CharacterCollision,
     CharacterControllerHandle as CCH, ColliderBuilderHandle as CBH, ColliderHandleRaw as CRaw,
     CollisionEventRecord as CER, ContactForceEventRecord, Cylinder, EffectiveCharacterMovement,
-    Ellipsoid, ImpulseJointHandleRaw as JRaw, InteractionGroupsDesc, JointAxisDesc,
-    JointBuilderHandle as JBH, JointTypeDesc, KdopPreset, NeuralActivation, NeuralBoundsDesc, Obb,
-    Prism, Quat, QueryFilterDesc, RTreeHandle as RTH, RayHit, RigidBodyBuilderHandle as RBH,
-    RigidBodyHandleRaw as RRaw, ShapeCastHit, ShapeCastOptionsDesc, ShapeDesc, ShapeType, Sphere,
-    SphericalShell, Ssv, Vec3, VoxelColliderMode, VoxelColliderOptions, WorldHandle as WH,
+    Ellipsoid, ImpulseJointHandleRaw as JRaw, InteractionGroupsDesc, JointBuilderHandle as JBH,
+    NeuralBoundsDesc, Obb, Prism, Quat, QueryFilterDesc, RTreeHandle as RTH, RayHit,
+    RigidBodyBuilderHandle as RBH, RigidBodyHandleRaw as RRaw, ShapeCastHit, ShapeCastOptionsDesc,
+    ShapeDesc, Sphere, SphericalShell, Ssv, Vec3, VoxelColliderOptions, WorldHandle as WH,
 };
 use crate::rapier::{
     bounds as bo, collider as col, compat as com, controller as cc, crbtree as crt, dop,
@@ -18,6 +17,7 @@ use crate::rapier::{
 use ljni::JNIEnv;
 use ljni::sys::{jbyte, jclass, jdouble, jdoubleArray, jint, jlong};
 use rapier3d::prelude::{Collider as CB, RigidBody as RB};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 
 fn to_jlong<T>(value: *mut T) -> jlong {
     value as isize as jlong
@@ -97,78 +97,32 @@ fn qfilter(
     }
 }
 
-fn shape_type(value: jint) -> ShapeType {
-    match value {
-        1 => ShapeType::Cuboid,
-        2 => ShapeType::CapsuleY,
-        3 => ShapeType::CapsuleX,
-        4 => ShapeType::CapsuleZ,
-        5 => ShapeType::Cylinder,
-        6 => ShapeType::RoundCylinder,
-        7 => ShapeType::Cone,
-        8 => ShapeType::RoundCone,
-        9 => ShapeType::RoundCuboid,
-        _ => ShapeType::Ball,
-    }
+fn shape_type(value: jint) -> u32 {
+    u32_from_jint(value)
 }
 
-fn body_status(value: jint) -> BodyStatus {
-    match value {
-        0 => BodyStatus::Dynamic,
-        1 => BodyStatus::Fixed,
-        2 => BodyStatus::KinematicPositionBased,
-        3 => BodyStatus::KinematicVelocityBased,
-        _ => BodyStatus::Fixed,
-    }
+fn body_status(value: jint) -> u32 {
+    u32_from_jint(value)
 }
 
-fn joint_type(value: jint) -> JointTypeDesc {
-    match value {
-        1 => JointTypeDesc::Revolute,
-        2 => JointTypeDesc::Prismatic,
-        3 => JointTypeDesc::Rope,
-        4 => JointTypeDesc::Spring,
-        5 => JointTypeDesc::Spherical,
-        _ => JointTypeDesc::Fixed,
-    }
+fn joint_type(value: jint) -> u32 {
+    u32_from_jint(value)
 }
 
-fn joint_axis(value: jint) -> JointAxisDesc {
-    match value {
-        1 => JointAxisDesc::LinY,
-        2 => JointAxisDesc::LinZ,
-        3 => JointAxisDesc::AngX,
-        4 => JointAxisDesc::AngY,
-        5 => JointAxisDesc::AngZ,
-        _ => JointAxisDesc::LinX,
-    }
+fn joint_axis(value: jint) -> u32 {
+    u32_from_jint(value)
 }
 
-fn kdop_preset(value: jint) -> KdopPreset {
-    match value {
-        14 => KdopPreset::K14,
-        18 => KdopPreset::K18,
-        26 => KdopPreset::K26,
-        _ => KdopPreset::K6,
-    }
+fn kdop_preset(value: jint) -> u32 {
+    u32_from_jint(value)
 }
 
-fn neural_activation(value: jint) -> NeuralActivation {
-    match value {
-        1 => NeuralActivation::Tanh,
-        2 => NeuralActivation::Sin,
-        3 => NeuralActivation::Linear,
-        _ => NeuralActivation::Relu,
-    }
+fn neural_activation(value: jint) -> u32 {
+    u32_from_jint(value)
 }
 
-fn voxel_mode(value: jint) -> VoxelColliderMode {
-    match value {
-        1 => VoxelColliderMode::Cuboids,
-        2 => VoxelColliderMode::GreedyCuboids,
-        3 => VoxelColliderMode::SurfaceMesh,
-        _ => VoxelColliderMode::Auto,
-    }
+fn voxel_mode(value: jint) -> u32 {
+    u32_from_jint(value)
 }
 
 fn vec3_to_j_double_array(_env: JNIEnv, vec3: Vec3) -> jdoubleArray {
@@ -216,13 +170,23 @@ macro_rules! jni {
     (@ty double_array) => { jdoubleArray };
     (@ty long_array) => { jlongArray };
     (@ty bool_array) => { jbooleanArray };
+    (@default long) => { 0 };
+    (@default boolean) => { 0 };
+    (@default double) => { 0.0 };
+    (@default int) => { 0 };
+    (@default void) => { () };
+    (@default double_array) => { std::ptr::null_mut() };
+    (@default long_array) => { std::ptr::null_mut() };
+    (@default bool_array) => { std::ptr::null_mut() };
     ($ret:ident $method:ident ( $($kind:ident $arg:ident),* ) $body:block) => {
         #[unsafe(export_name = concat!(
             "Java_org_polaris2023_msp_1rigid_1body_RigidBodyNative_",
             stringify!($method)
         ))]
         #[allow(non_snake_case)]
-        pub extern "system" fn $method(_env: JNIEnv, _class: jclass, $($arg: jni!(@ty $kind)),*) -> jni!(@ty $ret) $body
+        pub extern "system" fn $method(_env: JNIEnv, _class: jclass, $($arg: jni!(@ty $kind)),*) -> jni!(@ty $ret) {
+            catch_unwind(AssertUnwindSafe(|| $body)).unwrap_or(jni!(@default $ret))
+        }
     };
 }
 
@@ -237,13 +201,23 @@ macro_rules! jni_e_c {
     (@ty bool_array) => { jbooleanArray };
     (@ty env) => { JNIEnv };
     (@ty class) => { jclass };
+    (@default long) => { 0 };
+    (@default boolean) => { 0 };
+    (@default double) => { 0.0 };
+    (@default int) => { 0 };
+    (@default void) => { () };
+    (@default double_array) => { std::ptr::null_mut() };
+    (@default long_array) => { std::ptr::null_mut() };
+    (@default bool_array) => { std::ptr::null_mut() };
     ($ret:ident $method:ident ( $($kind:ident $arg:ident),* ) $body:block) => {
         #[unsafe(export_name = concat!(
             "Java_org_polaris2023_msp_1rigid_1body_RigidBodyNative_",
             stringify!($method)
         ))]
         #[allow(non_snake_case)]
-        pub extern "system" fn $method( $($arg: jni_e_c!(@ty $kind)),*) -> jni_e_c!(@ty $ret) $body
+        pub extern "system" fn $method( $($arg: jni_e_c!(@ty $kind)),*) -> jni_e_c!(@ty $ret) {
+            catch_unwind(AssertUnwindSafe(|| $body)).unwrap_or(jni_e_c!(@default $ret))
+        }
     };
 }
 

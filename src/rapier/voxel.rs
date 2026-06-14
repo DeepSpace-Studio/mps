@@ -3,7 +3,10 @@ use std::slice;
 use rapier3d::math::{Pose, Rotation, Vector};
 use rapier3d::prelude::{ColliderBuilder, SharedShape};
 
-use crate::rapier::ffi::{ColliderBuilderHandle, Vec3, VoxelColliderMode, VoxelColliderOptions};
+use crate::rapier::ffi::{
+    ColliderBuilderHandle, Vec3, VoxelColliderMode, VoxelColliderOptions,
+    voxel_collider_mode_from_raw,
+};
 
 const MAX_VOXEL_CELLS: usize = 262_144;
 const MAX_COMPOUND_PARTS: usize = 100_000;
@@ -57,8 +60,9 @@ impl VoxelGrid<'_> {
 }
 
 fn choose_mode(solid_count: usize, options: VoxelColliderOptions) -> VoxelColliderMode {
-    if options.mode != VoxelColliderMode::Auto {
-        return options.mode;
+    let mode = voxel_collider_mode_from_raw(options.mode);
+    if mode != VoxelColliderMode::Auto {
+        return mode;
     }
     if solid_count <= options.small_voxel_limit as usize {
         return VoxelColliderMode::Cuboids;
@@ -388,7 +392,7 @@ mod tests {
 
     fn options(mode: VoxelColliderMode) -> VoxelColliderOptions {
         VoxelColliderOptions {
-            mode,
+            mode: mode as u32,
             dynamic_body: Bool::FALSE,
             small_voxel_limit: 128,
             mesh_voxel_limit: 20_000,

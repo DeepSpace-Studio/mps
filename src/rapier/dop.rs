@@ -3,7 +3,7 @@ use std::slice;
 use rapier3d::prelude::{ColliderBuilder, Vector};
 use smallvec::{SmallVec, smallvec};
 
-use crate::rapier::ffi::{ColliderBuilderHandle, KdopPreset};
+use crate::rapier::ffi::{ColliderBuilderHandle, KdopPreset, kdop_preset_from_raw};
 
 const EPSILON: f64 = 1.0e-9;
 const MAX_RAW_POINTS: u32 = 1_000_000;
@@ -199,14 +199,14 @@ fn builder_from_raw_points(
 pub extern "C" fn collider_builder_create_kdop(
     points_xyz: *const f64,
     point_count: u32,
-    preset: KdopPreset,
+    preset: u32,
 ) -> *mut ColliderBuilderHandle {
     let Some(points) = builder_from_raw_points(points_xyz, point_count) else {
         return std::ptr::null_mut();
     };
 
     let hull = KdopHull {
-        directions: kdop_directions(preset),
+        directions: kdop_directions(kdop_preset_from_raw(preset)),
     };
     let Some(builder) = hull.build(&points) else {
         return std::ptr::null_mut();

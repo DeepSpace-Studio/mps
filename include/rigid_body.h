@@ -12,6 +12,45 @@
 
 #define ABI_VERSION 1
 
+typedef enum BodyStatus {
+  Dynamic = 0,
+  Fixed = 1,
+  KinematicPositionBased = 2,
+  KinematicVelocityBased = 3,
+} BodyStatus;
+
+typedef enum JointAxisDesc {
+  LinX = 0,
+  LinY = 1,
+  LinZ = 2,
+  AngX = 3,
+  AngY = 4,
+  AngZ = 5,
+} JointAxisDesc;
+
+typedef enum JointTypeDesc {
+  Fixed = 0,
+  Revolute = 1,
+  Prismatic = 2,
+  Rope = 3,
+  Spring = 4,
+  Spherical = 5,
+} JointTypeDesc;
+
+typedef enum KdopPreset {
+  K6 = 6,
+  K14 = 14,
+  K18 = 18,
+  K26 = 26,
+} KdopPreset;
+
+typedef enum NeuralActivation {
+  Relu = 0,
+  Tanh = 1,
+  Sin = 2,
+  Linear = 3,
+} NeuralActivation;
+
 typedef enum ShapeType {
   Ball = 0,
   Cuboid = 1,
@@ -24,45 +63,6 @@ typedef enum ShapeType {
   RoundCone = 8,
   RoundCuboid = 9,
 } ShapeType;
-
-typedef enum KdopPreset {
-  K6 = 6,
-  K14 = 14,
-  K18 = 18,
-  K26 = 26,
-} KdopPreset;
-
-typedef enum JointTypeDesc {
-  Fixed = 0,
-  Revolute = 1,
-  Prismatic = 2,
-  Rope = 3,
-  Spring = 4,
-  Spherical = 5,
-} JointTypeDesc;
-
-typedef enum JointAxisDesc {
-  LinX = 0,
-  LinY = 1,
-  LinZ = 2,
-  AngX = 3,
-  AngY = 4,
-  AngZ = 5,
-} JointAxisDesc;
-
-typedef enum NeuralActivation {
-  Relu = 0,
-  Tanh = 1,
-  Sin = 2,
-  Linear = 3,
-} NeuralActivation;
-
-typedef enum BodyStatus {
-  Dynamic = 0,
-  Fixed = 1,
-  KinematicPositionBased = 2,
-  KinematicVelocityBased = 3,
-} BodyStatus;
 
 typedef enum VoxelColliderMode {
   Auto = 0,
@@ -164,7 +164,7 @@ typedef struct QueryFilterDesc {
 } QueryFilterDesc;
 
 typedef struct ShapeDesc {
-  enum ShapeType shape_type;
+  uint32_t shape_type;
   double a;
   double b;
   double c;
@@ -210,22 +210,6 @@ typedef struct ContactForceEventRecord {
   double max_force_magnitude;
 } ContactForceEventRecord;
 
-typedef uint32_t (*ContactPairFilterCallback)(uintptr_t,
-                                              ColliderHandleRaw,
-                                              ColliderHandleRaw,
-                                              struct Bool,
-                                              RigidBodyHandleRaw,
-                                              struct Bool,
-                                              RigidBodyHandleRaw);
-
-typedef struct Bool (*IntersectionPairFilterCallback)(uintptr_t,
-                                                      ColliderHandleRaw,
-                                                      ColliderHandleRaw,
-                                                      struct Bool,
-                                                      RigidBodyHandleRaw,
-                                                      struct Bool,
-                                                      RigidBodyHandleRaw);
-
 typedef uint64_t ImpulseJointHandleRaw;
 
 typedef struct NeuralBoundsDesc {
@@ -235,7 +219,7 @@ typedef struct NeuralBoundsDesc {
   uint32_t sample_resolution;
   uint32_t hidden_width;
   uint32_t hidden_layers;
-  enum NeuralActivation activation;
+  uint32_t activation;
   double output_scale;
   double padding;
 } NeuralBoundsDesc;
@@ -270,7 +254,7 @@ typedef struct ShapeCastOptionsDesc {
 } ShapeCastOptionsDesc;
 
 typedef struct VoxelColliderOptions {
-  enum VoxelColliderMode mode;
+  uint32_t mode;
   struct Bool dynamic_body;
   uint32_t small_voxel_limit;
   uint32_t mesh_voxel_limit;
@@ -415,8 +399,7 @@ uint32_t query_intersect_spherical_shell_all(const struct WorldHandle *world,
                                              ColliderHandleRaw *out_handles,
                                              uint32_t capacity);
 
-struct ColliderBuilderHandle *collider_builder_create(enum ShapeType shape_type,
-                                                      struct Vec3 shape_data);
+struct ColliderBuilderHandle *collider_builder_create(uint32_t shape_type, struct Vec3 shape_data);
 
 struct ColliderBuilderHandle *collider_builder_create_ex(struct ShapeDesc shape_desc);
 
@@ -669,7 +652,7 @@ uint32_t crb_tree_query_aabb(const struct CRbTreeHandle *tree,
 
 struct ColliderBuilderHandle *collider_builder_create_kdop(const double *points_xyz,
                                                            uint32_t point_count,
-                                                           enum KdopPreset preset);
+                                                           uint32_t preset);
 
 struct ColliderBuilderHandle *collider_builder_create_fdh(const double *points_xyz,
                                                           uint32_t point_count,
@@ -689,18 +672,18 @@ struct ContactForceEventRecord world_get_contact_force_event(const struct WorldH
                                                              uint32_t index);
 
 void world_set_contact_pair_filter_callback(struct WorldHandle *world,
-                                            ContactPairFilterCallback callback,
-                                            uintptr_t user_data);
+                                            uintptr_t _callback,
+                                            uintptr_t _user_data);
 
 void world_set_intersection_pair_filter_callback(struct WorldHandle *world,
-                                                 IntersectionPairFilterCallback callback,
-                                                 uintptr_t user_data);
+                                                 uintptr_t _callback,
+                                                 uintptr_t _user_data);
 
 void world_clear_contact_pair_filter_callback(struct WorldHandle *world);
 
 void world_clear_intersection_pair_filter_callback(struct WorldHandle *world);
 
-struct JointBuilderHandle *joint_builder_create(enum JointTypeDesc joint_type,
+struct JointBuilderHandle *joint_builder_create(uint32_t joint_type,
                                                 struct Vec3 axis_or_primary,
                                                 double b,
                                                 double c);
@@ -714,17 +697,17 @@ void joint_builder_set_local_anchor1(struct JointBuilderHandle *builder, struct 
 void joint_builder_set_local_anchor2(struct JointBuilderHandle *builder, struct Vec3 anchor);
 
 void joint_builder_set_limits(struct JointBuilderHandle *builder,
-                              enum JointAxisDesc axis,
+                              uint32_t axis,
                               double min,
                               double max);
 
 void joint_builder_set_motor_velocity(struct JointBuilderHandle *builder,
-                                      enum JointAxisDesc axis,
+                                      uint32_t axis,
                                       double target_vel,
                                       double factor);
 
 void joint_builder_set_motor_position(struct JointBuilderHandle *builder,
-                                      enum JointAxisDesc axis,
+                                      uint32_t axis,
                                       double target_pos,
                                       double stiffness,
                                       double damping);
@@ -845,7 +828,7 @@ struct ShapeCastHit query_cast_shape(const struct WorldHandle *world,
                                      struct ShapeCastOptionsDesc options,
                                      struct QueryFilterDesc filter);
 
-struct RigidBodyBuilderHandle *rigid_body_builder_create(enum BodyStatus status);
+struct RigidBodyBuilderHandle *rigid_body_builder_create(uint32_t status);
 
 RigidBody *rigid_body_builder_build(struct RigidBodyBuilderHandle *builder);
 
@@ -907,11 +890,11 @@ uint8_t world_remove_rigid_body_flag(struct WorldHandle *world,
                                      RigidBodyHandleRaw handle,
                                      struct Bool remove_attached_colliders);
 
-enum BodyStatus rigid_body_get_status(const struct WorldHandle *world, RigidBodyHandleRaw handle);
+uint32_t rigid_body_get_status(const struct WorldHandle *world, RigidBodyHandleRaw handle);
 
 struct Bool rigid_body_set_status(struct WorldHandle *world,
                                   RigidBodyHandleRaw handle,
-                                  enum BodyStatus status,
+                                  uint32_t status,
                                   struct Bool wake_up);
 
 struct Vec3 rigid_body_get_translation(const struct WorldHandle *world, RigidBodyHandleRaw handle);

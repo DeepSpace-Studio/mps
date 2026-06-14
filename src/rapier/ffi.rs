@@ -75,7 +75,7 @@ pub enum VoxelColliderMode {
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct VoxelColliderOptions {
-    pub mode: VoxelColliderMode,
+    pub mode: u32,
     pub dynamic_body: Bool,
     pub small_voxel_limit: u32,
     pub mesh_voxel_limit: u32,
@@ -84,7 +84,7 @@ pub struct VoxelColliderOptions {
 impl Default for VoxelColliderOptions {
     fn default() -> Self {
         Self {
-            mode: VoxelColliderMode::Auto,
+            mode: VoxelColliderMode::Auto as u32,
             dynamic_body: Bool::FALSE,
             small_voxel_limit: 128,
             mesh_voxel_limit: 20_000,
@@ -101,7 +101,7 @@ impl Default for ShapeType {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ShapeDesc {
-    pub shape_type: ShapeType,
+    pub shape_type: u32,
     pub a: f64,
     pub b: f64,
     pub c: f64,
@@ -262,7 +262,7 @@ pub struct NeuralBoundsDesc {
     pub sample_resolution: u32,
     pub hidden_width: u32,
     pub hidden_layers: u32,
-    pub activation: NeuralActivation,
+    pub activation: u32,
     pub output_scale: f64,
     pub padding: f64,
 }
@@ -469,6 +469,16 @@ pub(crate) fn body_status_to_rapier(status: BodyStatus) -> rapier3d::prelude::Ri
     }
 }
 
+pub(crate) fn body_status_from_raw(value: u32) -> BodyStatus {
+    match value {
+        0 => BodyStatus::Dynamic,
+        1 => BodyStatus::Fixed,
+        2 => BodyStatus::KinematicPositionBased,
+        3 => BodyStatus::KinematicVelocityBased,
+        _ => BodyStatus::Fixed,
+    }
+}
+
 pub(crate) fn body_status_from_rapier(status: rapier3d::prelude::RigidBodyType) -> BodyStatus {
     match status {
         rapier3d::prelude::RigidBodyType::Dynamic => BodyStatus::Dynamic,
@@ -482,8 +492,27 @@ pub(crate) fn body_status_from_rapier(status: rapier3d::prelude::RigidBodyType) 
     }
 }
 
+pub(crate) fn body_status_to_raw(status: BodyStatus) -> u32 {
+    status as u32
+}
+
+pub(crate) fn shape_type_from_raw(value: u32) -> ShapeType {
+    match value {
+        1 => ShapeType::Cuboid,
+        2 => ShapeType::CapsuleY,
+        3 => ShapeType::CapsuleX,
+        4 => ShapeType::CapsuleZ,
+        5 => ShapeType::Cylinder,
+        6 => ShapeType::RoundCylinder,
+        7 => ShapeType::Cone,
+        8 => ShapeType::RoundCone,
+        9 => ShapeType::RoundCuboid,
+        _ => ShapeType::Ball,
+    }
+}
+
 pub(crate) fn shape_from_desc(desc: ShapeDesc) -> SharedShape {
-    match desc.shape_type {
+    match shape_type_from_raw(desc.shape_type) {
         ShapeType::Ball => SharedShape::ball(desc.a),
         ShapeType::Cuboid => SharedShape::cuboid(desc.a, desc.b, desc.c),
         ShapeType::CapsuleY => SharedShape::capsule_y(desc.a, desc.b),
@@ -502,7 +531,7 @@ pub(crate) fn shape_desc_valid(desc: ShapeDesc) -> bool {
         return false;
     }
 
-    match desc.shape_type {
+    match shape_type_from_raw(desc.shape_type) {
         ShapeType::Ball => desc.a > 0.0,
         ShapeType::Cuboid => desc.a > 0.0 && desc.b > 0.0 && desc.c > 0.0,
         ShapeType::CapsuleY | ShapeType::CapsuleX | ShapeType::CapsuleZ => {
@@ -513,6 +542,44 @@ pub(crate) fn shape_desc_valid(desc: ShapeDesc) -> bool {
             desc.a > 0.0 && desc.b > 0.0 && desc.c >= 0.0
         }
         ShapeType::RoundCuboid => desc.a > 0.0 && desc.b > 0.0 && desc.c > 0.0 && desc.d >= 0.0,
+    }
+}
+
+pub(crate) fn voxel_collider_mode_from_raw(value: u32) -> VoxelColliderMode {
+    match value {
+        1 => VoxelColliderMode::Cuboids,
+        2 => VoxelColliderMode::GreedyCuboids,
+        3 => VoxelColliderMode::SurfaceMesh,
+        _ => VoxelColliderMode::Auto,
+    }
+}
+
+pub(crate) fn neural_activation_from_raw(value: u32) -> NeuralActivation {
+    match value {
+        1 => NeuralActivation::Tanh,
+        2 => NeuralActivation::Sin,
+        3 => NeuralActivation::Linear,
+        _ => NeuralActivation::Relu,
+    }
+}
+
+pub(crate) fn kdop_preset_from_raw(value: u32) -> KdopPreset {
+    match value {
+        14 => KdopPreset::K14,
+        18 => KdopPreset::K18,
+        26 => KdopPreset::K26,
+        _ => KdopPreset::K6,
+    }
+}
+
+pub(crate) fn joint_type_from_raw(value: u32) -> JointTypeDesc {
+    match value {
+        1 => JointTypeDesc::Revolute,
+        2 => JointTypeDesc::Prismatic,
+        3 => JointTypeDesc::Rope,
+        4 => JointTypeDesc::Spring,
+        5 => JointTypeDesc::Spherical,
+        _ => JointTypeDesc::Fixed,
     }
 }
 
@@ -566,6 +633,17 @@ pub(crate) fn joint_axis_to_rapier(axis: JointAxisDesc) -> JointAxis {
         JointAxisDesc::AngX => JointAxis::AngX,
         JointAxisDesc::AngY => JointAxis::AngY,
         JointAxisDesc::AngZ => JointAxis::AngZ,
+    }
+}
+
+pub(crate) fn joint_axis_from_raw(value: u32) -> JointAxisDesc {
+    match value {
+        1 => JointAxisDesc::LinY,
+        2 => JointAxisDesc::LinZ,
+        3 => JointAxisDesc::AngX,
+        4 => JointAxisDesc::AngY,
+        5 => JointAxisDesc::AngZ,
+        _ => JointAxisDesc::LinX,
     }
 }
 

@@ -6,30 +6,10 @@ use rapier3d::prelude::{
 
 use crate::rapier::ffi::WorldHandle;
 use crate::rapier::ffi::{
-    Bool, ColliderHandleRaw, CollisionEventRecord, ContactForceEventRecord, RigidBodyHandleRaw,
-    pack_collider_handle, pack_rigid_body_handle, vec3_from_rapier,
+    Bool, CollisionEventRecord, ContactForceEventRecord, pack_collider_handle, vec3_from_rapier,
 };
 
 const MAX_EVENT_RECORDS: usize = 16_384;
-
-pub type ContactPairFilterCallback = extern "C" fn(
-    usize,
-    ColliderHandleRaw,
-    ColliderHandleRaw,
-    Bool,
-    RigidBodyHandleRaw,
-    Bool,
-    RigidBodyHandleRaw,
-) -> u32;
-pub type IntersectionPairFilterCallback = extern "C" fn(
-    usize,
-    ColliderHandleRaw,
-    ColliderHandleRaw,
-    Bool,
-    RigidBodyHandleRaw,
-    Bool,
-    RigidBodyHandleRaw,
-) -> Bool;
 
 #[derive(Default)]
 pub(crate) struct CollectingEventHandler {
@@ -119,64 +99,19 @@ impl EventHandler for CollectingEventHandler {
 
 #[derive(Default)]
 pub(crate) struct CallbackPhysicsHooks {
-    pub(crate) contact_pair_filter: Option<ContactPairFilterCallback>,
-    pub(crate) intersection_pair_filter: Option<IntersectionPairFilterCallback>,
-    pub(crate) user_data: usize,
+    _private: (),
 }
 
 impl PhysicsHooks for CallbackPhysicsHooks {
     fn filter_contact_pair(
         &self,
-        context: &rapier3d::prelude::PairFilterContext,
+        _context: &rapier3d::prelude::PairFilterContext,
     ) -> Option<SolverFlags> {
-        let Some(callback) = self.contact_pair_filter else {
-            return Some(SolverFlags::COMPUTE_IMPULSES);
-        };
-
-        let flags = callback(
-            self.user_data,
-            pack_collider_handle(context.collider1),
-            pack_collider_handle(context.collider2),
-            context.rigid_body1.is_some().into(),
-            context
-                .rigid_body1
-                .map(pack_rigid_body_handle)
-                .unwrap_or_default(),
-            context.rigid_body2.is_some().into(),
-            context
-                .rigid_body2
-                .map(pack_rigid_body_handle)
-                .unwrap_or_default(),
-        );
-
-        if flags == u32::MAX {
-            None
-        } else {
-            Some(SolverFlags::from_bits_truncate(flags))
-        }
+        Some(SolverFlags::COMPUTE_IMPULSES)
     }
 
-    fn filter_intersection_pair(&self, context: &rapier3d::prelude::PairFilterContext) -> bool {
-        let Some(callback) = self.intersection_pair_filter else {
-            return true;
-        };
-
-        callback(
-            self.user_data,
-            pack_collider_handle(context.collider1),
-            pack_collider_handle(context.collider2),
-            context.rigid_body1.is_some().into(),
-            context
-                .rigid_body1
-                .map(pack_rigid_body_handle)
-                .unwrap_or_default(),
-            context.rigid_body2.is_some().into(),
-            context
-                .rigid_body2
-                .map(pack_rigid_body_handle)
-                .unwrap_or_default(),
-        )
-        .0 != 0
+    fn filter_intersection_pair(&self, _context: &rapier3d::prelude::PairFilterContext) -> bool {
+        true
     }
 }
 
@@ -237,27 +172,25 @@ pub extern "C" fn world_get_contact_force_event(
 #[unsafe(no_mangle)]
 pub extern "C" fn world_set_contact_pair_filter_callback(
     world: *mut WorldHandle,
-    callback: ContactPairFilterCallback,
-    user_data: usize,
+    _callback: usize,
+    _user_data: usize,
 ) {
     let Some(world) = (unsafe { world.as_mut() }) else {
         return;
     };
-    world.inner.hooks.contact_pair_filter = Some(callback);
-    world.inner.hooks.user_data = user_data;
+    world.inner.hooks = CallbackPhysicsHooks::default();
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn world_set_intersection_pair_filter_callback(
     world: *mut WorldHandle,
-    callback: IntersectionPairFilterCallback,
-    user_data: usize,
+    _callback: usize,
+    _user_data: usize,
 ) {
     let Some(world) = (unsafe { world.as_mut() }) else {
         return;
     };
-    world.inner.hooks.intersection_pair_filter = Some(callback);
-    world.inner.hooks.user_data = user_data;
+    world.inner.hooks = CallbackPhysicsHooks::default();
 }
 
 #[unsafe(no_mangle)]
@@ -265,7 +198,7 @@ pub extern "C" fn world_clear_contact_pair_filter_callback(world: *mut WorldHand
     let Some(world) = (unsafe { world.as_mut() }) else {
         return;
     };
-    world.inner.hooks.contact_pair_filter = None;
+    world.inner.hooks = CallbackPhysicsHooks::default();
 }
 
 #[unsafe(no_mangle)]
@@ -273,5 +206,5 @@ pub extern "C" fn world_clear_intersection_pair_filter_callback(world: *mut Worl
     let Some(world) = (unsafe { world.as_mut() }) else {
         return;
     };
-    world.inner.hooks.intersection_pair_filter = None;
+    world.inner.hooks = CallbackPhysicsHooks::default();
 }

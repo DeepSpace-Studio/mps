@@ -6,8 +6,8 @@ use smallvec::SmallVec;
 
 use crate::rapier::ffi::{
     ColliderBuilderHandle, ColliderHandleRaw, MAX_OUTPUT_CAPACITY, NeuralActivation,
-    NeuralBoundsDesc, QueryFilterDesc, WorldHandle, pack_collider_handle, quat_finite,
-    quat_to_rapier, query_filter_from_desc, vec3_finite,
+    NeuralBoundsDesc, QueryFilterDesc, WorldHandle, neural_activation_from_raw,
+    pack_collider_handle, quat_finite, quat_to_rapier, query_filter_from_desc, vec3_finite,
 };
 
 const EPSILON: f64 = 1.0e-9;
@@ -97,10 +97,15 @@ fn eval_network(direction: Vector, desc: NeuralBoundsDesc, weights: &[f64]) -> O
         &mut reader,
         &[direction.x, direction.y, direction.z],
         hidden_width,
-        desc.activation,
+        neural_activation_from_raw(desc.activation),
     )?;
     for _ in 1..hidden_layers {
-        layer = eval_layer(&mut reader, &layer, hidden_width, desc.activation)?;
+        layer = eval_layer(
+            &mut reader,
+            &layer,
+            hidden_width,
+            neural_activation_from_raw(desc.activation),
+        )?;
     }
 
     let mut raw = 0.0;
@@ -424,7 +429,7 @@ mod tests {
             sample_resolution: 8,
             hidden_width: 4,
             hidden_layers: 1,
-            activation: NeuralActivation::Relu,
+            activation: NeuralActivation::Relu as u32,
             output_scale: 0.1,
             padding: 0.02,
         }
