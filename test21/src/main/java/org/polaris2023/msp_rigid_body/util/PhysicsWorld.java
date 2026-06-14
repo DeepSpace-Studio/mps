@@ -17,15 +17,23 @@ public final class PhysicsWorld implements AutoCloseable {
     }
 
     public long handle() {
+        requireOpen();
         return handle;
     }
 
+    public int colliderCount() {
+        requireOpen();
+        return RigidBodyNative.worldGetColliderSetSize(handle);
+    }
+
     public PhysicsWorld set(double gravityX, double gravityY, double gravityZ) {
+        requireOpen();
         RigidBodyNative.worldSetGravity(handle, gravityX, gravityY, gravityZ);
         return this;
     }
 
     public double[] gravity() {
+        requireOpen();
         return RigidBodyNative.worldGetGravity(handle);
     }
 
@@ -42,11 +50,13 @@ public final class PhysicsWorld implements AutoCloseable {
     }
 
     public PhysicsWorld deltaSeconds(double deltaSeconds) {
+        requireOpen();
         this.deltaSeconds = deltaSeconds;
         return this;
     }
 
     public PhysicsWorld step() {
+        requireOpen();
         RigidBodyNative.worldStep(handle, deltaSeconds);
         return this;
     }
@@ -56,6 +66,7 @@ public final class PhysicsWorld implements AutoCloseable {
     }
 
     public RigidBody.Builder body(int status) {
+        requireOpen();
         builder = RigidBody.Builder.builder(this).status(status).build();
         return builder;
     }
@@ -66,6 +77,26 @@ public final class PhysicsWorld implements AutoCloseable {
         }
         builder.translation(x, y, z);
         return this;
+    }
+
+    public Collider.Builder voxelCollider(
+            long voxels, int sizeX, int sizeY, int sizeZ, double voxelSize,
+            double originX, double originY, double originZ,
+            int mode, boolean dynamicBody, int smallVoxelLimit, int meshVoxelLimit) {
+        requireOpen();
+        return Collider.Builder.voxels(this,
+                voxels, sizeX, sizeY, sizeZ, voxelSize,
+                originX, originY, originZ,
+                mode, dynamicBody, smallVoxelLimit, meshVoxelLimit);
+    }
+
+    public Collider insert(Collider.Raw raw) {
+        requireOpen();
+        if (raw == null || raw.isEmpty()) {
+            throw new IllegalArgumentException("raw collider is empty");
+        }
+        long collider = RigidBodyNative.worldInsertCollider(handle, raw.release());
+        return new Collider(this, collider);
     }
 
     public PhysicsWorld insert() {
@@ -104,6 +135,12 @@ public final class PhysicsWorld implements AutoCloseable {
         if (handle != 0L) {
             RigidBodyNative.worldDestroy(handle);
             handle = 0L;
+        }
+    }
+
+    private void requireOpen() {
+        if (handle == 0L) {
+            throw new IllegalStateException("world is closed");
         }
     }
 }

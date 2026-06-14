@@ -53,6 +53,7 @@ public final class JniSmokeTest {
         }
 
         assertVoxelColliderCanBeCreatedAndInserted();
+        assertInvalidInputsAreRejected();
 
         long tree = RigidBodyNative.crbTreeCreate();
         if (tree == 0L) {
@@ -85,46 +86,76 @@ public final class JniSmokeTest {
 
         Unsafe unsafe = unsafe();
         long voxelAddress = copyToNative(unsafe, voxels);
-        long world = RigidBodyNative.worldCreate(0.0, -9.81, 0.0);
-        if (world == 0L) {
-            unsafe.freeMemory(voxelAddress);
-            throw new AssertionError("worldCreate returned null for voxel test");
-        }
-
-        try {
-            long builder = RigidBodyNative.colliderBuilderCreateVoxels(
+        try (PhysicsWorld world = new PhysicsWorld(0.0, -9.81, 0.0);
+             org.polaris2023.msp_rigid_body.util.Collider.Builder builder = world.voxelCollider(
                     voxelAddress,
                     sizeX, sizeY, sizeZ,
                     1.0,
                     0.0, 0.0, 0.0,
                     VOXEL_MODE_GREEDY_CUBOIDS,
-                    0,
+                    false,
                     128,
-                    20_000);
-            if (builder == 0L) {
+                    20_000)) {
+            if (world.isEmpty()) {
+                throw new AssertionError("worldCreate returned null for voxel test");
+            }
+            if (builder.isEmpty()) {
                 throw new AssertionError("colliderBuilderCreateVoxels returned null");
             }
 
-            RigidBodyNative.colliderBuilderSetFriction(builder, 0.8);
-            RigidBodyNative.colliderBuilderSetRestitution(builder, 0.1);
-
-            long collider = RigidBodyNative.colliderBuilderBuild(builder);
-            if (collider == 0L) {
-                throw new AssertionError("colliderBuilderBuild returned null for voxels");
-            }
-
-            long colliderHandle = RigidBodyNative.worldInsertCollider(world, collider);
-            if (colliderHandle == 0L) {
+            org.polaris2023.msp_rigid_body.util.Collider collider = builder
+                    .friction(0.8)
+                    .restitution(0.1)
+                    .insert();
+            if (collider.isEmpty()) {
                 throw new AssertionError("worldInsertCollider returned null for voxel collider");
             }
-            if (RigidBodyNative.worldGetColliderSetSize(world) != 1) {
+            if (world.colliderCount() != 1) {
                 throw new AssertionError("voxel collider was not inserted into world");
             }
 
-            RigidBodyNative.worldStep(world, 1.0 / 60.0);
+            world.step();
+        } finally {
+            unsafe.freeMemory(voxelAddress);
+        }
+    }
+
+    private static void assertInvalidInputsAreRejected() {
+        long world = RigidBodyNative.worldCreate(0.0, -9.81, 0.0);
+        if (world == 0L) {
+            throw new AssertionError("worldCreate returned null for invalid input test");
+        }
+        try {
+            double[] gravity = RigidBodyNative.worldGetGravity(world);
+            RigidBodyNative.worldStep(world, Double.NaN);
+            RigidBodyNative.worldSetGravity(world, Double.NaN, 1.0, 2.0);
+            assertClose(gravity[1], RigidBodyNative.worldGetGravity(world)[1], "invalid gravity should be ignored");
+
+            if (RigidBodyNative.colliderBuilderCreate(1, Double.NaN, 1.0, 1.0) != 0L) {
+                throw new AssertionError("invalid cuboid builder should be rejected");
+            }
+            if (RigidBodyNative.colliderBuilderCreateVoxels(0L, 1, 1, 1, 1.0, 0.0, 0.0, 0.0, 0, 0, 128, 20_000) != 0L) {
+                throw new AssertionError("null voxel pointer should be rejected");
+            }
+            if (RigidBodyNative.colliderBuilderBuild(0L) != 0L) {
+                throw new AssertionError("null collider builder build should return null");
+            }
+            if (RigidBodyNative.rigidBodyBuilderBuild(0L) != 0L) {
+                throw new AssertionError("null rigid body builder build should return null");
+            }
+            if (RigidBodyNative.queryIntersectSphere(
+                    world,
+                    0.0, 0.0, 0.0, 1.0,
+                    0, 0xffff, 0xffff, 0,
+                    0L, 0, 0L, 0,
+                    0L, -1) != 0) {
+                throw new AssertionError("negative query capacity should be rejected");
+            }
+            if (RigidBodyNative.crbTreeQueryAabb(0L, 0, 0, 0, 1, 1, 1, 0L, -1) != 0) {
+                throw new AssertionError("negative tree query capacity should be rejected");
+            }
         } finally {
             RigidBodyNative.worldDestroy(world);
-            unsafe.freeMemory(voxelAddress);
         }
     }
 

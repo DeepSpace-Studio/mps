@@ -4,9 +4,11 @@ import org.polaris2023.msp_rigid_body.RigidBodyNative;
 
 public final class RigidBody {
     private long body;
-    private Builder builder;
 
     public double[] translation(PhysicsWorld world) {
+        if (body == 0L) {
+            throw new IllegalStateException("rigid body is empty");
+        }
         return RigidBodyNative.rigidBodyGetTranslation(world.handle(), body);
     }
 
@@ -46,16 +48,20 @@ public final class RigidBody {
         }
 
         public Builder translation(double x, double y, double z) {
+            requireOpen();
             RigidBodyNative.rigidBodyBuilderSetTranslation(handle, x, y, z);
             return this;
         }
 
         public RigidBody body(PhysicsWorld world) {
+            requireOpen();
             RigidBody value = new RigidBody();
             long rigidBody = RigidBodyNative.rigidBodyBuilderBuild(handle);
             handle = 0L;
+            if (rigidBody == 0L) {
+                return value;
+            }
             value.body = RigidBodyNative.worldInsertRigidBody(world.handle(), rigidBody);
-            value.builder = this;
             return value;
         }
 
@@ -74,6 +80,12 @@ public final class RigidBody {
         @Override
         public PhysicsWorld parent() {
             return parent;
+        }
+
+        private void requireOpen() {
+            if (handle == 0L) {
+                throw new IllegalStateException("rigid body builder is closed");
+            }
         }
     }
 }
