@@ -5,8 +5,9 @@ use rapier3d::prelude::{ColliderBuilder, SharedShape};
 use smallvec::SmallVec;
 
 use crate::rapier::ffi::{
-    ColliderBuilderHandle, ColliderHandleRaw, NeuralActivation, NeuralBoundsDesc, QueryFilterDesc,
-    WorldHandle, pack_collider_handle, quat_to_rapier, query_filter_from_desc,
+    ColliderBuilderHandle, ColliderHandleRaw, MAX_OUTPUT_CAPACITY, NeuralActivation,
+    NeuralBoundsDesc, QueryFilterDesc, WorldHandle, pack_collider_handle, quat_finite,
+    quat_to_rapier, query_filter_from_desc, vec3_finite,
 };
 
 const EPSILON: f64 = 1.0e-9;
@@ -161,7 +162,13 @@ fn sample_directions(resolution: u32) -> SmallVec<[Vector; 128]> {
 }
 
 fn validate_desc(desc: NeuralBoundsDesc) -> Option<()> {
-    if desc.half_extents.x <= 0.0 || desc.half_extents.y <= 0.0 || desc.half_extents.z <= 0.0 {
+    if !vec3_finite(desc.center)
+        || !vec3_finite(desc.half_extents)
+        || !quat_finite(desc.rotation)
+        || desc.half_extents.x <= 0.0
+        || desc.half_extents.y <= 0.0
+        || desc.half_extents.z <= 0.0
+    {
         return None;
     }
     if desc.hidden_layers > MAX_HIDDEN_LAYERS || desc.hidden_width > MAX_HIDDEN_WIDTH {
@@ -269,7 +276,7 @@ fn intersect_neural(
     let Some(world) = (unsafe { world.as_ref() }) else {
         return 0;
     };
-    if out_handles.is_null() || capacity == 0 {
+    if out_handles.is_null() || capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
         return 0;
     }
     let Some((pose, shape)) = neural_shape(desc, weights) else {

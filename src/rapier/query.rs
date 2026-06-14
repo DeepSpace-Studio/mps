@@ -3,14 +3,22 @@ use rapier3d::parry::shape::FeatureId;
 use rapier3d::prelude::SharedShape;
 
 use crate::rapier::ffi::{
-    AabbDesc, Bool, ColliderHandleRaw, Obb, PointProjection, QueryFilterDesc, RayHit, ShapeCastHit,
-    ShapeCastOptionsDesc, ShapeDesc, Sphere, Vec3, WorldHandle, pack_collider_handle,
-    query_filter_from_desc, shape_cast_options_to_rapier, shape_from_desc, vec3_from_rapier,
-    vec3_to_rapier,
+    AabbDesc, Bool, ColliderHandleRaw, MAX_OUTPUT_CAPACITY, Obb, PointProjection, QueryFilterDesc,
+    RayHit, ShapeCastHit, ShapeCastOptionsDesc, ShapeDesc, Sphere, Vec3, WorldHandle,
+    pack_collider_handle, quat_finite, query_filter_from_desc, shape_cast_options_to_rapier,
+    shape_desc_valid, shape_from_desc, vec3_finite, vec3_from_rapier, vec3_to_rapier,
 };
 
 fn aabb_to_rapier(aabb: AabbDesc) -> Aabb {
     Aabb::new(vec3_to_rapier(aabb.mins), vec3_to_rapier(aabb.maxs))
+}
+
+fn aabb_valid(aabb: AabbDesc) -> bool {
+    vec3_finite(aabb.mins)
+        && vec3_finite(aabb.maxs)
+        && aabb.mins.x <= aabb.maxs.x
+        && aabb.mins.y <= aabb.maxs.y
+        && aabb.mins.z <= aabb.maxs.z
 }
 
 fn feature_id_to_u32(feature: FeatureId) -> u32 {
@@ -23,7 +31,13 @@ fn feature_id_to_u32(feature: FeatureId) -> u32 {
 }
 
 fn obb_shape(obb: Obb) -> Option<SharedShape> {
-    if obb.half_extents.x <= 0.0 || obb.half_extents.y <= 0.0 || obb.half_extents.z <= 0.0 {
+    if !vec3_finite(obb.center)
+        || !vec3_finite(obb.half_extents)
+        || !quat_finite(obb.rotation)
+        || obb.half_extents.x <= 0.0
+        || obb.half_extents.y <= 0.0
+        || obb.half_extents.z <= 0.0
+    {
         return None;
     }
 
@@ -35,7 +49,7 @@ fn obb_shape(obb: Obb) -> Option<SharedShape> {
 }
 
 fn sphere_shape(sphere: Sphere) -> Option<SharedShape> {
-    if sphere.radius <= 0.0 {
+    if !vec3_finite(sphere.center) || !sphere.radius.is_finite() || sphere.radius <= 0.0 {
         return None;
     }
 
@@ -63,6 +77,9 @@ pub extern "C" fn query_cast_ray(
     let Some(world) = (unsafe { world.as_ref() }) else {
         return RayHit::default();
     };
+    if !vec3_finite(origin) || !vec3_finite(direction) || !max_toi.is_finite() || max_toi < 0.0 {
+        return RayHit::default();
+    }
 
     let query = world.inner.broad_phase.as_query_pipeline(
         world.inner.narrow_phase.query_dispatcher(),
@@ -95,6 +112,9 @@ pub extern "C" fn query_project_point(
     let Some(world) = (unsafe { world.as_ref() }) else {
         return PointProjection::default();
     };
+    if !vec3_finite(point) || !max_dist.is_finite() || max_dist < 0.0 {
+        return PointProjection::default();
+    }
 
     let query = world.inner.broad_phase.as_query_pipeline(
         world.inner.narrow_phase.query_dispatcher(),
@@ -128,6 +148,9 @@ pub extern "C" fn query_intersect_point_count(
     let Some(world) = (unsafe { world.as_ref() }) else {
         return 0;
     };
+    if !vec3_finite(point) {
+        return 0;
+    }
 
     let query = world.inner.broad_phase.as_query_pipeline(
         world.inner.narrow_phase.query_dispatcher(),
@@ -148,6 +171,9 @@ pub extern "C" fn query_intersect_aabb_count(
     let Some(world) = (unsafe { world.as_ref() }) else {
         return 0;
     };
+    if !aabb_valid(aabb) {
+        return 0;
+    }
 
     let query = world.inner.broad_phase.as_query_pipeline(
         world.inner.narrow_phase.query_dispatcher(),
@@ -210,7 +236,7 @@ pub extern "C" fn query_intersect_obb(
     let Some(world) = (unsafe { world.as_ref() }) else {
         return 0;
     };
-    if out_handles.is_null() || capacity == 0 {
+    if out_handles.is_null() || capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
         return 0;
     }
     let Some(shape) = obb_shape(obb) else {
@@ -303,7 +329,7 @@ pub extern "C" fn query_intersect_sphere(
     let Some(world) = (unsafe { world.as_ref() }) else {
         return 0;
     };
-    if out_handles.is_null() || capacity == 0 {
+    if out_handles.is_null() || capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
         return 0;
     }
     let Some(shape) = sphere_shape(sphere) else {
@@ -390,6 +416,17 @@ pub extern "C" fn query_cast_shape(
     let Some(world) = (unsafe { world.as_ref() }) else {
         return ShapeCastHit::default();
     };
+    if !shape_desc_valid(shape_desc)
+        || !vec3_finite(translation)
+        || !quat_finite(rotation)
+        || !vec3_finite(velocity)
+        || !options.max_time_of_impact.is_finite()
+        || !options.target_distance.is_finite()
+        || options.max_time_of_impact < 0.0
+        || options.target_distance < 0.0
+    {
+        return ShapeCastHit::default();
+    }
 
     let query = world.inner.broad_phase.as_query_pipeline(
         world.inner.narrow_phase.query_dispatcher(),

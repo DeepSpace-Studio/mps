@@ -7,8 +7,8 @@ use crate::rapier::ffi::{
     AabbDesc, Bool, ColliderBuilderHandle, ColliderHandleRaw, InteractionGroupsDesc, Obb, Quat,
     RigidBodyHandleRaw, ShapeDesc, ShapeType, Sphere, Vec3, WorldHandle, active_events_from_bits,
     active_hooks_from_bits, interaction_groups_to_rapier, isometry_from_parts,
-    pack_collider_handle, quat_from_rapier, shape_from_desc, unpack_collider_handle,
-    unpack_rigid_body_handle, vec3_from_rapier, vec3_to_rapier,
+    pack_collider_handle, quat_finite, quat_from_rapier, shape_desc_valid, shape_from_desc,
+    unpack_collider_handle, unpack_rigid_body_handle, vec3_from_rapier, vec3_to_rapier,
 };
 
 const MIN_HALF_EXTENT: f64 = 1.0e-9;
@@ -147,6 +147,10 @@ pub extern "C" fn collider_builder_create(
         c: shape_data.z,
         d: 0.0,
     };
+    if !shape_desc_valid(shape_desc) {
+        return std::ptr::null_mut();
+    }
+
     Box::into_raw(Box::new(ColliderBuilderHandle {
         inner: default_builder(shape_desc),
     }))
@@ -154,6 +158,10 @@ pub extern "C" fn collider_builder_create(
 
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_ex(shape_desc: ShapeDesc) -> *mut ColliderBuilderHandle {
+    if !shape_desc_valid(shape_desc) {
+        return std::ptr::null_mut();
+    }
+
     Box::into_raw(Box::new(ColliderBuilderHandle {
         inner: default_builder(shape_desc),
     }))
@@ -161,7 +169,13 @@ pub extern "C" fn collider_builder_create_ex(shape_desc: ShapeDesc) -> *mut Coll
 
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_obb(obb: Obb) -> *mut ColliderBuilderHandle {
-    if obb.half_extents.x <= 0.0 || obb.half_extents.y <= 0.0 || obb.half_extents.z <= 0.0 {
+    if !vec3_finite(obb.center)
+        || !vec3_finite(obb.half_extents)
+        || !quat_finite(obb.rotation)
+        || obb.half_extents.x <= 0.0
+        || obb.half_extents.y <= 0.0
+        || obb.half_extents.z <= 0.0
+    {
         return std::ptr::null_mut();
     }
 
@@ -173,7 +187,7 @@ pub extern "C" fn collider_builder_create_obb(obb: Obb) -> *mut ColliderBuilderH
 
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_sphere(sphere: Sphere) -> *mut ColliderBuilderHandle {
-    if sphere.radius <= 0.0 {
+    if !vec3_finite(sphere.center) || !sphere.radius.is_finite() || sphere.radius <= 0.0 {
         return std::ptr::null_mut();
     }
 
@@ -190,7 +204,7 @@ pub extern "C" fn collider_builder_create_heightmap(
     scale: Vec3,
 ) -> *mut ColliderBuilderHandle {
     let sv = vec3_to_rapier(scale);
-    if data.is_null() || data_x == 0 || data_y == 0 || sv.length() <= 0.0 {
+    if data.is_null() || data_x == 0 || data_y == 0 || !vec3_finite(scale) || sv.length() <= 0.0 {
         return std::ptr::null_mut();
     }
     let Some(value_count) = (data_x as usize).checked_mul(data_y as usize) else {

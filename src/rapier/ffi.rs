@@ -373,6 +373,9 @@ pub type RigidBodyHandleRaw = u64;
 pub type ColliderHandleRaw = u64;
 pub type ImpulseJointHandleRaw = u64;
 
+pub(crate) const MAX_OUTPUT_CAPACITY: u32 = 1_000_000;
+pub(crate) const MAX_TREE_ENTRIES: usize = 1_000_000;
+
 const INVALID_HANDLE_RAW: u64 = u64::MAX;
 
 fn pack_handle_parts(id: u32, generation: u32) -> u64 {
@@ -388,6 +391,10 @@ pub(crate) fn vec3_to_rapier(value: Vec3) -> Vector {
     Vector::new(value.x, value.y, value.z)
 }
 
+pub(crate) fn vec3_finite(value: Vec3) -> bool {
+    value.x.is_finite() && value.y.is_finite() && value.z.is_finite()
+}
+
 pub(crate) fn vec3_from_rapier(value: Vector) -> Vec3 {
     Vec3 {
         x: value.x,
@@ -398,6 +405,10 @@ pub(crate) fn vec3_from_rapier(value: Vector) -> Vec3 {
 
 pub(crate) fn quat_to_rapier(value: Quat) -> Rotation {
     Rotation::from_xyzw(value.i, value.j, value.k, value.w)
+}
+
+pub(crate) fn quat_finite(value: Quat) -> bool {
+    value.i.is_finite() && value.j.is_finite() && value.k.is_finite() && value.w.is_finite()
 }
 
 pub(crate) fn quat_from_rapier(value: Rotation) -> Quat {
@@ -483,6 +494,25 @@ pub(crate) fn shape_from_desc(desc: ShapeDesc) -> SharedShape {
         ShapeType::Cone => SharedShape::cone(desc.a, desc.b),
         ShapeType::RoundCone => SharedShape::round_cone(desc.a, desc.b, desc.c),
         ShapeType::RoundCuboid => SharedShape::round_cuboid(desc.a, desc.b, desc.c, desc.d),
+    }
+}
+
+pub(crate) fn shape_desc_valid(desc: ShapeDesc) -> bool {
+    if !desc.a.is_finite() || !desc.b.is_finite() || !desc.c.is_finite() || !desc.d.is_finite() {
+        return false;
+    }
+
+    match desc.shape_type {
+        ShapeType::Ball => desc.a > 0.0,
+        ShapeType::Cuboid => desc.a > 0.0 && desc.b > 0.0 && desc.c > 0.0,
+        ShapeType::CapsuleY | ShapeType::CapsuleX | ShapeType::CapsuleZ => {
+            desc.a > 0.0 && desc.b > 0.0
+        }
+        ShapeType::Cylinder | ShapeType::Cone => desc.a > 0.0 && desc.b > 0.0,
+        ShapeType::RoundCylinder | ShapeType::RoundCone => {
+            desc.a > 0.0 && desc.b > 0.0 && desc.c >= 0.0
+        }
+        ShapeType::RoundCuboid => desc.a > 0.0 && desc.b > 0.0 && desc.c > 0.0 && desc.d >= 0.0,
     }
 }
 

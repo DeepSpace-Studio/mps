@@ -6,7 +6,7 @@ use rapier3d::control::{
 use crate::rapier::ffi::{
     Bool, CharacterCollision as FfiCharacterCollision, CharacterControllerHandle,
     EffectiveCharacterMovement, Quat, ShapeDesc, Vec3, WorldHandle, pack_collider_handle,
-    shape_from_desc, vec3_from_rapier, vec3_to_rapier,
+    quat_finite, shape_desc_valid, shape_from_desc, vec3_finite, vec3_from_rapier, vec3_to_rapier,
 };
 
 pub(crate) struct CharacterControllerState {
@@ -49,6 +49,9 @@ pub extern "C" fn character_controller_set_up(
     let Some(controller) = (unsafe { controller.as_mut() }) else {
         return;
     };
+    if !vec3_finite(up) {
+        return;
+    }
     controller.inner.controller.up = vec3_to_rapier(up);
 }
 
@@ -60,6 +63,9 @@ pub extern "C" fn character_controller_set_offset_absolute(
     let Some(controller) = (unsafe { controller.as_mut() }) else {
         return;
     };
+    if !offset.is_finite() || offset < 0.0 {
+        return;
+    }
     controller.inner.controller.offset = CharacterLength::Absolute(offset);
 }
 
@@ -71,6 +77,9 @@ pub extern "C" fn character_controller_set_offset_relative(
     let Some(controller) = (unsafe { controller.as_mut() }) else {
         return;
     };
+    if !offset.is_finite() || offset < 0.0 {
+        return;
+    }
     controller.inner.controller.offset = CharacterLength::Relative(offset);
 }
 
@@ -96,6 +105,14 @@ pub extern "C" fn character_controller_set_autostep(
     let Some(controller) = (unsafe { controller.as_mut() }) else {
         return;
     };
+    if enabled.0 != 0
+        && (!max_height.is_finite()
+            || !min_width.is_finite()
+            || max_height < 0.0
+            || min_width < 0.0)
+    {
+        return;
+    }
     controller.inner.controller.autostep = if enabled.0 != 0 {
         Some(CharacterAutostep {
             max_height: CharacterLength::Absolute(max_height),
@@ -116,6 +133,9 @@ pub extern "C" fn character_controller_set_snap_to_ground(
     let Some(controller) = (unsafe { controller.as_mut() }) else {
         return;
     };
+    if enabled.0 != 0 && (!distance.is_finite() || distance < 0.0) {
+        return;
+    }
     controller.inner.controller.snap_to_ground = if enabled.0 != 0 {
         Some(CharacterLength::Absolute(distance))
     } else {
@@ -132,6 +152,9 @@ pub extern "C" fn character_controller_set_slope_angles(
     let Some(controller) = (unsafe { controller.as_mut() }) else {
         return;
     };
+    if !max_climb_angle.is_finite() || !min_slide_angle.is_finite() {
+        return;
+    }
     controller.inner.controller.max_slope_climb_angle = max_climb_angle;
     controller.inner.controller.min_slope_slide_angle = min_slide_angle;
 }
@@ -152,6 +175,15 @@ pub extern "C" fn character_controller_move_shape(
     let Some(controller) = (unsafe { controller.as_mut() }) else {
         return EffectiveCharacterMovement::default();
     };
+    if !dt.is_finite()
+        || dt <= 0.0
+        || !shape_desc_valid(shape_desc)
+        || !vec3_finite(translation)
+        || !quat_finite(rotation)
+        || !vec3_finite(desired_translation)
+    {
+        return EffectiveCharacterMovement::default();
+    }
 
     let query = world.inner.broad_phase.as_query_pipeline(
         world.inner.narrow_phase.query_dispatcher(),
@@ -227,6 +259,14 @@ pub extern "C" fn character_controller_solve_impulses(
     let Some(controller) = (unsafe { controller.as_mut() }) else {
         return Bool::FALSE;
     };
+    if !dt.is_finite()
+        || dt <= 0.0
+        || !character_mass.is_finite()
+        || character_mass < 0.0
+        || !shape_desc_valid(shape_desc)
+    {
+        return Bool::FALSE;
+    }
 
     let shape = shape_from_desc(shape_desc);
     let query = world.inner.broad_phase.as_query_pipeline_mut(

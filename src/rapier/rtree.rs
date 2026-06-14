@@ -1,4 +1,6 @@
-use crate::rapier::ffi::{AabbDesc, Bool, RTreeHandle, Vec3};
+use crate::rapier::ffi::{
+    AabbDesc, Bool, MAX_OUTPUT_CAPACITY, MAX_TREE_ENTRIES, RTreeHandle, Vec3,
+};
 use smallvec::SmallVec;
 
 const MAX_CHILDREN: usize = 8;
@@ -117,6 +119,9 @@ impl RTreeIndex {
         if let Some(entry) = self.entries.iter_mut().find(|entry| entry.id == id) {
             entry.bounds = bounds;
         } else {
+            if self.entries.len() >= MAX_TREE_ENTRIES {
+                return false;
+            }
             self.entries.push(Entry { id, bounds });
         }
         self.dirty = true;
@@ -355,7 +360,7 @@ pub extern "C" fn rtree_query_aabb(
     let Some(tree) = (unsafe { tree.as_mut() }) else {
         return 0;
     };
-    if out_ids.is_null() || capacity == 0 {
+    if out_ids.is_null() || capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
         return 0;
     }
     let Some(bounds) = Aabb::from_desc(aabb) else {

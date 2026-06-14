@@ -4,9 +4,11 @@ use rapier3d::prelude::{
 };
 
 use crate::rapier::ffi::{
-    RigidBodyHandleRaw, Vec3, WorldHandle, pack_rigid_body_handle, quat_from_rapier,
-    vec3_from_rapier, vec3_to_rapier,
+    MAX_OUTPUT_CAPACITY, RigidBodyHandleRaw, Vec3, WorldHandle, pack_rigid_body_handle,
+    quat_from_rapier, vec3_finite, vec3_from_rapier, vec3_to_rapier,
 };
+
+const MAX_STEP_SECONDS: f64 = 1.0;
 
 pub(crate) struct PhysicsWorld {
     pub(crate) pipeline: PhysicsPipeline,
@@ -51,6 +53,12 @@ impl PhysicsWorld {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn world_create(gravity: Vec3) -> *mut WorldHandle {
+    let gravity = if vec3_finite(gravity) {
+        gravity
+    } else {
+        Vec3::default()
+    };
+
     Box::into_raw(Box::new(WorldHandle {
         inner: PhysicsWorld::new(gravity),
     }))
@@ -72,6 +80,9 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
     let Some(world) = (unsafe { world.as_mut() }) else {
         return;
     };
+    if !delta_seconds.is_finite() || delta_seconds <= 0.0 || delta_seconds > MAX_STEP_SECONDS {
+        return;
+    }
 
     world.inner.integration_parameters.dt = delta_seconds;
     world.inner.pipeline.step(
@@ -95,6 +106,9 @@ pub extern "C" fn world_set_gravity(world: *mut WorldHandle, gravity: Vec3) {
     let Some(world) = (unsafe { world.as_mut() }) else {
         return;
     };
+    if !vec3_finite(gravity) {
+        return;
+    }
 
     world.inner.gravity = vec3_to_rapier(gravity);
 }
@@ -159,7 +173,11 @@ pub extern "C" fn world_dynamic_body_snapshot(
     let Some(world) = (unsafe { world.as_ref() }) else {
         return 0;
     };
-    if out_handles.is_null() || out_values.is_null() || capacity == 0 {
+    if out_handles.is_null()
+        || out_values.is_null()
+        || capacity == 0
+        || capacity > MAX_OUTPUT_CAPACITY
+    {
         return 0;
     }
 

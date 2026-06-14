@@ -3,9 +3,9 @@ use rapier3d::prelude::{ColliderBuilder, SharedShape};
 use smallvec::SmallVec;
 
 use crate::rapier::ffi::{
-    Capsule, ColliderBuilderHandle, ColliderHandleRaw, Cylinder, Ellipsoid, Prism, QueryFilterDesc,
-    SphericalShell, Ssv, WorldHandle, isometry_from_parts, pack_collider_handle,
-    query_filter_from_desc, vec3_to_rapier,
+    Capsule, ColliderBuilderHandle, ColliderHandleRaw, Cylinder, Ellipsoid, MAX_OUTPUT_CAPACITY,
+    Prism, QueryFilterDesc, SphericalShell, Ssv, WorldHandle, isometry_from_parts,
+    pack_collider_handle, quat_finite, query_filter_from_desc, vec3_finite, vec3_to_rapier,
 };
 
 const EPSILON: f64 = 1.0e-9;
@@ -19,6 +19,10 @@ fn valid_segment(a: Vector, b: Vector) -> bool {
 }
 
 pub(crate) fn capsule_shape(capsule: Capsule) -> Option<(Pose, SharedShape)> {
+    if !vec3_finite(capsule.a) || !vec3_finite(capsule.b) || !capsule.radius.is_finite() {
+        return None;
+    }
+
     let a = vec3_to_rapier(capsule.a);
     let b = vec3_to_rapier(capsule.b);
     if capsule.radius <= 0.0 || !valid_segment(a, b) {
@@ -37,7 +41,13 @@ pub(crate) fn ssv_shape(ssv: Ssv) -> Option<(Pose, SharedShape)> {
 }
 
 pub(crate) fn cylinder_shape(cylinder: Cylinder) -> Option<(Pose, SharedShape)> {
-    if cylinder.radius <= 0.0 || cylinder.half_height <= 0.0 {
+    if !vec3_finite(cylinder.center)
+        || !quat_finite(cylinder.rotation)
+        || !cylinder.radius.is_finite()
+        || !cylinder.half_height.is_finite()
+        || cylinder.radius <= 0.0
+        || cylinder.half_height <= 0.0
+    {
         return None;
     }
 
@@ -48,7 +58,10 @@ pub(crate) fn cylinder_shape(cylinder: Cylinder) -> Option<(Pose, SharedShape)> 
 }
 
 pub(crate) fn spherical_shell_shape(shell: SphericalShell) -> Option<(Pose, SharedShape)> {
-    if shell.outer_radius <= 0.0
+    if !vec3_finite(shell.center)
+        || !shell.outer_radius.is_finite()
+        || !shell.inner_radius.is_finite()
+        || shell.outer_radius <= 0.0
         || shell.inner_radius < 0.0
         || shell.inner_radius > shell.outer_radius
     {
@@ -70,7 +83,13 @@ pub(crate) fn spherical_shell_shape(shell: SphericalShell) -> Option<(Pose, Shar
 }
 
 fn ellipsoid_points(ellipsoid: Ellipsoid) -> Option<SmallVec<[Vector; 128]>> {
-    if ellipsoid.radii.x <= 0.0 || ellipsoid.radii.y <= 0.0 || ellipsoid.radii.z <= 0.0 {
+    if !vec3_finite(ellipsoid.center)
+        || !vec3_finite(ellipsoid.radii)
+        || !quat_finite(ellipsoid.rotation)
+        || ellipsoid.radii.x <= 0.0
+        || ellipsoid.radii.y <= 0.0
+        || ellipsoid.radii.z <= 0.0
+    {
         return None;
     }
 
@@ -108,7 +127,14 @@ pub(crate) fn ellipsoid_shape(ellipsoid: Ellipsoid) -> Option<(Pose, SharedShape
 }
 
 fn prism_points(prism: Prism) -> Option<SmallVec<[Vector; 32]>> {
-    if prism.radius <= 0.0 || prism.half_height <= 0.0 || prism.sides < 3 {
+    if !vec3_finite(prism.center)
+        || !quat_finite(prism.rotation)
+        || !prism.radius.is_finite()
+        || !prism.half_height.is_finite()
+        || prism.radius <= 0.0
+        || prism.half_height <= 0.0
+        || prism.sides < 3
+    {
         return None;
     }
 
@@ -176,7 +202,7 @@ fn intersect_bound(
     let Some(world) = (unsafe { world.as_ref() }) else {
         return 0;
     };
-    if out_handles.is_null() || capacity == 0 {
+    if out_handles.is_null() || capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
         return 0;
     }
     let Some((pose, shape)) = bound else {

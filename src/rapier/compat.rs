@@ -5,9 +5,9 @@ use rapier3d::math::Vector;
 use rapier3d::prelude::{ColliderBuilder, RigidBodyBuilder};
 
 use crate::rapier::ffi::{
-    AabbDesc, InteractionGroupsDesc, Quat, QueryFilterDesc, RigidBodyHandleRaw, Vec3, WorldHandle,
-    interaction_groups_to_rapier, isometry_from_parts, pack_rigid_body_handle,
-    query_filter_from_desc, vec3_to_rapier,
+    AabbDesc, InteractionGroupsDesc, MAX_OUTPUT_CAPACITY, Quat, QueryFilterDesc,
+    RigidBodyHandleRaw, Vec3, WorldHandle, interaction_groups_to_rapier, isometry_from_parts,
+    pack_rigid_body_handle, query_filter_from_desc, vec3_finite, vec3_to_rapier,
 };
 
 const DYNAMIC_LINEAR_DAMPING: f64 = 0.4;
@@ -15,6 +15,14 @@ const DYNAMIC_ANGULAR_DAMPING: f64 = 0.18;
 const MAX_DYNAMIC_CUBOIDS: u32 = 100_000;
 const MAX_TRIMESH_VERTICES: u32 = 1_000_000;
 const MAX_TRIMESH_INDICES: u32 = 3_000_000;
+
+fn valid_aabb(aabb: AabbDesc) -> bool {
+    vec3_finite(aabb.mins)
+        && vec3_finite(aabb.maxs)
+        && aabb.mins.x <= aabb.maxs.x
+        && aabb.mins.y <= aabb.maxs.y
+        && aabb.mins.z <= aabb.maxs.z
+}
 
 #[unsafe(no_mangle)]
 pub extern "C" fn world_insert_dynamic_cuboids(
@@ -171,6 +179,9 @@ pub extern "C" fn query_intersect_aabb_rigid_body_count(
     let Some(world) = (unsafe { world.as_ref() }) else {
         return 0;
     };
+    if !valid_aabb(aabb) {
+        return 0;
+    }
 
     let query = world.inner.broad_phase.as_query_pipeline(
         world.inner.narrow_phase.query_dispatcher(),
@@ -208,7 +219,10 @@ pub extern "C" fn query_intersect_aabb_rigid_bodies(
     let Some(world) = (unsafe { world.as_ref() }) else {
         return 0;
     };
-    if out_handles.is_null() || capacity == 0 {
+    if out_handles.is_null() || capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
+        return 0;
+    }
+    if !valid_aabb(aabb) {
         return 0;
     }
 
