@@ -1,6 +1,10 @@
 use rapier3d::prelude::{MassProperties, RigidBodyBuilder};
 
-use crate::ffi::{BodyStatus, Bool, Quat, RigidBodyBuilderHandle, RigidBodyHandleRaw, Vec3, WorldHandle, body_status_from_rapier, body_status_to_rapier, isometry_from_parts, pack_rigid_body_handle, quat_from_rapier, unpack_rigid_body_handle, vec3_from_rapier, vec3_to_rapier, quat_to_rapier};
+use crate::ffi::{
+    BodyStatus, Bool, Quat, RigidBodyBuilderHandle, RigidBodyHandleRaw, Vec3, WorldHandle,
+    body_status_from_rapier, body_status_to_rapier, isometry_from_parts, pack_rigid_body_handle,
+    quat_from_rapier, quat_to_rapier, unpack_rigid_body_handle, vec3_from_rapier, vec3_to_rapier,
+};
 
 fn builder_from_status(status: BodyStatus) -> RigidBodyBuilder {
     match status {
@@ -81,7 +85,11 @@ pub extern "C" fn rigid_body_builder_set_additional_mass_properties(
     };
 
     let inner = std::mem::replace(&mut builder.inner, RigidBodyBuilder::dynamic());
-    builder.inner = inner.additional_mass_properties(MassProperties::new(vec3_to_rapier(center), mass, vec3_to_rapier(inertia)));
+    builder.inner = inner.additional_mass_properties(MassProperties::new(
+        vec3_to_rapier(center),
+        mass,
+        vec3_to_rapier(inertia),
+    ));
 }
 
 #[unsafe(no_mangle)]

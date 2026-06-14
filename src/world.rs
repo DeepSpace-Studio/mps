@@ -146,8 +146,11 @@ pub extern "C" fn world_dynamic_body_snapshot(
     }
 
     let capacity = capacity as usize;
+    let Some(value_capacity) = capacity.checked_mul(7) else {
+        return 0;
+    };
     let handles = unsafe { std::slice::from_raw_parts_mut(out_handles, capacity) };
-    let values = unsafe { std::slice::from_raw_parts_mut(out_values, capacity * 7) };
+    let values = unsafe { std::slice::from_raw_parts_mut(out_values, value_capacity) };
     let mut written = 0usize;
 
     for (handle, body) in world.inner.bodies.iter() {

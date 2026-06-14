@@ -1,7 +1,4 @@
-use std::ffi::c_void;
-use ljni::JNIEnv;
-use ljni::sys::{jbyte, jclass, jdouble, jint, jlong, jdoubleArray};
-use crate::abi::{ffm as abi, jni};
+use crate::abi::ffm as abi;
 use crate::ffi::{
     AabbDesc, BodyStatus, Bool, CRbTreeHandle as CRTH, Capsule, CharacterCollision,
     CharacterControllerHandle as CCH, ColliderBuilderHandle as CBH, ColliderHandleRaw as CRaw,
@@ -18,8 +15,8 @@ use crate::{
     voxel as vx, world as wo,
 };
 use ev::{ContactPairFilterCallback, IntersectionPairFilterCallback};
-
-
+use ljni::JNIEnv;
+use ljni::sys::{jbyte, jclass, jdouble, jdoubleArray, jint, jlong};
 
 fn to_jlong<T>(value: *mut T) -> jlong {
     value as isize as jlong
@@ -170,14 +167,28 @@ fn voxel_mode(value: jint) -> VoxelColliderMode {
 }
 
 fn vec3_to_j_double_array(_env: JNIEnv, vec3: Vec3) -> jdoubleArray {
-    let arr = _env.new_double_array(3).unwrap();
-    _env.set_double_array_region(&arr, 0, &[vec3.x, vec3.y, vec3.z]).unwrap();
+    let Ok(arr) = _env.new_double_array(3) else {
+        return std::ptr::null_mut();
+    };
+    if _env
+        .set_double_array_region(&arr, 0, &[vec3.x, vec3.y, vec3.z])
+        .is_err()
+    {
+        return std::ptr::null_mut();
+    }
     arr.as_raw()
 }
 
 fn quat_to_j_double_array(_env: JNIEnv, quat: Quat) -> jdoubleArray {
-    let arr = _env.new_double_array(4).unwrap();
-    _env.set_double_array_region(&arr, 0, &[quat.i, quat.j, quat.k, quat.w]).unwrap();
+    let Ok(arr) = _env.new_double_array(4) else {
+        return std::ptr::null_mut();
+    };
+    if _env
+        .set_double_array_region(&arr, 0, &[quat.i, quat.j, quat.k, quat.w])
+        .is_err()
+    {
+        return std::ptr::null_mut();
+    }
     arr.as_raw()
 }
 

@@ -127,6 +127,14 @@ pub extern "C" fn world_insert_static_trimesh(
     let body = RigidBodyBuilder::fixed().build();
     let body_handle = world.inner.bodies.insert(body);
     let Ok(collider) = ColliderBuilder::trimesh(vertices, triangles) else {
+        world.inner.bodies.remove(
+            body_handle,
+            &mut world.inner.islands,
+            &mut world.inner.colliders,
+            &mut world.inner.impulse_joints,
+            &mut world.inner.multibody_joints,
+            true,
+        );
         return 0;
     };
     let collider = collider.friction(friction).restitution(restitution).build();
