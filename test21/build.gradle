@@ -28,16 +28,24 @@ tasks.register('cargoBuildRelease', Exec) {
     commandLine 'cargo', 'build', '--release'
 }
 
-tasks.register('syncNativeLibraryToRelease', Copy) {
+tasks.register('syncNativeLibraryToRelease') {
     dependsOn tasks.named('cargoBuildRelease')
-    from({
-        def candidates = [
-                repoRoot.file("target/release/deps/${nativeLibraryName}").asFile,
-                repoRoot.file("target/release/${nativeLibraryName}").asFile
-        ]
-        candidates.find { it.isFile() }
-    })
-    into nativeLibraryDir.asFile
+    doLast {
+        def releaseLibrary = repoRoot.file("target/release/${nativeLibraryName}").asFile
+        if (releaseLibrary.isFile() && releaseLibrary.length() > 0L) {
+            return
+        }
+
+        def dependencyLibrary = repoRoot.file("target/release/deps/${nativeLibraryName}").asFile
+        if (!dependencyLibrary.isFile() || dependencyLibrary.length() == 0L) {
+            throw new GradleException("Native library was not built: ${releaseLibrary}")
+        }
+
+        java.nio.file.Files.copy(
+                dependencyLibrary.toPath(),
+                releaseLibrary.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+    }
 }
 
 tasks.register('runJniTest', JavaExec) {

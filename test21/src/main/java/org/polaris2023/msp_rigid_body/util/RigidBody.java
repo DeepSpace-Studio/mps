@@ -52,7 +52,9 @@ public final class RigidBody {
 
         public RigidBody body(PhysicsWorld world) {
             RigidBody value = new RigidBody();
-            value.body = RigidBodyNative.worldInsertRigidBody(world.handle(), handle);
+            long rigidBody = RigidBodyNative.rigidBodyBuilderBuild(handle);
+            handle = 0L;
+            value.body = RigidBodyNative.worldInsertRigidBody(world.handle(), rigidBody);
             value.builder = this;
             return value;
         }
