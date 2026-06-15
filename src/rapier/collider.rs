@@ -853,6 +853,16 @@ pub extern "C" fn collider_set_pose(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn collider_set_pose_flag(
+    world: *mut WorldHandle,
+    handle: ColliderHandleRaw,
+    translation: Vec3,
+    rotation: Quat,
+) -> u8 {
+    collider_set_pose(world, handle, translation, rotation).0
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn collider_set_sensor(
     world: *mut WorldHandle,
     handle: ColliderHandleRaw,
@@ -871,6 +881,15 @@ pub extern "C" fn collider_set_sensor(
 
     collider.set_sensor(sensor.0 != 0);
     Bool::TRUE
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn collider_set_sensor_flag(
+    world: *mut WorldHandle,
+    handle: ColliderHandleRaw,
+    sensor: Bool,
+) -> u8 {
+    collider_set_sensor(world, handle, sensor).0
 }
 
 #[unsafe(no_mangle)]
@@ -898,6 +917,15 @@ pub extern "C" fn collider_set_friction(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn collider_set_friction_flag(
+    world: *mut WorldHandle,
+    handle: ColliderHandleRaw,
+    friction: f64,
+) -> u8 {
+    collider_set_friction(world, handle, friction).0
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn collider_set_restitution(
     world: *mut WorldHandle,
     handle: ColliderHandleRaw,
@@ -922,6 +950,15 @@ pub extern "C" fn collider_set_restitution(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn collider_set_restitution_flag(
+    world: *mut WorldHandle,
+    handle: ColliderHandleRaw,
+    restitution: f64,
+) -> u8 {
+    collider_set_restitution(world, handle, restitution).0
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn collider_set_collision_groups(
     world: *mut WorldHandle,
     handle: ColliderHandleRaw,
@@ -940,6 +977,15 @@ pub extern "C" fn collider_set_collision_groups(
 
     collider.set_collision_groups(interaction_groups_to_rapier(groups));
     Bool::TRUE
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn collider_set_collision_groups_flag(
+    world: *mut WorldHandle,
+    handle: ColliderHandleRaw,
+    groups: InteractionGroupsDesc,
+) -> u8 {
+    collider_set_collision_groups(world, handle, groups).0
 }
 
 #[unsafe(no_mangle)]
@@ -964,6 +1010,15 @@ pub extern "C" fn collider_set_solver_groups(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn collider_set_solver_groups_flag(
+    world: *mut WorldHandle,
+    handle: ColliderHandleRaw,
+    groups: InteractionGroupsDesc,
+) -> u8 {
+    collider_set_solver_groups(world, handle, groups).0
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn collider_set_active_events(
     world: *mut WorldHandle,
     handle: ColliderHandleRaw,
@@ -982,6 +1037,15 @@ pub extern "C" fn collider_set_active_events(
 
     collider.set_active_events(active_events_from_bits(active_events_bits));
     Bool::TRUE
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn collider_set_active_events_flag(
+    world: *mut WorldHandle,
+    handle: ColliderHandleRaw,
+    active_events_bits: u32,
+) -> u8 {
+    collider_set_active_events(world, handle, active_events_bits).0
 }
 
 #[unsafe(no_mangle)]
@@ -1006,6 +1070,15 @@ pub extern "C" fn collider_set_active_hooks(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn collider_set_active_hooks_flag(
+    world: *mut WorldHandle,
+    handle: ColliderHandleRaw,
+    active_hooks_bits: u32,
+) -> u8 {
+    collider_set_active_hooks(world, handle, active_hooks_bits).0
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn collider_set_contact_force_event_threshold(
     world: *mut WorldHandle,
     handle: ColliderHandleRaw,
@@ -1027,6 +1100,15 @@ pub extern "C" fn collider_set_contact_force_event_threshold(
 
     collider.set_contact_force_event_threshold(threshold);
     Bool::TRUE
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn collider_set_contact_force_event_threshold_flag(
+    world: *mut WorldHandle,
+    handle: ColliderHandleRaw,
+    threshold: f64,
+) -> u8 {
+    collider_set_contact_force_event_threshold(world, handle, threshold).0
 }
 
 #[unsafe(no_mangle)]

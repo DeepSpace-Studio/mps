@@ -1,32 +1,24 @@
-# mps_rigid_body 项目分析
+# mps_rigid_body Project Analysis
 
-## 1. 项目定位
+## 1. Project Positioning
 
-这个项目是一个用 Rust 编写的 3D 刚体物理 native 库，底层依赖 `rapier3d-f64`，也就是 Rapier 3D 物理引擎的双精度版本。项目编译产物包含 `cdylib`，因此主要目标是给 Java 通过 JNI 或 Java FFM 调用。
+`mps_rigid_body` is a Rust native physics wrapper around `rapier3d-f64`.
+The crate builds as both `rlib` and `cdylib`, with the `cdylib` used by Java.
 
-从 `Cargo.toml` 可以看出几个核心信息：
-
-```toml
-name = "mps_rigid_body"
-crate-type = ["cdylib", "rlib"]
-rapier3d = { package = "rapier3d-f64", version = "0.33.0", features = ["parallel"] }
-```
-
-因此它不是一个纯 Rust 应用，而是一个跨语言物理引擎封装层。Rust 负责持有真实物理世界、刚体、碰撞体和查询结构；Java 侧主要持有 `long` 类型的指针或 handle。
-
-整体调用链可以理解为：
+The project is not a standalone Rust app. It is a cross-language physics runtime:
 
 ```text
-Java
-  -> JNI / FFM
-    -> Rust extern "C" API
-      -> 项目内 rapier wrapper
-        -> rapier3d-f64
+Java 21 JNI / Java 25 FFM
+  -> Rust C ABI / JNI wrappers
+    -> src/rapier wrapper modules
+      -> rapier3d-f64
 ```
 
-## 2. 顶层结构
+Rust owns the physics world, rigid bodies, colliders, joints, events, query
+pipeline, and spatial indexes. Java receives opaque pointers or packed handles
+and calls back into Rust for all physics operations.
 
-`src` 下主要分为三层：
+## 2. Source Layout
 
 ```text
 src/
@@ -39,231 +31,226 @@ src/
     helper.rs
     mod.rs
   rapier/
-    ffi.rs
-    world.rs
-    rigid_body.rs
-    collider.rs
-    query.rs
-    events.rs
-    joints.rs
-    controller.rs
     bounds.rs
-    dop.rs
-    neural.rs
-    voxel.rs
+    collider.rs
     compat.rs
-    rtree.rs
+    controller.rs
     crbtree.rs
+    dop.rs
     error.rs
+    events.rs
+    ffi.rs
+    joints.rs
     mod.rs
+    neural.rs
+    query.rs
+    rigid_body.rs
+    rtree.rs
+    voxel.rs
+    world.rs
+
+test21/
+  Java 21 JNI smoke test and Java helper API
+
+test25/
+  Java 25 FFM smoke test and FFM binding sample
 ```
 
-`lib.rs` 是 crate 入口，设置 `mimalloc` 为全局 allocator，并把 FFI 所需的类型重新导出，例如 `Vec3`、`Quat`、`WorldHandle`、`ShapeDesc`、`RayHit`、`CollisionEventRecord` 等。
+`src/rapier` is the core implementation. `src/abi` adapts it to external Java
+entry points. `src/helper` contains JNI support utilities.
 
-`abi` 目录负责 Java 接入。
+## 3. ABI Design
 
-`helper` 目录提供 JNI 数组转换等辅助能力。
+`src/rapier/ffi.rs` is the ABI type center. It defines `#[repr(C)]` structs used
+by C ABI, JNI, and Java FFM.
 
-`rapier` 目录是核心实现，里面封装了世界模拟、刚体、碰撞体、查询、事件、关节、角色控制器和扩展几何。
+Important ABI structs:
 
-## 3. ABI 和 FFI 设计
+- `Vec3`: 3D vector.
+- `Quat`: quaternion.
+- `Bool`: one-byte boolean wrapper.
+- `ShapeDesc`: generic primitive shape descriptor.
+- `InteractionGroupsDesc`: collision/solver group descriptor.
+- `QueryFilterDesc`: query filtering descriptor.
+- `ShapeCastOptionsDesc`: shape cast options.
+- `RayHit`, `PointProjection`, `ShapeCastHit`: query result records.
+- `CollisionEventRecord`, `ContactForceEventRecord`: event records.
+- `VoxelColliderOptions`, `VoxelBuildStats`: voxel build configuration and statistics.
+- `NeuralBoundsDesc`: neural bounds configuration.
 
-`src/rapier/ffi.rs` 是整个项目的 ABI 类型中心。
+The project intentionally does not expose Rapier internal Rust types directly.
+External callers use stable C-compatible types.
 
-它定义了大量 `#[repr(C)]` 结构体，保证 Rust 内存布局能被 C ABI、Java FFM 或 JNI 侧稳定理解。例如：
+### 3.1 Opaque Handles
 
-```rust
-pub struct Vec3 {
-    pub x: f64,
-    pub y: f64,
-    pub z: f64,
-}
+Long-lived Rust-owned objects are exposed as opaque pointers:
 
-pub struct Quat {
-    pub i: f64,
-    pub j: f64,
-    pub k: f64,
-    pub w: f64,
-}
-```
+- `WorldHandle`
+- `RigidBodyBuilderHandle`
+- `ColliderBuilderHandle`
+- `JointBuilderHandle`
+- `CharacterControllerHandle`
+- `RTreeHandle`
+- `CRbTreeHandle`
 
-项目没有直接把 Rapier 内部类型暴露给外部，而是定义自己的 ABI 类型：
+Java stores these as `long` or `MemorySegment`, depending on JNI vs FFM.
 
-- `Vec3`：三维向量。
-- `Quat`：四元数。
-- `Bool`：用 `u8` 表示布尔值。
-- `ShapeDesc`：基础形状描述。
-- `InteractionGroupsDesc`：碰撞组和过滤组。
-- `QueryFilterDesc`：查询过滤器。
-- `ShapeCastOptionsDesc`：形状扫掠参数。
-- `RayHit`：射线命中结果。
-- `ShapeCastHit`：形状扫掠命中结果。
-- `CollisionEventRecord`：碰撞事件。
-- `ContactForceEventRecord`：接触力事件。
-- `VoxelColliderOptions`：体素 collider 构建参数。
-- `NeuralBoundsDesc`：神经边界体参数。
+### 3.2 Packed Rapier Handles
 
-### 3.1 Opaque Pointer
-
-世界、builder、控制器、树索引等对象都用 opaque pointer 暴露：
-
-```rust
-pub struct WorldHandle {
-    pub(crate) inner: crate::rapier::world::PhysicsWorld,
-}
-```
-
-Java 侧只拿到一个 `long`，Rust 侧再转回 `*mut WorldHandle`。
-
-### 3.2 Rapier Handle 打包
-
-Rapier 内部的 `RigidBodyHandle`、`ColliderHandle`、`ImpulseJointHandle` 本质上包含 `id` 和 `generation`。项目把它们打包成 `u64`：
-
-```rust
-(((generation as u64) << 32) | (id as u64)).wrapping_add(1)
-```
-
-这里加 `1` 是为了把 `0` 保留为 null 或 invalid handle。外部 API 返回 `0` 通常表示失败或不存在。
-
-## 4. Java 接入层
-
-`src/abi/ffm.rs` 很薄，只提供 ABI 能力探测：
-
-- `abi_version`
-- `abi_supports_ffm`
-- `abi_supports_jni`
-
-`src/abi/jni.rs` 则把 Rust C ABI 包装成 JNI 函数。它使用宏生成大量 `Java_org_polaris2023_msp_1rigid_1body_RigidBodyNative_*` 方法。
-
-JNI 层主要职责是：
-
-- `jlong` 和裸指针互转。
-- `jint` 转 `u32`。
-- `jdouble` 转 `f64`。
-- Java double array 转 Rust slice。
-- Rust `Vec3` / `Quat` 转 Java double array。
-- 用 `catch_unwind` 捕获 panic，避免 panic 穿过 JNI 边界。
-
-JNI 层本身不做复杂物理逻辑，它只是参数适配和安全边界。
-
-## 5. PhysicsWorld 和世界模拟
-
-`src/rapier/world.rs` 定义了项目内部的核心世界结构：
-
-```rust
-pub(crate) struct PhysicsWorld {
-    pub(crate) pipeline: PhysicsPipeline,
-    pub(crate) gravity: Vector,
-    pub(crate) integration_parameters: IntegrationParameters,
-    pub(crate) islands: IslandManager,
-    pub(crate) broad_phase: BroadPhaseBvh,
-    pub(crate) narrow_phase: NarrowPhase,
-    pub(crate) bodies: RigidBodySet,
-    pub(crate) colliders: ColliderSet,
-    pub(crate) impulse_joints: ImpulseJointSet,
-    pub(crate) multibody_joints: MultibodyJointSet,
-    pub(crate) ccd_solver: CCDSolver,
-    pub(crate) hooks: CallbackPhysicsHooks,
-    pub(crate) events: CollectingEventHandler,
-}
-```
-
-这基本就是 Rapier 运行一帧所需的完整状态集合。
-
-主要 API：
-
-- `world_create`：创建物理世界。
-- `world_destroy`：释放世界。
-- `world_step`：推进模拟。
-- `world_set_gravity` / `world_get_gravity`：设置或读取重力。
-- `world_set_integration_parameters`：设置 dt、solver iterations、CCD substeps。
-- `world_body_snapshot`：批量导出所有刚体状态。
-- `world_dynamic_body_snapshot`：批量导出动态刚体状态。
-- `world_update_body_poses`：批量更新刚体位姿。
-- `world_update_body_velocities`：批量更新刚体速度。
-
-`world_step` 内部调用 Rapier 的核心模拟：
-
-```rust
-world.inner.pipeline.step(
-    world.inner.gravity,
-    &world.inner.integration_parameters,
-    &mut world.inner.islands,
-    &mut world.inner.broad_phase,
-    &mut world.inner.narrow_phase,
-    &mut world.inner.bodies,
-    &mut world.inner.colliders,
-    &mut world.inner.impulse_joints,
-    &mut world.inner.multibody_joints,
-    &mut world.inner.ccd_solver,
-    &world.inner.hooks,
-    &world.inner.events,
-);
-```
-
-项目限制单步 `delta_seconds` 必须大于 `0` 且不超过 `1.0` 秒，避免异常大步长破坏模拟稳定性。
-
-## 6. 刚体模块
-
-`src/rapier/rigid_body.rs` 负责刚体创建、插入、删除和运行时控制。
-
-支持的刚体类型：
-
-- `Dynamic`：动态刚体，受力、碰撞和重力影响。
-- `Fixed`：静态刚体，不移动。
-- `KinematicPositionBased`：基于位置的运动学刚体。
-- `KinematicVelocityBased`：基于速度的运动学刚体。
-
-典型创建流程：
+Rapier handles are packed into nonzero `u64` values:
 
 ```text
-rigid_body_builder_create
-rigid_body_builder_set_translation
-rigid_body_builder_set_rotation
-rigid_body_builder_set_linvel
-rigid_body_builder_build
-world_insert_rigid_body
+packed = ((generation << 32) | id) + 1
 ```
 
-builder 支持设置：
+`0` is reserved for null/invalid handles. This is used for rigid bodies,
+colliders, and impulse joints.
+
+### 3.3 FFM-Friendly Out Pointers
+
+Some native structs are returned through out-pointer variants for Java FFM.
+This avoids platform-specific complexity around returning larger structs by value.
+
+Examples:
+
+- `world_get_gravity_out`
+- `rigid_body_get_translation_out`
+- `rigid_body_get_rotation_out`
+- `collider_get_translation_out`
+- `collider_get_rotation_out`
+- `query_cast_ray_out`
+- `query_project_point_out`
+- `query_cast_shape_out`
+- `voxel_aabb_build_stats_out`
+- `voxel_obb_build_stats_out`
+
+For one-byte success/failure paths, Java FFM uses `_flag` functions returning
+`u8` instead of `Bool` struct returns.
+
+## 4. Java Access Layers
+
+### 4.1 JNI
+
+`src/abi/jni.rs` exposes JNI-compatible `Java_*` functions and delegates to the
+Rust C ABI implementation.
+
+Responsibilities:
+
+- Convert Java primitives to Rust ABI structs.
+- Convert Java arrays/native memory addresses to Rust slices.
+- Convert Rust result structs back to Java arrays or native output buffers.
+- Catch Rust panics at the JNI boundary.
+
+Java 21 wrappers live in `test21/src/main/java/.../util`.
+
+### 4.2 FFM
+
+`test25/.../RigidBodyFfm.java` is a Java 25 FFM binding sample. It declares Java
+`MemoryLayout` definitions matching the Rust `repr(C)` ABI and uses downcall
+handles for native functions.
+
+The FFM surface currently covers:
+
+- World lifecycle and stepping.
+- Gravity and collider count.
+- Rigid body builder, insertion, pose/velocity/force/impulse mutation, CCD, sleep/wakeup.
+- Collider builder, insertion, parent insertion, runtime material/group/event mutation.
+- CRbTree basics.
+- Voxel AABB/OBB build stats and collider creation.
+- Voxel AABB/OBB queries.
+- Regular queries: ray, point projection, AABB, OBB, sphere, shape cast.
+- Collision/contact-force event bulk reads and event clearing.
+
+## 5. World Module
+
+`src/rapier/world.rs` owns the Rapier simulation state:
+
+```rust
+PhysicsPipeline
+Vector gravity
+IntegrationParameters
+IslandManager
+BroadPhaseBvh
+NarrowPhase
+RigidBodySet
+ColliderSet
+ImpulseJointSet
+MultibodyJointSet
+CCDSolver
+CallbackPhysicsHooks
+CollectingEventHandler
+```
+
+Main functions:
+
+- `world_create`
+- `world_destroy`
+- `world_step`
+- `world_set_gravity`
+- `world_get_gravity`
+- `world_get_gravity_out`
+- `world_set_integration_parameters`
+- `world_get_integration_parameters`
+- `world_body_snapshot`
+- `world_dynamic_body_snapshot`
+- `world_update_body_poses`
+- `world_update_body_velocities`
+- `world_get_rigid_body_set_size`
+- `world_get_collider_set_size`
+
+`world_step` validates the timestep and advances the Rapier pipeline using the
+world's hooks and event handler.
+
+## 6. Rigid Bodies
+
+Implemented in `src/rapier/rigid_body.rs`.
+
+Supported body statuses:
+
+- `Dynamic`
+- `Fixed`
+- `KinematicPositionBased`
+- `KinematicVelocityBased`
+
+Builder capabilities:
 
 - translation
 - rotation
 - pose
+- linear/angular velocity
 - additional mass
 - additional mass properties
-- linear velocity
-- angular velocity
 - gravity scale
-- linear damping
-- angular damping
-- can sleep
+- damping
+- sleep behavior
 - enabled rotations
 - user data
 
-运行时支持：
+Runtime capabilities:
 
-- 获取/设置 body status。
-- 获取/设置 translation。
-- 获取/设置 rotation。
-- 获取/设置 pose。
-- 获取/设置 linear velocity。
-- 获取/设置 angular velocity。
-- add force。
-- add torque。
-- apply impulse。
-- apply torque impulse。
-- enable CCD。
-- sleep。
-- wake up。
+- get/set status
+- get/set translation
+- get/set rotation
+- set pose
+- get/set linear velocity
+- get/set angular velocity
+- add force
+- add torque
+- apply impulse
+- apply torque impulse
+- enable CCD
+- sleep
+- wake up
+- sleeping state query
+- remove/copy body
 
-实现上，builder 和临时 `RigidBody` 都通过 `Box::into_raw` 传给外部，再通过 `Box::from_raw` 回收或消费。也就是说，Java 侧必须遵守生命周期：builder build 后不能继续使用；未 build 的 builder 应该 destroy。
+FFM uses byte-returning `_flag` variants for success/failure mutation calls.
 
-## 7. 碰撞体模块
+## 7. Colliders
 
-`src/rapier/collider.rs` 负责 collider builder 和 collider 的世界操作。
+Implemented in `src/rapier/collider.rs`.
 
-基础形状由 `ShapeDesc` 或 `shape_type + Vec3` 创建，支持：
+Primitive shapes:
 
 - ball
 - cuboid
@@ -274,13 +261,13 @@ builder 支持设置：
 - round cone
 - round cuboid
 
-额外构造器支持：
+Additional builders:
 
 - OBB
 - sphere
 - heightmap
 - convex hull
-- point cloud bounds
+- point-cloud bounds
 - double BV
 - skewed OBB
 - discrete OBB
@@ -288,7 +275,7 @@ builder 支持设置：
 - edge BVH
 - medial spheres
 
-builder 可设置：
+Builder settings:
 
 - translation
 - rotation
@@ -301,62 +288,66 @@ builder 可设置：
 - solver groups
 - active events
 - active hooks
-- contact force event threshold
+- contact-force event threshold
 
-插入方式：
+Runtime settings:
 
-- `world_insert_collider`：插入独立 collider。
-- `world_insert_collider_with_parent`：把 collider 挂到某个 rigid body 上。
+- pose
+- sensor
+- friction
+- restitution
+- collision groups
+- solver groups
+- active events
+- active hooks
+- contact-force event threshold
+- density readback
 
-多数真实物理对象会用 parent body 方式：刚体负责运动状态，collider 负责几何形状、密度、摩擦和碰撞过滤。
+Insertion paths:
 
-## 8. 查询模块
+- `world_insert_collider`
+- `world_insert_collider_with_parent`
 
-`src/rapier/query.rs` 提供对物理世界的空间查询。
+## 8. Queries
 
-主要功能：
+Implemented in `src/rapier/query.rs`.
 
-- `query_cast_ray`：单条射线检测。
-- `query_cast_rays`：批量射线检测。
-- `query_project_point`：把点投影到最近 collider。
-- `query_intersect_point_count`：点包含查询。
-- `query_intersect_aabb_count`：AABB 交集数量。
-- `query_intersect_obb`：OBB 交集列表。
-- `query_intersect_sphere`：球体交集列表。
-- `query_cast_shape`：形状扫掠。
+Supported query operations:
 
-查询内部会基于世界的 broad phase 和 narrow phase 构造 query pipeline：
+- ray cast
+- batch ray cast
+- point projection
+- point intersection count
+- AABB intersection count and handle output
+- OBB intersection count and handle output
+- sphere intersection count and handle output
+- shape cast
 
-```rust
-world.inner.broad_phase.as_query_pipeline(
-    world.inner.narrow_phase.query_dispatcher(),
-    &world.inner.bodies,
-    &world.inner.colliders,
-    query_filter_from_desc(filter),
-)
-```
+The query pipeline is built from the world's broad phase, narrow phase, bodies,
+colliders, and `QueryFilterDesc`.
 
-`QueryFilterDesc` 支持：
+`QueryFilterDesc` supports:
 
-- flags
+- query flags
 - interaction groups
-- exclude collider
-- exclude rigid body
+- excluded collider
+- excluded rigid body
 
-这让 Java 侧可以实现“射线忽略自己”、“只检测某个碰撞组”、“排除某个刚体”等常见逻辑。
+FFM uses out-pointer variants for ray, point projection, and shape cast results.
 
-## 9. 事件模块
+## 9. Events
 
-`src/rapier/events.rs` 实现 Rapier 的 `EventHandler`，用于收集模拟中的事件。
+Implemented in `src/rapier/events.rs`.
 
-收集两类事件：
+The event handler stores:
 
-- collision event：碰撞开始或结束。
-- contact force event：接触力事件。
+- collision events
+- contact-force events
 
-事件存储在 `parking_lot::Mutex<Vec<_>>` 中，最大记录数是 `16_384`。
+Events are collected into bounded vectors protected by `parking_lot::Mutex`.
+The maximum stored event count is `16_384`.
 
-对外 API：
+Public event API:
 
 - `world_clear_events`
 - `world_collision_event_count`
@@ -366,703 +357,186 @@ world.inner.broad_phase.as_query_pipeline(
 - `world_get_contact_force_event`
 - `world_get_contact_force_events`
 
-文件里也有 contact pair callback 和 intersection callback 的 API，但当前实现会返回 unsupported。原因是外部 ABI 回调涉及函数指针、生命周期和线程安全，项目目前选择禁用，保留默认 hooks。
+Java 25 FFM currently uses the bulk read functions and slices the returned
+`MemorySegment` to the number of records written.
 
-## 10. 关节模块
+## 10. Voxel System
 
-`src/rapier/joints.rs` 封装 Rapier impulse joints。
+Implemented in `src/rapier/voxel.rs`.
 
-支持的 joint 类型：
+Voxel colliders can be built from:
 
-- fixed
-- revolute
-- prismatic
-- rope
-- spring
-- spherical
+- raw occupancy grid memory
+- Java `byte[]` through JNI
+- AABB
+- OBB
 
-builder 支持设置：
+Build modes:
 
-- contacts enabled
-- local anchor1
-- local anchor2
-- limits
-- motor velocity
-- motor position
+- `Auto`
+- `Cuboids`
+- `GreedyCuboids`
+- `SurfaceMesh`
 
-插入 joint 的流程：
-
-```text
-joint_builder_create
-joint_builder_set_local_anchor1
-joint_builder_set_local_anchor2
-joint_builder_set_limits
-world_insert_impulse_joint
-```
-
-`world_insert_impulse_joint` 会消费 builder，并把两个 rigid body handle 连接起来。
-
-## 11. 角色控制器
-
-`src/rapier/controller.rs` 包装 Rapier 的 `KinematicCharacterController`。
-
-它不是动态刚体求解器，而是游戏中常见的角色移动控制器。主要用于角色胶囊体、玩家移动、斜坡、台阶和贴地逻辑。
-
-支持设置：
-
-- up 方向
-- offset absolute
-- offset relative
-- slide
-- autostep
-- snap to ground
-- slope angles
-
-移动流程：
-
-```text
-character_controller_move_shape
-character_controller_collision_count
-character_controller_get_collision
-character_controller_solve_impulses
-```
-
-`character_controller_move_shape` 返回 `EffectiveCharacterMovement`：
-
-- `translation`：实际可应用位移。
-- `grounded`：是否接地。
-- `is_sliding_down_slope`：是否正在沿斜坡下滑。
-
-碰撞详情保存在 controller 内部的 `collisions` 列表里，可以逐个读取。
-
-## 12. Bounds 扩展形状
-
-`src/rapier/bounds.rs` 提供一些额外边界体构造和查询：
-
-- capsule
-- SSV
-- ellipsoid
-- prism
-- cylinder
-- spherical shell
-
-实现方式：
-
-- capsule / SSV：本质上使用 Rapier capsule。
-- cylinder：使用 Rapier cylinder。
-- ellipsoid：采样球面点后按 radii 缩放，再构造 convex hull。
-- prism：生成上下两个多边形环，再构造 convex hull。
-- spherical shell：当前实现实际使用 outer radius 的 ball，并没有真实表示空心壳内部。
-
-这些形状既可以创建 collider builder，也可以直接用于 intersection 查询。
-
-## 13. DOP / FDH 模块
-
-`src/rapier/dop.rs` 实现方向包围体。
-
-支持 k-DOP preset：
-
-- K6
-- K14
-- K18
-- K26
-
-还支持 FDH，也就是自定义方向集合。
-
-实现流程：
-
-1. 读取点云。
-2. 读取或生成方向集合。
-3. 对每个方向计算所有点的投影 min/max。
-4. 得到一组 slab。
-5. 枚举平面三元组求交点。
-6. 保留落在所有 slab 内的点。
-7. 用这些点构造 convex hull。
-
-这种方式适合把复杂点云近似成受控方向的凸包，而不是直接生成任意 convex hull。
-
-## 14. Neural Bounds 模块
-
-`src/rapier/neural.rs` 实现了一个特殊的神经边界体。
-
-输入参数包括：
-
-- center
-- half extents
-- rotation
-- sample resolution
-- hidden width
-- hidden layers
-- activation
-- output scale
-- padding
-- weights
-
-大致算法：
-
-1. 先加入 OBB 的 8 个角点。
-2. 在球面上采样多个方向。
-3. 把方向输入一个小 MLP。
-4. MLP 输出该方向的 expansion。
-5. 在基础 OBB 半径上叠加 expansion 和 padding。
-6. 得到扩展后的点集。
-7. 用点集生成 convex hull。
-
-它提供：
-
-- `neural_bounds_required_weight_count`
-- `collider_builder_create_neural_bounds`
-- `query_intersect_neural_bounds`
-
-这个模块适合把某些复杂或学习得到的边界近似成可用于物理查询的凸包。
-
-## 15. Voxel 模块
-
-`src/rapier/voxel.rs` 把体素网格转换成 collider。
-
-输入是 `u8` 数组，非 0 表示 solid voxel。
-
-支持模式：
-
-- `Cuboids`：每个 solid voxel 生成一个 cuboid。
-- `GreedyCuboids`：把连续 solid voxel 合并成长方体。
-- `SurfaceMesh`：只生成外表面 mesh。
-- `Auto`：根据体素数量和是否 dynamic body 自动选择。
-
-`Auto` 的倾向：
-
-- solid 数量较小时用 cuboids。
-- dynamic body 倾向 greedy cuboids。
-- 大型静态体素场景倾向 surface mesh。
-
-模块中有多个上限保护：
-
-- 最大体素数：`262_144`
-- 最大 compound parts：`100_000`
-- 最大 surface vertices：`1_000_000`
-- 最大 surface triangles：`500_000`
-
-这些限制用于防止 Java 侧传入过大数据导致 native 层内存或耗时失控。
-
-## 16. Compat 模块
-
-`src/rapier/compat.rs` 提供偏业务和性能优化的批量接口。
-
-主要功能：
-
-- `world_insert_dynamic_cuboids`
-- `world_insert_static_trimesh`
-- `query_intersect_aabb_rigid_body_count`
-- `query_intersect_aabb_rigid_bodies`
-
-`world_insert_dynamic_cuboids` 会一次创建一个 dynamic body，并把多个 cuboid collider 挂到它下面。这适合复杂物体由很多盒子组成的场景，能减少 Java 到 native 的调用次数。
-
-`world_insert_static_trimesh` 会创建 fixed body，再挂一个 trimesh collider。适合静态地形或场景网格。
-
-`query_intersect_aabb_rigid_bodies` 先查 AABB 命中的 collider，再通过 collider parent 去重得到 rigid body handles。
-
-## 17. RTree 和 CRbTree
-
-项目自己实现了两个 AABB 空间索引，它们不依赖 Rapier 世界。
-
-### 17.1 RTree
-
-`src/rapier/rtree.rs` 实现了一个简单 RTree 风格索引。
-
-特点：
-
-- 存储 `id + AABB`。
-- 插入和更新后标记 dirty。
-- 查询前懒 rebuild。
-- rebuild 时按最长轴排序并分块。
-- 查询时递归遍历 branch 和 leaf。
-
-它适合数据量较大、需要空间剪枝的 AABB 查询。
-
-### 17.2 CRbTree
-
-`src/rapier/crbtree.rs` 使用 `BTreeMap<u64, Aabb>`。
-
-特点：
-
-- 查询是线性扫描。
-- 输出按 id 顺序稳定。
-- 实现简单，确定性好。
-
-它适合数据量较小但希望查询结果顺序稳定的场景。
-
-## 18. 错误处理
-
-`src/rapier/error.rs` 提供 thread-local last error。
-
-对外 API：
-
-- `last_error_code`
-- `last_error_message`
-- `last_error_clear`
-
-错误类型包括：
-
-- null pointer
-- invalid argument
-- capacity
-- not found
-- unsupported
-
-需要注意的是，并不是所有 API 都会设置 last error。很多 C ABI 风格函数遇到非法参数时只是返回 `0`、`false` 或默认结构体。
-
-## 19. 典型使用流程
-
-### 19.1 创建动态刚体和碰撞体
-
-```text
-world_create
-rigid_body_builder_create(Dynamic)
-rigid_body_builder_set_translation
-rigid_body_builder_build
-world_insert_rigid_body
-
-collider_builder_create(Cuboid)
-collider_builder_set_density
-collider_builder_set_friction
-collider_builder_build
-world_insert_collider_with_parent
-
-world_step
-rigid_body_get_translation
-```
-
-### 19.2 做射线检测
-
-```text
-query_cast_ray(
-    world,
-    origin,
-    direction,
-    max_toi,
-    solid,
-    filter
-)
-```
-
-返回 `RayHit`，其中包含：
-
-- 命中的 collider handle
-- time of impact
-- normal
-- feature id
-
-### 19.3 同步大量刚体状态
-
-如果 Java 侧每个 body 都调用一次 `rigid_body_get_translation`，跨语言调用成本会很高。因此项目提供：
-
-```text
-world_body_snapshot
-world_dynamic_body_snapshot
-world_update_body_poses
-world_update_body_velocities
-```
-
-这些接口用连续数组一次性读写多个 body 的状态。
-
-## 20. 实现特点和注意点
-
-1. 项目是 ABI 优先设计，接口大量使用裸指针、`u64` handle 和 `#[repr(C)]` 数据结构。
-
-2. 物理求解核心交给 Rapier，本项目主要做跨语言封装、数据转换、批量 API 和扩展几何。
-
-3. `0` handle 通常表示失败或空值，真实 Rapier handle 会被打包后加 `1`。
-
-4. 输入校验比较多，包括 null pointer、NaN、Inf、负尺寸、容量上限等。
-
-5. builder 类对象通常会被 build 函数消费，外部必须遵守生命周期，否则容易出现 use-after-free。
-
-6. 很多扩展形状最终都会转成 convex hull，例如 ellipsoid、prism、k-DOP、FDH 和 neural bounds。
-
-7. voxel collider 会根据模式生成 compound cuboids 或 trimesh，适合体素场景。
-
-8. event collection 是内置收集式设计，不支持外部 callback。
-
-9. last error 不是所有函数都会设置，调用方不能完全依赖 error code 判断所有失败原因。
-
-10. 这个库明显针对 Java 调用性能做了优化，批量 snapshot、批量 ray、批量 cuboid 插入都是为了减少 JNI/FFM 往返次数。
-
-## 21. 总结
-
-这个项目可以概括为：一个面向 Java 的 Rapier 3D 双精度物理封装库。
-
-它提供了完整的刚体物理能力：
-
-- 世界模拟
-- 刚体
-- 碰撞体
-- 关节
-- 查询
-- 事件
-- 角色控制器
-
-同时还提供了一批扩展功能：
-
-- 体素 collider
-- k-DOP / FDH
-- 神经网络边界体
-- 自定义 AABB 空间索引
-- 批量状态同步
-- 批量复杂碰撞体插入
-
-整体设计重点不是重写物理引擎，而是把 Rapier 的能力稳定、高效地暴露给 Java，并补充一些适合业务侧使用的批量和复杂几何接口。
-
-## 22. Voxel 入口补充
-
-这次对 voxel 创建入口做了补充，目标是让调用方既能继续使用低层裸指针接口，也能用更方便的默认参数入口和 Java `byte[]` 入口。
-
-### 22.1 Rust C ABI 入口
-
-原有完整入口仍然保留：
-
-```rust
-collider_builder_create_voxels(
-    voxels,
-    size_x,
-    size_y,
-    size_z,
-    voxel_size,
-    origin,
-    options,
-)
-```
-
-这个入口适合 C ABI / FFM 调用方完整控制 `VoxelColliderOptions`，包括 `mode`、`dynamic_body`、`small_voxel_limit`、`mesh_voxel_limit`。
-
-新增默认参数入口：
-
-```rust
-collider_builder_create_voxels_auto(
-    voxels,
-    size_x,
-    size_y,
-    size_z,
-    voxel_size,
-    origin,
-    dynamic_body,
-)
-```
-
-它内部使用 `VoxelColliderOptions::default()`，只覆盖 `dynamic_body`。默认配置是：
-
-```text
-mode = Auto
-small_voxel_limit = 128
-mesh_voxel_limit = 20_000
-```
-
-### 22.2 JNI 入口
-
-JNI 层现在有四个 voxel 创建入口：
-
-```java
-colliderBuilderCreateVoxels(...)
-colliderBuilderCreateVoxelsAuto(...)
-colliderBuilderCreateVoxelBytes(...)
-colliderBuilderCreateVoxelBytesAuto(...)
-```
-
-- `colliderBuilderCreateVoxels`：使用 native memory 地址，参数最完整。
-- `colliderBuilderCreateVoxelsAuto`：使用 native memory 地址，但走默认 voxel options。
-- `colliderBuilderCreateVoxelBytes`：直接接收 Java `byte[]`，参数最完整。
-- `colliderBuilderCreateVoxelBytesAuto`：直接接收 Java `byte[]`，并走默认 voxel options。
-
-`byte[]` 入口会在 JNI 层复制 Java 数组到 Rust `Vec<u8>`，再调用 Rust voxel builder。它更易用，但会多一次数组复制；裸地址入口更适合大体素数据或高频调用。
-
-### 22.3 Java 工具层入口
-
-`PhysicsWorld` 现在提供了更顺手的 overload：
-
-```java
-world.voxelCollider(long voxels, int sizeX, int sizeY, int sizeZ, double voxelSize)
-world.voxelCollider(long voxels, int sizeX, int sizeY, int sizeZ, double voxelSize,
-        double originX, double originY, double originZ, boolean dynamicBody)
-world.voxelCollider(byte[] voxels, int sizeX, int sizeY, int sizeZ, double voxelSize)
-world.voxelCollider(byte[] voxels, int sizeX, int sizeY, int sizeZ, double voxelSize,
-        double originX, double originY, double originZ, boolean dynamicBody)
-```
-
-完整控制参数的版本也保留：
-
-```java
-world.voxelCollider(
-    voxels,
-    sizeX,
-    sizeY,
-    sizeZ,
-    voxelSize,
-    originX,
-    originY,
-    originZ,
-    mode,
-    dynamicBody,
-    smallVoxelLimit,
-    meshVoxelLimit
-)
-```
-
-`Collider.Builder` 里补充了 voxel mode 常量：
-
-```java
-VOXEL_MODE_AUTO
-VOXEL_MODE_CUBOIDS
-VOXEL_MODE_GREEDY_CUBOIDS
-VOXEL_MODE_SURFACE_MESH
-```
-
-以及默认阈值：
-
-```java
-DEFAULT_SMALL_VOXEL_LIMIT = 128
-DEFAULT_MESH_VOXEL_LIMIT = 20_000
-```
-
-### 22.4 VoxelGrid 辅助能力
-
-`VoxelGrid` 现在除了能暴露 native memory 地址：
-
-```java
-voxels.address()
-```
-
-也可以导出 Java 数组：
-
-```java
-voxels.toByteArray()
-```
-
-并能获取体素总数：
-
-```java
-voxels.count()
-```
-
-这样调用方可以根据场景选择：
-
-- 性能优先：`VoxelGrid.address()` + native memory 入口。
-- 易用优先：`VoxelGrid.toByteArray()` 或普通 `byte[]` + byte array 入口。
-
-### 22.5 典型用法
-
-使用默认参数和 native memory：
-
-```java
-try (VoxelGrid voxels = new VoxelGrid(16, 8, 16).fillBox(4, 0, 4, 12, 4, 12);
-     PhysicsWorld world = new PhysicsWorld(0.0, -9.81, 0.0);
-     Collider.Builder builder = world.voxelCollider(
-             voxels.address(),
-             voxels.sizeX(),
-             voxels.sizeY(),
-             voxels.sizeZ(),
-             1.0)) {
-    Collider collider = builder.insert();
-}
-```
-
-使用 Java `byte[]`：
-
-```java
-byte[] voxels = new byte[8];
-voxels[0] = 1;
-voxels[7] = 1;
-
-try (PhysicsWorld world = new PhysicsWorld(0.0, -9.81, 0.0);
-     Collider.Builder builder = world.voxelCollider(voxels, 2, 2, 2, 0.5)) {
-    Collider collider = builder.insert();
-}
-```
-
-完整控制模式：
-
-```java
-try (Collider.Builder builder = world.voxelCollider(
-        voxels.address(),
-        voxels.sizeX(),
-        voxels.sizeY(),
-        voxels.sizeZ(),
-        1.0,
-        0.0, 0.0, 0.0,
-        Collider.Builder.VOXEL_MODE_GREEDY_CUBOIDS,
-        false,
-        Collider.Builder.DEFAULT_SMALL_VOXEL_LIMIT,
-        Collider.Builder.DEFAULT_MESH_VOXEL_LIMIT)) {
-    Collider collider = builder.insert();
-}
-```
-
-### 22.6 设计取舍
-
-新增入口没有替换原有接口，而是在完整接口之外补一层便利 API。
-
-这样做的好处是：
-
-- 旧的 FFI/JNI 调用方不受影响。
-- 简单场景不用手写 mode 和阈值。
-- Java 调用方可以直接传 `byte[]`，不一定要先分配 native memory。
-- 需要性能或大数据场景时，仍然可以使用 native memory 地址入口，避免额外数组复制。
-
-验证情况：
-
-```text
-cargo test
-gradlew check in test21
-JNI smoke test passed on Java 21
-```
-
-## 23. Voxel implementation update: bounded creation, stats, query, and Java helpers
-
-This section records the current voxel work added after the initial project analysis.
-It is written in ASCII to avoid the existing markdown encoding display issue on this machine.
-
-### 23.1 Creation sources
-
-Voxel colliders can now be created from several input forms:
-
-- Raw occupancy memory: Rust/C ABI accepts `uint8_t*` plus grid dimensions.
-- Java native memory: `VoxelGrid.address()` can be passed to JNI without copying.
-- Java byte arrays: JNI can accept `byte[]` and copy it into a temporary Rust-owned buffer.
-- AABB: `collider_builder_create_voxel_aabb` fills a voxel grid from an axis-aligned bounding box.
-- OBB: `collider_builder_create_voxel_obb` fills a voxel grid from an oriented box.
-
-The AABB/OBB routes answer the earlier question about using bounding boxes to define voxels: yes, it is feasible. The implementation samples voxel cell centers against the target box and then reuses the same voxel collider build pipeline as raw occupancy grids.
-
-### 23.2 Build modes
-
-`VoxelColliderOptions` controls the representation:
-
-- `Auto`: choose based on solid voxel count and whether the body is dynamic.
-- `Cuboids`: one cuboid per solid voxel.
-- `GreedyCuboids`: merge continuous occupied blocks into larger cuboids.
-- `SurfaceMesh`: generate only the exterior mesh for large static voxel sets.
-
-The default thresholds remain:
+Default thresholds:
 
 ```text
 small_voxel_limit = 128
 mesh_voxel_limit = 20_000
 ```
 
-### 23.3 Build statistics
+Important native functions:
 
-The new `VoxelBuildStats` struct reports:
+- `collider_builder_create_voxels`
+- `collider_builder_create_voxels_auto`
+- `collider_builder_create_voxel_aabb`
+- `collider_builder_create_voxel_aabb_auto`
+- `collider_builder_create_voxel_obb`
+- `collider_builder_create_voxel_obb_auto`
+- `voxel_build_stats`
+- `voxel_aabb_build_stats`
+- `voxel_obb_build_stats`
+- `voxel_aabb_build_stats_out`
+- `voxel_obb_build_stats_out`
 
-- `cell_count`
-- `solid_count`
-- `selected_mode`
-- `estimated_parts`
-- `estimated_vertices`
-- `estimated_triangles`
-- `size_x`, `size_y`, `size_z`
+Voxel query functions:
 
-Rust/C ABI functions:
+- `query_intersect_voxel_aabb`
+- `query_intersect_voxel_aabb_count`
+- `query_intersect_voxel_obb`
+- `query_intersect_voxel_obb_count`
 
-```text
-voxel_build_stats
-voxel_aabb_build_stats
-voxel_obb_build_stats
-voxel_aabb_build_stats_out
-voxel_obb_build_stats_out
-```
+Direct insertion helpers:
 
-The `_out` variants are intended for FFM or other callers where returning a C struct by value is risky or inconvenient.
+- `world_insert_static_voxel_aabb`
+- `world_insert_dynamic_voxel_obb`
 
-Java 21 JNI exposes matching helpers through `Collider.Builder`:
+### 10.1 Bounding Boxes as Voxel Sources
 
-```java
-Collider.Builder.voxelStats(...)
-Collider.Builder.voxelAabbStats(...)
-Collider.Builder.voxelObbStats(...)
-```
+Using bounding boxes to define voxels is feasible and implemented.
 
-Java 25 FFM currently covers the AABB stats path with `voxelAabbBuildStats(...)`.
+For AABB, every generated cell is solid because the grid is exactly the box
+volume. For OBB, the system first builds a world-space AABB around the oriented
+box, then samples voxel cell centers against the OBB's local half-extents.
 
-### 23.4 Voxel-shaped queries
+This keeps the voxel builder pipeline unified: AABB/OBB paths generate an owned
+occupancy grid and then reuse the same voxel collider build modes.
 
-The query layer now has voxel AABB/OBB helpers:
+### 10.2 Java VoxelGrid
 
-```text
-query_intersect_voxel_aabb
-query_intersect_voxel_aabb_count
-query_intersect_voxel_obb
-query_intersect_voxel_obb_count
-```
+Java 21 includes `VoxelGrid`, which supports:
 
-Java 21 exposes these through `Query`:
+- `get`
+- `set`
+- `clear`
+- `solidCount`
+- `fillBox`
+- `fillAabb`
+- `fillSphere`
+- `copyFrom`
+- `union`
+- `subtract`
+- `intersect`
+- `toByteArray`
+- `address`
 
-```java
-query.countVoxelAabb(...)
-query.intersectVoxelAabb(...)
-query.countVoxelObb(...)
-query.intersectVoxelObb(...)
-```
+This helper makes simple voxel content possible without manually writing every
+occupancy byte.
 
-These queries build a temporary voxel-shaped collider and reuse Rapier's intersection pipeline with the existing query filter structure.
+## 11. Spatial Indexes
 
-### 23.5 Direct world insertion helpers
+The project includes two standalone spatial index wrappers:
 
-Two convenience insert paths were added for common workflows:
+- `CRbTree`
+- `RTree`
 
-```text
-world_insert_static_voxel_aabb
-world_insert_dynamic_voxel_obb
-```
+CRbTree has Java 25 FFM coverage for create, insert, and AABB count query.
+Java 21 JNI has broader helper coverage through `SpatialIndex`.
 
-Java 21 wrappers:
+RTree is the next obvious Java 25 FFM parity gap.
 
-```java
-PhysicsWorld.insertStaticVoxelAabb(...)
-PhysicsWorld.insertDynamicVoxelObb(...)
-```
+## 12. Extended Geometry
 
-They create the rigid body, build the voxel collider, attach it to the body, and return the inserted rigid body handle.
+Additional geometry modules:
 
-### 23.6 Java VoxelGrid helper
+- `bounds.rs`: capsule, SSV, ellipsoid, prism, cylinder, spherical shell.
+- `dop.rs`: kDOP and FDH builders.
+- `neural.rs`: neural bounds builder and neural bounds queries.
+- `compat.rs`: compatibility helpers such as dynamic cuboids and static trimesh insertion.
 
-`VoxelGrid` now supports common grid construction and editing operations:
+Most of these are exposed through Rust C ABI and Java 21 JNI. Java 25 FFM does
+not yet cover all of them.
 
-```java
-get(...)
-clear()
-solidCount()
-fillBox(...)
-fillAabb(...)
-fillSphere(...)
-copyFrom(...)
-union(...)
-subtract(...)
-intersect(...)
-toByteArray()
-address()
-```
+## 13. Joints and Character Controller
 
-This makes simple voxel assets practical to create from Java without manually computing every occupancy byte.
+`joints.rs` supports impulse joint creation and removal for several joint kinds.
+`controller.rs` wraps Rapier's character controller movement and collision data.
 
-### 23.7 FFM compatibility fix
+These are available through JNI wrappers, but Java 25 FFM parity is still open.
 
-The Java 25 FFM smoke test previously passed a `RigidBodyBuilderHandle` directly into `world_insert_rigid_body`. The C ABI expects a built `RigidBody*`, not the builder. The FFM layer now binds `rigid_body_builder_build`, builds the body first, and only then calls `world_insert_rigid_body`.
-
-This also fixed the Java 25 smoke test hang observed during verification.
-
-### 23.8 Verification
+## 14. Verification Status
 
 Verified commands:
 
-```text
-cargo fmt
+```powershell
 cargo test
-.\gradlew.bat check   # in test21, Java 21 JNI
-.\gradlew.bat check   # in test25, Java 25 FFM
+
+cd test21
+.\gradlew.bat check
+
+cd ..\test25
+.\gradlew.bat check
 ```
 
-Current result:
+Current expected result:
 
 ```text
 Rust tests: passed
 Java 21 JNI smoke test: passed
 Java 25 FFM smoke test: passed
 ```
+
+## 15. Current Java 25 FFM Coverage
+
+Java 25 FFM currently covers:
+
+- ABI version.
+- World create/destroy/step.
+- Gravity get/set.
+- Collider count.
+- Rigid body create/insert/get translation/get rotation.
+- Rigid body pose, translation, rotation mutation.
+- Rigid body linear/angular velocity mutation.
+- Rigid body force, torque, impulse, torque impulse.
+- Rigid body CCD, sleep, wakeup, sleeping state.
+- Collider builder create for primitive cuboid-like shape.
+- Voxel AABB/OBB builder stats and collider creation.
+- Collider builder material/event settings.
+- Collider insertion and insertion with parent.
+- Collider runtime pose, sensor, material, group, event, hook, threshold mutation.
+- Collider translation, rotation, and density reads.
+- CRbTree create/insert/AABB count query.
+- Regular queries: ray, point projection, AABB, OBB, sphere, shape cast.
+- Voxel-shaped AABB/OBB queries.
+- Collision event and contact-force event bulk reads.
+- Event clearing.
+
+## 16. Recommended Next Steps
+
+Recommended implementation order:
+
+1. Java 25 FFM RTree parity:
+   create, destroy, clear, len, insert, update, remove, rebuild, query count, query handles.
+
+2. Java 25 FFM character controller:
+   controller lifecycle, configuration setters, move shape, collision count/read, solve impulses.
+
+3. Java 25 FFM joints:
+   joint builder creation, anchors, limits, motors, insert/remove.
+
+4. Java 25 FFM advanced collider builders:
+   heightmap, convex hull, point-cloud bounds, kDOP, FDH, neural bounds.
+
+5. Higher-level Java 25 helper layer:
+   `RigidBodyFfm` is currently low-level. A safer Java 25 utility layer similar
+   to `test21/util` would reduce direct `MemorySegment` handling in user code.

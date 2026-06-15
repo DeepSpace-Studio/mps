@@ -102,6 +102,23 @@ pub extern "C" fn query_cast_ray(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn query_cast_ray_out(
+    world: *const WorldHandle,
+    origin: Vec3,
+    direction: Vec3,
+    max_toi: f64,
+    solid: Bool,
+    filter: QueryFilterDesc,
+    out_hit: *mut RayHit,
+) -> ColliderHandleRaw {
+    let hit = query_cast_ray(world, origin, direction, max_toi, solid, filter);
+    if let Some(out_hit) = unsafe { out_hit.as_mut() } {
+        *out_hit = hit;
+    }
+    hit.collider
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn query_cast_rays(
     world: *const WorldHandle,
     rays: *const f64,
@@ -197,6 +214,28 @@ pub extern "C" fn query_project_point(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn query_project_point_out(
+    world: *const WorldHandle,
+    point: Vec3,
+    max_dist: f64,
+    solid: Bool,
+    filter: QueryFilterDesc,
+    out_collider: *mut ColliderHandleRaw,
+    out_projection: *mut PointProjection,
+) -> ColliderHandleRaw {
+    let projection = query_project_point(world, point, max_dist, solid, filter, out_collider);
+    let collider = if let Some(out_collider) = unsafe { out_collider.as_ref() } {
+        *out_collider
+    } else {
+        0
+    };
+    if let Some(out_projection) = unsafe { out_projection.as_mut() } {
+        *out_projection = projection;
+    }
+    collider
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_point_count(
     world: *const WorldHandle,
     point: Vec3,
@@ -242,6 +281,42 @@ pub extern "C" fn query_intersect_aabb_count(
     query
         .intersect_aabb_conservative(aabb_to_rapier(aabb))
         .count() as u32
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn query_intersect_aabb(
+    world: *const WorldHandle,
+    aabb: AabbDesc,
+    filter: QueryFilterDesc,
+    out_handles: *mut ColliderHandleRaw,
+    capacity: u32,
+) -> u32 {
+    let Some(world) = (unsafe { world.as_ref() }) else {
+        return 0;
+    };
+    if out_handles.is_null() || capacity == 0 || capacity > MAX_OUTPUT_CAPACITY || !aabb_valid(aabb)
+    {
+        return 0;
+    }
+
+    let query = world.inner.broad_phase.as_query_pipeline(
+        world.inner.narrow_phase.query_dispatcher(),
+        &world.inner.bodies,
+        &world.inner.colliders,
+        query_filter_from_desc(filter),
+    );
+
+    let out = unsafe { std::slice::from_raw_parts_mut(out_handles, capacity as usize) };
+    let mut written = 0usize;
+    for (handle, _) in query.intersect_aabb_conservative(aabb_to_rapier(aabb)) {
+        if written >= out.len() {
+            break;
+        }
+        out[written] = pack_collider_handle(handle);
+        written += 1;
+    }
+
+    written as u32
 }
 
 #[unsafe(no_mangle)]
@@ -510,6 +585,32 @@ pub extern "C" fn query_cast_shape(
             status: hit.status as u32,
         })
         .unwrap_or_default()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn query_cast_shape_out(
+    world: *const WorldHandle,
+    shape_desc: ShapeDesc,
+    translation: Vec3,
+    rotation: crate::rapier::ffi::Quat,
+    velocity: Vec3,
+    options: ShapeCastOptionsDesc,
+    filter: QueryFilterDesc,
+    out_hit: *mut ShapeCastHit,
+) -> ColliderHandleRaw {
+    let hit = query_cast_shape(
+        world,
+        shape_desc,
+        translation,
+        rotation,
+        velocity,
+        options,
+        filter,
+    );
+    if let Some(out_hit) = unsafe { out_hit.as_mut() } {
+        *out_hit = hit;
+    }
+    hit.collider
 }
 
 #[cfg(test)]

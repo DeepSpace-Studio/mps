@@ -488,6 +488,16 @@ pub extern "C" fn rigid_body_set_translation(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn rigid_body_set_translation_flag(
+    world: *mut WorldHandle,
+    handle: RigidBodyHandleRaw,
+    translation: Vec3,
+    wake_up: Bool,
+) -> u8 {
+    rigid_body_set_translation(world, handle, translation, wake_up).0
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn rigid_body_set_rotation(
     world: *mut WorldHandle,
     handle: RigidBodyHandleRaw,
@@ -506,6 +516,16 @@ pub extern "C" fn rigid_body_set_rotation(
 
     body.set_rotation(quat_to_rapier(rotation), wake_up.0 != 0);
     Bool::TRUE
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn rigid_body_set_rotation_flag(
+    world: *mut WorldHandle,
+    handle: RigidBodyHandleRaw,
+    rotation: Quat,
+    wake_up: Bool,
+) -> u8 {
+    rigid_body_set_rotation(world, handle, rotation, wake_up).0
 }
 
 #[unsafe(no_mangle)]
@@ -632,6 +652,16 @@ pub extern "C" fn rigid_body_set_angvel(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn rigid_body_set_angvel_flag(
+    world: *mut WorldHandle,
+    handle: RigidBodyHandleRaw,
+    angvel: Vec3,
+    wake_up: Bool,
+) -> u8 {
+    rigid_body_set_angvel(world, handle, angvel, wake_up).0
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn rigid_body_add_force(
     world: *mut WorldHandle,
     handle: RigidBodyHandleRaw,
@@ -684,6 +714,16 @@ pub extern "C" fn rigid_body_add_torque(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn rigid_body_add_torque_flag(
+    world: *mut WorldHandle,
+    handle: RigidBodyHandleRaw,
+    torque: Vec3,
+    wake_up: Bool,
+) -> u8 {
+    rigid_body_add_torque(world, handle, torque, wake_up).0
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn rigid_body_apply_impulse(
     world: *mut WorldHandle,
     handle: RigidBodyHandleRaw,
@@ -702,6 +742,16 @@ pub extern "C" fn rigid_body_apply_impulse(
 
     body.apply_impulse(vec3_to_rapier(impulse), wake_up.0 != 0);
     Bool::TRUE
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn rigid_body_apply_impulse_flag(
+    world: *mut WorldHandle,
+    handle: RigidBodyHandleRaw,
+    impulse: Vec3,
+    wake_up: Bool,
+) -> u8 {
+    rigid_body_apply_impulse(world, handle, impulse, wake_up).0
 }
 
 #[unsafe(no_mangle)]
@@ -726,6 +776,16 @@ pub extern "C" fn rigid_body_apply_torque_impulse(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn rigid_body_apply_torque_impulse_flag(
+    world: *mut WorldHandle,
+    handle: RigidBodyHandleRaw,
+    torque_impulse: Vec3,
+    wake_up: Bool,
+) -> u8 {
+    rigid_body_apply_torque_impulse(world, handle, torque_impulse, wake_up).0
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn rigid_body_enable_ccd(
     world: *mut WorldHandle,
     handle: RigidBodyHandleRaw,
@@ -740,6 +800,15 @@ pub extern "C" fn rigid_body_enable_ccd(
 
     body.enable_ccd(enabled.0 != 0);
     Bool::TRUE
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn rigid_body_enable_ccd_flag(
+    world: *mut WorldHandle,
+    handle: RigidBodyHandleRaw,
+    enabled: Bool,
+) -> u8 {
+    rigid_body_enable_ccd(world, handle, enabled).0
 }
 
 #[unsafe(no_mangle)]

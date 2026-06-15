@@ -527,37 +527,74 @@ struct Bool collider_set_pose(struct WorldHandle *world,
                               struct Vec3 translation,
                               struct Quat rotation);
 
+uint8_t collider_set_pose_flag(struct WorldHandle *world,
+                               ColliderHandleRaw handle,
+                               struct Vec3 translation,
+                               struct Quat rotation);
+
 struct Bool collider_set_sensor(struct WorldHandle *world,
                                 ColliderHandleRaw handle,
                                 struct Bool sensor);
+
+uint8_t collider_set_sensor_flag(struct WorldHandle *world,
+                                 ColliderHandleRaw handle,
+                                 struct Bool sensor);
 
 struct Bool collider_set_friction(struct WorldHandle *world,
                                   ColliderHandleRaw handle,
                                   double friction);
 
+uint8_t collider_set_friction_flag(struct WorldHandle *world,
+                                   ColliderHandleRaw handle,
+                                   double friction);
+
 struct Bool collider_set_restitution(struct WorldHandle *world,
                                      ColliderHandleRaw handle,
                                      double restitution);
+
+uint8_t collider_set_restitution_flag(struct WorldHandle *world,
+                                      ColliderHandleRaw handle,
+                                      double restitution);
 
 struct Bool collider_set_collision_groups(struct WorldHandle *world,
                                           ColliderHandleRaw handle,
                                           struct InteractionGroupsDesc groups);
 
+uint8_t collider_set_collision_groups_flag(struct WorldHandle *world,
+                                           ColliderHandleRaw handle,
+                                           struct InteractionGroupsDesc groups);
+
 struct Bool collider_set_solver_groups(struct WorldHandle *world,
                                        ColliderHandleRaw handle,
                                        struct InteractionGroupsDesc groups);
+
+uint8_t collider_set_solver_groups_flag(struct WorldHandle *world,
+                                        ColliderHandleRaw handle,
+                                        struct InteractionGroupsDesc groups);
 
 struct Bool collider_set_active_events(struct WorldHandle *world,
                                        ColliderHandleRaw handle,
                                        uint32_t active_events_bits);
 
+uint8_t collider_set_active_events_flag(struct WorldHandle *world,
+                                        ColliderHandleRaw handle,
+                                        uint32_t active_events_bits);
+
 struct Bool collider_set_active_hooks(struct WorldHandle *world,
                                       ColliderHandleRaw handle,
                                       uint32_t active_hooks_bits);
 
+uint8_t collider_set_active_hooks_flag(struct WorldHandle *world,
+                                       ColliderHandleRaw handle,
+                                       uint32_t active_hooks_bits);
+
 struct Bool collider_set_contact_force_event_threshold(struct WorldHandle *world,
                                                        ColliderHandleRaw handle,
                                                        double threshold);
+
+uint8_t collider_set_contact_force_event_threshold_flag(struct WorldHandle *world,
+                                                        ColliderHandleRaw handle,
+                                                        double threshold);
 
 double collider_get_density(const struct WorldHandle *world, ColliderHandleRaw handle);
 
@@ -787,6 +824,14 @@ struct RayHit query_cast_ray(const struct WorldHandle *world,
                              struct Bool solid,
                              struct QueryFilterDesc filter);
 
+ColliderHandleRaw query_cast_ray_out(const struct WorldHandle *world,
+                                     struct Vec3 origin,
+                                     struct Vec3 direction,
+                                     double max_toi,
+                                     struct Bool solid,
+                                     struct QueryFilterDesc filter,
+                                     struct RayHit *out_hit);
+
 uint32_t query_cast_rays(const struct WorldHandle *world,
                          const double *rays,
                          uint32_t ray_count,
@@ -803,6 +848,14 @@ struct PointProjection query_project_point(const struct WorldHandle *world,
                                            struct QueryFilterDesc filter,
                                            ColliderHandleRaw *out_collider);
 
+ColliderHandleRaw query_project_point_out(const struct WorldHandle *world,
+                                          struct Vec3 point,
+                                          double max_dist,
+                                          struct Bool solid,
+                                          struct QueryFilterDesc filter,
+                                          ColliderHandleRaw *out_collider,
+                                          struct PointProjection *out_projection);
+
 uint32_t query_intersect_point_count(const struct WorldHandle *world,
                                      struct Vec3 point,
                                      struct QueryFilterDesc filter);
@@ -810,6 +863,12 @@ uint32_t query_intersect_point_count(const struct WorldHandle *world,
 uint32_t query_intersect_aabb_count(const struct WorldHandle *world,
                                     struct AabbDesc aabb,
                                     struct QueryFilterDesc filter);
+
+uint32_t query_intersect_aabb(const struct WorldHandle *world,
+                              struct AabbDesc aabb,
+                              struct QueryFilterDesc filter,
+                              ColliderHandleRaw *out_handles,
+                              uint32_t capacity);
 
 uint32_t query_intersect_aabb_count_all(const struct WorldHandle *world, struct AabbDesc aabb);
 
@@ -862,6 +921,15 @@ struct ShapeCastHit query_cast_shape(const struct WorldHandle *world,
                                      struct Vec3 velocity,
                                      struct ShapeCastOptionsDesc options,
                                      struct QueryFilterDesc filter);
+
+ColliderHandleRaw query_cast_shape_out(const struct WorldHandle *world,
+                                       struct ShapeDesc shape_desc,
+                                       struct Vec3 translation,
+                                       struct Quat rotation,
+                                       struct Vec3 velocity,
+                                       struct ShapeCastOptionsDesc options,
+                                       struct QueryFilterDesc filter,
+                                       struct ShapeCastHit *out_hit);
 
 struct RigidBodyBuilderHandle *rigid_body_builder_create(uint32_t status);
 
@@ -955,10 +1023,20 @@ struct Bool rigid_body_set_translation(struct WorldHandle *world,
                                        struct Vec3 translation,
                                        struct Bool wake_up);
 
+uint8_t rigid_body_set_translation_flag(struct WorldHandle *world,
+                                        RigidBodyHandleRaw handle,
+                                        struct Vec3 translation,
+                                        struct Bool wake_up);
+
 struct Bool rigid_body_set_rotation(struct WorldHandle *world,
                                     RigidBodyHandleRaw handle,
                                     struct Quat rotation,
                                     struct Bool wake_up);
+
+uint8_t rigid_body_set_rotation_flag(struct WorldHandle *world,
+                                     RigidBodyHandleRaw handle,
+                                     struct Quat rotation,
+                                     struct Bool wake_up);
 
 uint8_t rigid_body_set_pose_flag(struct WorldHandle *world,
                                  RigidBodyHandleRaw handle,
@@ -993,6 +1071,11 @@ struct Bool rigid_body_set_angvel(struct WorldHandle *world,
                                   struct Vec3 angvel,
                                   struct Bool wake_up);
 
+uint8_t rigid_body_set_angvel_flag(struct WorldHandle *world,
+                                   RigidBodyHandleRaw handle,
+                                   struct Vec3 angvel,
+                                   struct Bool wake_up);
+
 struct Bool rigid_body_add_force(struct WorldHandle *world,
                                  RigidBodyHandleRaw handle,
                                  struct Vec3 force,
@@ -1008,19 +1091,38 @@ struct Bool rigid_body_add_torque(struct WorldHandle *world,
                                   struct Vec3 torque,
                                   struct Bool wake_up);
 
+uint8_t rigid_body_add_torque_flag(struct WorldHandle *world,
+                                   RigidBodyHandleRaw handle,
+                                   struct Vec3 torque,
+                                   struct Bool wake_up);
+
 struct Bool rigid_body_apply_impulse(struct WorldHandle *world,
                                      RigidBodyHandleRaw handle,
                                      struct Vec3 impulse,
                                      struct Bool wake_up);
+
+uint8_t rigid_body_apply_impulse_flag(struct WorldHandle *world,
+                                      RigidBodyHandleRaw handle,
+                                      struct Vec3 impulse,
+                                      struct Bool wake_up);
 
 struct Bool rigid_body_apply_torque_impulse(struct WorldHandle *world,
                                             RigidBodyHandleRaw handle,
                                             struct Vec3 torque_impulse,
                                             struct Bool wake_up);
 
+uint8_t rigid_body_apply_torque_impulse_flag(struct WorldHandle *world,
+                                             RigidBodyHandleRaw handle,
+                                             struct Vec3 torque_impulse,
+                                             struct Bool wake_up);
+
 struct Bool rigid_body_enable_ccd(struct WorldHandle *world,
                                   RigidBodyHandleRaw handle,
                                   struct Bool enabled);
+
+uint8_t rigid_body_enable_ccd_flag(struct WorldHandle *world,
+                                   RigidBodyHandleRaw handle,
+                                   struct Bool enabled);
 
 struct Bool rigid_body_sleep(struct WorldHandle *world, RigidBodyHandleRaw handle);
 
