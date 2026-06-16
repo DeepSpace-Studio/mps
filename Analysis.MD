@@ -451,9 +451,10 @@ The project includes two standalone spatial index wrappers:
 - `RTree`
 
 CRbTree has Java 25 FFM coverage for create, insert, and AABB count query.
-Java 21 JNI has broader helper coverage through `SpatialIndex`.
+RTree now has Java 25 FFM coverage for create, destroy, clear, len, insert,
+update, remove, rebuild, AABB query count, and AABB query handle output.
 
-RTree is the next obvious Java 25 FFM parity gap.
+Java 21 JNI has broader helper coverage through `SpatialIndex`.
 
 ## 12. Extended Geometry
 
@@ -516,6 +517,7 @@ Java 25 FFM currently covers:
 - Collider runtime pose, sensor, material, group, event, hook, threshold mutation.
 - Collider translation, rotation, and density reads.
 - CRbTree create/insert/AABB count query.
+- RTree create/destroy/clear/len/insert/update/remove/rebuild/AABB query.
 - Regular queries: ray, point projection, AABB, OBB, sphere, shape cast.
 - Voxel-shaped AABB/OBB queries.
 - Collision event and contact-force event bulk reads.
@@ -525,18 +527,287 @@ Java 25 FFM currently covers:
 
 Recommended implementation order:
 
-1. Java 25 FFM RTree parity:
-   create, destroy, clear, len, insert, update, remove, rebuild, query count, query handles.
-
-2. Java 25 FFM character controller:
+1. Java 25 FFM character controller:
    controller lifecycle, configuration setters, move shape, collision count/read, solve impulses.
 
-3. Java 25 FFM joints:
+2. Java 25 FFM joints:
    joint builder creation, anchors, limits, motors, insert/remove.
 
-4. Java 25 FFM advanced collider builders:
+3. Java 25 FFM advanced collider builders:
    heightmap, convex hull, point-cloud bounds, kDOP, FDH, neural bounds.
 
-5. Higher-level Java 25 helper layer:
+4. Higher-level Java 25 helper layer:
    `RigidBodyFfm` is currently low-level. A safer Java 25 utility layer similar
    to `test21/util` would reduce direct `MemorySegment` handling in user code.
+
+## 17. src Feature Map
+
+This section summarizes the concrete feature responsibility of each `src`
+module. It is intended as a quick map for future development.
+
+### 17.1 Crate and ABI Entrypoints
+
+- `src/lib.rs`
+  - Crate root.
+  - Installs the global allocator.
+  - Re-exports ABI-facing structs and handles.
+  - Wires `abi`, `helper`, and `rapier` modules.
+
+- `src/abi/ffm.rs`
+  - Minimal C ABI capability probes.
+  - Exposes `abi_version`, `abi_supports_ffm`, and `abi_supports_jni`.
+  - Java 25 FFM calls the native library symbols directly; this file is not the
+    whole FFM binding, only the native capability surface.
+
+- `src/abi/jni.rs`
+  - JNI bridge for Java 21.
+  - Converts Java primitive arguments into Rust ABI structs.
+  - Wraps Rust C ABI calls as `Java_org_polaris2023_msp_1rigid_1body_RigidBodyNative_*`.
+  - Handles Java arrays, native output buffers, error boundaries, and panic safety.
+
+- `src/helper/helper.rs`
+  - JNI helper utilities for array/native-memory conversion.
+
+### 17.2 Core Physics Runtime
+
+- `src/rapier/world.rs`
+  - Owns the Rapier physics world state.
+  - Creates/destroys worlds, steps simulation, manages gravity and integration parameters.
+  - Exposes body/collider counts.
+  - Provides body snapshots and batch body pose/velocity updates.
+
+- `src/rapier/rigid_body.rs`
+  - Builds and inserts rigid bodies.
+  - Supports dynamic, fixed, and kinematic body types.
+  - Provides runtime pose, velocity, force, torque, impulse, CCD, sleep, and wakeup control.
+  - Includes byte-returning `_flag` variants for Java FFM-friendly mutation calls.
+
+- `src/rapier/collider.rs`
+  - Builds and inserts colliders.
+  - Supports primitive and advanced collider builders.
+  - Provides builder-level material, group, sensor, active event/hook, and threshold settings.
+  - Provides runtime collider pose/material/group/event/hook mutation.
+  - Supports standalone collider insertion and parented collider insertion.
+
+- `src/rapier/events.rs`
+  - Collects collision events and contact-force events during `world_step`.
+  - Provides count, single read, bulk read, and clear functions.
+  - Stores event queues in bounded mutex-protected vectors.
+
+### 17.3 Query and Movement Systems
+
+- `src/rapier/query.rs`
+  - Ray cast and batch ray cast.
+  - Point projection.
+  - Point, AABB, OBB, and sphere intersections.
+  - Shape cast.
+  - FFM-friendly out-pointer variants for ray, point projection, and shape cast.
+
+- `src/rapier/aerodynamics.rs`
+  - Surface-sample air force accumulation for Rapier rigid bodies.
+  - Computes drag and lift from wind velocity, air density, exposed area, and surface normal.
+  - Applies forces at world-space surface points with `add_force_at_point`.
+  - Includes pure estimation helpers and batch application helpers.
+
+- `src/rapier/controller.rs`
+  - Character controller lifecycle and configuration.
+  - Supports movement with collision reporting and impulse solving.
+  - JNI coverage exists; Java 25 FFM parity is still pending.
+
+### 17.4 Geometry Builders
+
+- `src/rapier/bounds.rs`
+  - Capsule, swept sphere volume, ellipsoid, prism, cylinder, and spherical shell builders.
+  - Matching intersection queries for these bound types.
+
+- `src/rapier/dop.rs`
+  - kDOP and FDH collider builders.
+  - Useful for approximate convex bounds from point clouds or directional hulls.
+
+- `src/rapier/neural.rs`
+  - Neural bounds descriptor and required weight count calculation.
+  - Neural bounds collider builder.
+  - Neural bounds intersection queries.
+
+- `src/rapier/voxel.rs`
+  - Raw occupancy-grid voxel colliders.
+  - AABB/OBB-to-voxel generation.
+  - Build modes: cuboids, greedy cuboids, surface mesh, auto.
+  - Voxel build statistics.
+  - Voxel-shaped AABB/OBB queries.
+  - Direct static AABB and dynamic OBB voxel body insertion helpers.
+
+- `src/rapier/compat.rs`
+  - Compatibility helpers for common workflows.
+  - Includes dynamic cuboid batch insertion and static trimesh insertion.
+  - Includes AABB rigid body query helpers.
+
+### 17.5 Spatial Indexes and Support
+
+- `src/rapier/crbtree.rs`
+  - Compact RbTree spatial index.
+  - Create, destroy, clear, len, insert, update, remove, AABB query count, AABB query handles.
+  - Partially covered by Java 25 FFM.
+
+- `src/rapier/rtree.rs`
+  - RTree spatial index.
+  - Create, destroy, clear, len, insert, update, remove, rebuild, AABB query count, AABB query handles.
+  - Covered in Rust tests, Java 21 JNI helpers, and Java 25 FFM smoke tests.
+
+- `src/rapier/joints.rs`
+  - Impulse joint builders and insertion/removal.
+  - Supports fixed, revolute, prismatic, rope, spring, and spherical joint styles.
+  - Supports anchors, limits, motor velocity, and motor position.
+  - Java 25 FFM parity is still pending.
+
+- `src/rapier/error.rs`
+  - Thread-local last-error code/message support.
+  - Used for invalid pointer/capacity/unsupported operation reporting.
+
+- `src/rapier/ffi.rs`
+  - Shared ABI structs, enums, handle packing/unpacking, and conversion helpers.
+  - The source of truth for C/JNI/FFM memory layout.
+
+- `src/rapier/mod.rs`
+  - Module wiring for the Rapier wrapper layer.
+
+## 18. New Feature Recommendations
+
+The project already has a broad Rust/JNI surface. The most valuable next work is
+to improve Java 25 FFM parity and then add higher-level ergonomics.
+
+### 18.1 High Priority
+
+1. Java 25 FFM character controller
+
+   Add FFM bindings for:
+
+   - controller create/destroy
+   - up vector
+   - offset absolute/relative
+   - slide
+   - autostep
+   - snap to ground
+   - slope angles
+   - move shape
+   - collision count/read
+   - solve impulses
+
+   Reason: character movement is a complete gameplay-facing feature, and JNI
+   already proves the API shape.
+
+2. Java 25 FFM joints
+
+   Add FFM bindings for:
+
+   - joint builder creation/destruction
+   - contacts enabled
+   - local anchors
+   - limits
+   - motor velocity
+   - motor position
+   - insert/remove impulse joint
+
+   Reason: constraints are essential for physics gameplay and mechanical setups.
+
+### 18.2 Medium Priority
+
+3. Java 25 FFM advanced collider builders
+
+   Add FFM coverage for:
+
+   - heightmap
+   - convex hull
+   - point cloud bounds
+   - double BV
+   - skewed/discrete OBB
+   - fused collapsing bounds
+   - edge BVH
+   - medial spheres
+   - kDOP
+   - FDH
+   - neural bounds
+
+   Reason: the Rust and JNI APIs already expose these builders, but FFM cannot
+   use most of them yet.
+
+4. Java 25 high-level helper layer
+
+   Build a safer utility package for Java 25 similar to `test21/util`.
+
+   Suggested wrappers:
+
+   - `FfmPhysicsWorld`
+   - `FfmRigidBody`
+   - `FfmCollider`
+   - `FfmQuery`
+   - `FfmSpatialIndex`
+   - `FfmVoxelGrid`
+
+   Reason: `RigidBodyFfm` is intentionally low-level. A helper layer would hide
+   repetitive `MemorySegment` allocation and native ownership details.
+
+5. Bulk query APIs
+
+   Add batch query support beyond ray batches:
+
+   - batch AABB intersection counts
+   - batch sphere intersection counts
+   - batch OBB intersection counts
+   - batch shape casts
+
+   Reason: games and simulations often need many queries per tick. Batch calls
+   reduce Java/native call overhead.
+
+6. Air-drag / lift helper layer
+
+   Add higher-level wrappers that can turn geometry samples into
+   `AeroSurface` batches and feed them into `aero_apply_surfaces`.
+
+   Reason: this is the cleanest path for an anvilkit-style integration. The
+   Rust side stays physics-centric while the caller decides how to sample
+   block faces, voxel shells, or mesh triangles.
+
+### 18.3 Longer-Term Features
+
+6. Voxel asset pipeline
+
+   Possible additions:
+
+   - voxelize heightmaps
+   - voxelize triangle meshes
+   - bitset or RLE compressed voxel input
+   - chunked voxel collider streaming
+   - material IDs instead of boolean occupancy
+
+   Reason: current voxel support is functional for generated boxes/grids, but a
+   content pipeline would make it practical for terrain and destructible scenes.
+
+7. Contact material callbacks or material table
+
+   Add a stable ABI-safe material table for friction/restitution/contact behavior.
+
+   Reason: direct callbacks across FFI are hard to keep safe. A material table
+   would provide configurable behavior without exposing arbitrary callback code.
+
+8. Debug geometry export
+
+   Add APIs to export collider/query debug geometry:
+
+   - collider AABBs
+   - voxel generated cuboids/mesh stats
+   - contact points/normals
+   - broad phase query debug output
+
+   Reason: debugging native physics from Java is hard without visibility.
+
+9. Serialization snapshots
+
+   Add optional snapshot save/load:
+
+   - body state
+   - collider descriptors
+   - joints
+   - integration parameters
+
+   Reason: useful for replay, testing, rollback, and editor workflows.

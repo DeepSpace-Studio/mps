@@ -5,6 +5,7 @@ import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.Linker;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.SymbolLookup;
 import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
@@ -108,6 +109,11 @@ public final class RigidBodyFfm {
             ValueLayout.JAVA_DOUBLE.withName("total_force_magnitude"),
             VEC3.withName("max_force_direction"),
             ValueLayout.JAVA_DOUBLE.withName("max_force_magnitude"));
+    public static final MemoryLayout AERO_REPORT = MemoryLayout.structLayout(
+            VEC3.withName("total_force"),
+            VEC3.withName("total_torque"),
+            ValueLayout.JAVA_INT.withName("surface_count"),
+            ValueLayout.JAVA_INT.withName("active_surface_count"));
 
     public static final long VEC3_X = VEC3.byteOffset(MemoryLayout.PathElement.groupElement("x"));
     public static final long VEC3_Y = VEC3.byteOffset(MemoryLayout.PathElement.groupElement("y"));
@@ -129,6 +135,9 @@ public final class RigidBodyFfm {
     public static final long CONTACT_FORCE_EVENT_TOTAL_FORCE_MAGNITUDE = CONTACT_FORCE_EVENT.byteOffset(MemoryLayout.PathElement.groupElement("total_force_magnitude"));
     public static final long VOXEL_STATS_SOLID_COUNT = VOXEL_STATS.byteOffset(MemoryLayout.PathElement.groupElement("solid_count"));
     public static final long VOXEL_STATS_SELECTED_MODE = VOXEL_STATS.byteOffset(MemoryLayout.PathElement.groupElement("selected_mode"));
+    public static final long AERO_REPORT_TOTAL_FORCE = AERO_REPORT.byteOffset(MemoryLayout.PathElement.groupElement("total_force"));
+    public static final long AERO_REPORT_SURFACE_COUNT = AERO_REPORT.byteOffset(MemoryLayout.PathElement.groupElement("surface_count"));
+    public static final long AERO_REPORT_ACTIVE_SURFACE_COUNT = AERO_REPORT.byteOffset(MemoryLayout.PathElement.groupElement("active_surface_count"));
 
     private static final Linker LINKER = Linker.nativeLinker();
 
@@ -168,10 +177,21 @@ public final class RigidBodyFfm {
     private final MethodHandle rigidBodySleepFlag;
     private final MethodHandle rigidBodyWakeUpFlag;
     private final MethodHandle rigidBodyIsSleepingFlag;
+    private final MethodHandle aeroApplyVoxelGrid;
     private final MethodHandle crbTreeCreate;
     private final MethodHandle crbTreeDestroy;
     private final MethodHandle crbTreeInsertFlag;
     private final MethodHandle crbTreeQueryAabbCount;
+    private final MethodHandle rtreeCreate;
+    private final MethodHandle rtreeDestroy;
+    private final MethodHandle rtreeClear;
+    private final MethodHandle rtreeLen;
+    private final MethodHandle rtreeInsert;
+    private final MethodHandle rtreeUpdate;
+    private final MethodHandle rtreeRemove;
+    private final MethodHandle rtreeRebuild;
+    private final MethodHandle rtreeQueryAabbCount;
+    private final MethodHandle rtreeQueryAabb;
     private final MethodHandle voxelAabbBuildStats;
     private final MethodHandle voxelObbBuildStats;
     private final MethodHandle colliderBuilderCreate;
@@ -250,10 +270,36 @@ public final class RigidBodyFfm {
         rigidBodySleepFlag = downcall("rigid_body_sleep_flag", FunctionDescriptor.of(ValueLayout.JAVA_BYTE, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
         rigidBodyWakeUpFlag = downcall("rigid_body_wake_up_flag", FunctionDescriptor.of(ValueLayout.JAVA_BYTE, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, BOOL));
         rigidBodyIsSleepingFlag = downcall("rigid_body_is_sleeping_flag", FunctionDescriptor.of(ValueLayout.JAVA_BYTE, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
+        aeroApplyVoxelGrid = downcall("aero_apply_voxel_grid_flag", FunctionDescriptor.of(
+                ValueLayout.JAVA_BYTE,
+                ValueLayout.ADDRESS,
+                ValueLayout.JAVA_LONG,
+                VEC3,
+                ValueLayout.JAVA_DOUBLE,
+                ValueLayout.ADDRESS,
+                ValueLayout.JAVA_INT,
+                ValueLayout.JAVA_INT,
+                ValueLayout.JAVA_INT,
+                ValueLayout.JAVA_DOUBLE,
+                VEC3,
+                ValueLayout.JAVA_DOUBLE,
+                ValueLayout.JAVA_DOUBLE,
+                BOOL,
+                ValueLayout.ADDRESS));
         crbTreeCreate = downcall("crb_tree_create", FunctionDescriptor.of(ValueLayout.ADDRESS));
         crbTreeDestroy = downcall("crb_tree_destroy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
         crbTreeInsertFlag = downcall("crb_tree_insert_flag", FunctionDescriptor.of(ValueLayout.JAVA_BYTE, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, AABB));
         crbTreeQueryAabbCount = downcall("crb_tree_query_aabb_count", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, AABB));
+        rtreeCreate = downcall("rtree_create", FunctionDescriptor.of(ValueLayout.ADDRESS));
+        rtreeDestroy = downcall("rtree_destroy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+        rtreeClear = downcall("rtree_clear", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+        rtreeLen = downcall("rtree_len", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+        rtreeInsert = downcall("rtree_insert", FunctionDescriptor.of(BOOL, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, AABB));
+        rtreeUpdate = downcall("rtree_update", FunctionDescriptor.of(BOOL, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, AABB));
+        rtreeRemove = downcall("rtree_remove", FunctionDescriptor.of(BOOL, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
+        rtreeRebuild = downcall("rtree_rebuild", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+        rtreeQueryAabbCount = downcall("rtree_query_aabb_count", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, AABB));
+        rtreeQueryAabb = downcall("rtree_query_aabb", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, AABB, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         voxelAabbBuildStats = downcall("voxel_aabb_build_stats_out", FunctionDescriptor.ofVoid(AABB, ValueLayout.JAVA_DOUBLE, VOXEL_OPTIONS, ValueLayout.ADDRESS));
         voxelObbBuildStats = downcall("voxel_obb_build_stats_out", FunctionDescriptor.ofVoid(OBB, ValueLayout.JAVA_DOUBLE, VOXEL_OPTIONS, ValueLayout.ADDRESS));
         colliderBuilderCreate = downcall("collider_builder_create", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.JAVA_INT, VEC3));
@@ -594,6 +640,51 @@ public final class RigidBodyFfm {
         }
     }
 
+    public MemorySegment aeroApplyVoxelGrid(
+            MemorySegment world,
+            long body,
+            double windX, double windY, double windZ,
+            double airDensity,
+            byte[] voxels,
+            int sizeX, int sizeY, int sizeZ,
+            double voxelSize,
+            double originX, double originY, double originZ,
+            double dragCoefficient,
+            double liftCoefficient,
+            boolean wakeUp) {
+        if (voxels.length != Math.multiplyExact(Math.multiplyExact(sizeX, sizeY), sizeZ)) {
+            throw new IllegalArgumentException("voxel array length does not match dimensions");
+        }
+        MemorySegment voxelMemory = arena.allocate(ValueLayout.JAVA_BYTE, voxels.length);
+        for (int i = 0; i < voxels.length; i++) {
+            voxelMemory.setAtIndex(ValueLayout.JAVA_BYTE, i, voxels[i]);
+        }
+        MemorySegment report = arena.allocate(AERO_REPORT);
+        try {
+            byte ok = (byte) aeroApplyVoxelGrid.invokeExact(
+                    world,
+                    body,
+                    vec3(windX, windY, windZ),
+                    airDensity,
+                    voxelMemory,
+                    sizeX,
+                    sizeY,
+                    sizeZ,
+                    voxelSize,
+                    vec3(originX, originY, originZ),
+                    dragCoefficient,
+                    liftCoefficient,
+                    bool(wakeUp),
+                    report);
+            if (ok == 0) {
+                throw new IllegalStateException("aero_apply_voxel_grid returned false");
+            }
+            return report;
+        } catch (Throwable throwable) {
+            throw callFailed("aero_apply_voxel_grid", throwable);
+        }
+    }
+
     public MemorySegment crbTreeCreate() {
         try {
             return (MemorySegment) crbTreeCreate.invokeExact();
@@ -623,6 +714,94 @@ public final class RigidBodyFfm {
             return (int) crbTreeQueryAabbCount.invokeExact(tree, aabb);
         } catch (Throwable throwable) {
             throw callFailed("crb_tree_query_aabb_count", throwable);
+        }
+    }
+
+    public MemorySegment rtreeCreate() {
+        try {
+            return (MemorySegment) rtreeCreate.invokeExact();
+        } catch (Throwable throwable) {
+            throw callFailed("rtree_create", throwable);
+        }
+    }
+
+    public void rtreeDestroy(MemorySegment tree) {
+        try {
+            rtreeDestroy.invokeExact(tree);
+        } catch (Throwable throwable) {
+            throw callFailed("rtree_destroy", throwable);
+        }
+    }
+
+    public void rtreeClear(MemorySegment tree) {
+        try {
+            rtreeClear.invokeExact(tree);
+        } catch (Throwable throwable) {
+            throw callFailed("rtree_clear", throwable);
+        }
+    }
+
+    public int rtreeLen(MemorySegment tree) {
+        try {
+            return (int) rtreeLen.invokeExact(tree);
+        } catch (Throwable throwable) {
+            throw callFailed("rtree_len", throwable);
+        }
+    }
+
+    public boolean rtreeInsert(MemorySegment tree, long id, MemorySegment aabb) {
+        try {
+            SegmentAllocator allocator = arena;
+            return boolValue((MemorySegment) rtreeInsert.invokeExact(allocator, tree, id, aabb));
+        } catch (Throwable throwable) {
+            throw callFailed("rtree_insert", throwable);
+        }
+    }
+
+    public boolean rtreeUpdate(MemorySegment tree, long id, MemorySegment aabb) {
+        try {
+            SegmentAllocator allocator = arena;
+            return boolValue((MemorySegment) rtreeUpdate.invokeExact(allocator, tree, id, aabb));
+        } catch (Throwable throwable) {
+            throw callFailed("rtree_update", throwable);
+        }
+    }
+
+    public boolean rtreeRemove(MemorySegment tree, long id) {
+        try {
+            SegmentAllocator allocator = arena;
+            return boolValue((MemorySegment) rtreeRemove.invokeExact(allocator, tree, id));
+        } catch (Throwable throwable) {
+            throw callFailed("rtree_remove", throwable);
+        }
+    }
+
+    public void rtreeRebuild(MemorySegment tree) {
+        try {
+            rtreeRebuild.invokeExact(tree);
+        } catch (Throwable throwable) {
+            throw callFailed("rtree_rebuild", throwable);
+        }
+    }
+
+    public int rtreeQueryAabbCount(MemorySegment tree, MemorySegment aabb) {
+        try {
+            return (int) rtreeQueryAabbCount.invokeExact(tree, aabb);
+        } catch (Throwable throwable) {
+            throw callFailed("rtree_query_aabb_count", throwable);
+        }
+    }
+
+    public long[] rtreeQueryAabb(MemorySegment tree, MemorySegment aabb, int capacity) {
+        if (capacity <= 0) {
+            return new long[0];
+        }
+        MemorySegment out = arena.allocate(ValueLayout.JAVA_LONG, capacity);
+        try {
+            int written = (int) rtreeQueryAabb.invokeExact(tree, aabb, out, capacity);
+            return longs(out, Math.max(0, Math.min(written, capacity)));
+        } catch (Throwable throwable) {
+            throw callFailed("rtree_query_aabb", throwable);
         }
     }
 
@@ -1137,6 +1316,18 @@ public final class RigidBodyFfm {
 
     public static int voxelStatsSelectedMode(MemorySegment stats) {
         return stats.get(ValueLayout.JAVA_INT, VOXEL_STATS_SELECTED_MODE);
+    }
+
+    public static MemorySegment aeroReportTotalForce(MemorySegment report) {
+        return report.asSlice(AERO_REPORT_TOTAL_FORCE, VEC3.byteSize());
+    }
+
+    public static int aeroReportSurfaceCount(MemorySegment report) {
+        return report.get(ValueLayout.JAVA_INT, AERO_REPORT_SURFACE_COUNT);
+    }
+
+    public static int aeroReportActiveSurfaceCount(MemorySegment report) {
+        return report.get(ValueLayout.JAVA_INT, AERO_REPORT_ACTIVE_SURFACE_COUNT);
     }
 
     public static double x(MemorySegment vec3) {

@@ -10,9 +10,10 @@ mod helper;
 mod rapier;
 
 pub use rapier::ffi::{
-    AabbDesc, BodyStatus, Bool, CRbTreeHandle, Capsule, CharacterCollision,
+    AabbDesc, AeroForceReport, AeroSurface, AnvilKitAppHandle, BodyStatus, Bool, CRbTreeHandle, Capsule, CharacterCollision,
     CharacterControllerHandle, ColliderBuilderHandle, ColliderHandleRaw, CollisionEventRecord,
-    ContactForceEventRecord, Cylinder, EffectiveCharacterMovement, Ellipsoid,
+    ContactForceEventRecord, Cylinder, EffectiveCharacterMovement, Ellipsoid, FluidForceReport,
+    FluidVolume,
     ImpulseJointHandleRaw, InteractionGroupsDesc, JointAxisDesc, JointBuilderHandle, JointTypeDesc,
     KdopPreset, NeuralActivation, NeuralBoundsDesc, Obb, PointProjection, Prism, Quat,
     QueryFilterDesc, RTreeHandle, RayHit, RigidBodyBuilderHandle, RigidBodyHandleRaw, ShapeCastHit,

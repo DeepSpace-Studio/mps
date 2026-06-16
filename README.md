@@ -37,6 +37,7 @@ Supported areas include:
 - World creation, stepping, gravity, integration parameters, body snapshots.
 - Rigid body creation, insertion, pose/velocity mutation, forces, impulses, CCD, sleep/wakeup.
 - Collider creation, insertion, runtime material/group/event settings.
+- Air-drag and lift accumulation for surface samples, driven by Rapier rigid body motion.
 - Ray, point, AABB, OBB, sphere, shape-cast, and voxel-shaped queries.
 - Collision and contact-force event queues.
 - Joints and character controller through JNI.
@@ -68,6 +69,7 @@ It covers:
 - Voxel AABB/OBB intersection queries.
 - Regular runtime queries: ray cast, point projection, AABB/OBB/sphere intersection, shape cast.
 - Rigid body runtime mutation: pose, velocity, force/torque, impulse, CCD, sleep/wakeup.
+- Air-drag and lift surface accumulation helpers for body motion.
 - Collider runtime mutation: pose, sensor, friction, restitution, groups, event bits, hooks, contact-force threshold.
 - Collision and contact-force event bulk reads plus event clearing.
 
@@ -130,7 +132,6 @@ Java 25 FFM smoke test: passed
 The main remaining integration work is Java 25 FFM parity for areas that already
 exist in Rust/JNI:
 
-- RTree full API.
 - Character controller.
 - Joints.
 - Advanced collider builders such as heightmap, convex hull, point-cloud bounds, kDOP, FDH, and neural bounds.

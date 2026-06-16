@@ -1,3 +1,5 @@
+pub(crate) mod aerodynamics;
+pub(crate) mod anvilkit;
 pub(crate) mod bounds;
 pub(crate) mod collider;
 pub(crate) mod compat;
@@ -7,6 +9,7 @@ pub(crate) mod dop;
 pub(crate) mod error;
 pub(crate) mod events;
 pub(crate) mod ffi;
+pub(crate) mod fluid;
 pub(crate) mod joints;
 pub(crate) mod neural;
 pub(crate) mod query;

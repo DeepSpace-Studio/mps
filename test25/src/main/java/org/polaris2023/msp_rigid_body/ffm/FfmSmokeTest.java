@@ -49,6 +49,12 @@ public final class FfmSmokeTest {
                 if (body == 0L) {
                     throw new AssertionError("world_insert_rigid_body returned zero handle");
                 }
+                MemorySegment massBuilder = api.colliderBuilderCreate(1, 0.5, 0.5, 0.5);
+                api.colliderBuilderSetDensity(massBuilder, 1.0);
+                MemorySegment massCollider = api.colliderBuilderBuild(massBuilder);
+                if (api.worldInsertColliderWithParent(world, massCollider, body) == 0L) {
+                    throw new AssertionError("mass collider insert failed");
+                }
 
                 MemorySegment translation = api.rigidBodyGetTranslation(world, body);
                 assertClose(4.0, RigidBodyFfm.x(translation), "body translation x");
@@ -91,7 +97,28 @@ public final class FfmSmokeTest {
                     throw new AssertionError("rigid_body_wake_up failed");
                 }
                 api.rigidBodyIsSleeping(world, body);
+                MemorySegment aeroReport = api.aeroApplyVoxelGrid(
+                        world,
+                        body,
+                        10.0, 0.0, 0.0,
+                        1.0,
+                        new byte[] {1},
+                        1, 1, 1,
+                        1.0,
+                        -0.5, -0.5, -0.5,
+                        1.0,
+                        0.0,
+                        true);
+                if (RigidBodyFfm.aeroReportSurfaceCount(aeroReport) != 6
+                        || RigidBodyFfm.aeroReportActiveSurfaceCount(aeroReport) <= 0
+                        || RigidBodyFfm.x(RigidBodyFfm.aeroReportTotalForce(aeroReport)) <= 0.0) {
+                    throw new AssertionError("aero voxel grid force report was invalid");
+                }
                 api.worldStep(world, 1.0 / 60.0);
+                linvel = api.rigidBodyGetLinvel(world, body);
+                if (RigidBodyFfm.x(linvel) <= 0.0) {
+                    throw new AssertionError("aero voxel grid did not accelerate body in wind direction");
+                }
             } finally {
                 api.worldDestroy(world);
             }
@@ -110,6 +137,46 @@ public final class FfmSmokeTest {
                 }
             } finally {
                 api.crbTreeDestroy(tree);
+            }
+
+            MemorySegment rtree = api.rtreeCreate();
+            try {
+                if (rtree.address() == 0L) {
+                    throw new AssertionError("rtree_create returned null");
+                }
+                if (!api.rtreeInsert(rtree, 10L, api.aabb(0.0, 0.0, 0.0, 1.0, 1.0, 1.0))) {
+                    throw new AssertionError("rtree_insert 10 failed");
+                }
+                if (!api.rtreeInsert(rtree, 20L, api.aabb(2.0, 2.0, 2.0, 3.0, 3.0, 3.0))) {
+                    throw new AssertionError("rtree_insert 20 failed");
+                }
+                if (api.rtreeLen(rtree) != 2) {
+                    throw new AssertionError("rtree_len expected 2");
+                }
+                int hitCount = api.rtreeQueryAabbCount(rtree, api.aabb(0.5, 0.5, 0.5, 2.5, 2.5, 2.5));
+                if (hitCount != 2) {
+                    throw new AssertionError("rtree_query_aabb_count expected 2, got " + hitCount);
+                }
+                long[] hits = api.rtreeQueryAabb(rtree, api.aabb(0.5, 0.5, 0.5, 2.5, 2.5, 2.5), 4);
+                if (hits.length != 2 || hits[0] != 10L || hits[1] != 20L) {
+                    throw new AssertionError("rtree_query_aabb returned unexpected handles");
+                }
+                if (!api.rtreeUpdate(rtree, 20L, api.aabb(10.0, 10.0, 10.0, 11.0, 11.0, 11.0))) {
+                    throw new AssertionError("rtree_update 20 failed");
+                }
+                api.rtreeRebuild(rtree);
+                if (api.rtreeQueryAabbCount(rtree, api.aabb(0.5, 0.5, 0.5, 2.5, 2.5, 2.5)) != 1) {
+                    throw new AssertionError("rtree update did not move id 20");
+                }
+                if (!api.rtreeRemove(rtree, 10L) || api.rtreeLen(rtree) != 1) {
+                    throw new AssertionError("rtree_remove 10 failed");
+                }
+                api.rtreeClear(rtree);
+                if (api.rtreeLen(rtree) != 0) {
+                    throw new AssertionError("rtree_clear failed");
+                }
+            } finally {
+                api.rtreeDestroy(rtree);
             }
 
             world = api.worldCreate(0.0, -9.81, 0.0);

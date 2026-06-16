@@ -1,16 +1,17 @@
 use crate::abi::ffm as abi;
 use crate::helper::helper::{jbytearray_to_array, jdoublearray_to_array};
 use crate::rapier::ffi::{
-    AabbDesc, Bool, CRbTreeHandle as CRTH, Capsule, CharacterCollision,
+    AabbDesc, AeroForceReport, AeroSurface, AnvilKitAppHandle as AKH, Bool, CRbTreeHandle as CRTH, Capsule, CharacterCollision,
     CharacterControllerHandle as CCH, ColliderBuilderHandle as CBH, ColliderHandleRaw as CRaw,
     CollisionEventRecord as CER, ContactForceEventRecord, Cylinder, EffectiveCharacterMovement,
-    Ellipsoid, ImpulseJointHandleRaw as JRaw, InteractionGroupsDesc, JointBuilderHandle as JBH,
+    Ellipsoid, FluidForceReport, FluidVolume, ImpulseJointHandleRaw as JRaw, InteractionGroupsDesc, JointBuilderHandle as JBH,
     NeuralBoundsDesc, Obb, PointProjection, Prism, Quat, QueryFilterDesc, RTreeHandle as RTH,
     RayHit, RigidBodyBuilderHandle as RBH, RigidBodyHandleRaw as RRaw, ShapeCastHit,
     ShapeCastOptionsDesc, ShapeDesc, Sphere, SphericalShell, Ssv, Vec3, VoxelColliderOptions,
     WorldHandle as WH,
 };
 use crate::rapier::{
+    anvilkit as ak,
     bounds as bo, collider as col, compat as com, controller as cc, crbtree as crt, dop,
     error as er, events as ev, joints as jo, neural as neu, query as qu, rigid_body as rb,
     rtree as rt, voxel as vx, world as wo,
@@ -610,6 +611,55 @@ jni!(int worldGetContactForceEvents(long world, long out_events, int capacity) {
 });
 jni!(void worldClearContactPairFilterCallback(long world) { ev::world_clear_contact_pair_filter_callback(m::<WH>(world)); });
 jni!(void worldClearIntersectionPairFilterCallback(long world) { ev::world_clear_intersection_pair_filter_callback(m::<WH>(world)); });
+
+jni!(long anvilKitAppCreate() { to_jlong(ak::anvilkit_app_create()) });
+jni!(void anvilKitAppDestroy(long app) { ak::anvilkit_app_destroy(m::<AKH>(app)); });
+jni!(void anvilKitAppUpdate(long app) { ak::anvilkit_app_update(m::<AKH>(app)); });
+jni!(long anvilKitAppSpawnBody(long app, double tx, double ty, double tz, double qi, double qj, double qk, double qw, int status) {
+    ak::anvilkit_app_spawn_body(m::<AKH>(app), v3(tx, ty, tz), qt(qi, qj, qk, qw), u32_from_jint(status)) as jlong
+});
+jni!(long anvilKitAppSpawnBodyWithCollider(long app, double tx, double ty, double tz, double qi, double qj, double qk, double qw, int status, int shape_type, double a, double b, double c, double d) {
+    ak::anvilkit_app_spawn_body_with_collider(m::<AKH>(app), v3(tx, ty, tz), qt(qi, qj, qk, qw), u32_from_jint(status), sd(shape_type, a, b, c, d)) as jlong
+});
+jni!(boolean anvilKitAppSetTransform(long app, long entity_bits, double tx, double ty, double tz, double qi, double qj, double qk, double qw) {
+    ak::anvilkit_app_set_transform(m::<AKH>(app), entity_bits as u64, v3(tx, ty, tz), qt(qi, qj, qk, qw)).0 as jbyte
+});
+jni!(int anvilKitAppSyncToWorld(long app, long world) {
+    ak::anvilkit_app_sync_to_world(m::<AKH>(app), m::<WH>(world)) as jint
+});
+jni!(long anvilKitAppEntityToBody(long app, long entity_bits) {
+    ak::anvilkit_app_entity_to_body(cp::<AKH>(app), entity_bits as u64) as jlong
+});
+jni!(long anvilKitAppEntityToCollider(long app, long entity_bits) {
+    ak::anvilkit_app_entity_to_collider(cp::<AKH>(app), entity_bits as u64) as jlong
+});
+jni!(boolean anvilKitAppApplyAeroSurfaces(long app, long world, long entity_bits, double wind_x, double wind_y, double wind_z, double air_density, long surfaces, int surface_count, int wake_up, long out_report) {
+    ak::anvilkit_app_apply_aero_surfaces(m::<AKH>(app), m::<WH>(world), entity_bits as u64, v3(wind_x, wind_y, wind_z), air_density, p::<AeroSurface>(surfaces), u32_from_jint(surface_count), jb(wake_up), pm::<AeroForceReport>(out_report)).0 as jbyte
+});
+jni!(boolean anvilKitAppApplyAeroVoxelGrid(long app, long world, long entity_bits, double wind_x, double wind_y, double wind_z, double air_density, long voxels, int size_x, int size_y, int size_z, double voxel_size, double origin_x, double origin_y, double origin_z, double drag_coefficient, double lift_coefficient, int wake_up, long out_report) {
+    ak::anvilkit_app_apply_aero_voxel_grid(m::<AKH>(app), m::<WH>(world), entity_bits as u64, v3(wind_x, wind_y, wind_z), air_density, p::<u8>(voxels), u32_from_jint(size_x), u32_from_jint(size_y), u32_from_jint(size_z), voxel_size, v3(origin_x, origin_y, origin_z), drag_coefficient, lift_coefficient, jb(wake_up), pm::<AeroForceReport>(out_report)).0 as jbyte
+});
+jni!(boolean anvilKitAppApplyFluidAabbForces(long app, long world, long entity_bits, double center_x, double center_y, double center_z, double half_x, double half_y, double half_z, double density, double linear_drag, double quadratic_drag, double angular_drag, double flow_x, double flow_y, double flow_z, double gravity_x, double gravity_y, double gravity_z, double body_half_x, double body_half_y, double body_half_z, double body_volume, int wake_up, long out_report) {
+    ak::anvilkit_app_apply_fluid_aabb_forces(
+        m::<AKH>(app),
+        m::<WH>(world),
+        entity_bits as u64,
+        FluidVolume {
+            center: v3(center_x, center_y, center_z),
+            half_extents: v3(half_x, half_y, half_z),
+            density,
+            linear_drag,
+            quadratic_drag,
+            angular_drag,
+            flow_velocity: v3(flow_x, flow_y, flow_z),
+            gravity: v3(gravity_x, gravity_y, gravity_z),
+        },
+        v3(body_half_x, body_half_y, body_half_z),
+        body_volume,
+        jb(wake_up),
+        pm::<FluidForceReport>(out_report)
+    ).0 as jbyte
+});
 
 jni!(long rtreeCreate() { to_jlong(rt::rtree_create()) });
 jni!(void rtreeDestroy(long tree) { rt::rtree_destroy(m::<RTH>(tree)); });

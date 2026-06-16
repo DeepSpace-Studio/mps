@@ -334,6 +334,50 @@ pub struct ContactForceEventRecord {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct AeroSurface {
+    pub point: Vec3,
+    pub normal: Vec3,
+    pub area: f64,
+    pub drag_coefficient: f64,
+    pub lift_coefficient: f64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct AeroForceReport {
+    pub total_force: Vec3,
+    pub total_torque: Vec3,
+    pub surface_count: u32,
+    pub active_surface_count: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct FluidVolume {
+    pub center: Vec3,
+    pub half_extents: Vec3,
+    pub density: f64,
+    pub linear_drag: f64,
+    pub quadratic_drag: f64,
+    pub angular_drag: f64,
+    pub flow_velocity: Vec3,
+    pub gravity: Vec3,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct FluidForceReport {
+    pub buoyancy_force: Vec3,
+    pub drag_force: Vec3,
+    pub angular_damping_torque: Vec3,
+    pub total_force: Vec3,
+    pub total_torque: Vec3,
+    pub submerged_fraction: f64,
+    pub displaced_volume: f64,
+}
+
+#[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum JointAxisDesc {
     LinX = 0,
@@ -357,6 +401,10 @@ pub enum JointTypeDesc {
 
 pub struct WorldHandle {
     pub(crate) inner: crate::rapier::world::PhysicsWorld,
+}
+
+pub struct AnvilKitAppHandle {
+    pub(crate) inner: crate::rapier::anvilkit::AnvilKitAppState,
 }
 
 pub struct RigidBodyBuilderHandle {

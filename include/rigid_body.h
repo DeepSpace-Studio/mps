@@ -71,6 +71,8 @@ typedef enum VoxelColliderMode {
   SurfaceMesh = 3,
 } VoxelColliderMode;
 
+typedef struct AnvilKitAppHandle AnvilKitAppHandle;
+
 typedef struct CRbTreeHandle CRbTreeHandle;
 
 typedef struct CharacterControllerHandle CharacterControllerHandle;
@@ -91,11 +93,66 @@ typedef struct Bool {
 #define Bool_FALSE (Bool){ ._0 = 0 }
 #define Bool_TRUE (Bool){ ._0 = 1 }
 
+typedef uint64_t RigidBodyHandleRaw;
+
 typedef struct Vec3 {
   double x;
   double y;
   double z;
 } Vec3;
+
+typedef struct AeroSurface {
+  struct Vec3 point;
+  struct Vec3 normal;
+  double area;
+  double drag_coefficient;
+  double lift_coefficient;
+} AeroSurface;
+
+typedef struct AeroForceReport {
+  struct Vec3 total_force;
+  struct Vec3 total_torque;
+  uint32_t surface_count;
+  uint32_t active_surface_count;
+} AeroForceReport;
+
+typedef struct Quat {
+  double i;
+  double j;
+  double k;
+  double w;
+} Quat;
+
+typedef struct ShapeDesc {
+  uint32_t shape_type;
+  double a;
+  double b;
+  double c;
+  double d;
+} ShapeDesc;
+
+typedef uint64_t ColliderHandleRaw;
+
+typedef struct FluidVolume {
+  struct Vec3 center;
+  struct Vec3 half_extents;
+  double density;
+  double linear_drag;
+  double quadratic_drag;
+  double angular_drag;
+  struct Vec3 flow_velocity;
+  struct Vec3 gravity;
+} FluidVolume;
+
+typedef struct FluidForceReport {
+  struct Vec3 buoyancy_force;
+  struct Vec3 drag_force;
+  struct Vec3 angular_damping_torque;
+  struct Vec3 total_force;
+  struct Vec3 total_torque;
+  double submerged_fraction;
+  double displaced_volume;
+} FluidForceReport;
 
 typedef struct Capsule {
   struct Vec3 a;
@@ -108,13 +165,6 @@ typedef struct Ssv {
   struct Vec3 b;
   double radius;
 } Ssv;
-
-typedef struct Quat {
-  double i;
-  double j;
-  double k;
-  double w;
-} Quat;
 
 typedef struct Ellipsoid {
   struct Vec3 center;
@@ -149,10 +199,6 @@ typedef struct InteractionGroupsDesc {
   uint32_t filter;
 } InteractionGroupsDesc;
 
-typedef uint64_t ColliderHandleRaw;
-
-typedef uint64_t RigidBodyHandleRaw;
-
 typedef struct QueryFilterDesc {
   uint32_t flags;
   struct InteractionGroupsDesc groups;
@@ -162,14 +208,6 @@ typedef struct QueryFilterDesc {
   RigidBodyHandleRaw exclude_rigid_body;
   struct Bool use_exclude_rigid_body;
 } QueryFilterDesc;
-
-typedef struct ShapeDesc {
-  uint32_t shape_type;
-  double a;
-  double b;
-  double c;
-  double d;
-} ShapeDesc;
 
 typedef struct Obb {
   struct Vec3 center;
@@ -293,6 +331,127 @@ uint32_t abi_version(void);
 struct Bool abi_supports_ffm(void);
 
 struct Bool abi_supports_jni(void);
+
+struct Bool aero_apply_surfaces(struct WorldHandle *world,
+                                RigidBodyHandleRaw body_handle,
+                                struct Vec3 wind_velocity,
+                                double air_density,
+                                const struct AeroSurface *surfaces,
+                                uint32_t surface_count,
+                                struct Bool wake_up,
+                                struct AeroForceReport *out_report);
+
+struct Bool aero_apply_voxel_grid(struct WorldHandle *world,
+                                  RigidBodyHandleRaw body_handle,
+                                  struct Vec3 wind_velocity,
+                                  double air_density,
+                                  const uint8_t *voxels,
+                                  uint32_t size_x,
+                                  uint32_t size_y,
+                                  uint32_t size_z,
+                                  double voxel_size,
+                                  struct Vec3 local_origin,
+                                  double drag_coefficient,
+                                  double lift_coefficient,
+                                  struct Bool wake_up,
+                                  struct AeroForceReport *out_report);
+
+uint8_t aero_apply_voxel_grid_flag(struct WorldHandle *world,
+                                   RigidBodyHandleRaw body_handle,
+                                   struct Vec3 wind_velocity,
+                                   double air_density,
+                                   const uint8_t *voxels,
+                                   uint32_t size_x,
+                                   uint32_t size_y,
+                                   uint32_t size_z,
+                                   double voxel_size,
+                                   struct Vec3 local_origin,
+                                   double drag_coefficient,
+                                   double lift_coefficient,
+                                   struct Bool wake_up,
+                                   struct AeroForceReport *out_report);
+
+uint8_t aero_apply_surfaces_flag(struct WorldHandle *world,
+                                 RigidBodyHandleRaw body_handle,
+                                 struct Vec3 wind_velocity,
+                                 double air_density,
+                                 const struct AeroSurface *surfaces,
+                                 uint32_t surface_count,
+                                 struct Bool wake_up,
+                                 struct AeroForceReport *out_report);
+
+struct Bool aero_estimate_surface_force(struct Vec3 body_linvel,
+                                        struct Vec3 body_angvel,
+                                        struct Vec3 body_center,
+                                        struct Vec3 wind_velocity,
+                                        double air_density,
+                                        struct AeroSurface surface,
+                                        struct AeroForceReport *out_report);
+
+struct AnvilKitAppHandle *anvilkit_app_create(void);
+
+void anvilkit_app_destroy(struct AnvilKitAppHandle *app);
+
+void anvilkit_app_update(struct AnvilKitAppHandle *app);
+
+uint64_t anvilkit_app_spawn_body(struct AnvilKitAppHandle *app,
+                                 struct Vec3 translation,
+                                 struct Quat rotation,
+                                 uint32_t status);
+
+uint64_t anvilkit_app_spawn_body_with_collider(struct AnvilKitAppHandle *app,
+                                               struct Vec3 translation,
+                                               struct Quat rotation,
+                                               uint32_t status,
+                                               struct ShapeDesc shape);
+
+struct Bool anvilkit_app_set_transform(struct AnvilKitAppHandle *app,
+                                       uint64_t entity_bits,
+                                       struct Vec3 translation,
+                                       struct Quat rotation);
+
+uint32_t anvilkit_app_sync_to_world(struct AnvilKitAppHandle *app, struct WorldHandle *world);
+
+RigidBodyHandleRaw anvilkit_app_entity_to_body(const struct AnvilKitAppHandle *app,
+                                               uint64_t entity_bits);
+
+ColliderHandleRaw anvilkit_app_entity_to_collider(const struct AnvilKitAppHandle *app,
+                                                  uint64_t entity_bits);
+
+struct Bool anvilkit_app_apply_aero_surfaces(struct AnvilKitAppHandle *app,
+                                             struct WorldHandle *world,
+                                             uint64_t entity_bits,
+                                             struct Vec3 wind_velocity,
+                                             double air_density,
+                                             const struct AeroSurface *surfaces,
+                                             uint32_t surface_count,
+                                             struct Bool wake_up,
+                                             struct AeroForceReport *out_report);
+
+struct Bool anvilkit_app_apply_aero_voxel_grid(struct AnvilKitAppHandle *app,
+                                               struct WorldHandle *world,
+                                               uint64_t entity_bits,
+                                               struct Vec3 wind_velocity,
+                                               double air_density,
+                                               const uint8_t *voxels,
+                                               uint32_t size_x,
+                                               uint32_t size_y,
+                                               uint32_t size_z,
+                                               double voxel_size,
+                                               struct Vec3 local_origin,
+                                               double drag_coefficient,
+                                               double lift_coefficient,
+                                               struct Bool wake_up,
+                                               struct AeroForceReport *out_report);
+
+struct Bool anvilkit_app_apply_fluid_aabb_forces(struct AnvilKitAppHandle *app,
+                                                 struct WorldHandle *world,
+                                                 uint64_t entity_bits,
+                                                 struct FluidVolume fluid_volume,
+                                                 struct Vec3 body_half_extents,
+                                                 double body_volume,
+                                                 struct Bool wake_up,
+                                                 struct FluidForceReport *out_report);
 
 struct ColliderBuilderHandle *collider_builder_create_capsule(struct Capsule capsule);
 
@@ -746,6 +905,30 @@ void world_clear_contact_pair_filter_callback(struct WorldHandle *world);
 
 void world_clear_intersection_pair_filter_callback(struct WorldHandle *world);
 
+struct Bool fluid_estimate_aabb_forces(struct FluidVolume fluid,
+                                       struct Vec3 body_center,
+                                       struct Vec3 body_half_extents,
+                                       double body_volume,
+                                       struct Vec3 body_linvel,
+                                       struct Vec3 body_angvel,
+                                       struct FluidForceReport *out_report);
+
+struct Bool fluid_apply_aabb_forces(struct WorldHandle *world,
+                                    RigidBodyHandleRaw body_handle,
+                                    struct FluidVolume fluid,
+                                    struct Vec3 body_half_extents,
+                                    double body_volume,
+                                    struct Bool wake_up,
+                                    struct FluidForceReport *out_report);
+
+uint8_t fluid_apply_aabb_forces_flag(struct WorldHandle *world,
+                                     RigidBodyHandleRaw body_handle,
+                                     struct FluidVolume fluid,
+                                     struct Vec3 body_half_extents,
+                                     double body_volume,
+                                     struct Bool wake_up,
+                                     struct FluidForceReport *out_report);
+
 struct JointBuilderHandle *joint_builder_create(uint32_t joint_type,
                                                 struct Vec3 axis_or_primary,
                                                 double b,
@@ -872,11 +1055,25 @@ uint32_t query_intersect_aabb(const struct WorldHandle *world,
 
 uint32_t query_intersect_aabb_count_all(const struct WorldHandle *world, struct AabbDesc aabb);
 
+uint32_t query_intersect_aabb_counts(const struct WorldHandle *world,
+                                     const struct AabbDesc *aabbs,
+                                     uint32_t query_count,
+                                     struct QueryFilterDesc filter,
+                                     uint32_t *out_counts,
+                                     uint32_t capacity);
+
 uint32_t query_intersect_obb_count(const struct WorldHandle *world,
                                    struct Obb obb,
                                    struct QueryFilterDesc filter);
 
 uint32_t query_intersect_obb_count_all(const struct WorldHandle *world, struct Obb obb);
+
+uint32_t query_intersect_obb_counts(const struct WorldHandle *world,
+                                    const struct Obb *obbs,
+                                    uint32_t query_count,
+                                    struct QueryFilterDesc filter,
+                                    uint32_t *out_counts,
+                                    uint32_t capacity);
 
 uint32_t query_intersect_obb(const struct WorldHandle *world,
                              struct Obb obb,
@@ -894,6 +1091,13 @@ uint32_t query_intersect_sphere_count(const struct WorldHandle *world,
                                       struct QueryFilterDesc filter);
 
 uint32_t query_intersect_sphere_count_all(const struct WorldHandle *world, struct Sphere sphere);
+
+uint32_t query_intersect_sphere_counts(const struct WorldHandle *world,
+                                       const struct Sphere *spheres,
+                                       uint32_t query_count,
+                                       struct QueryFilterDesc filter,
+                                       uint32_t *out_counts,
+                                       uint32_t capacity);
 
 uint32_t query_intersect_sphere(const struct WorldHandle *world,
                                 struct Sphere sphere,

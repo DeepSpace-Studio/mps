@@ -325,6 +325,38 @@ pub extern "C" fn query_intersect_aabb_count_all(world: *const WorldHandle, aabb
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn query_intersect_aabb_counts(
+    world: *const WorldHandle,
+    aabbs: *const AabbDesc,
+    query_count: u32,
+    filter: QueryFilterDesc,
+    out_counts: *mut u32,
+    capacity: u32,
+) -> u32 {
+    if world.is_null() {
+        set_error(ERR_NULL_POINTER, "world is null");
+        return 0;
+    }
+    if aabbs.is_null() || out_counts.is_null() {
+        set_error(ERR_NULL_POINTER, "AABB input or count output is null");
+        return 0;
+    }
+    if query_count == 0 || capacity < query_count || query_count > MAX_OUTPUT_CAPACITY {
+        set_error(ERR_CAPACITY, "invalid AABB batch capacity");
+        return 0;
+    }
+
+    let aabbs = unsafe { std::slice::from_raw_parts(aabbs, query_count as usize) };
+    let counts = unsafe { std::slice::from_raw_parts_mut(out_counts, capacity as usize) };
+    for index in 0..query_count as usize {
+        counts[index] = query_intersect_aabb_count(world, aabbs[index], filter);
+    }
+
+    clear_error();
+    query_count
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_obb_count(
     world: *const WorldHandle,
     obb: Obb,
@@ -355,6 +387,38 @@ pub extern "C" fn query_intersect_obb_count(
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_obb_count_all(world: *const WorldHandle, obb: Obb) -> u32 {
     query_intersect_obb_count(world, obb, QueryFilterDesc::default())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn query_intersect_obb_counts(
+    world: *const WorldHandle,
+    obbs: *const Obb,
+    query_count: u32,
+    filter: QueryFilterDesc,
+    out_counts: *mut u32,
+    capacity: u32,
+) -> u32 {
+    if world.is_null() {
+        set_error(ERR_NULL_POINTER, "world is null");
+        return 0;
+    }
+    if obbs.is_null() || out_counts.is_null() {
+        set_error(ERR_NULL_POINTER, "OBB input or count output is null");
+        return 0;
+    }
+    if query_count == 0 || capacity < query_count || query_count > MAX_OUTPUT_CAPACITY {
+        set_error(ERR_CAPACITY, "invalid OBB batch capacity");
+        return 0;
+    }
+
+    let obbs = unsafe { std::slice::from_raw_parts(obbs, query_count as usize) };
+    let counts = unsafe { std::slice::from_raw_parts_mut(out_counts, capacity as usize) };
+    for index in 0..query_count as usize {
+        counts[index] = query_intersect_obb_count(world, obbs[index], filter);
+    }
+
+    clear_error();
+    query_count
 }
 
 #[unsafe(no_mangle)]
@@ -448,6 +512,38 @@ pub extern "C" fn query_intersect_sphere_count_all(
     sphere: Sphere,
 ) -> u32 {
     query_intersect_sphere_count(world, sphere, QueryFilterDesc::default())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn query_intersect_sphere_counts(
+    world: *const WorldHandle,
+    spheres: *const Sphere,
+    query_count: u32,
+    filter: QueryFilterDesc,
+    out_counts: *mut u32,
+    capacity: u32,
+) -> u32 {
+    if world.is_null() {
+        set_error(ERR_NULL_POINTER, "world is null");
+        return 0;
+    }
+    if spheres.is_null() || out_counts.is_null() {
+        set_error(ERR_NULL_POINTER, "sphere input or count output is null");
+        return 0;
+    }
+    if query_count == 0 || capacity < query_count || query_count > MAX_OUTPUT_CAPACITY {
+        set_error(ERR_CAPACITY, "invalid sphere batch capacity");
+        return 0;
+    }
+
+    let spheres = unsafe { std::slice::from_raw_parts(spheres, query_count as usize) };
+    let counts = unsafe { std::slice::from_raw_parts_mut(out_counts, capacity as usize) };
+    for index in 0..query_count as usize {
+        counts[index] = query_intersect_sphere_count(world, spheres[index], filter);
+    }
+
+    clear_error();
+    query_count
 }
 
 #[unsafe(no_mangle)]
@@ -754,6 +850,144 @@ mod tests {
         );
         assert_eq!(hits[0].collider, collider);
         assert_eq!(hits[1].collider, 0);
+
+        crate::rapier::world::world_destroy(world);
+    }
+
+    #[test]
+    fn batch_intersection_counts_return_per_query_counts() {
+        let world = crate::rapier::world::world_create(Vec3::default());
+        let sphere = Sphere {
+            center: Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            radius: 1.0,
+        };
+        let builder = crate::rapier::collider::collider_builder_build(
+            crate::rapier::collider::collider_builder_create_sphere(sphere),
+        );
+        let collider = crate::rapier::collider::world_insert_collider(world, builder);
+        assert_ne!(collider, 0);
+        crate::rapier::world::world_step(world, 1.0 / 60.0);
+
+        let aabbs = [
+            AabbDesc {
+                mins: Vec3 {
+                    x: -2.0,
+                    y: -2.0,
+                    z: -2.0,
+                },
+                maxs: Vec3 {
+                    x: 2.0,
+                    y: 2.0,
+                    z: 2.0,
+                },
+            },
+            AabbDesc {
+                mins: Vec3 {
+                    x: 10.0,
+                    y: 10.0,
+                    z: 10.0,
+                },
+                maxs: Vec3 {
+                    x: 11.0,
+                    y: 11.0,
+                    z: 11.0,
+                },
+            },
+        ];
+        let mut counts = [0; 2];
+        assert_eq!(
+            query_intersect_aabb_counts(
+                world,
+                aabbs.as_ptr(),
+                aabbs.len() as u32,
+                QueryFilterDesc::default(),
+                counts.as_mut_ptr(),
+                counts.len() as u32,
+            ),
+            2
+        );
+        assert_eq!(counts, [1, 0]);
+
+        let spheres = [
+            sphere,
+            Sphere {
+                center: Vec3 {
+                    x: 10.0,
+                    y: 10.0,
+                    z: 10.0,
+                },
+                radius: 1.0,
+            },
+        ];
+        counts = [0; 2];
+        assert_eq!(
+            query_intersect_sphere_counts(
+                world,
+                spheres.as_ptr(),
+                spheres.len() as u32,
+                QueryFilterDesc::default(),
+                counts.as_mut_ptr(),
+                counts.len() as u32,
+            ),
+            2
+        );
+        assert_eq!(counts, [1, 0]);
+
+        let obbs = [
+            Obb {
+                center: Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                half_extents: Vec3 {
+                    x: 1.5,
+                    y: 1.5,
+                    z: 1.5,
+                },
+                rotation: Quat {
+                    i: 0.0,
+                    j: 0.0,
+                    k: 0.0,
+                    w: 1.0,
+                },
+            },
+            Obb {
+                center: Vec3 {
+                    x: 10.0,
+                    y: 10.0,
+                    z: 10.0,
+                },
+                half_extents: Vec3 {
+                    x: 1.0,
+                    y: 1.0,
+                    z: 1.0,
+                },
+                rotation: Quat {
+                    i: 0.0,
+                    j: 0.0,
+                    k: 0.0,
+                    w: 1.0,
+                },
+            },
+        ];
+        counts = [0; 2];
+        assert_eq!(
+            query_intersect_obb_counts(
+                world,
+                obbs.as_ptr(),
+                obbs.len() as u32,
+                QueryFilterDesc::default(),
+                counts.as_mut_ptr(),
+                counts.len() as u32,
+            ),
+            2
+        );
+        assert_eq!(counts, [1, 0]);
 
         crate::rapier::world::world_destroy(world);
     }
