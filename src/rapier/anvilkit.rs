@@ -6,9 +6,10 @@ use rapier3d::prelude::{ColliderBuilder, RigidBodyBuilder, RigidBodyType};
 
 use crate::rapier::aerodynamics;
 use crate::rapier::fluid;
+use crate::rapier::trajectory;
 use crate::rapier::ffi::{
     AeroForceReport, AeroSurface, Bool, ColliderHandleRaw, Quat, RigidBodyHandleRaw, ShapeDesc,
-    FluidForceReport, FluidVolume, Vec3, WorldHandle,
+    FluidForceReport, FluidVolume, TrajectoryEnvironment, TrajectoryForceReport, Vec3, WorldHandle,
     pack_collider_handle, pack_rigid_body_handle, quat_finite, unpack_rigid_body_handle,
     vec3_finite,
 };
@@ -456,6 +457,37 @@ pub extern "C" fn anvilkit_app_apply_fluid_aabb_forces(
         fluid_volume,
         body_half_extents,
         body_volume,
+        wake_up,
+        out_report,
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn anvilkit_app_apply_trajectory_forces(
+    app: *mut crate::rapier::ffi::AnvilKitAppHandle,
+    world: *mut WorldHandle,
+    entity_bits: u64,
+    environment: TrajectoryEnvironment,
+    wake_up: Bool,
+    out_report: *mut TrajectoryForceReport,
+) -> Bool {
+    let Some(app) = (unsafe { app.as_mut() }) else {
+        return Bool::FALSE;
+    };
+    let Some(world) = (unsafe { world.as_mut() }) else {
+        return Bool::FALSE;
+    };
+    let Ok(entity) = Entity::try_from_bits(entity_bits) else {
+        return Bool::FALSE;
+    };
+    let Some(handle) = app.inner.entity_to_body.get(&entity).copied() else {
+        return Bool::FALSE;
+    };
+
+    trajectory::trajectory_apply_forces_to_body(
+        world,
+        handle,
+        environment,
         wake_up,
         out_report,
     )

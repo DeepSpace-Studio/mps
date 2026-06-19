@@ -1,5 +1,7 @@
 use std::slice;
 
+use rayon::prelude::*;
+
 use rapier3d::math::{Pose, Rotation, Vector};
 use rapier3d::prelude::{ColliderBuilder, SharedShape};
 
@@ -149,24 +151,47 @@ fn build_cuboids(grid: &VoxelGrid<'_>, solid_count: usize) -> Option<ColliderBui
 }
 
 fn build_greedy_cuboids(grid: &VoxelGrid<'_>) -> Option<ColliderBuilder> {
+    let chunk_size = 32usize;
+    let y_starts: Vec<_> = (0..grid.size_y).step_by(chunk_size).collect();
+    let chunk_parts = y_starts
+        .into_par_iter()
+        .map(|y_start| {
+            build_greedy_cuboids_y_range(grid, y_start, (y_start + chunk_size).min(grid.size_y))
+        })
+        .collect::<Option<Vec<_>>>()?;
+    let total_parts = chunk_parts
+        .iter()
+        .try_fold(0usize, |total, parts| total.checked_add(parts.len()))?;
+    if total_parts > MAX_COMPOUND_PARTS {
+        return None;
+    }
+
+    let mut parts = Vec::with_capacity(total_parts);
+    for mut chunk in chunk_parts {
+        parts.append(&mut chunk);
+    }
+    (!parts.is_empty()).then(|| ColliderBuilder::compound(parts))
+}
+
+fn build_greedy_cuboids_y_range(
+    grid: &VoxelGrid<'_>,
+    y_start: usize,
+    y_end: usize,
+) -> Option<Vec<(Pose, SharedShape)>> {
     let mut visited = vec![false; grid.voxels.len()];
-    let mut parts = Vec::with_capacity(grid.voxels.len().min(1024));
+    let mut parts = Vec::new();
 
     for z in 0..grid.size_z {
-        for y in 0..grid.size_y {
+        for y in y_start..y_end {
             for x in 0..grid.size_x {
-                let Some(start) = grid.index(x, y, z) else {
-                    return None;
-                };
+                let start = grid.index(x, y, z)?;
                 if visited[start] || !grid.is_solid(x, y, z) {
                     continue;
                 }
 
                 let mut max_x = x + 1;
                 while max_x < grid.size_x {
-                    let Some(i) = grid.index(max_x, y, z) else {
-                        return None;
-                    };
+                    let i = grid.index(max_x, y, z)?;
                     if visited[i] || !grid.is_solid(max_x, y, z) {
                         break;
                     }
@@ -174,11 +199,9 @@ fn build_greedy_cuboids(grid: &VoxelGrid<'_>) -> Option<ColliderBuilder> {
                 }
 
                 let mut max_y = y + 1;
-                'expand_y: while max_y < grid.size_y {
+                'expand_y: while max_y < y_end {
                     for xx in x..max_x {
-                        let Some(i) = grid.index(xx, max_y, z) else {
-                            return None;
-                        };
+                        let i = grid.index(xx, max_y, z)?;
                         if visited[i] || !grid.is_solid(xx, max_y, z) {
                             break 'expand_y;
                         }
@@ -190,9 +213,7 @@ fn build_greedy_cuboids(grid: &VoxelGrid<'_>) -> Option<ColliderBuilder> {
                 'expand_z: while max_z < grid.size_z {
                     for yy in y..max_y {
                         for xx in x..max_x {
-                            let Some(i) = grid.index(xx, yy, max_z) else {
-                                return None;
-                            };
+                            let i = grid.index(xx, yy, max_z)?;
                             if visited[i] || !grid.is_solid(xx, yy, max_z) {
                                 break 'expand_z;
                             }
@@ -204,23 +225,18 @@ fn build_greedy_cuboids(grid: &VoxelGrid<'_>) -> Option<ColliderBuilder> {
                 for zz in z..max_z {
                     for yy in y..max_y {
                         for xx in x..max_x {
-                            let Some(i) = grid.index(xx, yy, zz) else {
-                                return None;
-                            };
+                            let i = grid.index(xx, yy, zz)?;
                             visited[i] = true;
                         }
                     }
                 }
 
                 push_cuboid(grid, &mut parts, x, y, z, max_x, max_y, max_z);
-                if parts.len() > MAX_COMPOUND_PARTS {
-                    return None;
-                }
             }
         }
     }
 
-    (!parts.is_empty()).then(|| ColliderBuilder::compound(parts))
+    Some(parts)
 }
 
 fn count_greedy_cuboids(grid: &VoxelGrid<'_>) -> Option<usize> {

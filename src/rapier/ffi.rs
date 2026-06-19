@@ -378,6 +378,36 @@ pub struct FluidForceReport {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct TrajectoryState {
+    pub position: Vec3,
+    pub velocity: Vec3,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct TrajectoryEnvironment {
+    pub gravity: Vec3,
+    pub flow_velocity: Vec3,
+    pub mass: f64,
+    pub reference_area: f64,
+    pub density: f64,
+    pub drag_coefficient: f64,
+    pub lift_coefficient: f64,
+    pub lift_direction: Vec3,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct TrajectoryForceReport {
+    pub gravity_force: Vec3,
+    pub drag_force: Vec3,
+    pub lift_force: Vec3,
+    pub total_force: Vec3,
+    pub acceleration: Vec3,
+}
+
+#[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum JointAxisDesc {
     LinX = 0,

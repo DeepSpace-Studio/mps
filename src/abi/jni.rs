@@ -8,7 +8,7 @@ use crate::rapier::ffi::{
     NeuralBoundsDesc, Obb, PointProjection, Prism, Quat, QueryFilterDesc, RTreeHandle as RTH,
     RayHit, RigidBodyBuilderHandle as RBH, RigidBodyHandleRaw as RRaw, ShapeCastHit,
     ShapeCastOptionsDesc, ShapeDesc, Sphere, SphericalShell, Ssv, Vec3, VoxelColliderOptions,
-    WorldHandle as WH,
+    TrajectoryEnvironment, TrajectoryForceReport, WorldHandle as WH,
 };
 use crate::rapier::{
     anvilkit as ak,
@@ -658,6 +658,25 @@ jni!(boolean anvilKitAppApplyFluidAabbForces(long app, long world, long entity_b
         body_volume,
         jb(wake_up),
         pm::<FluidForceReport>(out_report)
+    ).0 as jbyte
+});
+jni!(boolean anvilKitAppApplyTrajectoryForces(long app, long world, long entity_bits, double gravity_x, double gravity_y, double gravity_z, double flow_x, double flow_y, double flow_z, double mass, double reference_area, double density, double drag_coefficient, double lift_coefficient, double lift_x, double lift_y, double lift_z, int wake_up, long out_report) {
+    ak::anvilkit_app_apply_trajectory_forces(
+        m::<AKH>(app),
+        m::<WH>(world),
+        entity_bits as u64,
+        TrajectoryEnvironment {
+            gravity: v3(gravity_x, gravity_y, gravity_z),
+            flow_velocity: v3(flow_x, flow_y, flow_z),
+            mass,
+            reference_area,
+            density,
+            drag_coefficient,
+            lift_coefficient,
+            lift_direction: v3(lift_x, lift_y, lift_z),
+        },
+        jb(wake_up),
+        pm::<TrajectoryForceReport>(out_report)
     ).0 as jbyte
 });
 

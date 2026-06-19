@@ -154,6 +154,25 @@ typedef struct FluidForceReport {
   double displaced_volume;
 } FluidForceReport;
 
+typedef struct TrajectoryEnvironment {
+  struct Vec3 gravity;
+  struct Vec3 flow_velocity;
+  double mass;
+  double reference_area;
+  double density;
+  double drag_coefficient;
+  double lift_coefficient;
+  struct Vec3 lift_direction;
+} TrajectoryEnvironment;
+
+typedef struct TrajectoryForceReport {
+  struct Vec3 gravity_force;
+  struct Vec3 drag_force;
+  struct Vec3 lift_force;
+  struct Vec3 total_force;
+  struct Vec3 acceleration;
+} TrajectoryForceReport;
+
 typedef struct Capsule {
   struct Vec3 a;
   struct Vec3 b;
@@ -290,6 +309,11 @@ typedef struct ShapeCastOptionsDesc {
   struct Bool stop_at_penetration;
   struct Bool compute_impact_geometry_on_penetration;
 } ShapeCastOptionsDesc;
+
+typedef struct TrajectoryState {
+  struct Vec3 position;
+  struct Vec3 velocity;
+} TrajectoryState;
 
 typedef struct VoxelColliderOptions {
   uint32_t mode;
@@ -452,6 +476,13 @@ struct Bool anvilkit_app_apply_fluid_aabb_forces(struct AnvilKitAppHandle *app,
                                                  double body_volume,
                                                  struct Bool wake_up,
                                                  struct FluidForceReport *out_report);
+
+struct Bool anvilkit_app_apply_trajectory_forces(struct AnvilKitAppHandle *app,
+                                                 struct WorldHandle *world,
+                                                 uint64_t entity_bits,
+                                                 struct TrajectoryEnvironment environment,
+                                                 struct Bool wake_up,
+                                                 struct TrajectoryForceReport *out_report);
 
 struct ColliderBuilderHandle *collider_builder_create_capsule(struct Capsule capsule);
 
@@ -1366,6 +1397,28 @@ uint32_t rtree_query_aabb(struct RTreeHandle *tree,
                           struct AabbDesc aabb,
                           uint64_t *out_ids,
                           uint32_t capacity);
+
+struct Bool trajectory_estimate_forces(struct TrajectoryState state,
+                                       struct TrajectoryEnvironment env,
+                                       struct TrajectoryForceReport *out_report);
+
+struct Bool trajectory_integrate_step(struct TrajectoryState state,
+                                      struct TrajectoryEnvironment env,
+                                      double dt,
+                                      struct TrajectoryState *out_state,
+                                      struct TrajectoryForceReport *out_report);
+
+struct Bool trajectory_apply_forces_to_body(struct WorldHandle *world,
+                                            RigidBodyHandleRaw body_handle,
+                                            struct TrajectoryEnvironment env,
+                                            struct Bool wake_up,
+                                            struct TrajectoryForceReport *out_report);
+
+uint8_t trajectory_apply_forces_to_body_flag(struct WorldHandle *world,
+                                             RigidBodyHandleRaw body_handle,
+                                             struct TrajectoryEnvironment env,
+                                             struct Bool wake_up,
+                                             struct TrajectoryForceReport *out_report);
 
 struct ColliderBuilderHandle *collider_builder_create_voxels(const uint8_t *voxels,
                                                              uint32_t size_x,

@@ -15,6 +15,7 @@ smallvec = "1.15.2"
 mimalloc = "0.1.52"
 anvilkit = { version = "0.1", features = ["rapier"] }
 bevy_ecs = "0.14"
+rayon = "1.10"
 
 
 [build-dependencies]
