@@ -1,6 +1,8 @@
 use rapier3d::prelude::Vector;
 
-use crate::rapier::error::{ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error};
+use crate::rapier::error::{
+    ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error,
+};
 use crate::rapier::ffi::{
     AeroForceReport, AeroSurface, Bool, MAX_OUTPUT_CAPACITY, RigidBodyHandleRaw, Vec3, WorldHandle,
     unpack_rigid_body_handle, vec3_finite, vec3_from_rapier, vec3_to_rapier,
@@ -96,7 +98,12 @@ fn voxel_solid(
         .is_some_and(|voxel| *voxel != 0)
 }
 
-fn make_report(total_force: Vector, total_torque: Vector, surface_count: u32, active_surface_count: u32) -> AeroForceReport {
+fn make_report(
+    total_force: Vector,
+    total_torque: Vector,
+    surface_count: u32,
+    active_surface_count: u32,
+) -> AeroForceReport {
     AeroForceReport {
         total_force: vec3_from_rapier(total_force),
         total_torque: vec3_from_rapier(total_torque),
@@ -168,7 +175,12 @@ pub extern "C" fn aero_apply_surfaces(
     }
 
     if let Some(out_report) = unsafe { out_report.as_mut() } {
-        *out_report = make_report(total_force, total_torque, surface_count, active_surface_count);
+        *out_report = make_report(
+            total_force,
+            total_torque,
+            surface_count,
+            active_surface_count,
+        );
     }
 
     clear_error();
@@ -212,7 +224,10 @@ pub extern "C" fn aero_apply_voxel_grid(
         return Bool::FALSE;
     };
     if cell_count > MAX_OUTPUT_CAPACITY as usize {
-        set_error(ERR_CAPACITY, "voxel grid exceeds maximum aerodynamic sample count");
+        set_error(
+            ERR_CAPACITY,
+            "voxel grid exceeds maximum aerodynamic sample count",
+        );
         return Bool::FALSE;
     }
     if !vec3_finite(wind_velocity)
@@ -247,7 +262,13 @@ pub extern "C" fn aero_apply_voxel_grid(
     let local_origin = vec3_to_rapier(local_origin);
     let face_area = voxel_size * voxel_size;
     let faces = [
-        (-1isize, 0isize, 0isize, Vector::NEG_X, Vector::new(0.0, 0.5, 0.5)),
+        (
+            -1isize,
+            0isize,
+            0isize,
+            Vector::NEG_X,
+            Vector::new(0.0, 0.5, 0.5),
+        ),
         (1, 0, 0, Vector::X, Vector::new(1.0, 0.5, 0.5)),
         (0, -1, 0, Vector::NEG_Y, Vector::new(0.5, 0.0, 0.5)),
         (0, 1, 0, Vector::Y, Vector::new(0.5, 1.0, 0.5)),
@@ -262,7 +283,15 @@ pub extern "C" fn aero_apply_voxel_grid(
     for z in 0..size_z as usize {
         for y in 0..size_y as usize {
             for x in 0..size_x as usize {
-                if !voxel_solid(voxels, size_x as usize, size_y as usize, size_z as usize, x as isize, y as isize, z as isize) {
+                if !voxel_solid(
+                    voxels,
+                    size_x as usize,
+                    size_y as usize,
+                    size_z as usize,
+                    x as isize,
+                    y as isize,
+                    z as isize,
+                ) {
                     continue;
                 }
 
@@ -280,7 +309,8 @@ pub extern "C" fn aero_apply_voxel_grid(
                     }
                     surface_count += 1;
                     let local_point = local_origin
-                        + (Vector::new(x as f64, y as f64, z as f64) + local_face_offset) * voxel_size;
+                        + (Vector::new(x as f64, y as f64, z as f64) + local_face_offset)
+                            * voxel_size;
                     let world_point = pose * local_point;
                     let world_normal = pose.rotation * local_normal;
                     let surface = AeroSurface {
@@ -311,7 +341,12 @@ pub extern "C" fn aero_apply_voxel_grid(
     }
 
     if let Some(out_report) = unsafe { out_report.as_mut() } {
-        *out_report = make_report(total_force, total_torque, surface_count, active_surface_count);
+        *out_report = make_report(
+            total_force,
+            total_torque,
+            surface_count,
+            active_surface_count,
+        );
     }
     clear_error();
     Bool::TRUE
@@ -470,9 +505,8 @@ mod tests {
     #[test]
     fn applies_aerodynamic_force_to_rapier_body() {
         let world = crate::rapier::world::world_create(Vec3::default());
-        let builder = crate::rapier::rigid_body::rigid_body_builder_create(
-            BodyStatus::Dynamic as u32,
-        );
+        let builder =
+            crate::rapier::rigid_body::rigid_body_builder_create(BodyStatus::Dynamic as u32);
         crate::rapier::rigid_body::rigid_body_builder_set_additional_mass(builder, 1.0);
         let body = crate::rapier::rigid_body::rigid_body_builder_build(builder);
         let body_handle = crate::rapier::rigid_body::world_insert_rigid_body(world, body);

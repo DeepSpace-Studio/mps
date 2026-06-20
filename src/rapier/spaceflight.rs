@@ -2,7 +2,9 @@ use std::f64::consts::{PI, TAU};
 
 use rapier3d::prelude::Vector;
 
-use crate::rapier::error::{ERR_INVALID_ARGUMENT, clear_error, set_error};
+use crate::rapier::error::{
+    ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, clear_error, set_error,
+};
 use crate::rapier::ffi::{
     AirlockDepressurization, AtomicOxygenErosion, BangOffBangProfile, BatteryEquivalentCircuit,
     Bool, ChemicalReactionRate, CmgExchange, CmgRobustInverse, Co2MassBalance,
@@ -10,9 +12,9 @@ use crate::rapier::ffi::{
     FlexibleModeDerivative, FluidLoopHeatTransfer, FriisLink, GnssObservation,
     HallThrusterPerformance, HohmannTransfer, LeastSquaresAttitude, ManipulatorDynamics,
     MassProperties, OrbitalElements, Quat, QuaternionDerivative, RadarMeasurement, RadiatorPower,
-    RigidBodyEulerDerivative, ScalarKalman, Sgp4SecularRates, SloshPendulumDerivative,
-    SolarPanelPower, StateVector, ThermalBalance, VariationalState, Vec3, vec3_finite,
-    vec3_from_rapier, vec3_to_rapier,
+    RigidBodyEulerDerivative, RigidBodyHandleRaw, ScalarKalman, Sgp4SecularRates,
+    SloshPendulumDerivative, SolarPanelPower, StateVector, ThermalBalance, VariationalState, Vec3,
+    WorldHandle, unpack_rigid_body_handle, vec3_finite, vec3_from_rapier, vec3_to_rapier,
 };
 
 const EPS: f64 = 1.0e-12;
@@ -31,6 +33,12 @@ fn write_out<T: Copy>(out: *mut T, value: T) -> Bool {
     *out = value;
     clear_error();
     Bool::TRUE
+}
+
+fn write_optional_out<T: Copy>(out: *mut T, value: T) {
+    if let Some(out) = unsafe { out.as_mut() } {
+        *out = value;
+    }
 }
 
 fn invalid_nan(message: &str) -> f64 {
@@ -248,6 +256,69 @@ pub extern "C" fn space_j2_acceleration(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn space_apply_j2_force_to_body(
+    world: *mut WorldHandle,
+    body_handle: RigidBodyHandleRaw,
+    mu: f64,
+    equatorial_radius: f64,
+    j2: f64,
+    mass: f64,
+    wake_up: Bool,
+    out_acceleration: *mut Vec3,
+) -> Bool {
+    if !mass.is_finite() || mass <= 0.0 {
+        set_error(ERR_INVALID_ARGUMENT, "invalid J2 body mass");
+        return Bool::FALSE;
+    }
+    let Some(world) = (unsafe { world.as_mut() }) else {
+        set_error(ERR_NULL_POINTER, "world is null");
+        return Bool::FALSE;
+    };
+    let Some(body) = world
+        .inner
+        .bodies
+        .get_mut(unpack_rigid_body_handle(body_handle))
+    else {
+        set_error(ERR_NOT_FOUND, "body was not found");
+        return Bool::FALSE;
+    };
+    let position = vec3_from_rapier(body.translation());
+    let mut acceleration = Vec3::default();
+    if space_j2_acceleration(position, mu, equatorial_radius, j2, &mut acceleration) == Bool::FALSE
+    {
+        return Bool::FALSE;
+    }
+    body.add_force(vec3_to_rapier(acceleration) * mass, wake_up.0 != 0);
+    write_optional_out(out_acceleration, acceleration);
+    clear_error();
+    Bool::TRUE
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn space_apply_j2_force_to_body_flag(
+    world: *mut WorldHandle,
+    body_handle: RigidBodyHandleRaw,
+    mu: f64,
+    equatorial_radius: f64,
+    j2: f64,
+    mass: f64,
+    wake_up: Bool,
+    out_acceleration: *mut Vec3,
+) -> u8 {
+    space_apply_j2_force_to_body(
+        world,
+        body_handle,
+        mu,
+        equatorial_radius,
+        j2,
+        mass,
+        wake_up,
+        out_acceleration,
+    )
+    .0
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn space_quaternion_derivative(
     attitude: Quat,
     angular_velocity: Vec3,
@@ -334,6 +405,60 @@ pub extern "C" fn space_cmg_exchange(
             wheel_momentum_dot: vec3_from_rapier(h_dot),
         },
     )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn space_apply_cmg_torque_to_body(
+    world: *mut WorldHandle,
+    body_handle: RigidBodyHandleRaw,
+    gimbal_axis: Vec3,
+    wheel_momentum: Vec3,
+    gimbal_rate: f64,
+    wake_up: Bool,
+    out_exchange: *mut CmgExchange,
+) -> Bool {
+    let Some(world) = (unsafe { world.as_mut() }) else {
+        set_error(ERR_NULL_POINTER, "world is null");
+        return Bool::FALSE;
+    };
+    let Some(body) = world
+        .inner
+        .bodies
+        .get_mut(unpack_rigid_body_handle(body_handle))
+    else {
+        set_error(ERR_NOT_FOUND, "body was not found");
+        return Bool::FALSE;
+    };
+    let mut exchange = CmgExchange::default();
+    if space_cmg_exchange(gimbal_axis, wheel_momentum, gimbal_rate, &mut exchange) == Bool::FALSE {
+        return Bool::FALSE;
+    }
+    body.add_torque(vec3_to_rapier(exchange.body_torque), wake_up.0 != 0);
+    write_optional_out(out_exchange, exchange);
+    clear_error();
+    Bool::TRUE
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn space_apply_cmg_torque_to_body_flag(
+    world: *mut WorldHandle,
+    body_handle: RigidBodyHandleRaw,
+    gimbal_axis: Vec3,
+    wheel_momentum: Vec3,
+    gimbal_rate: f64,
+    wake_up: Bool,
+    out_exchange: *mut CmgExchange,
+) -> u8 {
+    space_apply_cmg_torque_to_body(
+        world,
+        body_handle,
+        gimbal_axis,
+        wheel_momentum,
+        gimbal_rate,
+        wake_up,
+        out_exchange,
+    )
+    .0
 }
 
 #[unsafe(no_mangle)]
@@ -720,6 +845,80 @@ pub extern "C" fn space_atmospheric_drag_acceleration(
         Vector::ZERO
     };
     write_out(out_acceleration, vec3_from_rapier(acc))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn space_apply_atmospheric_drag_to_body(
+    world: *mut WorldHandle,
+    body_handle: RigidBodyHandleRaw,
+    atmosphere_velocity: Vec3,
+    density: f64,
+    drag_coefficient: f64,
+    area: f64,
+    mass: f64,
+    wake_up: Bool,
+    out_acceleration: *mut Vec3,
+) -> Bool {
+    if !mass.is_finite() || mass <= 0.0 {
+        set_error(ERR_INVALID_ARGUMENT, "invalid atmospheric drag body mass");
+        return Bool::FALSE;
+    }
+    let Some(world) = (unsafe { world.as_mut() }) else {
+        set_error(ERR_NULL_POINTER, "world is null");
+        return Bool::FALSE;
+    };
+    let Some(body) = world
+        .inner
+        .bodies
+        .get_mut(unpack_rigid_body_handle(body_handle))
+    else {
+        set_error(ERR_NOT_FOUND, "body was not found");
+        return Bool::FALSE;
+    };
+    let velocity = vec3_from_rapier(body.linvel());
+    let mut acceleration = Vec3::default();
+    if space_atmospheric_drag_acceleration(
+        velocity,
+        atmosphere_velocity,
+        density,
+        drag_coefficient,
+        area,
+        mass,
+        &mut acceleration,
+    ) == Bool::FALSE
+    {
+        return Bool::FALSE;
+    }
+    body.add_force(vec3_to_rapier(acceleration) * mass, wake_up.0 != 0);
+    write_optional_out(out_acceleration, acceleration);
+    clear_error();
+    Bool::TRUE
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn space_apply_atmospheric_drag_to_body_flag(
+    world: *mut WorldHandle,
+    body_handle: RigidBodyHandleRaw,
+    atmosphere_velocity: Vec3,
+    density: f64,
+    drag_coefficient: f64,
+    area: f64,
+    mass: f64,
+    wake_up: Bool,
+    out_acceleration: *mut Vec3,
+) -> u8 {
+    space_apply_atmospheric_drag_to_body(
+        world,
+        body_handle,
+        atmosphere_velocity,
+        density,
+        drag_coefficient,
+        area,
+        mass,
+        wake_up,
+        out_acceleration,
+    )
+    .0
 }
 
 #[unsafe(no_mangle)]
@@ -1510,6 +1709,78 @@ pub extern "C" fn space_solar_radiation_pressure_acceleration(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn space_apply_solar_radiation_pressure_to_body(
+    world: *mut WorldHandle,
+    body_handle: RigidBodyHandleRaw,
+    sun_direction: Vec3,
+    solar_flux: f64,
+    reflectivity: f64,
+    area: f64,
+    mass: f64,
+    wake_up: Bool,
+    out_acceleration: *mut Vec3,
+) -> Bool {
+    if !mass.is_finite() || mass <= 0.0 {
+        set_error(ERR_INVALID_ARGUMENT, "invalid solar radiation body mass");
+        return Bool::FALSE;
+    }
+    let Some(world) = (unsafe { world.as_mut() }) else {
+        set_error(ERR_NULL_POINTER, "world is null");
+        return Bool::FALSE;
+    };
+    let Some(body) = world
+        .inner
+        .bodies
+        .get_mut(unpack_rigid_body_handle(body_handle))
+    else {
+        set_error(ERR_NOT_FOUND, "body was not found");
+        return Bool::FALSE;
+    };
+    let mut acceleration = Vec3::default();
+    if space_solar_radiation_pressure_acceleration(
+        sun_direction,
+        solar_flux,
+        reflectivity,
+        area,
+        mass,
+        &mut acceleration,
+    ) == Bool::FALSE
+    {
+        return Bool::FALSE;
+    }
+    body.add_force(vec3_to_rapier(acceleration) * mass, wake_up.0 != 0);
+    write_optional_out(out_acceleration, acceleration);
+    clear_error();
+    Bool::TRUE
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn space_apply_solar_radiation_pressure_to_body_flag(
+    world: *mut WorldHandle,
+    body_handle: RigidBodyHandleRaw,
+    sun_direction: Vec3,
+    solar_flux: f64,
+    reflectivity: f64,
+    area: f64,
+    mass: f64,
+    wake_up: Bool,
+    out_acceleration: *mut Vec3,
+) -> u8 {
+    space_apply_solar_radiation_pressure_to_body(
+        world,
+        body_handle,
+        sun_direction,
+        solar_flux,
+        reflectivity,
+        area,
+        mass,
+        wake_up,
+        out_acceleration,
+    )
+    .0
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn space_gravity_gradient_torque(
     position: Vec3,
     inertia_diag: Vec3,
@@ -1542,6 +1813,58 @@ pub extern "C" fn space_gravity_gradient_torque(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn space_apply_gravity_gradient_torque_to_body(
+    world: *mut WorldHandle,
+    body_handle: RigidBodyHandleRaw,
+    inertia_diag: Vec3,
+    mu: f64,
+    wake_up: Bool,
+    out_torque: *mut Vec3,
+) -> Bool {
+    let Some(world) = (unsafe { world.as_mut() }) else {
+        set_error(ERR_NULL_POINTER, "world is null");
+        return Bool::FALSE;
+    };
+    let Some(body) = world
+        .inner
+        .bodies
+        .get_mut(unpack_rigid_body_handle(body_handle))
+    else {
+        set_error(ERR_NOT_FOUND, "body was not found");
+        return Bool::FALSE;
+    };
+    let position = vec3_from_rapier(body.translation());
+    let mut torque = Vec3::default();
+    if space_gravity_gradient_torque(position, inertia_diag, mu, &mut torque) == Bool::FALSE {
+        return Bool::FALSE;
+    }
+    body.add_torque(vec3_to_rapier(torque), wake_up.0 != 0);
+    write_optional_out(out_torque, torque);
+    clear_error();
+    Bool::TRUE
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn space_apply_gravity_gradient_torque_to_body_flag(
+    world: *mut WorldHandle,
+    body_handle: RigidBodyHandleRaw,
+    inertia_diag: Vec3,
+    mu: f64,
+    wake_up: Bool,
+    out_torque: *mut Vec3,
+) -> u8 {
+    space_apply_gravity_gradient_torque_to_body(
+        world,
+        body_handle,
+        inertia_diag,
+        mu,
+        wake_up,
+        out_torque,
+    )
+    .0
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn space_magnetic_torquer_dipole(
     commanded_torque: Vec3,
     magnetic_field: Vec3,
@@ -1568,6 +1891,63 @@ pub extern "C" fn space_magnetic_torquer_dipole(
         m *= max_dipole / mn;
     }
     write_out(out_dipole, vec3_from_rapier(m))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn space_apply_magnetic_torquer_to_body(
+    world: *mut WorldHandle,
+    body_handle: RigidBodyHandleRaw,
+    commanded_torque: Vec3,
+    magnetic_field: Vec3,
+    max_dipole: f64,
+    wake_up: Bool,
+    out_dipole: *mut Vec3,
+) -> Bool {
+    let Some(world) = (unsafe { world.as_mut() }) else {
+        set_error(ERR_NULL_POINTER, "world is null");
+        return Bool::FALSE;
+    };
+    let Some(body) = world
+        .inner
+        .bodies
+        .get_mut(unpack_rigid_body_handle(body_handle))
+    else {
+        set_error(ERR_NOT_FOUND, "body was not found");
+        return Bool::FALSE;
+    };
+    let mut dipole = Vec3::default();
+    if space_magnetic_torquer_dipole(commanded_torque, magnetic_field, max_dipole, &mut dipole)
+        == Bool::FALSE
+    {
+        return Bool::FALSE;
+    }
+    let torque = cross(vec3_to_rapier(dipole), vec3_to_rapier(magnetic_field));
+    body.add_torque(torque, wake_up.0 != 0);
+    write_optional_out(out_dipole, dipole);
+    clear_error();
+    Bool::TRUE
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn space_apply_magnetic_torquer_to_body_flag(
+    world: *mut WorldHandle,
+    body_handle: RigidBodyHandleRaw,
+    commanded_torque: Vec3,
+    magnetic_field: Vec3,
+    max_dipole: f64,
+    wake_up: Bool,
+    out_dipole: *mut Vec3,
+) -> u8 {
+    space_apply_magnetic_torquer_to_body(
+        world,
+        body_handle,
+        commanded_torque,
+        magnetic_field,
+        max_dipole,
+        wake_up,
+        out_dipole,
+    )
+    .0
 }
 
 #[unsafe(no_mangle)]
@@ -2043,5 +2423,154 @@ mod tests {
             Bool::TRUE
         );
         assert!(airlock.pressure < 101_325.0);
+    }
+
+    #[test]
+    fn space_formulas_apply_to_rapier_body() {
+        let world = crate::rapier::world::world_create(Vec3::default());
+        let builder = crate::rapier::rigid_body::rigid_body_builder_create(
+            crate::rapier::ffi::BodyStatus::Dynamic as u32,
+        );
+        crate::rapier::rigid_body::rigid_body_builder_set_translation(
+            builder,
+            Vec3 {
+                x: 7_000_000.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        crate::rapier::rigid_body::rigid_body_builder_set_linvel(
+            builder,
+            Vec3 {
+                x: 7_500.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        crate::rapier::rigid_body::rigid_body_builder_set_additional_mass(builder, 1.0);
+        let body = crate::rapier::rigid_body::rigid_body_builder_build(builder);
+        let handle = crate::rapier::rigid_body::world_insert_rigid_body(world, body);
+
+        let mut j2 = Vec3::default();
+        assert_eq!(
+            space_apply_j2_force_to_body(
+                world,
+                handle,
+                3.986_004_418e14,
+                6_378_137.0,
+                1.082_626_68e-3,
+                1.0,
+                Bool::TRUE,
+                &mut j2,
+            ),
+            Bool::TRUE
+        );
+        assert!(j2.x < 0.0);
+
+        let mut drag = Vec3::default();
+        assert_eq!(
+            space_apply_atmospheric_drag_to_body(
+                world,
+                handle,
+                Vec3::default(),
+                1.0e-12,
+                2.2,
+                1.0,
+                1.0,
+                Bool::TRUE,
+                &mut drag,
+            ),
+            Bool::TRUE
+        );
+        assert!(drag.x < 0.0);
+
+        let mut srp = Vec3::default();
+        assert_eq!(
+            space_apply_solar_radiation_pressure_to_body(
+                world,
+                handle,
+                Vec3 {
+                    x: 1.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                1361.0,
+                1.2,
+                2.0,
+                1.0,
+                Bool::TRUE,
+                &mut srp,
+            ),
+            Bool::TRUE
+        );
+        assert!(srp.x > 0.0);
+
+        let mut gravity_gradient = Vec3::default();
+        assert_eq!(
+            space_apply_gravity_gradient_torque_to_body(
+                world,
+                handle,
+                Vec3 {
+                    x: 1.0,
+                    y: 2.0,
+                    z: 3.0,
+                },
+                3.986_004_418e14,
+                Bool::TRUE,
+                &mut gravity_gradient,
+            ),
+            Bool::TRUE
+        );
+
+        let mut magnetic_dipole = Vec3::default();
+        assert_eq!(
+            space_apply_magnetic_torquer_to_body(
+                world,
+                handle,
+                Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 1.0,
+                },
+                Vec3 {
+                    x: 1.0e-5,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                10.0,
+                Bool::TRUE,
+                &mut magnetic_dipole,
+            ),
+            Bool::TRUE
+        );
+        assert!(magnetic_dipole.y.abs() > 0.0);
+
+        let mut exchange = CmgExchange::default();
+        assert_eq!(
+            space_apply_cmg_torque_to_body(
+                world,
+                handle,
+                Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 1.0,
+                },
+                Vec3 {
+                    x: 1.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                0.5,
+                Bool::TRUE,
+                &mut exchange,
+            ),
+            Bool::TRUE
+        );
+        assert!(exchange.body_torque.y.abs() > 0.0);
+
+        crate::rapier::world::world_step(world, 1.0 / 60.0);
+        let velocity = crate::rapier::rigid_body::rigid_body_get_linvel(world, handle);
+        assert!(velocity.x.is_finite());
+        crate::rapier::world::world_destroy(world);
     }
 }

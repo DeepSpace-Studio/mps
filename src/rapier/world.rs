@@ -1,7 +1,8 @@
 use rapier3d::prelude::{
-    BroadPhaseBvh, CCDSolver, ColliderSet, ImpulseJointSet, IntegrationParameters, IslandManager,
-    MultibodyJointSet, NarrowPhase, PhysicsPipeline, RigidBodySet, Vector,
+    ActiveHooks, BroadPhaseBvh, CCDSolver, ColliderSet, ImpulseJointSet, IntegrationParameters,
+    IslandManager, MultibodyJointSet, NarrowPhase, PhysicsPipeline, RigidBodySet, Vector,
 };
+use std::sync::Arc;
 
 use crate::rapier::error::{
     ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, clear_error, set_error,
@@ -27,7 +28,7 @@ pub(crate) struct PhysicsWorld {
     pub(crate) multibody_joints: MultibodyJointSet,
     pub(crate) ccd_solver: CCDSolver,
     pub(crate) hooks: crate::rapier::events::CallbackPhysicsHooks,
-    pub(crate) events: crate::rapier::events::CollectingEventHandler,
+    pub(crate) events: Arc<crate::rapier::events::CollectingEventHandler>,
 }
 
 impl PhysicsWorld {
@@ -37,6 +38,7 @@ impl PhysicsWorld {
         integration_parameters.num_solver_iterations = 4;
         integration_parameters.max_ccd_substeps = 4;
 
+        let events = Arc::new(crate::rapier::events::CollectingEventHandler::default());
         Self {
             pipeline: PhysicsPipeline::new(),
             gravity: vec3_to_rapier(gravity),
@@ -49,8 +51,8 @@ impl PhysicsWorld {
             impulse_joints: ImpulseJointSet::new(),
             multibody_joints: MultibodyJointSet::new(),
             ccd_solver: CCDSolver::new(),
-            hooks: crate::rapier::events::CallbackPhysicsHooks::default(),
-            events: crate::rapier::events::CollectingEventHandler::default(),
+            hooks: crate::rapier::events::CallbackPhysicsHooks::new(events.clone()),
+            events,
         }
     }
 }
@@ -89,6 +91,19 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
     }
 
     world.inner.integration_parameters.dt = delta_seconds;
+    if world
+        .inner
+        .events
+        .custom_physics()
+        .coulomb_friction
+        .is_some_and(|law| law.enabled.0 != 0)
+    {
+        for (_, collider) in world.inner.colliders.iter_mut() {
+            collider
+                .set_active_hooks(collider.active_hooks() | ActiveHooks::MODIFY_SOLVER_CONTACTS);
+        }
+    }
+    crate::rapier::events::apply_custom_external_forces(&mut world.inner);
     world.inner.pipeline.step(
         world.inner.gravity,
         &world.inner.integration_parameters,
@@ -101,7 +116,7 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
         &mut world.inner.multibody_joints,
         &mut world.inner.ccd_solver,
         &world.inner.hooks,
-        &world.inner.events,
+        &*world.inner.events,
     );
 }
 
