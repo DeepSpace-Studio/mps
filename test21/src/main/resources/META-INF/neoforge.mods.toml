@@ -1,0 +1,19 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="All Rights Reserved"
+
+[[mods]]
+modId="mps_rigid_body"
+version="${mod_version}"
+displayName="${mod_name}"
+authors="Polaris Stars"
+description='''
+JNI-backed rigid body test mod.
+'''
+
+[[dependencies.mps_rigid_body]]
+modId="neoforge"
+type="required"
+versionRange="[${neo_forge_version},)"
+ordering="NONE"
+side="BOTH"

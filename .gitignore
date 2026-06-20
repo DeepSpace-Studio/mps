@@ -22,3 +22,5 @@ target
 
 **/.gradle/
 **/build/
+
+**/runs/

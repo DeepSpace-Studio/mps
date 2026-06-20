@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 
-use crate::rapier::ffi::{AabbDesc, Bool, CRbTreeHandle, Vec3};
+use crate::rapier::ffi::{
+    AabbDesc, Bool, CRbTreeHandle, MAX_OUTPUT_CAPACITY, MAX_TREE_ENTRIES, Vec3,
+};
 
 #[derive(Clone, Copy, Debug)]
 struct Aabb {
@@ -51,6 +53,9 @@ impl CRbTreeIndex {
 
     fn insert(&mut self, id: u64, bounds: Aabb) -> bool {
         if id == 0 {
+            return false;
+        }
+        if !self.entries.contains_key(&id) && self.entries.len() >= MAX_TREE_ENTRIES {
             return false;
         }
         self.entries.insert(id, bounds);
@@ -126,6 +131,11 @@ pub extern "C" fn crb_tree_insert(tree: *mut CRbTreeHandle, id: u64, aabb: AabbD
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn crb_tree_insert_flag(tree: *mut CRbTreeHandle, id: u64, aabb: AabbDesc) -> u8 {
+    crb_tree_insert(tree, id, aabb).0
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn crb_tree_update(tree: *mut CRbTreeHandle, id: u64, aabb: AabbDesc) -> Bool {
     let Some(tree) = (unsafe { tree.as_mut() }) else {
         return Bool::FALSE;
@@ -168,7 +178,7 @@ pub extern "C" fn crb_tree_query_aabb(
     let Some(tree) = (unsafe { tree.as_ref() }) else {
         return 0;
     };
-    if out_ids.is_null() || capacity == 0 {
+    if out_ids.is_null() || capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
         return 0;
     }
     let Some(bounds) = Aabb::from_desc(aabb) else {

@@ -1,10 +1,13 @@
 use std::slice;
 
 use rapier3d::prelude::{ColliderBuilder, Vector};
+use smallvec::{SmallVec, smallvec};
 
-use crate::rapier::ffi::{ColliderBuilderHandle, KdopPreset};
+use crate::rapier::ffi::{ColliderBuilderHandle, KdopPreset, kdop_preset_from_raw};
 
 const EPSILON: f64 = 1.0e-9;
+const MAX_RAW_POINTS: u32 = 1_000_000;
+const MAX_RAW_DIRECTIONS: u32 = 4_096;
 
 #[derive(Clone, Copy)]
 struct Slab {
@@ -22,7 +25,7 @@ trait DirectionHull {
 }
 
 struct KdopHull {
-    directions: Vec<Vector>,
+    directions: SmallVec<[Vector; 13]>,
 }
 
 impl DirectionHull for KdopHull {
@@ -46,15 +49,19 @@ fn normalize_direction(direction: Vector) -> Option<Vector> {
     (len > EPSILON).then_some(direction / len)
 }
 
-fn read_vectors(values: &[f64]) -> Vec<Vector> {
-    values
-        .chunks_exact(3)
-        .map(|chunk| Vector::new(chunk[0], chunk[1], chunk[2]))
-        .collect()
+fn read_vectors(values: &[f64]) -> Option<SmallVec<[Vector; 32]>> {
+    let mut vectors = SmallVec::with_capacity(values.len() / 3);
+    for chunk in values.chunks_exact(3) {
+        if !chunk[0].is_finite() || !chunk[1].is_finite() || !chunk[2].is_finite() {
+            return None;
+        }
+        vectors.push(Vector::new(chunk[0], chunk[1], chunk[2]));
+    }
+    Some(vectors)
 }
 
-fn kdop_directions(preset: KdopPreset) -> Vec<Vector> {
-    let mut directions = vec![
+fn kdop_directions(preset: KdopPreset) -> SmallVec<[Vector; 13]> {
+    let mut directions: SmallVec<[Vector; 13]> = smallvec![
         Vector::new(1.0, 0.0, 0.0),
         Vector::new(0.0, 1.0, 0.0),
         Vector::new(0.0, 0.0, 1.0),
@@ -88,8 +95,8 @@ fn kdop_directions(preset: KdopPreset) -> Vec<Vector> {
         .collect()
 }
 
-fn slabs_from_points(points: &[Vector], directions: &[Vector]) -> Option<Vec<Slab>> {
-    let mut slabs = Vec::new();
+fn slabs_from_points(points: &[Vector], directions: &[Vector]) -> Option<SmallVec<[Slab; 16]>> {
+    let mut slabs = SmallVec::<[Slab; 16]>::new();
     for direction in directions {
         let Some(normal) = normalize_direction(*direction) else {
             continue;
@@ -128,7 +135,7 @@ fn contains_point(slabs: &[Slab], point: Vector) -> bool {
     })
 }
 
-fn push_unique(points: &mut Vec<Vector>, point: Vector) {
+fn push_unique(points: &mut SmallVec<[Vector; 32]>, point: Vector) {
     if points
         .iter()
         .any(|existing| (*existing - point).length_squared() <= 1.0e-12)
@@ -145,13 +152,13 @@ fn build_direction_hull(points: &[Vector], directions: &[Vector]) -> Option<Coll
     }
 
     let slabs = slabs_from_points(points, directions)?;
-    let mut planes = Vec::with_capacity(slabs.len() * 2);
+    let mut planes = SmallVec::<[(Vector, f64); 32]>::with_capacity(slabs.len() * 2);
     for slab in &slabs {
         planes.push((slab.normal, slab.max));
         planes.push((-slab.normal, -slab.min));
     }
 
-    let mut vertices = Vec::new();
+    let mut vertices = SmallVec::<[Vector; 32]>::new();
     for i in 0..planes.len() {
         for j in (i + 1)..planes.len() {
             for k in (j + 1)..planes.len() {
@@ -173,30 +180,33 @@ fn build_direction_hull(points: &[Vector], directions: &[Vector]) -> Option<Coll
         }
     }
 
-    ColliderBuilder::convex_hull(&vertices)
+    ColliderBuilder::convex_hull(vertices.as_slice())
 }
 
-fn builder_from_raw_points(points_xyz: *const f64, point_count: u32) -> Option<Vec<Vector>> {
-    if points_xyz.is_null() || point_count < 4 {
+fn builder_from_raw_points(
+    points_xyz: *const f64,
+    point_count: u32,
+) -> Option<SmallVec<[Vector; 32]>> {
+    if points_xyz.is_null() || point_count < 4 || point_count > MAX_RAW_POINTS {
         return None;
     }
     let value_count = (point_count as usize).checked_mul(3)?;
     let values = unsafe { slice::from_raw_parts(points_xyz, value_count) };
-    Some(read_vectors(values))
+    read_vectors(values)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_kdop(
     points_xyz: *const f64,
     point_count: u32,
-    preset: KdopPreset,
+    preset: u32,
 ) -> *mut ColliderBuilderHandle {
     let Some(points) = builder_from_raw_points(points_xyz, point_count) else {
         return std::ptr::null_mut();
     };
 
     let hull = KdopHull {
-        directions: kdop_directions(preset),
+        directions: kdop_directions(kdop_preset_from_raw(preset)),
     };
     let Some(builder) = hull.build(&points) else {
         return std::ptr::null_mut();
@@ -215,7 +225,7 @@ pub extern "C" fn collider_builder_create_fdh(
     let Some(points) = builder_from_raw_points(points_xyz, point_count) else {
         return std::ptr::null_mut();
     };
-    if directions_xyz.is_null() || direction_count < 3 {
+    if directions_xyz.is_null() || direction_count < 3 || direction_count > MAX_RAW_DIRECTIONS {
         return std::ptr::null_mut();
     }
 
@@ -223,7 +233,9 @@ pub extern "C" fn collider_builder_create_fdh(
         return std::ptr::null_mut();
     };
     let direction_values = unsafe { slice::from_raw_parts(directions_xyz, direction_value_count) };
-    let directions = read_vectors(direction_values);
+    let Some(directions) = read_vectors(direction_values) else {
+        return std::ptr::null_mut();
+    };
     let hull = FdhHull {
         directions: &directions,
     };
@@ -238,8 +250,8 @@ pub extern "C" fn collider_builder_create_fdh(
 mod tests {
     use super::*;
 
-    fn cube_points() -> Vec<Vector> {
-        let mut points = Vec::new();
+    fn cube_points() -> SmallVec<[Vector; 8]> {
+        let mut points = SmallVec::new();
         for x in [-1.0, 1.0] {
             for y in [-1.0, 1.0] {
                 for z in [-1.0, 1.0] {

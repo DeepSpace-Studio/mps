@@ -1,4 +1,7 @@
-use crate::rapier::ffi::{AabbDesc, Bool, RTreeHandle, Vec3};
+use crate::rapier::ffi::{
+    AabbDesc, Bool, MAX_OUTPUT_CAPACITY, MAX_TREE_ENTRIES, RTreeHandle, Vec3,
+};
+use smallvec::SmallVec;
 
 const MAX_CHILDREN: usize = 8;
 
@@ -77,7 +80,7 @@ struct Entry {
 
 #[derive(Clone, Debug)]
 enum NodeKind {
-    Leaf(Vec<Entry>),
+    Leaf(SmallVec<[Entry; MAX_CHILDREN]>),
     Branch(Vec<Node>),
 }
 
@@ -116,6 +119,9 @@ impl RTreeIndex {
         if let Some(entry) = self.entries.iter_mut().find(|entry| entry.id == id) {
             entry.bounds = bounds;
         } else {
+            if self.entries.len() >= MAX_TREE_ENTRIES {
+                return false;
+            }
             self.entries.push(Entry { id, bounds });
         }
         self.dirty = true;
@@ -135,7 +141,7 @@ impl RTreeIndex {
         if !self.dirty {
             return;
         }
-        self.root = build_node(self.entries.clone());
+        self.root = build_node(&mut self.entries);
         self.dirty = false;
     }
 
@@ -183,26 +189,27 @@ fn longest_axis(bounds: Aabb) -> usize {
     }
 }
 
-fn build_node(mut entries: Vec<Entry>) -> Option<Node> {
+fn build_node(entries: &mut [Entry]) -> Option<Node> {
     let bounds = entries_bounds(&entries)?;
     if entries.len() <= MAX_CHILDREN {
         return Some(Node {
             bounds,
-            kind: NodeKind::Leaf(entries),
+            kind: NodeKind::Leaf(entries.iter().copied().collect()),
         });
     }
 
     let axis = longest_axis(bounds);
-    entries.sort_by(|a, b| {
+    entries.sort_unstable_by(|a, b| {
         a.bounds
             .center_axis(axis)
             .total_cmp(&b.bounds.center_axis(axis))
             .then_with(|| a.id.cmp(&b.id))
     });
 
-    let mut children = Vec::new();
-    for chunk in entries.chunks(MAX_CHILDREN) {
-        if let Some(child) = build_node(chunk.to_vec()) {
+    let child_count = entries.len().div_ceil(MAX_CHILDREN);
+    let mut children = Vec::with_capacity(child_count);
+    for chunk in entries.chunks_mut(MAX_CHILDREN) {
+        if let Some(child) = build_node(chunk) {
             children.push(child);
         }
     }
@@ -353,7 +360,7 @@ pub extern "C" fn rtree_query_aabb(
     let Some(tree) = (unsafe { tree.as_mut() }) else {
         return 0;
     };
-    if out_ids.is_null() || capacity == 0 {
+    if out_ids.is_null() || capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
         return 0;
     }
     let Some(bounds) = Aabb::from_desc(aabb) else {

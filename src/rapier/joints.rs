@@ -5,9 +5,16 @@ use rapier3d::prelude::{
 
 use crate::rapier::ffi::{
     Bool, ImpulseJointHandleRaw, JointAxisDesc, JointBuilderHandle, JointTypeDesc,
-    RigidBodyHandleRaw, Vec3, WorldHandle, joint_axis_to_rapier, pack_impulse_joint_handle,
-    unpack_impulse_joint_handle, unpack_rigid_body_handle, vec3_to_rapier,
+    RigidBodyHandleRaw, Vec3, WorldHandle, joint_axis_from_raw, joint_axis_to_rapier,
+    joint_type_from_raw, pack_impulse_joint_handle, unpack_impulse_joint_handle,
+    unpack_rigid_body_handle, vec3_finite, vec3_to_rapier,
 };
+
+const EPSILON: f64 = 1.0e-9;
+
+fn valid_axis(axis: Vec3) -> bool {
+    vec3_finite(axis) && (axis.x * axis.x + axis.y * axis.y + axis.z * axis.z) > EPSILON
+}
 
 pub(crate) enum JointBuilderKind {
     Fixed(FixedJointBuilder),
@@ -152,21 +159,39 @@ impl JointBuilderKind {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn joint_builder_create(
-    joint_type: JointTypeDesc,
+    joint_type: u32,
     axis_or_primary: Vec3,
     b: f64,
     c: f64,
 ) -> *mut JointBuilderHandle {
+    if !vec3_finite(axis_or_primary) || !b.is_finite() || !c.is_finite() {
+        return std::ptr::null_mut();
+    }
+    let joint_type = joint_type_from_raw(joint_type);
     let inner = match joint_type {
         JointTypeDesc::Fixed => JointBuilderKind::Fixed(FixedJointBuilder::new()),
         JointTypeDesc::Revolute => {
+            if !valid_axis(axis_or_primary) {
+                return std::ptr::null_mut();
+            }
             JointBuilderKind::Revolute(RevoluteJointBuilder::new(vec3_to_rapier(axis_or_primary)))
         }
         JointTypeDesc::Prismatic => {
+            if !valid_axis(axis_or_primary) {
+                return std::ptr::null_mut();
+            }
             JointBuilderKind::Prismatic(PrismaticJointBuilder::new(vec3_to_rapier(axis_or_primary)))
         }
-        JointTypeDesc::Rope => JointBuilderKind::Rope(RopeJointBuilder::new(b)),
+        JointTypeDesc::Rope => {
+            if b < 0.0 {
+                return std::ptr::null_mut();
+            }
+            JointBuilderKind::Rope(RopeJointBuilder::new(b))
+        }
         JointTypeDesc::Spring => {
+            if b < 0.0 || c < 0.0 {
+                return std::ptr::null_mut();
+            }
             JointBuilderKind::Spring(SpringJointBuilder::new(axis_or_primary.x, b, c))
         }
         JointTypeDesc::Spherical => JointBuilderKind::Spherical(SphericalJointBuilder::new()),
@@ -202,6 +227,9 @@ pub extern "C" fn joint_builder_set_local_anchor1(builder: *mut JointBuilderHand
     let Some(builder) = (unsafe { builder.as_mut() }) else {
         return;
     };
+    if !vec3_finite(anchor) {
+        return;
+    }
     builder.inner.set_local_anchor1(vec3_to_rapier(anchor));
 }
 
@@ -210,39 +238,52 @@ pub extern "C" fn joint_builder_set_local_anchor2(builder: *mut JointBuilderHand
     let Some(builder) = (unsafe { builder.as_mut() }) else {
         return;
     };
+    if !vec3_finite(anchor) {
+        return;
+    }
     builder.inner.set_local_anchor2(vec3_to_rapier(anchor));
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn joint_builder_set_limits(
     builder: *mut JointBuilderHandle,
-    axis: JointAxisDesc,
+    axis: u32,
     min: f64,
     max: f64,
 ) {
     let Some(builder) = (unsafe { builder.as_mut() }) else {
         return;
     };
-    builder.inner.set_limits(axis, min, max);
+    if !min.is_finite() || !max.is_finite() || min > max {
+        return;
+    }
+    builder
+        .inner
+        .set_limits(joint_axis_from_raw(axis), min, max);
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn joint_builder_set_motor_velocity(
     builder: *mut JointBuilderHandle,
-    axis: JointAxisDesc,
+    axis: u32,
     target_vel: f64,
     factor: f64,
 ) {
     let Some(builder) = (unsafe { builder.as_mut() }) else {
         return;
     };
-    builder.inner.set_motor_velocity(axis, target_vel, factor);
+    if !target_vel.is_finite() || !factor.is_finite() || factor < 0.0 {
+        return;
+    }
+    builder
+        .inner
+        .set_motor_velocity(joint_axis_from_raw(axis), target_vel, factor);
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn joint_builder_set_motor_position(
     builder: *mut JointBuilderHandle,
-    axis: JointAxisDesc,
+    axis: u32,
     target_pos: f64,
     stiffness: f64,
     damping: f64,
@@ -250,9 +291,17 @@ pub extern "C" fn joint_builder_set_motor_position(
     let Some(builder) = (unsafe { builder.as_mut() }) else {
         return;
     };
+    if !target_pos.is_finite()
+        || !stiffness.is_finite()
+        || !damping.is_finite()
+        || stiffness < 0.0
+        || damping < 0.0
+    {
+        return;
+    }
     builder
         .inner
-        .set_motor_position(axis, target_pos, stiffness, damping);
+        .set_motor_position(joint_axis_from_raw(axis), target_pos, stiffness, damping);
 }
 
 fn build_and_insert(
@@ -315,14 +364,12 @@ pub extern "C" fn world_insert_impulse_joint(
     let Some(world) = (unsafe { world.as_mut() }) else {
         return 0;
     };
-    let Some(builder) = (unsafe { builder.as_mut() }) else {
+    if builder.is_null() {
         return 0;
-    };
+    }
 
-    let joint = std::mem::replace(
-        &mut builder.inner,
-        JointBuilderKind::Fixed(FixedJointBuilder::new()),
-    );
+    let builder = unsafe { Box::from_raw(builder) };
+    let JointBuilderHandle { inner: joint } = *builder;
     pack_impulse_joint_handle(build_and_insert(world, body1, body2, joint, wake_up.0 != 0))
 }
 

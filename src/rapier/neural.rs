@@ -2,10 +2,12 @@ use std::slice;
 
 use rapier3d::math::{Pose, Rotation, Vector};
 use rapier3d::prelude::{ColliderBuilder, SharedShape};
+use smallvec::SmallVec;
 
 use crate::rapier::ffi::{
-    ColliderBuilderHandle, ColliderHandleRaw, NeuralActivation, NeuralBoundsDesc, QueryFilterDesc,
-    WorldHandle, pack_collider_handle, quat_to_rapier, query_filter_from_desc,
+    ColliderBuilderHandle, ColliderHandleRaw, MAX_OUTPUT_CAPACITY, NeuralActivation,
+    NeuralBoundsDesc, QueryFilterDesc, WorldHandle, neural_activation_from_raw,
+    pack_collider_handle, quat_finite, quat_to_rapier, query_filter_from_desc, vec3_finite,
 };
 
 const EPSILON: f64 = 1.0e-9;
@@ -65,8 +67,8 @@ fn eval_layer(
     input: &[f64],
     output_width: usize,
     activation: NeuralActivation,
-) -> Option<Vec<f64>> {
-    let mut output = Vec::with_capacity(output_width);
+) -> Option<SmallVec<[f64; 32]>> {
+    let mut output = SmallVec::<[f64; 32]>::with_capacity(output_width);
     for _ in 0..output_width {
         let mut value = 0.0;
         for input_value in input {
@@ -95,10 +97,15 @@ fn eval_network(direction: Vector, desc: NeuralBoundsDesc, weights: &[f64]) -> O
         &mut reader,
         &[direction.x, direction.y, direction.z],
         hidden_width,
-        desc.activation,
+        neural_activation_from_raw(desc.activation),
     )?;
     for _ in 1..hidden_layers {
-        layer = eval_layer(&mut reader, &layer, hidden_width, desc.activation)?;
+        layer = eval_layer(
+            &mut reader,
+            &layer,
+            hidden_width,
+            neural_activation_from_raw(desc.activation),
+        )?;
     }
 
     let mut raw = 0.0;
@@ -114,7 +121,11 @@ fn normalized(value: Vector) -> Option<Vector> {
     (len > EPSILON).then_some(value / len)
 }
 
-fn push_obb_corners(points: &mut Vec<Vector>, desc: NeuralBoundsDesc, rotation: Rotation) {
+fn push_obb_corners(
+    points: &mut SmallVec<[Vector; 128]>,
+    desc: NeuralBoundsDesc,
+    rotation: Rotation,
+) {
     for x in [-desc.half_extents.x, desc.half_extents.x] {
         for y in [-desc.half_extents.y, desc.half_extents.y] {
             for z in [-desc.half_extents.z, desc.half_extents.z] {
@@ -124,10 +135,10 @@ fn push_obb_corners(points: &mut Vec<Vector>, desc: NeuralBoundsDesc, rotation: 
     }
 }
 
-fn sample_directions(resolution: u32) -> Vec<Vector> {
+fn sample_directions(resolution: u32) -> SmallVec<[Vector; 128]> {
     let rings = resolution.clamp(2, MAX_SAMPLE_RESOLUTION) as usize;
     let segments = rings * 2;
-    let mut directions = Vec::with_capacity((rings - 1) * segments + 6);
+    let mut directions = SmallVec::<[Vector; 128]>::with_capacity((rings - 1) * segments + 6);
 
     directions.extend([
         Vector::new(1.0, 0.0, 0.0),
@@ -156,7 +167,13 @@ fn sample_directions(resolution: u32) -> Vec<Vector> {
 }
 
 fn validate_desc(desc: NeuralBoundsDesc) -> Option<()> {
-    if desc.half_extents.x <= 0.0 || desc.half_extents.y <= 0.0 || desc.half_extents.z <= 0.0 {
+    if !vec3_finite(desc.center)
+        || !vec3_finite(desc.half_extents)
+        || !quat_finite(desc.rotation)
+        || desc.half_extents.x <= 0.0
+        || desc.half_extents.y <= 0.0
+        || desc.half_extents.z <= 0.0
+    {
         return None;
     }
     if desc.hidden_layers > MAX_HIDDEN_LAYERS || desc.hidden_width > MAX_HIDDEN_WIDTH {
@@ -175,7 +192,7 @@ fn validate_desc(desc: NeuralBoundsDesc) -> Option<()> {
     Some(())
 }
 
-fn neural_points(desc: NeuralBoundsDesc, weights: &[f64]) -> Option<Vec<Vector>> {
+fn neural_points(desc: NeuralBoundsDesc, weights: &[f64]) -> Option<SmallVec<[Vector; 128]>> {
     validate_desc(desc)?;
     let required = required_weight_count(desc.hidden_width as usize, desc.hidden_layers as usize)?;
     if weights.len() != required || !weights.iter().all(|value| value.is_finite()) {
@@ -183,7 +200,7 @@ fn neural_points(desc: NeuralBoundsDesc, weights: &[f64]) -> Option<Vec<Vector>>
     }
 
     let rotation = quat_to_rapier(desc.rotation);
-    let mut points = Vec::new();
+    let mut points = SmallVec::<[Vector; 128]>::new();
     push_obb_corners(&mut points, desc, rotation);
 
     for direction in sample_directions(desc.sample_resolution) {
@@ -200,7 +217,7 @@ fn neural_points(desc: NeuralBoundsDesc, weights: &[f64]) -> Option<Vec<Vector>>
 
 fn neural_shape(desc: NeuralBoundsDesc, weights: &[f64]) -> Option<(Pose, SharedShape)> {
     let points = neural_points(desc, weights)?;
-    let shape = SharedShape::convex_hull(&points)?;
+    let shape = SharedShape::convex_hull(points.as_slice())?;
     Some((
         Pose::from_parts(
             Vector::new(desc.center.x, desc.center.y, desc.center.z),
@@ -212,6 +229,9 @@ fn neural_shape(desc: NeuralBoundsDesc, weights: &[f64]) -> Option<(Pose, Shared
 
 fn weights_from_raw(weights: *const f64, weight_count: u32) -> Option<&'static [f64]> {
     if weights.is_null() {
+        return None;
+    }
+    if weight_count == 0 || weight_count > 1_048_576 {
         return None;
     }
     Some(unsafe { slice::from_raw_parts(weights, weight_count as usize) })
@@ -261,7 +281,7 @@ fn intersect_neural(
     let Some(world) = (unsafe { world.as_ref() }) else {
         return 0;
     };
-    if out_handles.is_null() || capacity == 0 {
+    if out_handles.is_null() || capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
         return 0;
     }
     let Some((pose, shape)) = neural_shape(desc, weights) else {
@@ -409,7 +429,7 @@ mod tests {
             sample_resolution: 8,
             hidden_width: 4,
             hidden_layers: 1,
-            activation: NeuralActivation::Relu,
+            activation: NeuralActivation::Relu as u32,
             output_scale: 0.1,
             padding: 0.02,
         }
@@ -436,7 +456,9 @@ mod tests {
     fn neural_bounds_query_intersects_inserted_collider() {
         let desc = desc();
         let weights = vec![0.0; neural_bounds_required_weight_count(4, 1) as usize];
-        let builder = crate::rapier::collider::collider_builder_build(collider_builder_create_neural_bounds(desc, weights.as_ptr(), weights.len() as u32));
+        let builder = crate::rapier::collider::collider_builder_build(
+            collider_builder_create_neural_bounds(desc, weights.as_ptr(), weights.len() as u32),
+        );
         assert!(!builder.is_null());
 
         let world = crate::rapier::world::world_create(Vec3::default());
@@ -458,7 +480,7 @@ mod tests {
             ),
             1
         );
-        
+
         crate::rapier::world::world_destroy(world);
     }
 }
