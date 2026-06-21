@@ -1,7 +1,7 @@
 use std::slice;
 
 use crate::rapier::error::{
-    ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error,
+    ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, ERR_UNSUPPORTED, clear_error, set_error,
 };
 use crate::rapier::ffi::{
     AcousticContactDesc, AcousticExcitationReport, AcousticMaterial, AcousticResonanceReport,
@@ -151,7 +151,12 @@ fn transform_generalized(stiffness: &[f64], mass_lower: &[f64], n: usize) -> Vec
     transformed
 }
 
-fn jacobi_eigen_symmetric(mut matrix: Vec<f64>, n: usize) -> (Vec<f64>, Vec<f64>) {
+fn jacobi_eigen_symmetric(mut matrix: Vec<f64>, n: usize) -> Option<(Vec<f64>, Vec<f64>)> {
+    if n > 200 {
+        // Jacobi O(n⁴) becomes prohibitive beyond 200 DOF.
+        // Caller should handle this fallback (e.g. use a different solver).
+        return None;
+    }
     let mut vectors = vec![0.0; n * n];
     for i in 0..n {
         vectors[matrix_index(i, i, n)] = 1.0;
@@ -217,7 +222,7 @@ fn jacobi_eigen_symmetric(mut matrix: Vec<f64>, n: usize) -> (Vec<f64>, Vec<f64>
     let values = (0..n)
         .map(|i| matrix[matrix_index(i, i, n)])
         .collect::<Vec<_>>();
-    (values, vectors)
+    Some((values, vectors))
 }
 
 #[unsafe(no_mangle)]
@@ -270,7 +275,12 @@ pub extern "C" fn acoustic_generalized_modal_analysis(
         return Bool::FALSE;
     };
     let transformed = transform_generalized(stiffness, &mass_lower, n);
-    let (eigenvalues, modal_vectors) = jacobi_eigen_symmetric(transformed, n);
+    let Some((eigenvalues, modal_vectors)) = jacobi_eigen_symmetric(transformed, n) else {
+        set_error(
+            ERR_UNSUPPORTED,
+            "Jacobi solver does not support n > 200; use a different eigensolver");
+        return Bool::FALSE;
+    };
     let mut order = (0..n).collect::<Vec<_>>();
     order.sort_by(|&a, &b| eigenvalues[a].total_cmp(&eigenvalues[b]));
 
