@@ -10,6 +10,8 @@ use crate::rapier::ffi::{
     RelativisticOrbitReport, RocheLimitReport, Vec3, vec3_finite, vec3_from_rapier, vec3_to_rapier,
 };
 
+use crate::rapier::math::{finite_non_negative, finite_positive};
+
 const MAX_NBODY_PARTICLES: u32 = 100_000;
 const SPEED_OF_LIGHT: f64 = 299_792_458.0;
 const EPSILON: f64 = 1.0e-12;
@@ -27,14 +29,6 @@ struct QuadNode {
     center_of_mass: Vector,
     particle: Option<usize>,
     children: [Option<usize>; 4],
-}
-
-fn finite_positive(value: f64) -> bool {
-    value.is_finite() && value > 0.0
-}
-
-fn finite_non_negative(value: f64) -> bool {
-    value.is_finite() && value >= 0.0
 }
 
 fn params_valid(params: NBodySolverParams) -> bool {
@@ -312,7 +306,7 @@ pub extern "C" fn astro_nbody_barnes_hut_accelerations(
         body_count: particle_count,
         ..NBodyForceReport::default()
     };
-    for i in 0..particles.len() {
+    for (i, out_item) in out.iter_mut().enumerate().take(particles.len()) {
         let mut approximate = 0;
         let mut direct = 0;
         let acceleration = bh_acceleration(
@@ -327,7 +321,7 @@ pub extern "C" fn astro_nbody_barnes_hut_accelerations(
         report.approximate_node_count += approximate;
         report.direct_pair_count += direct;
         report.max_acceleration = f64::max(report.max_acceleration, acceleration.length());
-        out[i] = vec3_from_rapier(acceleration);
+        *out_item = vec3_from_rapier(acceleration);
     }
     if let Some(out_report) = unsafe { out_report.as_mut() } {
         *out_report = report;

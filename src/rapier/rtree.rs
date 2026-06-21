@@ -80,7 +80,7 @@ struct Entry {
 
 #[derive(Clone, Debug)]
 enum NodeKind {
-    Leaf(SmallVec<[Entry; MAX_CHILDREN]>),
+    Leaf(Box<SmallVec<[Entry; MAX_CHILDREN]>>),
     Branch(Vec<Node>),
 }
 
@@ -190,11 +190,11 @@ fn longest_axis(bounds: Aabb) -> usize {
 }
 
 fn build_node(entries: &mut [Entry]) -> Option<Node> {
-    let bounds = entries_bounds(&entries)?;
+    let bounds = entries_bounds(entries)?;
     if entries.len() <= MAX_CHILDREN {
         return Some(Node {
             bounds,
-            kind: NodeKind::Leaf(entries.iter().copied().collect()),
+            kind: NodeKind::Leaf(Box::new(entries.iter().copied().collect())),
         });
     }
 
@@ -245,7 +245,7 @@ fn query_node(node: &Node, bounds: Aabb, out_ids: &mut [u64], written: &mut usiz
 
     match &node.kind {
         NodeKind::Leaf(entries) => {
-            for entry in entries {
+            for entry in entries.iter() {
                 if *written >= out_ids.len() {
                     return;
                 }

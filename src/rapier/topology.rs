@@ -8,16 +8,10 @@ use crate::rapier::ffi::{
     TopologyOptimizationReport,
 };
 
+use crate::rapier::math::{finite_non_negative, finite_positive};
+
 const MAX_DENSITY_CELLS: u32 = 2_000_000;
 const EPSILON: f64 = 1.0e-12;
-
-fn finite_non_negative(value: f64) -> bool {
-    value.is_finite() && value >= 0.0
-}
-
-fn finite_positive(value: f64) -> bool {
-    value.is_finite() && value > 0.0
-}
 
 fn params_valid(params: TopologyOptimizationParams) -> bool {
     params.volume_fraction.is_finite()

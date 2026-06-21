@@ -628,20 +628,12 @@ pub extern "C" fn sf_vortex_reconnection(
     let d1_len_sq = vec3_length_sq(d1);
     let d2_len_sq = vec3_length_sq(d2);
 
-    let closest_approach;
-
-    if d1_len_sq < EPSILON || d2_len_sq < EPSILON {
+    let closest_approach = if d1_len_sq < EPSILON || d2_len_sq < EPSILON {
         // Degenerate segments
         let c1 = seg1.start;
         let c2 = seg2.start;
-        closest_approach = vec3_length(vec3_sub(c1, c2));
+        vec3_length(vec3_sub(c1, c2))
     } else {
-        // Segment param: P(s) = A + s*(B-A), Q(t) = C + t*(D-C)
-        // Minimise |P(s) - Q(t)|²
-        let r = r; // A - C
-        let d1 = d1;
-        let d2 = d2;
-
         let a = vec3_dot(d1, d1);
         let b = vec3_dot(d1, d2);
         let c = vec3_dot(d2, d2);
@@ -661,8 +653,8 @@ pub extern "C" fn sf_vortex_reconnection(
 
         let p1 = vec3_add(seg1.start, vec3_scale(d1, s));
         let p2 = vec3_add(seg2.start, vec3_scale(d2, t));
-        closest_approach = vec3_length(vec3_sub(p1, p2));
-    }
+        vec3_length(vec3_sub(p1, p2))
+    };
 
     let reconnected = closest_approach < reconnection_distance;
 
@@ -1064,7 +1056,7 @@ mod tests {
         assert!(vel.z != 0.0);
         assert!(vel.x == 0.0 && vel.y == 0.0);
         // Speed should be positive (for positive circulation)
-        assert!(vel.z > 0.0 || true); // direction depends on quantum sign
+        assert!(vel.z != 0.0); // direction depends on quantum sign
     }
 
     #[test]

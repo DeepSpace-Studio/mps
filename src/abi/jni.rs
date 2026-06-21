@@ -1,15 +1,17 @@
 use crate::abi::ffm as abi;
-use crate::helper::helper::{jbytearray_to_array, jdoublearray_to_array};
+use crate::helper::{jbytearray_to_array, jdoublearray_to_array};
+#[cfg(feature = "anvilkit-bridge")]
+use crate::rapier::anvilkit as ak;
 use crate::rapier::ffi::{
-    AabbDesc, Bool, CRbTreeHandle as CRTH,
-    Capsule, CharacterCollision, CharacterControllerHandle as CCH, ColliderBuilderHandle as CBH,
-    ColliderHandleRaw as CRaw, CollisionEventRecord as CER, ContactForceEventRecord, Cylinder,
-    EffectiveCharacterMovement, Ellipsoid, HohmannTransfer,
-    ImpulseJointHandleRaw as JRaw, InteractionGroupsDesc, JointBuilderHandle as JBH,
-    NeuralBoundsDesc, Obb, PointProjection, Prism, Quat, QueryFilterDesc,
-    QuaternionDerivative, RTreeHandle as RTH, RayHit, RigidBodyBuilderHandle as RBH,
-    RigidBodyHandleRaw as RRaw, ScalarKalman, ShapeCastHit, ShapeCastOptionsDesc, ShapeDesc,
-    Sphere, SphericalShell, Ssv, Vec3, VoxelColliderOptions, WorldHandle as WH,
+    AabbDesc, Bool, CRbTreeHandle as CRTH, Capsule, CharacterCollision,
+    CharacterControllerHandle as CCH, ColliderBuilderHandle as CBH, ColliderHandleRaw as CRaw,
+    CollisionEventRecord as CER, ContactForceEventRecord, Cylinder, EffectiveCharacterMovement,
+    Ellipsoid, HohmannTransfer, ImpulseJointHandleRaw as JRaw, InteractionGroupsDesc,
+    JointBuilderHandle as JBH, NeuralBoundsDesc, Obb, PointProjection, Prism, Quat,
+    QuaternionDerivative, QueryFilterDesc, RTreeHandle as RTH, RayHit,
+    RigidBodyBuilderHandle as RBH, RigidBodyHandleRaw as RRaw, ScalarKalman, ShapeCastHit,
+    ShapeCastOptionsDesc, ShapeDesc, Sphere, SphericalShell, Ssv, Vec3, VoxelColliderOptions,
+    WorldHandle as WH,
 };
 #[cfg(feature = "anvilkit-bridge")]
 use crate::rapier::ffi::{
@@ -21,8 +23,6 @@ use crate::rapier::{
     error as er, events as ev, joints as jo, neural as neu, query as qu, rigid_body as rb,
     rtree as rt, spaceflight as sf, voxel as vx, world as wo,
 };
-#[cfg(feature = "anvilkit-bridge")]
-use crate::rapier::anvilkit as ak;
 use ljni::JNIEnv;
 use ljni::sys::{jbyte, jbyteArray, jclass, jdouble, jdoubleArray, jint, jlong, jstring};
 use rapier3d::prelude::{Collider as CB, RigidBody as RB};
@@ -85,6 +85,7 @@ fn aa(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn qfilter(
     flags: jint,
     memberships: jint,

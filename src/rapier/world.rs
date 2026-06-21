@@ -33,10 +33,12 @@ pub(crate) struct PhysicsWorld {
 
 impl PhysicsWorld {
     pub(crate) fn new(gravity: Vec3) -> Self {
-        let mut integration_parameters = IntegrationParameters::default();
-        integration_parameters.dt = 1.0 / 60.0;
-        integration_parameters.num_solver_iterations = 4;
-        integration_parameters.max_ccd_substeps = 4;
+        let integration_parameters = IntegrationParameters {
+            dt: 1.0 / 60.0,
+            num_solver_iterations: 4,
+            max_ccd_substeps: 4,
+            ..IntegrationParameters::default()
+        };
 
         let events = Arc::new(crate::rapier::events::CollectingEventHandler::default());
         Self {

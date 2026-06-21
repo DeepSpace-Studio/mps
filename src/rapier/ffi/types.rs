@@ -77,8 +77,9 @@ pub enum BodyStatus {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
 pub enum ShapeType {
+    #[default]
     Ball = 0,
     Cuboid = 1,
     CapsuleY = 2,
@@ -131,12 +132,6 @@ impl Default for VoxelColliderOptions {
             small_voxel_limit: 128,
             mesh_voxel_limit: 20_000,
         }
-    }
-}
-
-impl Default for ShapeType {
-    fn default() -> Self {
-        Self::Ball
     }
 }
 
@@ -281,18 +276,13 @@ pub struct SphericalShell {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
 pub enum NeuralActivation {
+    #[default]
     Relu = 0,
     Tanh = 1,
     Sin = 2,
     Linear = 3,
-}
-
-impl Default for NeuralActivation {
-    fn default() -> Self {
-        Self::Relu
-    }
 }
 
 #[repr(C)]
@@ -1399,10 +1389,22 @@ pub struct LengthContraction {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct LorentzBoost {
     /// 4x4 Lorentz boost matrix in row-major order acting on (ct, x, y, z)
-    pub m00: f64, pub m01: f64, pub m02: f64, pub m03: f64,
-    pub m10: f64, pub m11: f64, pub m12: f64, pub m13: f64,
-    pub m20: f64, pub m21: f64, pub m22: f64, pub m23: f64,
-    pub m30: f64, pub m31: f64, pub m32: f64, pub m33: f64,
+    pub m00: f64,
+    pub m01: f64,
+    pub m02: f64,
+    pub m03: f64,
+    pub m10: f64,
+    pub m11: f64,
+    pub m12: f64,
+    pub m13: f64,
+    pub m20: f64,
+    pub m21: f64,
+    pub m22: f64,
+    pub m23: f64,
+    pub m30: f64,
+    pub m31: f64,
+    pub m32: f64,
+    pub m33: f64,
 }
 
 #[repr(C)]

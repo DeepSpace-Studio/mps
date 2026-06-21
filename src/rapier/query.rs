@@ -149,9 +149,9 @@ pub extern "C" fn query_cast_rays(
     let rays = unsafe { std::slice::from_raw_parts(rays, ray_value_count) };
     let hits = unsafe { std::slice::from_raw_parts_mut(out_hits, capacity as usize) };
     let mut written = 0usize;
-    for index in 0..ray_count as usize {
+    for (index, hit) in hits.iter_mut().enumerate().take(ray_count as usize) {
         let offset = index * 6;
-        hits[index] = query_cast_ray(
+        *hit = query_cast_ray(
             world,
             Vec3 {
                 x: rays[offset],

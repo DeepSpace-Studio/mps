@@ -9,17 +9,11 @@ use crate::rapier::ffi::{
     ThermoelasticReport,
 };
 
+use crate::rapier::math::{finite_non_negative, finite_positive};
+
 const STEFAN_BOLTZMANN: f64 = 5.670_374_419e-8;
 const MAX_FEM_NODES: u32 = 1_000_000;
 const MAX_FEM_EDGES: u32 = 2_000_000;
-
-fn finite_non_negative(value: f64) -> bool {
-    value.is_finite() && value >= 0.0
-}
-
-fn finite_positive(value: f64) -> bool {
-    value.is_finite() && value > 0.0
-}
 
 fn material_valid(material: MaterialProperties) -> bool {
     finite_non_negative(material.density)

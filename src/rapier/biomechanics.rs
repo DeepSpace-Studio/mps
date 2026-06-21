@@ -4,15 +4,9 @@ use crate::rapier::ffi::{
     SkeletalJointLimit,
 };
 
+use crate::rapier::math::{finite_non_negative, finite_positive};
+
 const EPSILON: f64 = 1.0e-12;
-
-fn finite_non_negative(value: f64) -> bool {
-    value.is_finite() && value >= 0.0
-}
-
-fn finite_positive(value: f64) -> bool {
-    value.is_finite() && value > 0.0
-}
 
 fn muscle_desc_valid(desc: HillMuscleDesc) -> bool {
     finite_positive(desc.max_isometric_force)

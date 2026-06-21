@@ -1,0 +1,17 @@
+# clippy.toml — lint configuration for mps_rigid_body
+
+# Allow more arguments for FFI wrapper functions (JNI/C ABI bridge)
+too-many-arguments-threshold = 10
+
+# Large enum variant threshold — Box indirection for large variants is acceptable
+# but we only warn when the ratio is extreme
+enum-variant-size-threshold = 500
+
+# Cognitive complexity — FFI functions tend to have more validation branches
+cognitive-complexity-threshold = 50
+
+# Allow longer type names (physics report structs can be verbose)
+type-complexity-threshold = 500
+
+# Doc comments
+doc-valid-idents = ["FFI", "FFM", "JNI", "AABB", "OBB", "SSV", "CCD", "PID", "MPC", "SPH", "PIC", "FEM", "FDTD", "RK4", "SGP4", "DH", "CMG", "CW", "FDH", "kDOP", "CRbTree", "RTree", "GP", "SN"]

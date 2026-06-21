@@ -187,7 +187,7 @@ fn builder_from_raw_points(
     points_xyz: *const f64,
     point_count: u32,
 ) -> Option<SmallVec<[Vector; 32]>> {
-    if points_xyz.is_null() || point_count < 4 || point_count > MAX_RAW_POINTS {
+    if points_xyz.is_null() || !(4..=MAX_RAW_POINTS).contains(&point_count) {
         return None;
     }
     let value_count = (point_count as usize).checked_mul(3)?;
@@ -225,7 +225,7 @@ pub extern "C" fn collider_builder_create_fdh(
     let Some(points) = builder_from_raw_points(points_xyz, point_count) else {
         return std::ptr::null_mut();
     };
-    if directions_xyz.is_null() || direction_count < 3 || direction_count > MAX_RAW_DIRECTIONS {
+    if directions_xyz.is_null() || !(3..=MAX_RAW_DIRECTIONS).contains(&direction_count) {
         return std::ptr::null_mut();
     }
 
