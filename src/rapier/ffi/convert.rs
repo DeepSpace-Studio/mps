@@ -8,10 +8,9 @@ use rapier3d::prelude::{
 };
 
 use super::types::{
-    BodyStatus, ColliderHandleRaw, InteractionGroupsDesc, JointAxisDesc,
+    BodyStatus, ColliderHandleRaw, ImpulseJointHandleRaw, InteractionGroupsDesc, JointAxisDesc,
     JointTypeDesc, KdopPreset, NeuralActivation, Quat, QueryFilterDesc, RigidBodyHandleRaw,
     ShapeCastOptionsDesc, ShapeDesc, ShapeType, Vec3, VoxelColliderMode,
-    ImpulseJointHandleRaw,
 };
 
 pub(crate) const MAX_OUTPUT_CAPACITY: u32 = 1_000_000;

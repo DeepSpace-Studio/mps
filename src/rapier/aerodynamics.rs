@@ -33,6 +33,7 @@ fn compute_surface_force(
 
     let point = vec3_to_rapier(surface.point);
     let normal = vec3_to_rapier(surface.normal);
+    #[allow(clippy::question_mark)]
     let Some(unit_normal) = normal.try_normalize() else {
         return None;
     };

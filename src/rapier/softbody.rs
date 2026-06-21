@@ -10,17 +10,11 @@ use crate::rapier::ffi::{
     SoftSpring, SoftVolumeConstraint, Vec3, vec3_finite, vec3_from_rapier, vec3_to_rapier,
 };
 
+use crate::rapier::math::{finite_non_negative, finite_positive};
+
 const EPSILON: f64 = 1.0e-12;
 const MAX_PARTICLES: u32 = 2_000_000;
 const MAX_CONSTRAINTS: u32 = 2_000_000;
-
-fn finite_non_negative(value: f64) -> bool {
-    value.is_finite() && value >= 0.0
-}
-
-fn finite_positive(value: f64) -> bool {
-    value.is_finite() && value > 0.0
-}
 
 fn index_valid(index: u32, count: u32) -> bool {
     index < count

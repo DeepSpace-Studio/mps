@@ -15,6 +15,8 @@ use crate::rapier::ffi::{
     PicStepReport, PlasmaParamsReport, VlasovMomentReport,
 };
 
+use crate::rapier::math::{finite, finite_non_negative, finite_positive};
+
 const EPSILON: f64 = 1.0e-14;
 const MASS_EPSILON: f64 = 1.0e-30;
 const PI: f64 = std::f64::consts::PI;
@@ -28,18 +30,6 @@ const BOLTZMANN: f64 = 1.380_649e-23;
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-fn finite_positive(value: f64) -> bool {
-    value.is_finite() && value > 0.0
-}
-
-fn finite_non_negative(value: f64) -> bool {
-    value.is_finite() && value >= 0.0
-}
-
-fn finite(value: f64) -> bool {
-    value.is_finite()
-}
 
 fn write_out<T: Copy>(out: *mut T, value: T) -> Bool {
     let Some(out) = (unsafe { out.as_mut() }) else {
@@ -344,9 +334,9 @@ pub extern "C" fn pl_interpolate_field(
     let iy_f = (particle_y - origin_y) / cell_size;
     let iz_f = (particle_z - origin_z) / cell_size;
 
-    let ix = clamp(ix_f.floor() as f64, 0.0, (nx as f64) - 2.0) as usize;
-    let iy = clamp(iy_f.floor() as f64, 0.0, (ny as f64) - 2.0) as usize;
-    let iz = clamp(iz_f.floor() as f64, 0.0, (nz as f64) - 2.0) as usize;
+    let ix = clamp(ix_f.floor(), 0.0, (nx as f64) - 2.0) as usize;
+    let iy = clamp(iy_f.floor(), 0.0, (ny as f64) - 2.0) as usize;
+    let iz = clamp(iz_f.floor(), 0.0, (nz as f64) - 2.0) as usize;
 
     // Local coordinates within the cell [0, 1)
     let wx = ix_f - ix as f64;
@@ -1141,8 +1131,8 @@ mod tests {
         // φ should be symmetric (parabolic) with maximum at the centre
         assert!(phi[0] == 0.0);
         assert!(phi[n as usize - 1] == 0.0);
-        for i in 1..n as usize - 1 {
-            assert!(phi[i] > 0.0, "potential should be positive inside");
+        for val in phi.iter().take(n as usize - 1).skip(1) {
+            assert!(*val > 0.0, "potential should be positive inside");
         }
         // E-field should be anti-symmetric
         assert!((e[0] + e[n as usize - 1]).abs() < 1e-10 || e[0] * e[n as usize - 1] < 0.0);

@@ -10,18 +10,12 @@ use crate::rapier::ffi::{
     MagneticFluxReport, MaxwellPointReport, Vec3, vec3_finite, vec3_from_rapier, vec3_to_rapier,
 };
 
+use crate::rapier::math::{finite_non_negative, finite_positive};
+
 const EPSILON: f64 = 1.0e-12;
 const VACUUM_PERMITTIVITY: f64 = 8.854_187_812_8e-12;
 const VACUUM_PERMEABILITY: f64 = 1.256_637_062_12e-6;
 const MAX_FIELD_CELLS: u32 = 2_000_000;
-
-fn finite_non_negative(value: f64) -> bool {
-    value.is_finite() && value >= 0.0
-}
-
-fn finite_positive(value: f64) -> bool {
-    value.is_finite() && value > 0.0
-}
 
 fn field_valid(field: ElectromagneticField) -> bool {
     vec3_finite(field.electric) && vec3_finite(field.magnetic)

@@ -7,17 +7,12 @@ use crate::rapier::ffi::{
     Bool, MpcConfig, MpcReport, PidGains, PidReport, PidState, StateSpaceReport,
 };
 
+use crate::rapier::math::{finite, finite_positive};
+
 const MAX_STATE_COUNT: u32 = 64;
 const MAX_INPUT_COUNT: u32 = 32;
 const MAX_OUTPUT_COUNT: u32 = 64;
 const MAX_HORIZON: u32 = 64;
-fn finite(value: f64) -> bool {
-    value.is_finite()
-}
-
-fn finite_positive(value: f64) -> bool {
-    value.is_finite() && value > 0.0
-}
 
 fn vec_norm(values: &[f64]) -> f64 {
     values.iter().map(|value| value * value).sum::<f64>().sqrt()

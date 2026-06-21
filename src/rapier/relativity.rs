@@ -14,16 +14,10 @@ use crate::rapier::ffi::{
     RelativisticParticle, SchwarzschildMetric, Vec3, vec3_finite, vec3_from_rapier, vec3_to_rapier,
 };
 
+use crate::rapier::math::{finite_non_negative, finite_positive};
+
 const SPEED_OF_LIGHT: f64 = 299_792_458.0;
 const EPSILON: f64 = 1.0e-12;
-
-fn finite_positive(value: f64) -> bool {
-    value.is_finite() && value > 0.0
-}
-
-fn finite_non_negative(value: f64) -> bool {
-    value.is_finite() && value >= 0.0
-}
 
 fn write_out<T: Copy>(out: *mut T, value: T) -> Bool {
     let Some(out) = (unsafe { out.as_mut() }) else {

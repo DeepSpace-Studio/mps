@@ -20,6 +20,8 @@ use crate::rapier::ffi::{
     ThinFilmParams, YoungSlitPoint,
 };
 
+use crate::rapier::math::{finite, finite_non_negative, finite_positive};
+
 const EPSILON: f64 = 1.0e-14;
 const PI: f64 = std::f64::consts::PI;
 const TWO_PI: f64 = 2.0 * PI;
@@ -27,18 +29,6 @@ const TWO_PI: f64 = 2.0 * PI;
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-fn finite(value: f64) -> bool {
-    value.is_finite()
-}
-
-fn finite_positive(value: f64) -> bool {
-    value.is_finite() && value > 0.0
-}
-
-fn finite_non_negative(value: f64) -> bool {
-    value.is_finite() && value >= 0.0
-}
 
 fn write_out<T: Copy>(out: *mut T, value: T) -> Bool {
     let Some(out) = (unsafe { out.as_mut() }) else {
@@ -566,7 +556,7 @@ pub extern "C" fn wo_young_slit_pattern(
     let count = (num_points as usize).min(cap);
     let buf = unsafe { std::slice::from_raw_parts_mut(out_intensities, count) };
 
-    for i in 0..count {
+    for (i, buf_item) in buf.iter_mut().enumerate().take(count) {
         let frac = i as f64 / (count - 1).max(1) as f64;
         let x = x_min + frac * (x_max - x_min);
         let mut point = YoungSlitPoint::default();
@@ -574,7 +564,7 @@ pub extern "C" fn wo_young_slit_pattern(
             slit_separation, slit_width, screen_distance, wavelength,
             x, 0.0, &mut point,
         );
-        buf[i] = point.intensity;
+        *buf_item = point.intensity;
     }
 
     clear_error();
@@ -874,11 +864,9 @@ pub extern "C" fn wo_fresnel_grid(
 ///
 /// Returns a buffer of intensities corresponding to each wavelength.
 /// Already handled by `wo_thin_film_spectrum` above.
-
 // ===========================================================================
 // Tests
 // ===========================================================================
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1090,7 +1078,7 @@ mod tests {
         );
         assert_eq!(count, 3);
         for &i in intensities.iter() {
-            assert!(i >= 0.0 && i <= 1.0);
+            assert!((0.0..=1.0).contains(&i));
         }
     }
 

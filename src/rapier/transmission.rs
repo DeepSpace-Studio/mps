@@ -4,20 +4,10 @@ use crate::rapier::ffi::{
     ScrewConstraintDesc, ScrewConstraintReport, SpiralConstraintDesc, SpiralConstraintReport, Vec3,
 };
 
+use crate::rapier::math::{finite, finite_non_negative, finite_positive};
+
 const EPSILON: f64 = 1.0e-12;
 const TAU: f64 = std::f64::consts::TAU;
-
-fn finite(value: f64) -> bool {
-    value.is_finite()
-}
-
-fn finite_non_negative(value: f64) -> bool {
-    value.is_finite() && value >= 0.0
-}
-
-fn finite_positive(value: f64) -> bool {
-    value.is_finite() && value > 0.0
-}
 
 fn wrap_tau(angle: f64) -> f64 {
     angle.rem_euclid(TAU)

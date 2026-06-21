@@ -101,6 +101,7 @@ fn choose_mode(solid_count: usize, options: VoxelColliderOptions) -> VoxelCollid
     VoxelColliderMode::GreedyCuboids
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_cuboid(
     grid: &VoxelGrid<'_>,
     parts: &mut Vec<(Pose, SharedShape)>,

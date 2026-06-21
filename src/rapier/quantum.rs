@@ -3,16 +3,10 @@ use crate::rapier::ffi::{
     Bool, QuantumBarrier, QuantumOscillatorReport, QuantumTunnelingReport, QuantumWaveFunction,
 };
 
+use crate::rapier::math::{finite_non_negative, finite_positive};
+
 const EPSILON: f64 = 1.0e-12;
 const REDUCED_PLANCK: f64 = 1.054_571_817e-34;
-
-fn finite_non_negative(value: f64) -> bool {
-    value.is_finite() && value >= 0.0
-}
-
-fn finite_positive(value: f64) -> bool {
-    value.is_finite() && value > 0.0
-}
 
 fn effective_hbar(reduced_planck: f64) -> f64 {
     if reduced_planck == 0.0 {

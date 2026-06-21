@@ -20,20 +20,14 @@ use crate::rapier::ffi::{
     LorenzStepReport, LyapunovReport,
 };
 
+use crate::rapier::math::{finite, finite_positive};
+
 const EPSILON: f64 = 1.0e-14;
 const DIST_EPSILON: f64 = 1.0e-16;
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-fn finite(value: f64) -> bool {
-    value.is_finite()
-}
-
-fn finite_positive(value: f64) -> bool {
-    value.is_finite() && value > 0.0
-}
 
 fn write_out<T: Copy>(out: *mut T, value: T) -> Bool {
     let Some(out) = (unsafe { out.as_mut() }) else {
@@ -319,7 +313,7 @@ pub extern "C" fn chaos_lyapunov_lorenz(
         };
 
         // Re-normalise every renorm_every steps
-        if (step + 1) % (renorm_every as u32) == 0 {
+        if (step + 1) % renorm_every == 0 {
             let dx = pert_state.x - ref_state.x;
             let dy = pert_state.y - ref_state.y;
             let dz = pert_state.z - ref_state.z;
@@ -400,11 +394,7 @@ pub extern "C" fn chaos_lyapunov_rosenstein(
     let samples = unsafe { std::slice::from_raw_parts(data, n) };
 
     // Number of embedded vectors
-    let n_vectors = if n > (m - 1) * tau {
-        n - (m - 1) * tau
-    } else {
-        0
-    };
+    let n_vectors = n.saturating_sub((m - 1) * tau);
     if n_vectors < 2 {
         set_error(ERR_INVALID_ARGUMENT, "too few vectors for embedding");
         return Bool::FALSE;
@@ -1009,11 +999,7 @@ pub extern "C" fn chaos_detect(
     // ---- 2. Correlation dimension (Grassberger–Procaccia) ----
     let m = params.embedding_dim as usize;
     let tau = params.embedding_delay as usize;
-    let n_vectors = if effective_steps > (m - 1) * tau {
-        effective_steps - (m - 1) * tau
-    } else {
-        0
-    };
+    let n_vectors = effective_steps.saturating_sub((m - 1) * tau);
 
     let corr_dim = if n_vectors >= 4 {
         let radius = params.neighbourhood_radius;
@@ -1143,11 +1129,11 @@ pub extern "C" fn chaos_logistic_step(
         set_error(ERR_INVALID_ARGUMENT, "x and r must be finite");
         return Bool::FALSE;
     }
-    if x < 0.0 || x > 1.0 {
+    if !(0.0..=1.0).contains(&x) {
         set_error(ERR_INVALID_ARGUMENT, "x must be in [0, 1]");
         return Bool::FALSE;
     }
-    if r < 0.0 || r > 4.0 {
+    if !(0.0..=4.0).contains(&r) {
         set_error(ERR_INVALID_ARGUMENT, "r must be in [0, 4]");
         return Bool::FALSE;
     }
@@ -1174,7 +1160,7 @@ pub extern "C" fn chaos_logistic_iterate(
     if !finite(initial_x) || !finite(r) {
         return 0;
     }
-    if initial_x < 0.0 || initial_x > 1.0 || r < 0.0 || r > 4.0 {
+    if !(0.0..=1.0).contains(&initial_x) || !(0.0..=4.0).contains(&r) {
         set_error(ERR_INVALID_ARGUMENT, "x in [0,1], r in [0,4]");
         return 0;
     }
@@ -1220,7 +1206,7 @@ pub extern "C" fn chaos_logistic_bifurcation(
     if !finite(initial_x) || !finite(r_min) || !finite(r_max) {
         return 0;
     }
-    if initial_x < 0.0 || initial_x > 1.0 {
+    if !(0.0..=1.0).contains(&initial_x) {
         return 0;
     }
     if r_min < 0.0 || r_max > 4.0 || r_min > r_max {
@@ -1249,7 +1235,7 @@ pub extern "C" fn chaos_logistic_bifurcation(
             r_min
         };
 
-        if !finite(r) || r < 0.0 || r > 4.0 {
+        if !finite(r) || !(0.0..=4.0).contains(&r) {
             continue;
         }
 
@@ -1561,7 +1547,7 @@ mod tests {
         let count = chaos_logistic_iterate(0.5, 3.8, 10, data.as_mut_ptr(), 10);
         assert_eq!(count, 10);
         for &val in data.iter() {
-            assert!(val >= 0.0 && val <= 1.0);
+            assert!((0.0..=1.0).contains(&val));
         }
     }
 
@@ -1579,9 +1565,9 @@ mod tests {
         assert_eq!(count, 50); // 5 * 10
         // With 5 param steps from 2.5 to 4.0
         // Points should have parameters in that range
-        for i in 0..count as usize {
-            assert!(buf[i].parameter >= 2.5 - 1e-9);
-            assert!(buf[i].parameter <= 4.0 + 1e-9);
+        for point in buf.iter().take(count as usize) {
+            assert!(point.parameter >= 2.5 - 1e-9);
+            assert!(point.parameter <= 4.0 + 1e-9);
         }
     }
 

@@ -9,15 +9,9 @@ use crate::rapier::ffi::{
     vec3_to_rapier,
 };
 
+use crate::rapier::math::{finite_non_negative, finite_positive};
+
 const MAX_GRID_CELLS: u32 = 2_000_000;
-
-fn finite_non_negative(value: f64) -> bool {
-    value.is_finite() && value >= 0.0
-}
-
-fn finite_positive(value: f64) -> bool {
-    value.is_finite() && value > 0.0
-}
 
 fn params_valid(params: GrayScottParams) -> bool {
     finite_non_negative(params.diffusion_u)

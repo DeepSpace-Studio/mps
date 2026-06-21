@@ -8,7 +8,8 @@ use crate::rapier::ffi::{
     RigidBodyHandleRaw, ShapeDesc, Sphere, Vec3, WorldHandle, active_events_from_bits,
     active_hooks_from_bits, interaction_groups_to_rapier, isometry_from_parts,
     pack_collider_handle, quat_finite, quat_from_rapier, shape_desc_valid, shape_from_desc,
-    unpack_collider_handle, unpack_rigid_body_handle, vec3_from_rapier, vec3_to_rapier,
+    unpack_collider_handle, unpack_rigid_body_handle, vec3_finite, vec3_from_rapier,
+    vec3_to_rapier,
 };
 
 const MIN_HALF_EXTENT: f64 = 1.0e-9;
@@ -19,18 +20,6 @@ const MAX_SPHERE_COUNT: u32 = 1_000_000;
 
 fn default_builder(shape_desc: ShapeDesc) -> ColliderBuilder {
     ColliderBuilder::new(shape_from_desc(shape_desc))
-}
-
-fn valid_aabb(mins: Vec3, maxs: Vec3) -> bool {
-    mins.x.is_finite()
-        && mins.y.is_finite()
-        && mins.z.is_finite()
-        && maxs.x.is_finite()
-        && maxs.y.is_finite()
-        && maxs.z.is_finite()
-        && mins.x <= maxs.x
-        && mins.y <= maxs.y
-        && mins.z <= maxs.z
 }
 
 fn builder_from_aabb(mins: Vec3, maxs: Vec3) -> *mut ColliderBuilderHandle {
@@ -54,28 +43,16 @@ fn builder_from_aabb(mins: Vec3, maxs: Vec3) -> *mut ColliderBuilderHandle {
     }))
 }
 
-fn vec3_finite(value: Vec3) -> bool {
-    value.x.is_finite() && value.y.is_finite() && value.z.is_finite()
-}
-
-fn vec3_add(a: Vec3, b: Vec3) -> Vec3 {
-    Vec3 {
-        x: a.x + b.x,
-        y: a.y + b.y,
-        z: a.z + b.z,
-    }
-}
-
-fn vec3_sub(a: Vec3, b: Vec3) -> Vec3 {
-    Vec3 {
-        x: a.x - b.x,
-        y: a.y - b.y,
-        z: a.z - b.z,
-    }
-}
-
-fn vec3_len2(value: Vec3) -> f64 {
-    value.x * value.x + value.y * value.y + value.z * value.z
+fn valid_aabb(mins: Vec3, maxs: Vec3) -> bool {
+    mins.x.is_finite()
+        && mins.y.is_finite()
+        && mins.z.is_finite()
+        && maxs.x.is_finite()
+        && maxs.y.is_finite()
+        && maxs.z.is_finite()
+        && mins.x <= maxs.x
+        && mins.y <= maxs.y
+        && mins.z <= maxs.z
 }
 
 fn points_from_xyz(points_xyz: *const f64, point_count: u32) -> Option<Vec<Vec3>> {
@@ -306,9 +283,9 @@ pub extern "C" fn collider_builder_create_skewed_obb(
         || !vec3_finite(axis_x)
         || !vec3_finite(axis_y)
         || !vec3_finite(axis_z)
-        || vec3_len2(axis_x) <= MIN_HALF_EXTENT
-        || vec3_len2(axis_y) <= MIN_HALF_EXTENT
-        || vec3_len2(axis_z) <= MIN_HALF_EXTENT
+        || axis_x.x * axis_x.x + axis_x.y * axis_x.y + axis_x.z * axis_x.z <= MIN_HALF_EXTENT
+        || axis_y.x * axis_y.x + axis_y.y * axis_y.y + axis_y.z * axis_y.z <= MIN_HALF_EXTENT
+        || axis_z.x * axis_z.x + axis_z.y * axis_z.y + axis_z.z * axis_z.z <= MIN_HALF_EXTENT
     {
         return std::ptr::null_mut();
     }
@@ -317,14 +294,11 @@ pub extern "C" fn collider_builder_create_skewed_obb(
     for sx in [-1.0, 1.0] {
         for sy in [-1.0, 1.0] {
             for sz in [-1.0, 1.0] {
-                points.push(vec3_add(
-                    center,
-                    Vec3 {
-                        x: axis_x.x * sx + axis_y.x * sy + axis_z.x * sz,
-                        y: axis_x.y * sx + axis_y.y * sy + axis_z.y * sz,
-                        z: axis_x.z * sx + axis_y.z * sy + axis_z.z * sz,
-                    },
-                ));
+                points.push(Vec3 {
+                    x: center.x + axis_x.x * sx + axis_y.x * sy + axis_z.x * sz,
+                    y: center.y + axis_x.y * sx + axis_y.y * sy + axis_z.y * sz,
+                    z: center.z + axis_x.z * sx + axis_y.z * sy + axis_z.z * sz,
+                });
             }
         }
     }
@@ -430,7 +404,10 @@ pub extern "C" fn collider_builder_create_edge_bvh(
         let Some(b) = vertices.get(edge[1] as usize).copied() else {
             return std::ptr::null_mut();
         };
-        if vec3_len2(vec3_sub(b, a)) <= MIN_HALF_EXTENT {
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let dz = b.z - a.z;
+        if dx * dx + dy * dy + dz * dz <= MIN_HALF_EXTENT {
             continue;
         }
         parts.push((

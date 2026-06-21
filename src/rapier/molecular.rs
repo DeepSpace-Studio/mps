@@ -8,16 +8,10 @@ use crate::rapier::ffi::{
     WorldHandle, unpack_rigid_body_handle, vec3_finite, vec3_from_rapier, vec3_to_rapier,
 };
 
+use crate::rapier::math::{finite_non_negative, finite_positive};
+
 const EPSILON: f64 = 1.0e-12;
 const VACUUM_COULOMB_CONSTANT: f64 = 8.987_551_792_3e9;
-
-fn finite_non_negative(value: f64) -> bool {
-    value.is_finite() && value >= 0.0
-}
-
-fn finite_positive(value: f64) -> bool {
-    value.is_finite() && value > 0.0
-}
 
 fn particle_valid(particle: MolecularParticle) -> bool {
     vec3_finite(particle.position)

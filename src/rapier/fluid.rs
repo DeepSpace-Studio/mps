@@ -9,6 +9,8 @@ use crate::rapier::ffi::{
     vec3_from_rapier, vec3_to_rapier,
 };
 
+use crate::rapier::math::{finite_non_negative, finite_positive};
+
 const EPSILON: f64 = 1.0e-12;
 const PI: f64 = std::f64::consts::PI;
 
@@ -28,14 +30,6 @@ fn fluid_valid(fluid: FluidVolume) -> bool {
         && fluid.quadratic_drag >= 0.0
         && fluid.angular_drag.is_finite()
         && fluid.angular_drag >= 0.0
-}
-
-fn finite_positive(value: f64) -> bool {
-    value.is_finite() && value > 0.0
-}
-
-fn finite_non_negative(value: f64) -> bool {
-    value.is_finite() && value >= 0.0
 }
 
 fn clamp01(value: f64) -> f64 {

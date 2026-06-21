@@ -10,12 +10,10 @@ use crate::rapier::ffi::{
     NewmarkBetaParameters, NewmarkBetaReport, Vec3, vec3_finite, vec3_from_rapier, vec3_to_rapier,
 };
 
+use crate::rapier::math::finite_positive;
+
 const EPSILON: f64 = 1.0e-12;
 const MAX_DOF: u32 = 512;
-
-fn finite_positive(value: f64) -> bool {
-    value.is_finite() && value > 0.0
-}
 
 fn material_valid(material: MaterialProperties) -> bool {
     finite_positive(material.youngs_modulus)
