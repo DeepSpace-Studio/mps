@@ -32,6 +32,10 @@ fn to_jlong<T>(value: *mut T) -> jlong {
     value as isize as jlong
 }
 
+fn to_jint(value: usize) -> jlong {
+    value as jlong
+}
+
 fn m<T>(value: jlong) -> *mut T {
     value as isize as *mut T
 }
@@ -192,7 +196,7 @@ macro_rules! jni {
     (@default bool_array) => { std::ptr::null_mut() };
     ($ret:ident $method:ident ( $($kind:ident $arg:ident),* ) $body:block) => {
         #[unsafe(export_name = concat!(
-            "Java_org_polaris2023_msp_1rigid_1body_RigidBodyNative_",
+            "Java_org_polaris2023_mps_rapier_RapierNative_",
             stringify!($method)
         ))]
         #[allow(non_snake_case)]
@@ -225,7 +229,7 @@ macro_rules! jni_e_c {
     (@default bool_array) => { std::ptr::null_mut() };
     ($ret:ident $method:ident ( $($kind:ident $arg:ident),* ) $body:block) => {
         #[unsafe(export_name = concat!(
-            "Java_org_polaris2023_msp_1rigid_1body_RigidBodyNative_",
+            "Java_org_polaris2023_mps_rapier_RapierNative_",
             stringify!($method)
         ))]
         #[allow(non_snake_case)]
@@ -241,7 +245,7 @@ jni!(boolean abiSupportsJni() { abi::abi_supports_jni().0 as jbyte });
 jni!(int abiLastErrorCode() { er::last_error_code() as jint });
 jni!(void abiClearLastError() { er::last_error_clear(); });
 
-#[unsafe(export_name = "Java_org_polaris2023_msp_1rigid_1body_RigidBodyNative_abiLastErrorMessage")]
+#[unsafe(export_name = "Java_org_polaris2023_mps_rapier_RapierNative_abiLastErrorMessage")]
 #[allow(non_snake_case)]
 pub extern "system" fn abiLastErrorMessage(env: JNIEnv, _class: jclass) -> jstring {
     catch_unwind(AssertUnwindSafe(|| {
@@ -292,6 +296,7 @@ jni!(long worldCopyCollider(long world, long handle)  { col::world_copy_collider
 jni!(void colliderDestroyRaw(long collider) { col::collider_destroy_raw(m::<CB>(collider)); });
 
 jni!(long colliderBuilderCreate(int shape_type, double a, double b, double c) { to_jlong(col::collider_builder_create(self::shape_type(shape_type), v3(a, b, c))) });
+jni!(long colliderBuilderCreateHalfSpace(double nx, double ny, double nz) { to_jlong(col::collider_builder_create_halfspace(v3(nx, ny, nz))) });
 jni_e_c!(long colliderBuilderCreateHeightmap(env _env, class _class, double_array data, int data_x, int data_y, double scale_x, double scale_y, double scale_z) {
     let Some(values) = jdoublearray_to_array(&_env, data) else {
         return 0;
@@ -410,6 +415,7 @@ jni_e_c!(double_array colliderGetTranslation(env _env, class _class, long world,
 jni_e_c!(double_array colliderGetRotation(env _env, class _class, long world, long handle) { quat_to_j_double_array(_env, col::collider_get_rotation(cp::<WH>(world), handle as CRaw)) });
 jni!(void colliderGetTranslationOut(long world, long handle, long out_translation) { col::collider_get_translation_out(cp::<WH>(world), handle as CRaw, pm::<Vec3>(out_translation)); });
 jni!(void colliderGetRotationOut(long world, long handle, long out_rotation) { col::collider_get_rotation_out(cp::<WH>(world), handle as CRaw, pm::<Quat>(out_rotation)); });
+jni!(long colliderGetShapeSize(long world, long handle) { to_jint(col::collider_get_shape_count(cp::<WH>(world), handle as CRaw)) });
 jni!(boolean colliderSetPose(long world, long handle, double x, double y, double z, double qi, double qj, double qk, double qw) { col::collider_set_pose(m::<WH>(world), handle as CRaw, v3(x, y, z), qt(qi, qj, qk, qw)).0 as jbyte });
 jni!(boolean colliderSetSensor(long world, long handle, int sensor) { col::collider_set_sensor(m::<WH>(world), handle as CRaw, jb(sensor)).0 as jbyte });
 jni!(boolean colliderSetFriction(long world, long handle, double friction) { col::collider_set_friction(m::<WH>(world), handle as CRaw, friction).0 as jbyte });

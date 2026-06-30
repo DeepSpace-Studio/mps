@@ -2735,6 +2735,8 @@ uint32_t chaos_logistic_bifurcation(double initial_x,
 
 struct ColliderBuilderHandle *collider_builder_create(uint32_t shape_type, struct Vec3 shape_data);
 
+struct ColliderBuilderHandle *collider_builder_create_halfspace(struct Vec3 normal);
+
 struct ColliderBuilderHandle *collider_builder_create_ex(struct ShapeDesc shape_desc);
 
 struct ColliderBuilderHandle *collider_builder_create_obb(struct Obb obb);
@@ -2833,6 +2835,8 @@ uint8_t world_remove_collider_flag(struct WorldHandle *world,
                                    struct Bool wake_up);
 
 struct Vec3 collider_get_translation(const struct WorldHandle *world, ColliderHandleRaw handle);
+
+uintptr_t collider_get_shape_count(const struct WorldHandle *world, ColliderHandleRaw handle);
 
 void collider_get_translation_out(const struct WorldHandle *world,
                                   ColliderHandleRaw handle,

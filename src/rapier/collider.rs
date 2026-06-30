@@ -1,8 +1,8 @@
 use rapier3d::math::{Pose, Rotation, Vector};
-use rapier3d::prelude::{Array2, Collider, ColliderBuilder, SharedShape};
+use rapier3d::prelude::{Array2, Collider, ColliderBuilder, SharedShape, TypedShape};
 use smallvec::SmallVec;
 use std::slice;
-
+use rapier3d::na::Unit;
 use crate::rapier::ffi::{
     AabbDesc, Bool, ColliderBuilderHandle, ColliderHandleRaw, InteractionGroupsDesc, Obb, Quat,
     RigidBodyHandleRaw, ShapeDesc, Sphere, Vec3, WorldHandle, active_events_from_bits,
@@ -130,6 +130,17 @@ pub extern "C" fn collider_builder_create(
 
     Box::into_raw(Box::new(ColliderBuilderHandle {
         inner: default_builder(shape_desc),
+    }))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn collider_builder_create_halfspace(normal: Vec3) -> *mut ColliderBuilderHandle {
+    if !vec3_finite(normal) {
+        return std::ptr::null_mut();
+    }
+
+    Box::into_raw(Box::new(ColliderBuilderHandle {
+        inner: ColliderBuilder::halfspace(Unit::new_unchecked(vec3_to_rapier(normal).normalize())),
     }))
 }
 
@@ -759,6 +770,21 @@ pub extern "C" fn collider_get_translation(
         .get(unpack_collider_handle(handle))
         .map(|collider| vec3_from_rapier(collider.translation()))
         .unwrap_or_default()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn collider_get_shape_count(
+    world: *const WorldHandle,
+    handle: ColliderHandleRaw,
+) -> usize {
+    let Some(world) = (unsafe { world.as_ref() }) else {
+        return 0;
+    };
+
+    match world.inner.colliders.get(unpack_collider_handle(handle)).unwrap().shape().as_typed_shape() {
+        TypedShape::Compound(compound) => compound.shapes().len(),
+        _ => 1,
+    }
 }
 
 #[unsafe(no_mangle)]

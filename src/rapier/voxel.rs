@@ -11,8 +11,8 @@ use crate::rapier::ffi::{
     WorldHandle, quat_finite, quat_to_rapier, vec3_finite, voxel_collider_mode_from_raw,
 };
 
-const MAX_VOXEL_CELLS: usize = 262_144;
-const MAX_COMPOUND_PARTS: usize = 100_000;
+const MAX_VOXEL_CELLS: usize = 1_000_000;
+const MAX_COMPOUND_PARTS: usize = 1_000_000;
 const MAX_SURFACE_VERTICES: usize = 1_000_000;
 const MAX_SURFACE_TRIANGLES: usize = 500_000;
 
@@ -182,55 +182,51 @@ fn build_greedy_cuboids_y_range(
     let mut visited = vec![false; grid.voxels.len()];
     let mut parts = Vec::new();
 
-    for z in 0..grid.size_z {
-        for y in y_start..y_end {
-            for x in 0..grid.size_x {
+    for x in 0..grid.size_x {
+        for z in 0..grid.size_z {
+            for y in y_start..y_end {
                 let start = grid.index(x, y, z)?;
                 if visited[start] || !grid.is_solid(x, y, z) {
                     continue;
                 }
 
-                let mut max_x = x + 1;
-                while max_x < grid.size_x {
-                    let i = grid.index(max_x, y, z)?;
-                    if visited[i] || !grid.is_solid(max_x, y, z) {
-                        break;
-                    }
-                    max_x += 1;
-                }
-
                 let mut max_y = y + 1;
                 'expand_y: while max_y < y_end {
-                    for xx in x..max_x {
-                        let i = grid.index(xx, max_y, z)?;
-                        if visited[i] || !grid.is_solid(xx, max_y, z) {
-                            break 'expand_y;
-                        }
+                    let i = grid.index(x, max_y, z)?;
+                    if visited[i] || !grid.is_solid(x, max_y, z) {
+                        break 'expand_y;
                     }
                     max_y += 1;
                 }
 
                 let mut max_z = z + 1;
                 'expand_z: while max_z < grid.size_z {
-                    for yy in y..max_y {
-                        for xx in x..max_x {
-                            let i = grid.index(xx, yy, max_z)?;
-                            if visited[i] || !grid.is_solid(xx, yy, max_z) {
-                                break 'expand_z;
-                            }
-                        }
+                    let i = grid.index(x, y, max_z)?;
+                    if visited[i] || !grid.is_solid(x, y, max_z) {
+                        break 'expand_z;
                     }
                     max_z += 1;
                 }
 
-                for zz in z..max_z {
-                    for yy in y..max_y {
-                        for xx in x..max_x {
+                let mut max_x = x + 1;
+                'expand_x: while max_x < grid.size_x {
+                    let i = grid.index(max_x, y, z)?;
+                    if visited[i] || !grid.is_solid(max_x, y, z) {
+                        break 'expand_x;
+                    }
+                    max_x += 1;
+                }
+
+                for xx in x..max_x {
+                    for zz in z..max_z {
+                        for yy in y..max_y {
                             let i = grid.index(xx, yy, zz)?;
                             visited[i] = true;
                         }
                     }
                 }
+
+                println!("visiting x={}, z={}, y={}", x, z, y);
 
                 push_cuboid(grid, &mut parts, x, y, z, max_x, max_y, max_z);
             }
