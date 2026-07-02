@@ -178,6 +178,9 @@ blockquote { border-left: 3px solid var(--accent); padding: 8px 16px; margin: 16
   <a href="#mc-ffm">Java 25 FFM (1.26.1)</a>
   <a href="#mc-perf">性能优化</a>
 
+  <h2>事件系统</h2>
+  <a href="#event-cache">缓存注册机制</a>
+
   <h2>参考</h2>
   <a href="#precision">精度优化</a>
   <a href="#error-codes">错误码</a>
@@ -191,7 +194,7 @@ blockquote { border-left: 3px solid var(--accent); padding: 8px 16px; margin: 16
 <h1>mps_rigid_body</h1>
 <p>
   基于 <code>rapier3d-f64</code> 的 Rust 原生物理运行时。为 Java Minecraft (NeoForge) 提供
-  刚体动力学、空间查询、体素碰撞、航天工程、混沌理论等 567 个 C ABI 函数。
+  刚体动力学、空间查询、体素碰撞、航天工程、混沌理论等 580 个 C ABI 函数。
 	  采用 Kahan 补偿求和与 mul_add 融合乘加以确保双精度数值稳定性。
 </p>
 <div class="btns">
@@ -267,10 +270,10 @@ blockquote { border-left: 3px solid var(--accent); padding: 8px 16px; margin: 16
 
 <h3>统计</h3>
 <div class="card-grid">
-  <div class="card"><h3>567</h3><p><code>pub extern "C" fn</code> 函数</p></div>
+  <div class="card"><h3>580</h3><p><code>pub extern "C" fn</code> 函数</p></div>
   <div class="card"><h3>41</h3><p>Rust 源模块</p></div>
   <div class="card"><h3>~2400</h3><p>行 FFI 类型定义</p></div>
-  <div class="card"><h3>178</h3><p>Rust 单元测试</p></div>
+  <div class="card"><h3>180</h3><p>Rust 单元测试</p></div>
   <div class="card"><h3>2</h3><p>Java 访问层 (JNI + FFM)</p></div>
   <div class="card"><h3>0.1.4</h3><p>当前版本</p></div>
 </div>
@@ -292,7 +295,7 @@ cargo build --release
 
 # 运行 Rust 测试
 cargo test
-# 输出: test result: ok. 178 passed</code></pre>
+# 输出: test result: ok. 180 passed</code></pre>
 
 <h3>Java 21 JNI (Minecraft 1.21.1)</h3>
 <pre><code class="language-shell">cd test21
@@ -1436,6 +1439,117 @@ MemorySegment world = (MemorySegment) worldCreate.invokeExact(
 </ul>
 </section>
 
+
+<section id="event-cache">
+<h2>事件缓存注册机制 — 初始化注册，零帧开销</h2>
+<p>
+  传统的事件读取模式每帧需要：<code>count → allocate → read → parse</code> 四次 FFI 调用。
+  缓存注册机制将事件分发路径压缩为一次 <code>drain</code> 调用，或直接通过 C 函数指针回调。
+</p>
+
+<h3>架构对比</h3>
+<table>
+<tr><th>方面</th><th>传统 Poll 模式</th><th>缓存注册模式</th></tr>
+<tr><td>每帧 FFI 调用</td><td>4 次 (count + allocate + read × 2)</td><td>1 次 (drain)</td></tr>
+<tr><td>内存分配</td><td>每次分配 Java 缓冲区</td><td>启动时一次分配 ring buffer</td></tr>
+<tr><td>锁竞争</td><td><code>Mutex&lt;Vec&gt;</code> 每帧加锁</td><td>无锁 atomic ring buffer (SPSC)</td></tr>
+<tr><td>事件解析</td><td>Java 侧逐字段 <code>MemorySegment.get()</code></td><td>Rust 侧 struct 拷贝，Java 侧批量读取</td></tr>
+<tr><td>回调分发</td><td>不支持</td><td>支持 C 函数指针回调 (零 JNI 开销)</td></tr>
+<tr><td>注册时机</td><td>无</td><td>初始化时一次注册，后续零查找</td></tr>
+</table>
+
+<h3>核心组件</h3>
+
+<h4>1. 无锁 Ring Buffer</h4>
+<p>
+  单生产者（Rust 物理线程）+ 单消费者（Java drain 线程）的无锁环形缓冲区。
+  使用 <code>AtomicU32</code> write/read 游标实现 SPSC 队列语义，零内存分配：
+</p>
+<pre><code class=language-rust>// Rust 侧 — 物理线程写入
+fn push(&self, event: CollisionEventRecord) {
+    let w = self.write.load(Ordering::Relaxed);
+    let r = self.read.load(Ordering::Acquire);
+    if w.wrapping_sub(r) >= cap {
+        self.dropped.fetch_add(1, Ordering::Relaxed); // 溢出统计
+        return;
+    }
+    unsafe { (*self.buf.get())[(w % cap) as usize] = event; }
+    self.write.store(w.wrapping_add(1), Ordering::Release);
+}</code></pre>
+
+<h4>2. Callback Registry</h4>
+<p>
+  初始化时注册 C 函数指针，物理步进时直接调用，无需 Java 侧每帧轮询：
+</p>
+<pre><code class=language-rust>// Rust 侧 — 回调槽位（零堆分配）
+struct CallbackSlot {
+    cb: usize,       // C 函数指针 (0 = 未设置)
+    user_data: usize, // 透传用户数据
+    handle: u64,     // 用于取消注册
+}
+
+fn dispatch_collision(&self, record: CollisionEventRecord) {
+    if self.collision_cb.cb != 0 {
+        let cb: CollisionEventCallback = unsafe { std::mem::transmute(self.collision_cb.cb) };
+        if let Some(f) = cb {
+            unsafe { f(ptr::null(), &record, self.collision_cb.user_data as *mut c_void); }
+        }
+    }
+}</code></pre>
+
+<h3>FFI 函数列表</h3>
+<table class="fn-table">
+<tr><th>函数</th><th>说明</th></tr>
+<tr><td><code>world_init_collision_event_ring(world, capacity) → Bool</code></td><td>分配碰撞事件 ring buffer（启动时一次调用）</td></tr>
+<tr><td><code>world_init_contact_force_event_ring(world, capacity) → Bool</code></td><td>分配接触力事件 ring buffer</td></tr>
+<tr><td><code>world_drain_collision_event_ring(world, out, capacity) → u32</code></td><td>批量排空碰撞事件（唯一每帧 FFI 调用）</td></tr>
+<tr><td><code>world_drain_contact_force_event_ring(world, out, capacity) → u32</code></td><td>批量排空接触力事件</td></tr>
+<tr><td><code>world_collision_event_ring_len(world) → u32</code></td><td>查询 ring buffer 当前事件数（无锁）</td></tr>
+<tr><td><code>world_contact_force_event_ring_len(world) → u32</code></td><td>查询接触力 ring buffer 长度</td></tr>
+<tr><td><code>world_collision_event_ring_stats(world, out) → Bool</code></td><td>读取 ring buffer 统计（容量/占用/丢弃/溢出）</td></tr>
+<tr><td><code>world_contact_force_event_ring_stats(world, out) → Bool</code></td><td>读取接触力 ring buffer 统计</td></tr>
+<tr><td><code>world_clear_event_rings(world)</code></td><td>清空两个 ring buffer 并重置计数器</td></tr>
+<tr><td><code>world_register_collision_callback(world, fn_ptr, user_data) → u64</code></td><td>注册碰撞事件回调，返回句柄</td></tr>
+<tr><td><code>world_register_contact_force_callback(world, fn_ptr, user_data) → u64</code></td><td>注册接触力事件回调</td></tr>
+<tr><td><code>world_unregister_callback(world, handle)</code></td><td>通过句柄取消注册回调</td></tr>
+<tr><td><code>world_set_event_dispatch_mode(world, mode) → Bool</code></td><td>设置分发模式：Poll=0, Callback=1, Both=2</td></tr>
+</table>
+
+<h3>Java 使用模式</h3>
+<pre><code class=language-java>// === 初始化阶段（仅一次）===
+long world = RigidBody.worldCreate(0, -9.81, 0);
+
+// 1. 分配 ring buffer（容量 4096 条事件）
+RigidBody.worldInitCollisionEventRing(world, 4096);
+RigidBody.worldInitContactForceEventRing(world, 4096);
+
+// 2. 设置为 Both 模式（ring buffer + 可选的 callback）
+RigidBody.worldSetEventDispatchMode(world, 2);
+
+// === 每帧循环 ===
+while (running) {
+    // 物理步进 — 事件自动写入 ring buffer
+    RigidBody.worldStep(world, 1.0 / 20.0);
+
+    // 唯一的一次 FFI 调用 — 批量排空事件
+    MemorySegment events = RigidBody.worldDrainCollisionEventRing(world, 4096);
+    int count = RigidBody.eventCount(events, COLLISION_EVENT_LAYOUT);
+
+    // 零 FFI 的 Java 侧遍历
+    for (int i = 0; i &lt; count; i++) {
+        boolean started = RigidBody.collisionEventStarted(events, i);
+        long c1 = RigidBody.collisionEventCollider1(events, i);
+        long c2 = RigidBody.collisionEventCollider2(events, i);
+        // 处理事件...
+    }
+}
+
+// === 可选：注册 C 回调（零 Java 轮询）===
+// 适合高性能场景 — 事件在物理步进内直接回调
+// RigidBody.worldRegisterCollisionCallback(world, callbackPtr, userData);
+</code></pre>
+</section>
+
 <!-- ====== REFERENCE ====== -->
 <section id="precision">
 <h2>精度优化 — 双精度数值稳定性</h2>
@@ -1543,7 +1657,7 @@ let msg_ptr = last_error_message();</code></pre>
 
 <section id="verification">
 <h2>验证命令</h2>
-<pre><code class="language-shell"># Rust 测试 (178 个)
+<pre><code class="language-shell"># Rust 测试 (180 个)
 cargo test
 
 # Rust 类型检查
