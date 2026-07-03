@@ -19,6 +19,7 @@ pub(crate) mod events;
 pub(crate) mod ffi;
 pub(crate) mod fluid;
 pub(crate) mod fracture;
+pub(crate) mod interaction;
 pub(crate) mod joints;
 pub(crate) mod math;
 pub(crate) mod molecular;

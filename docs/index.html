@@ -127,6 +127,7 @@ blockquote { border-left: 3px solid var(--accent); padding: 8px 16px; margin: 16
   <a href="#collider">Collider 碰撞体</a>
   <a href="#query">Query 空间查询</a>
   <a href="#events">Events 事件系统</a>
+  <a href="#interaction">Interaction 交互力</a>
 
   <h2>高级几何</h2>
   <a href="#voxel">Voxel 体素系统</a>
@@ -194,7 +195,7 @@ blockquote { border-left: 3px solid var(--accent); padding: 8px 16px; margin: 16
 <h1>m/s 米每秒</h1>
 <p>
   基于 <code>rapier3d-f64</code> 的 Rust 原生物理运行时。为 Java Minecraft (NeoForge) 提供
-  刚体动力学、空间查询、体素碰撞、航天工程、混沌理论等 580 个 C ABI 函数。
+  刚体动力学、空间查询、体素碰撞、航天工程、混沌理论等 584 个 C ABI 函数。
 	  采用 Kahan 补偿求和与 mul_add 融合乘加以确保双精度数值稳定性。
 </p>
 <div class="btns">
@@ -209,7 +210,7 @@ blockquote { border-left: 3px solid var(--accent); padding: 8px 16px; margin: 16
 
 <pre><code class="language-text">Java 21 JNI / Java 25 FFM
   └── Rust C ABI / JNI wrappers
-        └── src/rapier 功能模块 (41 个)
+        └── src/rapier 功能模块 (42 个)
               ├── rapier3d-f64 (双精度物理引擎)
               ├── 工程公式层 (航天、弹道、气动、流体...)
               └── AnvilKit ECS 桥接</code></pre>
@@ -270,10 +271,10 @@ blockquote { border-left: 3px solid var(--accent); padding: 8px 16px; margin: 16
 
 <h3>统计</h3>
 <div class="card-grid">
-  <div class="card"><h3>580</h3><p><code>pub extern "C" fn</code> 函数</p></div>
-  <div class="card"><h3>41</h3><p>Rust 源模块</p></div>
+  <div class="card"><h3>584</h3><p><code>pub extern "C" fn</code> 函数</p></div>
+  <div class="card"><h3>42</h3><p>Rust 源模块</p></div>
   <div class="card"><h3>~2400</h3><p>行 FFI 类型定义</p></div>
-  <div class="card"><h3>180</h3><p>Rust 单元测试</p></div>
+  <div class="card"><h3>183</h3><p>Rust 单元测试</p></div>
   <div class="card"><h3>2</h3><p>Java 访问层 (JNI + FFM)</p></div>
   <div class="card"><h3>0.1.4</h3><p>当前版本</p></div>
 </div>
@@ -295,7 +296,7 @@ cargo build --release
 
 # 运行 Rust 测试
 cargo test
-# 输出: test result: ok. 180 passed</code></pre>
+# 输出: test result: ok. 183 passed</code></pre>
 
 <h3>Java 21 JNI (Minecraft 1.21.1)</h3>
 <pre><code class="language-shell">cd test21
@@ -614,6 +615,93 @@ world.clearEvents();</code></pre>
 </section>
 
 <!-- ====== ADVANCED GEOMETRY ====== -->
+
+<section id="interaction">
+<h2>Interaction — 刚体交互力系统</h2>
+<p>
+  刚体间物理交互在 <code>world_step</code> 内自动执行。初始化时通过 <code>world_set_*_law</code>
+  配置一次，之后每帧零额外 FFI 调用。
+</p>
+
+<h3>三大交互力</h3>
+<table>
+<tr><th>系统</th><th>物理模型</th><th>配置</th></tr>
+<tr><td><strong>万有引力</strong></td><td>F = G·m₁·m₂/r² (O(n²) 直接求和)</td><td><code>NewtonGravityLaw</code> — 支持自定义 G、最小/最大距离</td></tr>
+<tr><td><strong>库仑摩擦力</strong></td><td>F_f = μ·F_n，静/动摩擦自动切换</td><td><code>CoulombFrictionLaw</code> — 读取 narrow-phase 接触数据施加</td></tr>
+<tr><td><strong>空气阻力</strong></td><td>Stokes (低 Re) + 湍流 (高 Re) 双模式</td><td><code>AirDragLaw</code> — 雷诺数自适应切换</td></tr>
+</table>
+
+<h3>架构</h3>
+<pre><code class="language-text">world_step()
+  ├── apply_custom_external_forces_with_custom()  ← 浮力/电磁/弹簧/点重力
+  ├── apply_body_interactions()
+  │     ├── pairwise_gravity()        ← 刚体间万有引力
+  │     ├── apply_coulomb_friction()  ← 接触面摩擦力
+  │     └── per_body_air_drag()       ← 空气阻力
+  └── pipeline.step()                 ← Rapier 求解器</code></pre>
+
+<h3>FFI 函数</h3>
+<table class="fn-table">
+<tr><th>函数</th><th>说明</th></tr>
+<tr><td><code>world_set_newton_gravity_law(world, law) → Bool</code></td><td>设置万有引力参数（G、最小距离、最大距离）</td></tr>
+<tr><td><code>world_clear_newton_gravity_law(world)</code></td><td>清除万有引力</td></tr>
+<tr><td><code>world_get_newton_gravity_law(world, out) → Bool</code></td><td>读取万有引力配置</td></tr>
+<tr><td><code>world_set_coulomb_friction_law(world, law) → Bool</code></td><td>设置库仑摩擦（静/动系数、阈值）</td></tr>
+<tr><td><code>world_set_air_drag_law(world, law) → Bool</code></td><td>设置空气阻力（密度、粘度、特征长度等）</td></tr>
+<tr><td><code>world_get_custom_physics_report(world, out) → Bool</code></td><td>读取综合物理报告（力、力矩、雷诺数）</td></tr>
+</table>
+
+<h3>Java 使用示例</h3>
+<pre><code class="language-java">// === 初始化（仅一次）===
+PhysicsWorld world = new PhysicsWorld(0, -9.81, 0);
+
+// 1. 启用刚体间万有引力 (G=1000 适合游戏尺度)
+world.setNewtonGravityLaw(new NewtonGravityLaw()
+    .gravitationalConstant(1000.0)
+    .minDistance(0.01)
+    .enabled(true));
+
+// 2. 启用库仑摩擦力
+world.setCoulombFrictionLaw(new CoulombFrictionLaw()
+    .staticCoefficient(0.6)
+    .dynamicCoefficient(0.4)
+    .velocityThreshold(0.01)
+    .enabled(true));
+
+// 3. 启用空气阻力
+world.setAirDragLaw(new AirDragLaw()
+    .fluidVelocity(0, 0, 0)
+    .density(1.225)         // 空气密度 kg/m³
+    .dragCoefficient(0.47)  // 球体阻力系数
+    .referenceArea(0.5)     // 参考面积 m²
+    .enabled(true));
+
+// === 每帧循环 ===
+while (running) {
+    world.step();  // 三种交互力自动执行
+    // 无需额外调用
+}</code></pre>
+
+<h3>NewtonGravityLaw 结构体</h3>
+<table>
+<tr><th>字段</th><th>类型</th><th>默认值</th><th>说明</th></tr>
+<tr><td><code>gravitational_constant</code></td><td><code>f64</code></td><td>6.67430e-11</td><td>万有引力常数 (N·m²/kg²)</td></tr>
+<tr><td><code>min_distance</code></td><td><code>f64</code></td><td>0.01</td><td>最小距离，防止除零</td></tr>
+<tr><td><code>max_distance</code></td><td><code>f64</code></td><td>0.0</td><td>最大作用距离 (0=无限)</td></tr>
+<tr><td><code>enabled</code></td><td><code>Bool</code></td><td>FALSE</td><td>是否启用</td></tr>
+</table>
+
+<h3>已有公式接入指南</h3>
+<p>项目中 42 个物理公式模块通过以下模式接入刚体系统：</p>
+<table>
+<tr><th>接入方式</th><th>适用模块</th><th>调用位置</th></tr>
+<tr><td><strong>独立公式</strong>（纯函数）</td><td>chaos, relativity, quantum, plasma, wave_optics 等</td><td>Java 侧按需调用，不自动执行</td></tr>
+<tr><td><strong>ExternalForceLaw</strong></td><td>浮力、电磁力、弹簧力、点源重力</td><td><code>apply_custom_external_forces_with_custom</code></td></tr>
+<tr><td><strong>Interaction 系统</strong></td><td>万有引力、库仑摩擦、空气阻力</td><td><code>apply_body_interactions</code></td></tr>
+<tr><td><strong>专用集成函数</strong></td><td>aerodynamics, trajectory, spaceflight, fluid</td><td>通过 <code>*_apply_*_to_body</code> 函数直接操作刚体</td></tr>
+</table>
+</section>
+
 <section id="voxel">
 <h2>Voxel — 体素系统</h2>
 
@@ -1657,7 +1745,7 @@ let msg_ptr = last_error_message();</code></pre>
 
 <section id="verification">
 <h2>验证命令</h2>
-<pre><code class="language-shell"># Rust 测试 (180 个)
+<pre><code class="language-shell"># Rust 测试 (183 个)
 cargo test
 
 # Rust 类型检查
