@@ -1,6 +1,6 @@
-# msp_rigid_body
+# mps_rigid_body
 
-`msp_rigid_body` is a Rust native physics library built on `rapier3d-f64`.
+`mps_rigid_body` is a Rust native physics library built on `rapier3d-f64`.
 It exposes one native `cdylib` to Java through both JNI and Java FFM.
 
 The project is intended to provide a stable Java-facing rigid body API while
