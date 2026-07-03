@@ -5,6 +5,7 @@ pub(crate) mod anvilkit;
 pub(crate) mod astrophysics;
 pub(crate) mod biomechanics;
 pub(crate) mod bounds;
+pub(crate) mod bridge;
 pub(crate) mod chaos;
 pub(crate) mod collider;
 pub(crate) mod compat;
