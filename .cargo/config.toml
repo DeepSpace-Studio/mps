@@ -1,0 +1,98 @@
+# .cargo/config.toml — mps_rigid_body 构建配置
+#
+# 面向跨平台 cdylib:
+#   Windows (x86_64, aarch64): MSVC / GNU
+#   Linux   (x86_64, aarch64, armv7, riscv64, ppc64le)
+#   macOS   (x86_64, aarch64)
+#   FreeBSD (x86_64)
+#
+# 编译目标由 CI 或开发者通过 --target 指定。
+
+[build]
+# 全局 rustflags: 仅放所有 target 通用的，避免 Linux 特有 flag 在 MSVC 上报错
+rustflags = [
+    "-C", "force-frame-pointers=no",
+]
+
+# ---- Linux -----------------------------------------------------------
+
+[target.x86_64-unknown-linux-gnu]
+rustflags = [
+    "-C", "link-arg=-Wl,-z,relro",
+    "-C", "link-arg=-Wl,-z,now",
+    "-C", "link-arg=-Wl,--as-needed",
+    "-C", "link-arg=-Wl,--build-id=sha1",
+]
+
+[target.aarch64-unknown-linux-gnu]
+rustflags = [
+    "-C", "link-arg=-Wl,-z,relro",
+    "-C", "link-arg=-Wl,-z,now",
+    "-C", "link-arg=-Wl,--as-needed",
+    "-C", "link-arg=-Wl,--build-id=sha1",
+]
+
+[target.armv7-unknown-linux-gnueabihf]
+rustflags = [
+    "-C", "link-arg=-Wl,-z,relro",
+    "-C", "link-arg=-Wl,-z,now",
+    "-C", "link-arg=-Wl,--as-needed",
+    "-C", "link-arg=-Wl,--build-id=sha1",
+]
+
+[target.riscv64gc-unknown-linux-gnu]
+rustflags = [
+    "-C", "link-arg=-Wl,-z,relro",
+    "-C", "link-arg=-Wl,-z,now",
+    "-C", "link-arg=-Wl,--as-needed",
+    "-C", "link-arg=-Wl,--build-id=sha1",
+]
+
+[target.powerpc64le-unknown-linux-gnu]
+rustflags = [
+    "-C", "link-arg=-Wl,-z,relro",
+    "-C", "link-arg=-Wl,-z,now",
+    "-C", "link-arg=-Wl,--as-needed",
+    "-C", "link-arg=-Wl,--build-id=sha1",
+]
+
+# ---- Windows ---------------------------------------------------------
+
+[target.x86_64-pc-windows-msvc]
+rustflags = [
+    "-C", "link-arg=/OPT:REF",
+    "-C", "link-arg=/OPT:ICF",
+]
+
+[target.aarch64-pc-windows-msvc]
+rustflags = [
+    "-C", "link-arg=/OPT:REF",
+    "-C", "link-arg=/OPT:ICF",
+]
+
+[target.aarch64-pc-windows-gnullvm]
+rustflags = [
+    "-C", "link-arg=-Wl,--as-needed",
+    "-C", "link-arg=-Wl,--build-id=sha1",
+]
+
+# ---- macOS -----------------------------------------------------------
+
+[target.x86_64-apple-darwin]
+rustflags = [
+    "-C", "link-arg=-Wl,-dead_strip",
+]
+
+[target.aarch64-apple-darwin]
+rustflags = [
+    "-C", "link-arg=-Wl,-dead_strip",
+]
+
+# ---- FreeBSD ---------------------------------------------------------
+
+[target.x86_64-unknown-freebsd]
+rustflags = [
+    "-C", "link-arg=-Wl,-z,relro",
+    "-C", "link-arg=-Wl,-z,now",
+    "-C", "link-arg=-Wl,--as-needed",
+]
