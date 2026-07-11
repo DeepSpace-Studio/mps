@@ -620,3 +620,273 @@ cd ..\test25
 4. 序列化快照
 
    保存和恢复 body、collider、joint、integration parameters，用于 replay、rollback、测试和编辑器。
+
+## 14. Rust 项目完整结构
+
+### 14.1 Crate 配置
+
+`Cargo.toml`:
+- **名称:** `mps_rigid_body`
+- **版本:** 0.1.4
+- **Edition:** 2024
+- **Crate 类型:** `cdylib` + `rlib`（Java 共享库 + Rust 静态库）
+- **Panic 策略:** `abort`（开发和生产模式均 abort，保证 JNI 安全性）
+
+关键依赖：
+
+| 依赖 | 版本 | 说明 |
+|---|---|---|
+| `rapier3d-f64` | 0.33.0 | 双精度物理引擎，启用 `parallel` 特性 |
+| `jni` (ljni) | 0.21.0 | Java 21 JNI 绑定 |
+| `parking_lot` | 0.12.5 | 同步原语 (Mutex/RwLock) |
+| `hashbrown` | 0.17.1 | 高性能 HashMap/HashSet |
+| `smallvec` | 1.15.2 | 小向量优化 |
+| `mimalloc` | 0.1.52 | 全局分配器 |
+| `anvilkit` | 0.1 (可选) | ECS 桥接 |
+| `bevy_ecs` | 0.19.0 (可选) | ECS 框架 |
+| `rayon` | 1.12 | 并行迭代 |
+| `cbindgen` | 0.29.4 | 构建时 C 头文件生成 |
+
+特性标志：
+- `default = []` — 无默认特性
+- `anvilkit-bridge` — 启用 `dep:anvilkit` + `dep:bevy_ecs`
+
+### 14.2 全局分配器
+
+```rust
+use mimalloc::MiMalloc;
+#[global_allocator]
+static GLOBAL_ALLOCATOR: MiMalloc = MiMalloc;
+```
+
+MiMalloc 专为多线程工作负载优化（Rapier 使用 `rayon` 并行 broad-phase/narrow-phase）。
+
+### 14.3 FFI 类型系统
+
+`src/rapier/ffi/types.rs` 是所有跨语言类型的唯一来源，约 2400 行。关键类别：
+
+**不透明句柄（Rust 持有，作为原始指针传递）：**
+`WorldHandle`, `RigidBodyBuilderHandle`, `ColliderBuilderHandle`, `JointBuilderHandle`,
+`CharacterControllerHandle`, `RTreeHandle`, `CRbTreeHandle`, `AnvilKitAppHandle`
+
+**Packed Handle（非零 u64，Java 侧存储为 `long`）：**
+`RigidBodyHandleRaw`, `ColliderHandleRaw`, `ImpulseJointHandleRaw`
+打包公式: `packed = ((generation << 32) | id) + 1`，`0` 保留为 null/invalid
+
+**基础 ABI 类型：**
+`Vec3`(24字节), `Quat`(32字节), `Bool`(u8), `BodyStatus`, `ShapeType`, `VoxelColliderMode`,
+`JointAxisDesc`, `JointTypeDesc`, `NeuralActivation`, `KdopPreset`
+
+**描述符结构体（输入参数）：**
+`ShapeDesc`, `InteractionGroupsDesc`, `QueryFilterDesc`, `ShapeCastOptionsDesc`,
+`AabbDesc`, `Obb`, `Sphere`, `Capsule`, `Ssv`, `Ellipsoid`, `Prism`, `Cylinder`,
+`SphericalShell`, `VoxelColliderOptions`, `NeuralBoundsDesc`
+
+**结果结构体（输出记录）：** 详见英文版 Section 19.5
+
+**领域公式结构体：**
+混沌: `LorenzState`, `LorenzParams`, `LyapunovReport`, `DoublePendulumState`, `ChaosDetectionReport`, `LogisticMapState`
+相对论: `LorentzBoost`, `RelativisticParticle`, `SchwarzschildMetric`, `GravitationalTimeDilation`, `LengthContraction`
+超流体: `VortexSegment`, `BiotSavartVelocity`, `GpOrderParameter`, `VortexRing`, `VortexReconnectionReport`, `VortexTangleStats`
+波动光学: `ComplexAmplitude`, `PlaneWaveParams`, `DiffractionPoint`, `ThinFilmInterferenceReport`, `YoungSlitPoint`
+等离子体: `PicParticle`, `GridField`, `PlasmaParamsReport`, `VlasovMomentReport`, `MagneticXPoint`, `PicStepReport`
+
+### 14.4 数学工具 (src/rapier/math.rs)
+
+共享辅助函数，替代原先在各模块中重复的代码：
+```rust
+fn finite(value: f64) -> bool
+fn finite_positive(value: f64) -> bool
+fn finite_non_negative(value: f64) -> bool
+fn clamp(value: f64, lo: f64, hi: f64) -> f64
+fn write_out<T: Copy>(out: *mut T, value: T) -> Bool  // 通过指针写入，含 null 检查
+fn vec3_add/sub/scale/dot/cross/length/length_sq/normalize
+```
+
+### 14.5 错误处理 (src/rapier/error.rs)
+
+线程本地最后错误状态：
+```rust
+fn set_error(code: u32, message: &str)
+fn clear_error()
+fn get_last_error_code() -> u32
+fn get_last_error_message() -> *const c_char
+```
+
+错误码: `ERR_NULL_POINTER`(1), `ERR_INVALID_HANDLE`(2), `ERR_INVALID_BODY`(3),
+`ERR_INVALID_COLLIDER`(4), `ERR_INVALID_JOINT`(5), `ERR_UNSUPPORTED`(6)
+
+## 15. Java Minecraft 集成 (test21)
+
+### 15.1 NeoForge Mod 配置
+
+`test21/` 是一个 **NeoForge 1.21.1** mod 项目，通过 JNI 集成 Rust 原生库。
+
+| 配置项 | 值 |
+|---|---|
+| Minecraft 版本 | 1.21.1 |
+| NeoForge 版本 | 21.1.233 |
+| Java 版本 | 21 |
+| Mod ID | `mps_rigid_body` |
+| Mod 名称 | "MPS Rigid Body" |
+| 作者 | Polaris Stars |
+
+**原生库集成流程：**
+```
+cargo build --release
+  └── 生成 target/release/mps_rigid_body.dll
+      └── copyNativeLibraryToResources
+            └── 复制到 build/generated/resources/native/{os}/{arch}/
+                  └── 打包进 JAR
+                        └── Minecraft 启动时 System.loadLibrary("mps_rigid_body")
+```
+
+### 15.2 Java 类结构
+
+```
+org.polaris2023.msp_rigid_body/
+  RigidBody.java          — 公共静态 API (门面)
+  RigidBodyNative.java    — JNI native 方法声明
+
+org.polaris2023.msp_rigid_body.util/
+  PhysicsWorld.java       — World 封装 (AutoCloseable)
+  RigidBody.java          — 刚体封装 (Builder 模式)
+  Collider.java           — 碰撞体封装
+  CharacterController.java — 角色控制器封装
+  SpatialIndex.java       — CRbTree/RTree 封装
+  NativeMemory.java       — Unsafe 本地内存管理
+  VoxelGrid.java          — 体素网格辅助类
+  IParent.java            — 父刚体接口
+```
+
+### 15.3 在 Minecraft 中的使用方式
+
+```java
+// 1. 初始化物理世界
+PhysicsWorld physicsWorld = new PhysicsWorld(0, -9.81, 0);
+physicsWorld.integrationParameters(1.0 / 20.0, 4, 4);
+
+// 2. 为实体创建刚体
+RigidBody body = physicsWorld.body(BodyStatus.DYNAMIC)
+    .translation(entity.getX(), entity.getY(), entity.getZ())
+    .linearVelocity(entity.getDeltaMovement().x, ...)
+    .gravityScale(1.0)
+    .canSleep(true)
+    .build().body(physicsWorld);
+
+// 3. 为地形创建体素碰撞体
+byte[] occupancy = chunkToVoxelGrid(chunk, 16, 16, 16);
+Collider terrain = physicsWorld.voxelCollider(occupancy, 16, 16, 16, 1.0)
+    .friction(0.6).buildAndInsert();
+
+// 4. 每 tick 推进
+physicsWorld.step();
+
+// 5. 同步刚体位置回 Minecraft 实体
+for (BodySnapshot snap : physicsWorld.bodySnapshot()) {
+    entity.setPos(snap.translation()[0], ...);
+}
+
+// 6. 处理碰撞事件
+for (CollisionEvent evt : physicsWorld.collisionEvents()) {
+    // 触发伤害、音效等
+}
+physicsWorld.clearEvents();
+```
+
+### 15.4 API 封装层次
+
+| 层次 | 类 | 用途 |
+|---|---|---|
+| 底层 | `RigidBodyNative` | JNI native 方法，直接调用 Rust |
+| 中层 | `NativeMemory` | Unsafe 内存管理，Vec3/Quat 读写 |
+| 高层 | `PhysicsWorld`, `RigidBody`, `Collider` | 面向对象封装，Builder 模式 |
+| 门面 | `RigidBody` (顶层) | 静态便捷方法 |
+
+## 16. Java 25 FFM 集成 (test25)
+
+### 16.1 项目配置
+
+| 配置项 | 值 |
+|---|---|
+| Minecraft 版本 | 1.26.1 |
+| NeoForge 版本 | 26.1.2 |
+| Java 版本 | 25 |
+| JVM 参数 | `--enable-native-access=ALL-UNNAMED` |
+| NeoForge 预览 | 通过 `-Penable_neoforge_preview=true` 启用 |
+
+### 16.2 FFM vs JNI 对比
+
+| 方面 | JNI (test21) | FFM (test25) |
+|---|---|---|
+| Java 版本 | 21 | 25 |
+| Minecraft 版本 | 1.21.1 | 1.26.1 (预览) |
+| 本地访问 | `System.loadLibrary` + JNI 函数 | `SymbolLookup` + MethodHandle downcalls |
+| 句柄类型 | `long` | `MemorySegment` |
+| 结构布局 | 手动偏移量 | `MemoryLayout` 定义 |
+| 性能 | JNI 每调用开销 | 近乎零开销 (直接 C ABI) |
+
+### 16.3 FFM 使用示例
+
+```java
+// 加载本地库
+var lookup = SymbolLookup.libraryLookup(
+    Path.of(System.getProperty("rigidbody.native.path")), Arena.global());
+
+// 定义结构布局
+static final StructLayout VEC3 = MemoryLayout.structLayout(
+    ValueLayout.JAVA_DOUBLE.withName("x"),
+    ValueLayout.JAVA_DOUBLE.withName("y"),
+    ValueLayout.JAVA_DOUBLE.withName("z"));
+
+// 查找并调用函数
+var worldCreate = Linker.nativeLinker().downcallHandle(
+    lookup.find("world_create").get(),
+    FunctionDescriptor.of(ValueLayout.ADDRESS, VEC3));
+
+MemorySegment world = (MemorySegment) worldCreate.invokeExact(
+    Vec3.of(0, -9.81, 0));
+```
+
+### 16.4 已覆盖的 FFM 功能
+
+- ABI 版本检测
+- World 创建/销毁/步进
+- 重力读写、碰撞体数量
+- 刚体创建/插入/位姿/速度/力/冲量
+- 碰撞体创建/插入/材质/分组/事件
+- CRbTree / RTree 操作
+- 体素 AABB/OBB 构建和查询
+- Ray/Point/AABB/OBB/Sphere/Shape Cast 查询
+- 碰撞事件和接触力事件批量读取
+
+## 17. 统计总览
+
+| 指标 | 数值 |
+|---|---|
+| C ABI 函数 | 564 个 (`pub extern "C" fn`) |
+| Rust 源模块 | 39 个 |
+| FFI 类型定义 | ~2400 行 |
+| Rust 单元测试 | 172 个 |
+| Java 访问层 | 2 个 (JNI + FFM) |
+| 当前版本 | 0.1.4 |
+
+## 18. 构建与验证命令
+
+```powershell
+# Rust 测试 (172 个)
+cargo test
+
+# Java 21 JNI smoke test
+cd test21
+.\gradlew.bat check
+
+# Java 25 FFM smoke test
+cd ..\test25
+.\gradlew.bat check
+
+# 完整构建
+cargo build --release
+cd test21 && .\gradlew.bat build
+cd ..\test25 && .\gradlew.bat build
+```

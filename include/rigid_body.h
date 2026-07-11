@@ -773,6 +773,32 @@ typedef struct ExternalForceLaw {
   struct Bool enabled;
 } ExternalForceLaw;
 
+/**
+ * Newtonian pairwise gravity configuration for body-body attraction.
+ *
+ * When enabled, every dynamic body attracts every other dynamic body via
+ * Newton's law:  F = G · m₁ · m₂ / r².
+ *
+ * Set `gravitational_constant` to 6.67430e-11 for real-world gravity,
+ * or a larger value for game-scale simulations.
+ */
+typedef struct NewtonGravityLaw {
+  /**
+   * Gravitational constant (default: 6.67430e-11 N·m²/kg²).
+   * Use larger values for game-scale simulations.
+   */
+  double gravitational_constant;
+  /**
+   * Minimum distance to prevent division by zero (default: 0.01 m).
+   */
+  double min_distance;
+  /**
+   * Maximum distance for gravity to apply (0 = no limit).
+   */
+  double max_distance;
+  struct Bool enabled;
+} NewtonGravityLaw;
+
 typedef struct CustomPhysicsReport {
   uint32_t body_count;
   uint32_t drag_body_count;
@@ -798,6 +824,33 @@ typedef struct ContactForceEventRecord {
   struct Vec3 max_force_direction;
   double max_force_magnitude;
 } ContactForceEventRecord;
+
+/**
+ * Pre-allocated ring buffer for zero-allocation event caching.
+ */
+typedef struct EventRingBufferStats {
+  /**
+   * Total capacity of the ring buffer (in event records).
+   */
+  uint32_t capacity;
+  /**
+   * Number of events currently in the buffer.
+   */
+  uint32_t len;
+  /**
+   * Number of events dropped due to buffer overflow since last reset.
+   */
+  uint32_t dropped;
+  /**
+   * Whether the buffer has wrapped around (overwritten old events).
+   */
+  struct Bool wrapped;
+} EventRingBufferStats;
+
+/**
+ * Opaque handle returned by `world_register_*_callback` — used to unregister.
+ */
+typedef uint64_t EventCallbackHandle;
 
 typedef struct NavierStokesReport {
   struct Vec3 advection;
@@ -3201,6 +3254,15 @@ void world_clear_external_force_law(struct WorldHandle *world);
 struct Bool world_get_external_force_law(const struct WorldHandle *world,
                                          struct ExternalForceLaw *out_law);
 
+struct Bool world_set_newton_gravity_law(struct WorldHandle *world, struct NewtonGravityLaw law);
+
+uint8_t world_set_newton_gravity_law_flag(struct WorldHandle *world, struct NewtonGravityLaw law);
+
+void world_clear_newton_gravity_law(struct WorldHandle *world);
+
+struct Bool world_get_newton_gravity_law(const struct WorldHandle *world,
+                                         struct NewtonGravityLaw *out_law);
+
 struct Bool world_get_custom_physics_report(const struct WorldHandle *world,
                                             struct CustomPhysicsReport *out_report);
 
@@ -3235,6 +3297,91 @@ void world_set_intersection_pair_filter_callback(struct WorldHandle *world,
 void world_clear_contact_pair_filter_callback(struct WorldHandle *world);
 
 void world_clear_intersection_pair_filter_callback(struct WorldHandle *world);
+
+/**
+ * Allocate a collision-event ring buffer of `capacity` records.
+ * Events will be written here during `world_step` instead of (or in addition to)
+ * the legacy Vec queue.  Java drains the ring buffer at its own pace.
+ */
+struct Bool world_init_collision_event_ring(struct WorldHandle *world, uint32_t capacity);
+
+/**
+ * Allocate a contact-force-event ring buffer.
+ */
+struct Bool world_init_contact_force_event_ring(struct WorldHandle *world, uint32_t capacity);
+
+/**
+ * Drain the collision-event ring buffer into `out_events`.
+ * Returns the number of events drained.  This is the **only** FFI call needed
+ * per frame after init — no more count-then-allocate-then-read cycles.
+ */
+uint32_t world_drain_collision_event_ring(const struct WorldHandle *world,
+                                          struct CollisionEventRecord *out_events,
+                                          uint32_t capacity);
+
+/**
+ * Drain the contact-force-event ring buffer.
+ */
+uint32_t world_drain_contact_force_event_ring(const struct WorldHandle *world,
+                                              struct ContactForceEventRecord *out_events,
+                                              uint32_t capacity);
+
+/**
+ * Get the current number of events in the collision ring buffer (cheap, no lock).
+ */
+uint32_t world_collision_event_ring_len(const struct WorldHandle *world);
+
+/**
+ * Get the current number of events in the contact-force ring buffer.
+ */
+uint32_t world_contact_force_event_ring_len(const struct WorldHandle *world);
+
+/**
+ * Get ring buffer statistics (capacity, occupancy, drops, wraps).
+ */
+struct Bool world_collision_event_ring_stats(const struct WorldHandle *world,
+                                             struct EventRingBufferStats *out_stats);
+
+struct Bool world_contact_force_event_ring_stats(const struct WorldHandle *world,
+                                                 struct EventRingBufferStats *out_stats);
+
+/**
+ * Clear both ring buffers and reset drop counters.
+ */
+void world_clear_event_rings(struct WorldHandle *world);
+
+/**
+ * Register a collision-event callback.
+ *
+ * `callback` is a C function pointer (zero = unregister).
+ * `user_data` is passed through unchanged to each invocation.
+ * Returns an opaque handle for later unregistration.
+ */
+EventCallbackHandle world_register_collision_callback(struct WorldHandle *world,
+                                                      uintptr_t callback,
+                                                      uintptr_t user_data);
+
+/**
+ * Register a contact-force-event callback.
+ */
+EventCallbackHandle world_register_contact_force_callback(struct WorldHandle *world,
+                                                          uintptr_t callback,
+                                                          uintptr_t user_data);
+
+/**
+ * Unregister a previously registered callback by its handle.
+ * Passing 0 or an invalid handle is a no-op.
+ */
+void world_unregister_callback(struct WorldHandle *world, EventCallbackHandle handle);
+
+/**
+ * Set the event dispatch mode.
+ *
+ * - `Poll` (0): legacy Vec queue only (default).
+ * - `Callback` (1): registered callbacks only.
+ * - `Both` (2): ring buffer + callbacks.
+ */
+struct Bool world_set_event_dispatch_mode(struct WorldHandle *world, uint32_t mode);
 
 struct Bool fluid_estimate_aabb_forces(struct FluidVolume fluid,
                                        struct Vec3 body_center,

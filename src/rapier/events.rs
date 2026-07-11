@@ -3,15 +3,18 @@ use rapier3d::geometry::{CollisionEvent, CollisionEventFlags, ContactPair, Solve
 use rapier3d::prelude::{
     ColliderSet, ContactForceEvent, EventHandler, PhysicsHooks, Real, RigidBodySet, Vector,
 };
+use std::cell::UnsafeCell;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::rapier::error::{
     ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, ERR_UNSUPPORTED, clear_error, set_error,
 };
 use crate::rapier::ffi::{
     AirDragLaw, Bool, CollisionEventRecord, ContactForceEventRecord, CoulombFrictionLaw,
-    CustomPhysicsReport, ExternalForceLaw, MAX_OUTPUT_CAPACITY, WorldHandle, pack_collider_handle,
-    vec3_finite, vec3_from_rapier, vec3_to_rapier,
+    CustomPhysicsReport, EventDispatchMode, ExternalForceLaw, MAX_OUTPUT_CAPACITY, NewtonGravityLaw,
+    WorldHandle, pack_collider_handle, vec3_finite, vec3_from_rapier, vec3_to_rapier,
 };
+use crate::rapier::math::KahanVec3;
 
 const MAX_EVENT_RECORDS: usize = 16_384;
 
@@ -20,6 +23,7 @@ pub(crate) struct CustomPhysicsState {
     pub(crate) coulomb_friction: Option<CoulombFrictionLaw>,
     pub(crate) air_drag: Option<AirDragLaw>,
     pub(crate) external_force: Option<ExternalForceLaw>,
+    pub(crate) newton_gravity: Option<NewtonGravityLaw>,
     pub(crate) last_report: CustomPhysicsReport,
 }
 
@@ -28,6 +32,7 @@ pub(crate) struct CollectingEventHandler {
     collision_events: Mutex<Vec<CollisionEventRecord>>,
     contact_force_events: Mutex<Vec<ContactForceEventRecord>>,
     custom_physics: RwLock<CustomPhysicsState>,
+    producer_cache: RwLock<ProducerCache>,
 }
 
 impl CollectingEventHandler {
@@ -81,6 +86,284 @@ fn push_event<T>(events: &mut Vec<T>, event: T) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Lock-free ring buffer for zero-allocation event caching
+// ---------------------------------------------------------------------------
+
+/// Single-producer (Rust physics thread), single-consumer (Java drain thread)
+/// ring buffer for `CollisionEventRecord`.
+pub(crate) struct CollisionEventRing {
+    buf: UnsafeCell<Box<[CollisionEventRecord]>>,
+    write: AtomicU32,
+    read: AtomicU32,
+    dropped: AtomicU32,
+}
+
+// SAFETY: Ring buffer is single-producer, single-consumer.
+// Rust physics thread writes; Java drain thread reads. No concurrent writes.
+unsafe impl Send for CollisionEventRing {}
+unsafe impl Sync for CollisionEventRing {}
+
+impl std::fmt::Debug for CollisionEventRing {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CollisionEventRing")
+            .field("len", &self.len())
+            .finish()
+    }
+}
+
+impl CollisionEventRing {
+    fn new(capacity: u32) -> Self {
+        let cap = capacity.max(1).min(MAX_OUTPUT_CAPACITY) as usize;
+        Self {
+            buf: UnsafeCell::new(
+                vec![CollisionEventRecord::default(); cap].into_boxed_slice(),
+            ),
+            write: AtomicU32::new(0),
+            read: AtomicU32::new(0),
+            dropped: AtomicU32::new(0),
+        }
+    }
+
+    /// Push one event. Called from the physics thread (producer).
+    fn push(&self, event: CollisionEventRecord) {
+        let cap = self.buf().len() as u32;
+        let w = self.write.load(Ordering::Relaxed);
+        let r = self.read.load(Ordering::Acquire);
+        if w.wrapping_sub(r) >= cap {
+            self.dropped.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
+        // SAFETY: single producer — only the physics thread writes.
+        unsafe {
+            (*self.buf.get())[(w % cap) as usize] = event;
+        }
+        self.write.store(w.wrapping_add(1), Ordering::Release);
+    }
+
+    /// Drain up to `out.len()` events. Returns the number actually drained.
+    fn drain(&self, out: &mut [CollisionEventRecord]) -> u32 {
+        let cap = self.buf().len() as u32;
+        let r = self.read.load(Ordering::Relaxed);
+        let w = self.write.load(Ordering::Acquire);
+        let avail = w.wrapping_sub(r).min(cap);
+        let count = avail.min(out.len() as u32);
+        // SAFETY: single consumer reads from indices that the producer has
+        // finished writing to (Release/Acquire ordering guarantees visibility).
+        let buf = unsafe { &*self.buf.get() };
+        for i in 0..count {
+            out[i as usize] = buf[((r + i) % cap) as usize];
+        }
+        self.read.store(r.wrapping_add(count), Ordering::Release);
+        count
+    }
+
+    fn buf(&self) -> &[CollisionEventRecord] {
+        unsafe { &*self.buf.get() }
+    }
+
+    fn len(&self) -> u32 {
+        let w = self.write.load(Ordering::Acquire);
+        let r = self.read.load(Ordering::Relaxed);
+        w.wrapping_sub(r).min(self.buf().len() as u32)
+    }
+
+    fn stats(&self) -> EventRingBufferStats {
+        let cap = self.buf().len() as u32;
+        let w = self.write.load(Ordering::Relaxed);
+        let r = self.read.load(Ordering::Relaxed);
+        let avail = w.wrapping_sub(r);
+        EventRingBufferStats {
+            capacity: cap,
+            len: avail.min(cap),
+            dropped: self.dropped.load(Ordering::Relaxed),
+            wrapped: Bool::from(avail > cap),
+        }
+    }
+
+    fn clear(&self) {
+        let w = self.write.load(Ordering::Relaxed);
+        self.read.store(w, Ordering::Release);
+        self.dropped.store(0, Ordering::Relaxed);
+    }
+}
+
+/// Single-producer, single-consumer ring buffer for `ContactForceEventRecord`.
+pub(crate) struct ContactForceEventRing {
+    buf: UnsafeCell<Box<[ContactForceEventRecord]>>,
+    write: AtomicU32,
+    read: AtomicU32,
+    dropped: AtomicU32,
+}
+
+unsafe impl Send for ContactForceEventRing {}
+unsafe impl Sync for ContactForceEventRing {}
+
+impl std::fmt::Debug for ContactForceEventRing {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ContactForceEventRing")
+            .field("len", &self.len())
+            .finish()
+    }
+}
+
+impl ContactForceEventRing {
+    fn new(capacity: u32) -> Self {
+        let cap = capacity.max(1).min(MAX_OUTPUT_CAPACITY) as usize;
+        Self {
+            buf: UnsafeCell::new(
+                vec![ContactForceEventRecord::default(); cap].into_boxed_slice(),
+            ),
+            write: AtomicU32::new(0),
+            read: AtomicU32::new(0),
+            dropped: AtomicU32::new(0),
+        }
+    }
+
+    fn push(&self, event: ContactForceEventRecord) {
+        let cap = self.buf().len() as u32;
+        let w = self.write.load(Ordering::Relaxed);
+        let r = self.read.load(Ordering::Acquire);
+        if w.wrapping_sub(r) >= cap {
+            self.dropped.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
+        unsafe {
+            (*self.buf.get())[(w % cap) as usize] = event;
+        }
+        self.write.store(w.wrapping_add(1), Ordering::Release);
+    }
+
+    fn drain(&self, out: &mut [ContactForceEventRecord]) -> u32 {
+        let cap = self.buf().len() as u32;
+        let r = self.read.load(Ordering::Relaxed);
+        let w = self.write.load(Ordering::Acquire);
+        let avail = w.wrapping_sub(r).min(cap);
+        let count = avail.min(out.len() as u32);
+        let buf = unsafe { &*self.buf.get() };
+        for i in 0..count {
+            out[i as usize] = buf[((r + i) % cap) as usize];
+        }
+        self.read.store(r.wrapping_add(count), Ordering::Release);
+        count
+    }
+
+    fn buf(&self) -> &[ContactForceEventRecord] {
+        unsafe { &*self.buf.get() }
+    }
+
+    fn len(&self) -> u32 {
+        let w = self.write.load(Ordering::Acquire);
+        let r = self.read.load(Ordering::Relaxed);
+        w.wrapping_sub(r).min(self.buf().len() as u32)
+    }
+
+    fn stats(&self) -> EventRingBufferStats {
+        let cap = self.buf().len() as u32;
+        let w = self.write.load(Ordering::Relaxed);
+        let r = self.read.load(Ordering::Relaxed);
+        let avail = w.wrapping_sub(r);
+        EventRingBufferStats {
+            capacity: cap,
+            len: avail.min(cap),
+            dropped: self.dropped.load(Ordering::Relaxed),
+            wrapped: Bool::from(avail > cap),
+        }
+    }
+
+    fn clear(&self) {
+        let w = self.write.load(Ordering::Relaxed);
+        self.read.store(w, Ordering::Release);
+        self.dropped.store(0, Ordering::Relaxed);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Callback registry — init-time registration, zero per-frame lookup
+// ---------------------------------------------------------------------------
+
+use crate::rapier::ffi::{
+    CollisionEventCallback, ContactForceEventCallback, EventCallbackHandle, EventRingBufferStats,
+};
+
+/// Registered callbacks + ring buffer pair for a single event type.
+#[derive(Default)]
+struct CallbackSlot {
+    cb: usize,       // function pointer (zero → unset)
+    user_data: usize, // opaque pointer passed to callback
+    handle: u64,     // monotonically increasing handle for unregister
+}
+
+#[derive(Default)]
+struct ProducerCache {
+    collisions: Option<CollisionEventRing>,
+    contact_forces: Option<ContactForceEventRing>,
+    collision_cb: CallbackSlot,
+    contact_force_cb: CallbackSlot,
+    dispatch_mode: EventDispatchMode,
+    next_handle: u64,
+}
+
+impl ProducerCache {
+    fn dispatch_collision(&self, record: CollisionEventRecord) {
+        match self.dispatch_mode {
+            EventDispatchMode::Poll => { /* handled by existing Vec path */ }
+            EventDispatchMode::Callback | EventDispatchMode::Both => {
+                if self.collision_cb.cb != 0 {
+                    let cb: CollisionEventCallback =
+                        unsafe { std::mem::transmute(self.collision_cb.cb) };
+                    if let Some(f) = cb {
+                        unsafe {
+                            f(
+                                std::ptr::null(),
+                                &record as *const _,
+                                self.collision_cb.user_data as *mut std::ffi::c_void,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        if matches!(
+            self.dispatch_mode,
+            EventDispatchMode::Poll | EventDispatchMode::Both
+        ) {
+            if let Some(ref ring) = self.collisions {
+                ring.push(record);
+            }
+        }
+    }
+
+    fn dispatch_contact_force(&self, record: ContactForceEventRecord) {
+        match self.dispatch_mode {
+            EventDispatchMode::Poll => {}
+            EventDispatchMode::Callback | EventDispatchMode::Both => {
+                if self.contact_force_cb.cb != 0 {
+                    let cb: ContactForceEventCallback =
+                        unsafe { std::mem::transmute(self.contact_force_cb.cb) };
+                    if let Some(f) = cb {
+                        unsafe {
+                            f(
+                                std::ptr::null(),
+                                &record as *const _,
+                                self.contact_force_cb.user_data as *mut std::ffi::c_void,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        if matches!(
+            self.dispatch_mode,
+            EventDispatchMode::Poll | EventDispatchMode::Both
+        ) {
+            if let Some(ref ring) = self.contact_forces {
+                ring.push(record);
+            }
+        }
+    }
+}
+
 impl EventHandler for CollectingEventHandler {
     fn handle_collision_event(
         &self,
@@ -106,7 +389,12 @@ impl EventHandler for CollectingEventHandler {
             },
         };
 
+        // Always push to the legacy Vec for backward compatibility.
         push_event(&mut self.collision_events.lock(), record);
+
+        // Also dispatch through the producer cache (ring buffer + optional callback).
+        let pc = self.producer_cache.read();
+        pc.dispatch_collision(record);
     }
 
     fn handle_contact_force_event(
@@ -118,17 +406,19 @@ impl EventHandler for CollectingEventHandler {
         total_force_magnitude: Real,
     ) {
         let event = ContactForceEvent::from_contact_pair(dt, contact_pair, total_force_magnitude);
-        push_event(
-            &mut self.contact_force_events.lock(),
-            ContactForceEventRecord {
-                collider1: pack_collider_handle(event.collider1),
-                collider2: pack_collider_handle(event.collider2),
-                total_force: vec3_from_rapier(event.total_force),
-                total_force_magnitude: event.total_force_magnitude,
-                max_force_direction: vec3_from_rapier(event.max_force_direction),
-                max_force_magnitude: event.max_force_magnitude,
-            },
-        );
+        let record = ContactForceEventRecord {
+            collider1: pack_collider_handle(event.collider1),
+            collider2: pack_collider_handle(event.collider2),
+            total_force: vec3_from_rapier(event.total_force),
+            total_force_magnitude: event.total_force_magnitude,
+            max_force_direction: vec3_from_rapier(event.max_force_direction),
+            max_force_magnitude: event.max_force_magnitude,
+        };
+
+        push_event(&mut self.contact_force_events.lock(), record);
+
+        let pc = self.producer_cache.read();
+        pc.dispatch_contact_force(record);
     }
 }
 
@@ -250,91 +540,103 @@ fn external_force_law_valid(law: ExternalForceLaw) -> bool {
         && law.gravitational_parameter >= 0.0
 }
 
-pub(crate) fn apply_custom_external_forces(world: &mut crate::rapier::world::PhysicsWorld) {
-    let custom = world.events.custom_physics();
-    let air_drag = custom
-        .air_drag
-        .filter(|law| law.enabled.0 != 0 && air_drag_law_valid(*law));
+/// Apply custom external forces (buoyancy, EM, spring, point gravity) using
+/// the already-read physics state.  Air drag is now handled by
+/// `interaction::apply_body_interactions`.
+pub(crate) fn apply_custom_external_forces_with_custom(
+    world: &mut crate::rapier::world::PhysicsWorld,
+    custom: CustomPhysicsState,
+) {
     let external_force = custom
         .external_force
         .filter(|law| law.enabled.0 != 0 && external_force_law_valid(*law));
 
-    if air_drag.is_none() && external_force.is_none() {
-        world
-            .events
-            .set_last_custom_physics_report(CustomPhysicsReport::default());
+    if external_force.is_none() {
         return;
     }
 
+    // Pre-compute constant parts of external forces outside the body loop
+    let buoyancy_force_vec = external_force
+        .filter(|law| law.buoyancy_enabled.0 != 0)
+        .map(|law| {
+            -vec3_to_rapier(law.buoyancy_gravity) * (law.fluid_density * law.displaced_volume)
+        });
+    let em_electric_vec = external_force
+        .filter(|law| law.electromagnetic_enabled.0 != 0)
+        .map(|law| vec3_to_rapier(law.electric_field) * law.charge);
+    let em_magnetic_vec = external_force
+        .filter(|law| law.electromagnetic_enabled.0 != 0)
+        .map(|law| vec3_to_rapier(law.magnetic_field));
+    let em_charge = external_force
+        .filter(|law| law.electromagnetic_enabled.0 != 0)
+        .map(|law| law.charge);
+    let spring_anchor = external_force
+        .filter(|law| law.elastic_enabled.0 != 0)
+        .map(|law| vec3_to_rapier(law.spring_anchor));
+    let spring_k = external_force
+        .filter(|law| law.elastic_enabled.0 != 0)
+        .map(|law| law.spring_stiffness);
+    let spring_d = external_force
+        .filter(|law| law.elastic_enabled.0 != 0)
+        .map(|law| law.spring_damping);
+    let gravity_source = external_force
+        .filter(|law| law.gravity_enabled.0 != 0)
+        .map(|law| vec3_to_rapier(law.gravity_source));
+    let grav_param = external_force
+        .filter(|law| law.gravity_enabled.0 != 0)
+        .map(|law| law.gravitational_parameter);
+
     let mut report = CustomPhysicsReport::default();
-    let mut total_drag = Vector::ZERO;
-    let mut total_external = Vector::ZERO;
+    let mut total_external = KahanVec3::default();
+
     for (_, body) in world.bodies.iter_mut() {
         report.body_count += 1;
         if !body.is_dynamic() {
             continue;
         }
 
-        if let Some(law) = air_drag {
-            let fluid_velocity = vec3_to_rapier(law.fluid_velocity);
-            let relative_velocity = body.linvel() - fluid_velocity;
-            let speed = relative_velocity.length();
-            if speed > 1.0e-12 {
-                let reynolds =
-                    law.density * speed * law.characteristic_length / law.dynamic_viscosity;
-                report.max_reynolds_number = report.max_reynolds_number.max(reynolds);
-                let drag_magnitude = if reynolds <= law.reynolds_stokes_limit {
-                    3.0 * std::f64::consts::PI
-                        * law.dynamic_viscosity
-                        * law.characteristic_length
-                        * speed
-                } else {
-                    0.5 * law.density * speed * speed * law.drag_coefficient * law.reference_area
-                };
-                let force = -relative_velocity / speed * drag_magnitude;
-                body.add_force(force, true);
-                total_drag += force;
-                report.drag_body_count += 1;
+        // --- External force (pre-computed constant parts) ---
+        let mut force = Vector::ZERO;
+
+        // Buoyancy: constant force per body
+        if let Some(bf) = buoyancy_force_vec {
+            force += bf;
+        }
+
+        // Electromagnetic: E-field constant, B-field × v per body
+        if let (Some(ef), Some(bf), Some(q)) = (em_electric_vec, em_magnetic_vec, em_charge) {
+            let magnetic = body.linvel().cross(bf);
+            force += ef + magnetic * q;
+        }
+
+        // Elastic spring
+        if let (Some(anchor), Some(k), Some(d)) = (spring_anchor, spring_k, spring_d) {
+            let displacement = body.translation() - anchor;
+            let damping = body.linvel() * d;
+            force += -displacement * k - damping;
+        }
+
+        // Gravity point-mass
+        if let (Some(src), Some(gp)) = (gravity_source, grav_param) {
+            let offset = src - body.translation();
+            let distance_squared = offset.length_squared();
+            if distance_squared > 1.0e-12 {
+                let mass = body.mass();
+                if mass > 0.0 {
+                    force += offset / distance_squared.sqrt()
+                        * (gp * mass / distance_squared);
+                }
             }
         }
 
-        if let Some(law) = external_force {
-            let mut force = Vector::ZERO;
-            if law.buoyancy_enabled.0 != 0 {
-                force += -vec3_to_rapier(law.buoyancy_gravity)
-                    * (law.fluid_density * law.displaced_volume);
-            }
-            if law.electromagnetic_enabled.0 != 0 {
-                let velocity = body.linvel();
-                let magnetic = velocity.cross(vec3_to_rapier(law.magnetic_field));
-                force += (vec3_to_rapier(law.electric_field) + magnetic) * law.charge;
-            }
-            if law.elastic_enabled.0 != 0 {
-                let displacement = body.translation() - vec3_to_rapier(law.spring_anchor);
-                let damping = body.linvel() * law.spring_damping;
-                force += -displacement * law.spring_stiffness - damping;
-            }
-            if law.gravity_enabled.0 != 0 {
-                let offset = vec3_to_rapier(law.gravity_source) - body.translation();
-                let distance_squared = offset.length_squared();
-                if distance_squared > 1.0e-12 {
-                    let mass = body.mass();
-                    if mass > 0.0 {
-                        force += offset / distance_squared.sqrt()
-                            * (law.gravitational_parameter * mass / distance_squared);
-                    }
-                }
-            }
-            if force != Vector::ZERO {
-                body.add_force(force, true);
-                total_external += force;
-                report.external_force_body_count += 1;
-            }
+        if force != Vector::ZERO {
+            body.add_force(force, true);
+            total_external.add(vec3_from_rapier(force));
+            report.external_force_body_count += 1;
         }
     }
 
-    report.total_drag_force = vec3_from_rapier(total_drag);
-    report.total_external_force = vec3_from_rapier(total_external);
+    report.total_external_force = total_external.value();
     world.events.set_last_custom_physics_report(report);
 }
 
@@ -519,6 +821,75 @@ pub extern "C" fn world_get_external_force_law(
     Bool::TRUE
 }
 
+// ---------------------------------------------------------------------------
+// Newton gravity law FFI
+// ---------------------------------------------------------------------------
+
+#[unsafe(no_mangle)]
+pub extern "C" fn world_set_newton_gravity_law(
+    world: *mut WorldHandle,
+    law: NewtonGravityLaw,
+) -> Bool {
+    let Some(world) = (unsafe { world.as_mut() }) else {
+        set_error(ERR_NULL_POINTER, "world is null");
+        return Bool::FALSE;
+    };
+    if !law.gravitational_constant.is_finite()
+        || law.gravitational_constant < 0.0
+        || !law.min_distance.is_finite()
+        || law.min_distance <= 0.0
+        || !law.max_distance.is_finite()
+        || law.max_distance < 0.0
+    {
+        set_error(ERR_INVALID_ARGUMENT, "invalid Newton gravity law");
+        return Bool::FALSE;
+    }
+    world.inner.events.custom_physics.write().newton_gravity =
+        if law.enabled.0 != 0 { Some(law) } else { None };
+    clear_error();
+    Bool::TRUE
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn world_set_newton_gravity_law_flag(
+    world: *mut WorldHandle,
+    law: NewtonGravityLaw,
+) -> u8 {
+    world_set_newton_gravity_law(world, law).0
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn world_clear_newton_gravity_law(world: *mut WorldHandle) {
+    let Some(world) = (unsafe { world.as_mut() }) else {
+        return;
+    };
+    world.inner.events.custom_physics.write().newton_gravity = None;
+    clear_error();
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn world_get_newton_gravity_law(
+    world: *const WorldHandle,
+    out_law: *mut NewtonGravityLaw,
+) -> Bool {
+    let Some(world) = (unsafe { world.as_ref() }) else {
+        set_error(ERR_NULL_POINTER, "world is null");
+        return Bool::FALSE;
+    };
+    let Some(out_law) = (unsafe { out_law.as_mut() }) else {
+        set_error(ERR_NULL_POINTER, "Newton gravity output is null");
+        return Bool::FALSE;
+    };
+    *out_law = world
+        .inner
+        .events
+        .custom_physics()
+        .newton_gravity
+        .unwrap_or_default();
+    clear_error();
+    Bool::TRUE
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn world_get_custom_physics_report(
     world: *const WorldHandle,
@@ -688,6 +1059,301 @@ pub extern "C" fn world_clear_intersection_pair_filter_callback(world: *mut Worl
         return;
     };
     world.inner.hooks = CallbackPhysicsHooks::new(world.inner.events.clone());
+}
+
+// ---------------------------------------------------------------------------
+// Event cache registry — init-time registration, zero per-frame lookup
+// ---------------------------------------------------------------------------
+
+/// Allocate a collision-event ring buffer of `capacity` records.
+/// Events will be written here during `world_step` instead of (or in addition to)
+/// the legacy Vec queue.  Java drains the ring buffer at its own pace.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_init_collision_event_ring(
+    world: *mut WorldHandle,
+    capacity: u32,
+) -> Bool {
+    let Some(world) = (unsafe { world.as_mut() }) else {
+        set_error(ERR_NULL_POINTER, "world is null");
+        return Bool::FALSE;
+    };
+    if capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
+        set_error(ERR_CAPACITY, "invalid collision event ring capacity");
+        return Bool::FALSE;
+    }
+    world.inner.events.producer_cache.write().collisions =
+        Some(CollisionEventRing::new(capacity));
+    clear_error();
+    Bool::TRUE
+}
+
+/// Allocate a contact-force-event ring buffer.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_init_contact_force_event_ring(
+    world: *mut WorldHandle,
+    capacity: u32,
+) -> Bool {
+    let Some(world) = (unsafe { world.as_mut() }) else {
+        set_error(ERR_NULL_POINTER, "world is null");
+        return Bool::FALSE;
+    };
+    if capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
+        set_error(ERR_CAPACITY, "invalid contact force event ring capacity");
+        return Bool::FALSE;
+    }
+    world.inner.events.producer_cache.write().contact_forces =
+        Some(ContactForceEventRing::new(capacity));
+    clear_error();
+    Bool::TRUE
+}
+
+/// Drain the collision-event ring buffer into `out_events`.
+/// Returns the number of events drained.  This is the **only** FFI call needed
+/// per frame after init — no more count-then-allocate-then-read cycles.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_drain_collision_event_ring(
+    world: *const WorldHandle,
+    out_events: *mut CollisionEventRecord,
+    capacity: u32,
+) -> u32 {
+    let Some(world) = (unsafe { world.as_ref() }) else {
+        set_error(ERR_NULL_POINTER, "world is null");
+        return 0;
+    };
+    if out_events.is_null() || capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
+        set_error(ERR_CAPACITY, "invalid collision event drain output");
+        return 0;
+    }
+    let out = unsafe { std::slice::from_raw_parts_mut(out_events, capacity as usize) };
+    let pc = world.inner.events.producer_cache.read();
+    let count = pc
+        .collisions
+        .as_ref()
+        .map(|ring| ring.drain(out))
+        .unwrap_or(0);
+    clear_error();
+    count
+}
+
+/// Drain the contact-force-event ring buffer.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_drain_contact_force_event_ring(
+    world: *const WorldHandle,
+    out_events: *mut ContactForceEventRecord,
+    capacity: u32,
+) -> u32 {
+    let Some(world) = (unsafe { world.as_ref() }) else {
+        set_error(ERR_NULL_POINTER, "world is null");
+        return 0;
+    };
+    if out_events.is_null() || capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
+        set_error(ERR_CAPACITY, "invalid contact force event drain output");
+        return 0;
+    }
+    let out = unsafe { std::slice::from_raw_parts_mut(out_events, capacity as usize) };
+    let pc = world.inner.events.producer_cache.read();
+    let count = pc
+        .contact_forces
+        .as_ref()
+        .map(|ring| ring.drain(out))
+        .unwrap_or(0);
+    clear_error();
+    count
+}
+
+/// Get the current number of events in the collision ring buffer (cheap, no lock).
+#[unsafe(no_mangle)]
+pub extern "C" fn world_collision_event_ring_len(world: *const WorldHandle) -> u32 {
+    let Some(world) = (unsafe { world.as_ref() }) else {
+        return 0;
+    };
+    world
+        .inner
+        .events
+        .producer_cache
+        .read()
+        .collisions
+        .as_ref()
+        .map(|ring| ring.len())
+        .unwrap_or(0)
+}
+
+/// Get the current number of events in the contact-force ring buffer.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_contact_force_event_ring_len(world: *const WorldHandle) -> u32 {
+    let Some(world) = (unsafe { world.as_ref() }) else {
+        return 0;
+    };
+    world
+        .inner
+        .events
+        .producer_cache
+        .read()
+        .contact_forces
+        .as_ref()
+        .map(|ring| ring.len())
+        .unwrap_or(0)
+}
+
+/// Get ring buffer statistics (capacity, occupancy, drops, wraps).
+#[unsafe(no_mangle)]
+pub extern "C" fn world_collision_event_ring_stats(
+    world: *const WorldHandle,
+    out_stats: *mut EventRingBufferStats,
+) -> Bool {
+    let Some(world) = (unsafe { world.as_ref() }) else {
+        set_error(ERR_NULL_POINTER, "world is null");
+        return Bool::FALSE;
+    };
+    let Some(out_stats) = (unsafe { out_stats.as_mut() }) else {
+        set_error(ERR_NULL_POINTER, "ring stats output is null");
+        return Bool::FALSE;
+    };
+    let pc = world.inner.events.producer_cache.read();
+    *out_stats = pc
+        .collisions
+        .as_ref()
+        .map(|ring| ring.stats())
+        .unwrap_or_default();
+    clear_error();
+    Bool::TRUE
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn world_contact_force_event_ring_stats(
+    world: *const WorldHandle,
+    out_stats: *mut EventRingBufferStats,
+) -> Bool {
+    let Some(world) = (unsafe { world.as_ref() }) else {
+        set_error(ERR_NULL_POINTER, "world is null");
+        return Bool::FALSE;
+    };
+    let Some(out_stats) = (unsafe { out_stats.as_mut() }) else {
+        set_error(ERR_NULL_POINTER, "ring stats output is null");
+        return Bool::FALSE;
+    };
+    let pc = world.inner.events.producer_cache.read();
+    *out_stats = pc
+        .contact_forces
+        .as_ref()
+        .map(|ring| ring.stats())
+        .unwrap_or_default();
+    clear_error();
+    Bool::TRUE
+}
+
+/// Clear both ring buffers and reset drop counters.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_clear_event_rings(world: *mut WorldHandle) {
+    let Some(world) = (unsafe { world.as_mut() }) else {
+        return;
+    };
+    let pc = world.inner.events.producer_cache.read();
+    if let Some(ref ring) = pc.collisions {
+        ring.clear();
+    }
+    if let Some(ref ring) = pc.contact_forces {
+        ring.clear();
+    }
+}
+
+/// Register a collision-event callback.
+///
+/// `callback` is a C function pointer (zero = unregister).
+/// `user_data` is passed through unchanged to each invocation.
+/// Returns an opaque handle for later unregistration.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_register_collision_callback(
+    world: *mut WorldHandle,
+    callback: usize,
+    user_data: usize,
+) -> EventCallbackHandle {
+    let Some(world) = (unsafe { world.as_mut() }) else {
+        set_error(ERR_NULL_POINTER, "world is null");
+        return 0;
+    };
+    let mut pc = world.inner.events.producer_cache.write();
+    pc.next_handle = pc.next_handle.wrapping_add(1);
+    pc.collision_cb = CallbackSlot {
+        cb: callback,
+        user_data,
+        handle: pc.next_handle,
+    };
+    clear_error();
+    pc.next_handle
+}
+
+/// Register a contact-force-event callback.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_register_contact_force_callback(
+    world: *mut WorldHandle,
+    callback: usize,
+    user_data: usize,
+) -> EventCallbackHandle {
+    let Some(world) = (unsafe { world.as_mut() }) else {
+        set_error(ERR_NULL_POINTER, "world is null");
+        return 0;
+    };
+    let mut pc = world.inner.events.producer_cache.write();
+    pc.next_handle = pc.next_handle.wrapping_add(1);
+    pc.contact_force_cb = CallbackSlot {
+        cb: callback,
+        user_data,
+        handle: pc.next_handle,
+    };
+    clear_error();
+    pc.next_handle
+}
+
+/// Unregister a previously registered callback by its handle.
+/// Passing 0 or an invalid handle is a no-op.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_unregister_callback(
+    world: *mut WorldHandle,
+    handle: EventCallbackHandle,
+) {
+    let Some(world) = (unsafe { world.as_mut() }) else {
+        return;
+    };
+    if handle == 0 {
+        return;
+    }
+    let mut pc = world.inner.events.producer_cache.write();
+    if pc.collision_cb.handle == handle {
+        pc.collision_cb = CallbackSlot::default();
+    }
+    if pc.contact_force_cb.handle == handle {
+        pc.contact_force_cb = CallbackSlot::default();
+    }
+    clear_error();
+}
+
+/// Set the event dispatch mode.
+///
+/// - `Poll` (0): legacy Vec queue only (default).
+/// - `Callback` (1): registered callbacks only.
+/// - `Both` (2): ring buffer + callbacks.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_set_event_dispatch_mode(
+    world: *mut WorldHandle,
+    mode: u32,
+) -> Bool {
+    let Some(world) = (unsafe { world.as_mut() }) else {
+        set_error(ERR_NULL_POINTER, "world is null");
+        return Bool::FALSE;
+    };
+    let mode = match mode {
+        0 => EventDispatchMode::Poll,
+        1 => EventDispatchMode::Callback,
+        2 => EventDispatchMode::Both,
+        _ => {
+            set_error(ERR_INVALID_ARGUMENT, "invalid event dispatch mode");
+            return Bool::FALSE;
+        }
+    };
+    world.inner.events.producer_cache.write().dispatch_mode = mode;
+    clear_error();
+    Bool::TRUE
 }
 
 #[cfg(test)]
@@ -903,6 +1569,115 @@ mod tests {
         assert!(report.total_external_force.x < 0.0);
         assert!(report.total_external_force.y > 0.0);
         assert!(report.total_external_force.z > 0.0);
+        crate::rapier::world::world_destroy(world);
+    }
+
+    #[test]
+    fn event_ring_buffer_produces_and_drains_events() {
+        let world = crate::rapier::world::world_create(Vec3::default());
+        // Init ring buffer
+        assert_eq!(
+            world_init_collision_event_ring(world, 64),
+            Bool::TRUE
+        );
+        assert_eq!(
+            world_init_contact_force_event_ring(world, 64),
+            Bool::TRUE
+        );
+        // Set dispatch mode to Both so ring buffer gets filled
+        assert_eq!(world_set_event_dispatch_mode(world, 2), Bool::TRUE);
+
+        // Create two colliding bodies with collision events enabled
+        let ground = crate::rapier::rigid_body::rigid_body_builder_build(
+            crate::rapier::rigid_body::rigid_body_builder_create(BodyStatus::Fixed as u32),
+        );
+        let ground_handle = crate::rapier::rigid_body::world_insert_rigid_body(world, ground);
+        let gc_builder = crate::rapier::collider::collider_builder_create_ex(ShapeDesc {
+            shape_type: 1,
+            a: 2.0,
+            b: 0.25,
+            c: 2.0,
+            d: 0.0,
+        });
+        // Enable collision events so the ring buffer receives them
+        crate::rapier::collider::collider_builder_set_active_events(
+            gc_builder,
+            1, // COLLISION_EVENTS = 1
+        );
+        let gc = crate::rapier::collider::collider_builder_build(gc_builder);
+        crate::rapier::collider::world_insert_collider_with_parent(world, gc, ground_handle);
+
+        let body_b = crate::rapier::rigid_body::rigid_body_builder_create(BodyStatus::Dynamic as u32);
+        crate::rapier::rigid_body::rigid_body_builder_set_translation(
+            body_b,
+            Vec3 {
+                x: 0.0,
+                y: 0.5,
+                z: 0.0,
+            },
+        );
+        crate::rapier::rigid_body::rigid_body_builder_set_additional_mass(body_b, 1.0);
+        let body = crate::rapier::rigid_body::rigid_body_builder_build(body_b);
+        let body_handle = crate::rapier::rigid_body::world_insert_rigid_body(world, body);
+        let bc_builder = crate::rapier::collider::collider_builder_create_ex(ShapeDesc {
+            shape_type: 1,
+            a: 0.25,
+            b: 0.25,
+            c: 0.25,
+            d: 0.0,
+        });
+        crate::rapier::collider::collider_builder_set_active_events(bc_builder, 1);
+        let bc = crate::rapier::collider::collider_builder_build(bc_builder);
+        crate::rapier::collider::world_insert_collider_with_parent(world, bc, body_handle);
+
+        // Step — collision should occur
+        crate::rapier::world::world_step(world, 1.0 / 60.0);
+
+        // Ring buffer should have events
+        let len = world_collision_event_ring_len(world);
+        assert!(len > 0, "expected collision events in ring buffer");
+
+        // Drain ring buffer
+        let mut out = vec![CollisionEventRecord::default(); 64];
+        let drained = world_drain_collision_event_ring(world, out.as_mut_ptr(), 64);
+        assert_eq!(drained, len);
+
+        // After drain, ring should be empty
+        assert_eq!(world_collision_event_ring_len(world), 0);
+
+        // Stats should reflect capacity
+        let mut stats = EventRingBufferStats::default();
+        assert_eq!(
+            world_collision_event_ring_stats(world, &mut stats),
+            Bool::TRUE
+        );
+        assert_eq!(stats.capacity, 64);
+        assert_eq!(stats.len, 0);
+        assert_eq!(stats.dropped, 0);
+
+        // Clear rings
+        world_clear_event_rings(world);
+
+        crate::rapier::world::world_destroy(world);
+    }
+
+    #[test]
+    fn callback_registration_and_unregistration() {
+        let world = crate::rapier::world::world_create(Vec3::default());
+
+        // Register callback (pass 0 as fn ptr — valid "no-op" registration test)
+        let handle = world_register_collision_callback(world, 0, 42);
+        assert_ne!(handle, 0, "callback handle should be non-zero");
+
+        // Set dispatch mode
+        assert_eq!(world_set_event_dispatch_mode(world, 2), Bool::TRUE); // Both
+
+        // Unregister
+        world_unregister_callback(world, handle);
+
+        // Unregister with zero handle is no-op
+        world_unregister_callback(world, 0);
+
         crate::rapier::world::world_destroy(world);
     }
 }
