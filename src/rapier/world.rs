@@ -12,7 +12,8 @@ use crate::rapier::ffi::{
     pack_rigid_body_handle, quat_finite, quat_from_rapier, unpack_rigid_body_handle, vec3_finite,
     vec3_from_rapier, vec3_to_rapier,
 };
-use crate::rapier::forces::ForceRegistry;
+use crate::rapier::forces::{ForceFacade, ForceRegistry};
+use hashbrown::HashMap;
 
 const MAX_STEP_SECONDS: f64 = 1.0;
 
@@ -97,18 +98,13 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
 
     world.inner.integration_parameters.dt = delta_seconds;
 
-    // Cache custom physics read once to avoid double RwLock acquire.
-    // The coulomb hook setup only needs to run when the law is first enabled;
-    // we detect this by checking whether MODIFY_SOLVER_CONTACTS is already set
-    // on the first collider (all are set uniformly).
+    // --- Coulomb hook setup (unchanged) ---
     let custom = world.inner.events.custom_physics();
     let coulomb_active = custom
         .coulomb_friction
         .is_some_and(|law| law.enabled.0 != 0);
 
     if coulomb_active {
-        // Only set the hook on colliders that don't already have it.
-        // Most colliders get it set on first step and skip thereafter.
         let hook_bit = ActiveHooks::MODIFY_SOLVER_CONTACTS;
         for (_, collider) in world.inner.colliders.iter_mut() {
             let current = collider.active_hooks();
@@ -118,68 +114,40 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
         }
     }
 
-    // 1. Pre-check which force types are registered (avoids borrow conflict).
-    let has_newton_gravity = !world
-        .inner
-        .force_registry
-        .find_by_type(crate::rapier::forces::ForceLawType::NewtonianGravity)
-        .is_empty();
-    let has_coulomb = !world
-        .inner
-        .force_registry
-        .find_by_type(crate::rapier::forces::ForceLawType::CoulombFriction)
-        .is_empty();
-    let has_air_drag = !world
-        .inner
-        .force_registry
-        .find_by_type(crate::rapier::forces::ForceLawType::AirDrag)
-        .is_empty();
-    let has_external_forces = !world
-        .inner
-        .force_registry
-        .find_by_type(crate::rapier::forces::ForceLawType::Buoyancy)
-        .is_empty()
-        || !world
-            .inner
-            .force_registry
-            .find_by_type(crate::rapier::forces::ForceLawType::Electromagnetic)
-            .is_empty()
-        || !world
-            .inner
-            .force_registry
-            .find_by_type(crate::rapier::forces::ForceLawType::ElasticSpring)
-            .is_empty()
-        || !world
-            .inner
-            .force_registry
-            .find_by_type(crate::rapier::forces::ForceLawType::PointGravity)
-            .is_empty();
-
-    // 2. Apply forces via the type-registry (new path).
-    let force_report = world.inner.force_registry.apply_all(
+    // --- Force facade: the single entry-point for all force application ---
+    let mut frame_log = HashMap::new();
+    let mut facade = ForceFacade::new(
         &mut world.inner.bodies,
         &mut world.inner.colliders,
         &world.inner.narrow_phase,
+        &mut frame_log,
     );
 
-    // 3. Legacy path: apply forces that haven't been migrated to ForceLaw yet.
-    if !has_external_forces {
-        crate::rapier::events::apply_custom_external_forces_with_custom(
-            &mut world.inner,
-            custom.clone(),
-        );
-    }
-    if !has_newton_gravity || !has_coulomb || !has_air_drag {
-        crate::rapier::interaction::apply_body_interactions(&mut world.inner, &custom);
-    }
+    // 1. Registered ForceLaw list (from new system)
+    world.inner.force_registry.apply_all(&mut facade);
 
-    // 4. Merge registry report into events, but only if it has content.
-    //    Otherwise preserve the legacy report (set by apply_* functions above).
-    let has_registry_forces = force_report
+    // 2. Backward-compat: old unregistered external-force law setter path
+    //   Work around borrowck by copying body handles/positions, then replaying forces through facade.
+    crate::rapier::events::apply_custom_external_forces_with_facade(
+        &custom,
+        &mut facade,
+    );
+
+    // 3. Backward-compat: old unregistered body-interaction path
+    //   Same approach: compute forces first (immutable reads), then replay.
+    crate::rapier::interaction::apply_body_interactions_with_facade(
+        &world.inner.force_registry,
+        &custom,
+        &mut facade,
+    );
+
+    // 4. Drain the facade frame-log into a report and write it to events
+    let force_report = facade.drain_report();
+    if force_report
         .contributions
         .values()
-        .any(|c| c.body_count > 0);
-    if has_registry_forces {
+        .any(|c| c.body_count > 0)
+    {
         world
             .inner
             .events
@@ -564,6 +532,52 @@ pub extern "C" fn world_update_body_velocities(
 }
 
 // ---------------------------------------------------------------------------
+// Convenience: register celestial gravity as a ForceLaw
+// ---------------------------------------------------------------------------
+
+/// Register celestial body gravity as a ForceLaw in the world's registry.
+///
+/// `body_id` maps to `CelestialBodyId` (0=Sun, 3=Earth, 4=Moon, 5=Mars, etc.).
+///
+/// Returns handle (non-zero) on success, 0 on invalid body_id.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_register_celestial_gravity(
+    world: *mut WorldHandle,
+    body_id: u32,
+    max_degree: u32,
+) -> u64 {
+    let Some(world) = (unsafe { world.as_mut() }) else {
+        set_error(ERR_NULL_POINTER, "world is null");
+        return 0;
+    };
+    let id = match body_id {
+        0..=9 => unsafe {
+            std::mem::transmute::<u32, crate::rapier::celestial_data::CelestialBodyId>(body_id)
+        },
+        _ => {
+            set_error(ERR_INVALID_ARGUMENT, "invalid celestial body ID");
+            return 0;
+        }
+    };
+    let body = crate::rapier::celestial_data::get_celestial_body(id);
+    let law = crate::rapier::interaction::CelestialGravityForceLaw {
+        body,
+        max_sh_degree: max_degree.min(body.max_degree),
+        enabled: true,
+    };
+
+    let existing = world.inner.force_registry.find_by_type(
+        crate::rapier::forces::ForceLawType::CelestialGravity,
+    );
+    for h in existing {
+        world.inner.force_registry.unregister(h);
+    }
+
+    clear_error();
+    world.inner.force_registry.register(Box::new(law)).raw()
+}
+
+// ---------------------------------------------------------------------------
 // ForceRegistry FFI — generic access for advanced callers
 // ---------------------------------------------------------------------------
 
@@ -626,7 +640,9 @@ fn force_law_type_from_u32(tag: u32) -> Option<ForceLawType> {
         21 => Some(ForceLawType::TrajectoryCentrifugal),
         22 => Some(ForceLawType::TrajectoryGravity),
         23 => Some(ForceLawType::ControlPID),
-        _ => None, // Custom(u64) must use the runtime-register path
+        24 => Some(ForceLawType::CelestialGravity),
+        25 => Some(ForceLawType::TerrainGravity),
+        _ => None,
     }
 }
 

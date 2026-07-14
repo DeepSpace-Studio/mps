@@ -12,6 +12,115 @@
 
 #define ABI_VERSION 1
 
+/**
+ * Newtonian gravitational constant (m³·kg⁻¹·s⁻²) — CODATA 2018
+ */
+#define G 6.67430e-11
+
+/**
+ * Astronomical Unit (m) — IAU 2012 Resolution B2
+ */
+#define AU 149597870700.0
+
+/**
+ * Speed of light (m·s⁻¹) — exact (SI 1983)
+ */
+#define C 299792458.0
+
+/**
+ * IERS 2010 / DE441
+ */
+#define EARTH_GM 3.986004415e14
+
+#define EARTH_EQ_RADIUS 6378136.3
+
+#define EARTH_POLAR_RADIUS 6356751.9
+
+#define EARTH_FLATTENING (1.0 / 298.257222101)
+
+#define EARTH_ROTATION_RATE 7.2921150e-5
+
+#define EARTH_J2 0.00108262668355
+
+#define EARTH_J3 -2.53265648533e-6
+
+#define EARTH_J4 -1.61962159137e-6
+
+#define EARTH_J5 -2.2730e-7
+
+#define EARTH_J6 5.407e-7
+
+/**
+ * Reference surface atmospheric density for NRLMSISE-00 at 0km (kg/m³)
+ */
+#define EARTH_SURFACE_DENSITY 1.225
+
+/**
+ * Atmospheric scale height near surface (m)
+ */
+#define EARTH_SCALE_HEIGHT 8500.0
+
+/**
+ * Solar constant / c (N/m² at 1 AU from Sun)
+ */
+#define SOLAR_PRESSURE_AT_1AU 4.5605e-6
+
+#define MOON_GM 4.902800118e12
+
+#define MOON_EQ_RADIUS 1737400.0
+
+#define MOON_FLATTENING (1.0 / 400.0)
+
+#define MOON_ROTATION_RATE 2.6616995e-6
+
+#define MOON_J2 2.0330e-4
+
+#define MOON_J3 -1.00e-5
+
+#define MARS_GM 4.282837362e13
+
+#define MARS_EQ_RADIUS 3396190.0
+
+#define MARS_FLATTENING (1.0 / 169.77)
+
+#define MARS_ROTATION_RATE 7.088218108e-5
+
+#define MARS_J2 1.960454e-3
+
+#define MARS_J3 3.145e-5
+
+#define SUN_GM 1.3271244004193938e20
+
+#define SUN_EQ_RADIUS 695700000.0
+
+#define SUN_FLATTENING 9.0e-6
+
+#define SUN_J2 2.22e-7
+
+#define JUPITER_GM 1.266865349218048e17
+
+#define JUPITER_EQ_RADIUS 71492000.0
+
+#define JUPITER_FLATTENING (1.0 / 15.41)
+
+#define JUPITER_ROTATION_RATE 1.758532e-4
+
+#define JUPITER_J2 1.4736e-2
+
+#define JUPITER_J4 -5.87e-4
+
+#define SATURN_GM 3.793120749865088e16
+
+#define SATURN_EQ_RADIUS 60268000.0
+
+#define SATURN_FLATTENING (1.0 / 10.21)
+
+#define SATURN_ROTATION_RATE 1.63788e-4
+
+#define SATURN_J2 1.6291e-2
+
+#define SATURN_J4 -9.15e-4
+
 typedef enum BodyStatus {
   Dynamic = 0,
   Fixed = 1,
@@ -1758,6 +1867,24 @@ typedef struct GpGridPoint {
   double density;
 } GpGridPoint;
 
+/**
+ * A mass concentration (mascon) on the Moon's surface.
+ */
+typedef struct LunarMascon {
+  /**
+   * Center position (Moon-fixed, meters)
+   */
+  struct Vec3 center;
+  /**
+   * Excess mass (kg) — positive = mass excess
+   */
+  double excess_mass;
+  /**
+   * Radius of the mascon (m) — used for softening
+   */
+  double radius;
+} LunarMascon;
+
 typedef struct HeatConductionReport {
   double temperature_delta;
   double temperature_gradient;
@@ -2610,6 +2737,47 @@ uint32_t query_intersect_spherical_shell_all(const struct WorldHandle *world,
                                              struct SphericalShell shell,
                                              ColliderHandleRaw *out_handles,
                                              uint32_t capacity);
+
+/**
+ * Get body parameters by ID.  `body_id` maps to `CelestialBodyId`.
+ *
+ * Returns the packed data:
+ *   out_gm            — gravitational parameter (m³/s²)
+ *   out_eq_radius     — equatorial radius (m)
+ *   out_flattening    — flattening f = (a-c)/a
+ *   out_rotation_rate — siderial rotation rate (rad/s)
+ *   out_j2_j6         — [j2, j3, j4, j5, j6] array of 5 f64s
+ *
+ * `max_degree` is returned directly.
+ * Returns 0 on success; sets error on invalid ID.
+ */
+struct Bool celestial_get_body(uint32_t body_id,
+                               double *out_gm,
+                               double *out_eq_radius,
+                               double *out_flattening,
+                               double *out_rotation_rate,
+                               double *out_j2_j6,
+                               uint32_t *out_max_degree,
+                               double *out_ref_radius,
+                               double *out_surface_density,
+                               double *out_scale_height);
+
+/**
+ * Retrieve packed spherical-harmonic coefficients for a body.
+ *
+ * `c_coeffs_out` and `s_coeffs_out` must point to pre-allocated buffers of
+ * size `len` (use `celestial_get_sh_coeff_count(body_id)` first).
+ * Returns the number of coefficients actually written.
+ */
+uint32_t celestial_get_sh_coeffs(uint32_t body_id,
+                                 double *c_coeffs_out,
+                                 double *s_coeffs_out,
+                                 uint32_t capacity);
+
+/**
+ * Return the number of spherical-harmonic coefficients for a given body.
+ */
+uint32_t celestial_get_sh_coeff_count(uint32_t body_id);
 
 /**
  * Perform one RK4 step of the Lorenz system.
@@ -3505,6 +3673,87 @@ struct Bool world_replace_body_with_fracture_fragments(struct WorldHandle *world
                                                        ImpulseJointHandleRaw *out_joint_handles,
                                                        uint32_t capacity,
                                                        struct FractureReplaceReport *out_report);
+
+/**
+ * Compute spherical-harmonic gravitational acceleration.
+ *
+ * `position` — body-fixed position (ECEF for Earth)
+ * `body_id` — celestial body ID (0=Sun, 3=Earth, 4=Moon, 5=Mars, etc.)
+ * `max_degree` — maximum degree ≤ body.max_degree
+ * `out_acceleration` — output acceleration vector (m/s²)
+ *
+ * Returns Bool::TRUE on success.
+ */
+struct Bool gravity_spherical_harmonics(struct Vec3 position,
+                                        uint32_t body_id,
+                                        uint32_t max_degree,
+                                        struct Vec3 *out_acceleration);
+
+/**
+ * Compute ellipsoid gravitational acceleration.
+ */
+struct Bool gravity_ellipsoid(struct Vec3 position,
+                              uint32_t body_id,
+                              struct Vec3 *out_acceleration);
+
+/**
+ * Compute zonal-harmonic (J2–J6) acceleration.
+ *
+ * `jn` points to an array of `jn_count` zonal coefficients (J2, J3, …).
+ */
+struct Bool gravity_zonal_harmonics(struct Vec3 position,
+                                    double gm,
+                                    double equatorial_radius,
+                                    const double *jn,
+                                    uint32_t jn_count,
+                                    struct Vec3 *out_acceleration);
+
+/**
+ * Compute quadrupole tensor acceleration.
+ */
+struct Bool gravity_quadrupole_tensor(struct Vec3 position,
+                                      double gm,
+                                      const double *quadrupole,
+                                      struct Vec3 *out_acceleration);
+
+/**
+ * Advance a single body using the leapfrog (velocity Verlet) integrator.
+ *
+ * `acceleration_fn` is not directly callable from C; the caller should
+ * pre-compute the acceleration and pass it as `accel_now`.  The integrator
+ * advances position/velocity and returns the *new* acceleration at the
+ * updated position via `accel_next_out`.
+ */
+struct Bool integrator_leapfrog_step(struct Vec3 *position,
+                                     struct Vec3 *velocity,
+                                     const struct Vec3 *accel_now,
+                                     double dt,
+                                     struct Vec3 *accel_next_out);
+
+/**
+ * Compute post-Newtonian relativistic acceleration correction.
+ */
+struct Bool integrator_post_newtonian(struct Vec3 position,
+                                      struct Vec3 velocity,
+                                      double gm,
+                                      uint32_t order,
+                                      struct Vec3 *out_acceleration);
+
+/**
+ * Compute specific orbital energy.
+ */
+struct Bool integrator_specific_energy(struct Vec3 position,
+                                       struct Vec3 velocity,
+                                       double gm,
+                                       double *out_energy);
+
+/**
+ * Compute Keplerian orbital elements.
+ */
+struct Bool integrator_keplerian_elements(struct Vec3 position,
+                                          struct Vec3 velocity,
+                                          double gm,
+                                          double *out_elements);
 
 struct JointBuilderHandle *joint_builder_create(uint32_t joint_type,
                                                 struct Vec3 axis_or_primary,
@@ -5073,6 +5322,60 @@ double sf_helium_mass(void);
  */
 double sf_helium_scattering_length(void);
 
+/**
+ * Compute polyhedron gravity.
+ *
+ * `vertices_xyz` — flat array of vertex positions (3×n_verts f64s)
+ * `face_indices` — flat array of triangle indices (3×n_faces u32s)
+ * `density` — constant density (kg/m³)
+ */
+struct Bool terrain_polyhedron_gravity(struct Vec3 position,
+                                       const double *vertices_xyz,
+                                       uint32_t n_vertices,
+                                       const uint32_t *face_indices,
+                                       uint32_t n_faces,
+                                       double density,
+                                       struct Vec3 *out_acceleration);
+
+/**
+ * Compute terrain gravity from DEM (direct summation method).
+ */
+struct Bool terrain_gravity_dem(struct Vec3 position,
+                                const double *dem,
+                                uint32_t nx,
+                                uint32_t ny,
+                                double resolution,
+                                double reference_radius,
+                                double surface_density,
+                                struct Vec3 *out_acceleration);
+
+/**
+ * Compute terrain gravity from DEM (FFT/quadrupole approximation).
+ */
+struct Bool terrain_gravity_dem_fft(struct Vec3 position,
+                                    const double *dem,
+                                    uint32_t nx,
+                                    uint32_t ny,
+                                    double resolution,
+                                    double reference_radius,
+                                    double surface_density,
+                                    struct Vec3 *out_acceleration);
+
+/**
+ * Compute lunar mascon gravitational acceleration.
+ */
+struct Bool terrain_lunar_mascon_gravity(struct Vec3 position, struct Vec3 *out_acceleration);
+
+/**
+ * Get the number of built-in lunar mascons.
+ */
+uint32_t terrain_lunar_mascon_count(void);
+
+/**
+ * Get a specific lunar mascon by index.
+ */
+struct Bool terrain_lunar_mascon_get(uint32_t index, struct LunarMascon *out_mascon);
+
 struct Bool thermal_fourier_conduction(double hot_temperature,
                                        double cold_temperature,
                                        double conductivity,
@@ -5585,6 +5888,17 @@ uint32_t world_update_body_velocities(struct WorldHandle *world,
                                       const double *values,
                                       uint32_t count,
                                       struct Bool wake_up);
+
+/**
+ * Register celestial body gravity as a ForceLaw in the world's registry.
+ *
+ * `body_id` maps to `CelestialBodyId` (0=Sun, 3=Earth, 4=Moon, 5=Mars, etc.).
+ *
+ * Returns handle (non-zero) on success, 0 on invalid body_id.
+ */
+uint64_t world_register_celestial_gravity(struct WorldHandle *world,
+                                          uint32_t body_id,
+                                          uint32_t max_degree);
 
 uint32_t world_get_force_registry_count(const struct WorldHandle *world);
 

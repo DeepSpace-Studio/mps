@@ -640,6 +640,90 @@ pub(crate) fn apply_custom_external_forces_with_custom(
     world.events.set_last_custom_physics_report(report);
 }
 
+/// Facade-based wrapper: calls the original function and replays its forces
+/// through the facade so the frame-log captures them with correct ForceLawType tags.
+///
+/// This is a temporary shim — once all force sources are registered as ForceLaw
+/// impls, this function and `apply_custom_external_forces_with_custom` will be removed.
+pub(crate) fn apply_custom_external_forces_with_facade(
+    custom: &CustomPhysicsState,
+    facade: &mut crate::rapier::forces::ForceFacade<'_>,
+) {
+    let Some(external_force) = custom
+        .external_force
+        .filter(|law| law.enabled.0 != 0 && external_force_law_valid(*law))
+    else {
+        return;
+    };
+
+    use crate::rapier::forces::ForceLawType;
+
+    // Pre-compute constants
+    let buoyancy_force_vec = external_force
+        .buoyancy_enabled.0.ne(&0)
+        .then(|| -vec3_to_rapier(external_force.buoyancy_gravity)
+            * (external_force.fluid_density * external_force.displaced_volume));
+    let em_electric_vec = external_force.electromagnetic_enabled.0.ne(&0)
+        .then(|| vec3_to_rapier(external_force.electric_field) * external_force.charge);
+    let em_magnetic_vec = external_force.electromagnetic_enabled.0.ne(&0)
+        .then(|| vec3_to_rapier(external_force.magnetic_field));
+    let em_charge = external_force.electromagnetic_enabled.0.ne(&0)
+        .then(|| external_force.charge);
+    let spring_anchor = external_force.elastic_enabled.0.ne(&0)
+        .then(|| vec3_to_rapier(external_force.spring_anchor));
+    let spring_k = external_force.elastic_enabled.0.ne(&0)
+        .then(|| external_force.spring_stiffness);
+    let spring_d = external_force.elastic_enabled.0.ne(&0)
+        .then(|| external_force.spring_damping);
+    let gravity_source = external_force.gravity_enabled.0.ne(&0)
+        .then(|| vec3_to_rapier(external_force.gravity_source));
+    let grav_param = external_force.gravity_enabled.0.ne(&0)
+        .then(|| external_force.gravitational_parameter);
+
+    // Phase 1: compute forces (immutable body read)
+    struct PendingForce {
+        handle: rapier3d::prelude::RigidBodyHandle,
+        force: Vector,
+        source: ForceLawType,
+    }
+    let mut pending: smallvec::SmallVec<[PendingForce; 64]> = smallvec::SmallVec::new();
+
+    for (handle, body) in facade.bodies.iter() {
+        if !body.is_dynamic() {
+            continue;
+        }
+
+        if let Some(bf) = buoyancy_force_vec {
+            pending.push(PendingForce { handle, force: bf, source: ForceLawType::Buoyancy });
+        }
+        if let (Some(ef), Some(bf), Some(q)) = (em_electric_vec, em_magnetic_vec, em_charge) {
+            let magnetic = body.linvel().cross(bf);
+            pending.push(PendingForce { handle, force: ef + magnetic * q, source: ForceLawType::Electromagnetic });
+        }
+        if let (Some(anchor), Some(k), Some(d)) = (spring_anchor, spring_k, spring_d) {
+            let displacement = body.translation() - anchor;
+            let damping = body.linvel() * d;
+            pending.push(PendingForce { handle, force: -displacement * k - damping, source: ForceLawType::ElasticSpring });
+        }
+        if let (Some(src), Some(gp)) = (gravity_source, grav_param) {
+            let offset = src - body.translation();
+            let distance_squared = offset.length_squared();
+            if distance_squared > 1.0e-12 {
+                let mass = body.mass();
+                if mass > 0.0 {
+                    let f = offset / distance_squared.sqrt() * (gp * mass / distance_squared);
+                    pending.push(PendingForce { handle, force: f, source: ForceLawType::PointGravity });
+                }
+            }
+        }
+    }
+
+    // Phase 2: apply forces (mutable body write)
+    for pf in pending {
+        facade.add_force(pf.handle, pf.force, pf.source);
+    }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn world_set_coulomb_friction_law(
     world: *mut WorldHandle,

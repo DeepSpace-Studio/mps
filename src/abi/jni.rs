@@ -12,16 +12,19 @@ use crate::rapier::ffi::{
     RigidBodyBuilderHandle as RBH, RigidBodyHandleRaw as RRaw, ScalarKalman, ShapeCastHit,
     ShapeCastOptionsDesc, ShapeDesc, Sphere, SphericalShell, Ssv, Vec3, VoxelColliderOptions,
     WorldHandle as WH,
+    AirDragLaw, CoulombFrictionLaw, CustomPhysicsReport, ExternalForceLaw, NewtonGravityLaw,
 };
 #[cfg(feature = "anvilkit-bridge")]
 use crate::rapier::ffi::{
     AeroForceReport, AeroSurface, AnvilKitAppHandle as AKH, FluidForceReport, FluidVolume,
     TrajectoryEnvironment, TrajectoryForceReport,
 };
+use crate::rapier::ffi::{AeroForceReport, AeroSurface, FluidForceReport, FluidVolume, TrajectoryForceReport};
 use crate::rapier::{
-    bounds as bo, collider as col, compat as com, controller as cc, crbtree as crt, dop,
-    error as er, events as ev, joints as jo, neural as neu, query as qu, rigid_body as rb,
-    rtree as rt, spaceflight as sf, voxel as vx, world as wo,
+    bounds as bo, collider as col, compat as com, controller as cc,
+    crbtree as crt, dop, error as er, events as ev, joints as jo,
+    neural as neu, query as qu, rigid_body as rb, rtree as rt, spaceflight as sf,
+    voxel as vx, world as wo,
 };
 use ljni::JNIEnv;
 use ljni::sys::{jbyte, jbyteArray, jclass, jdouble, jdoubleArray, jint, jlong, jstring};
@@ -868,4 +871,23 @@ jni!(int bridgeWriteF64Slice(long values, int value_count, long slot, int capaci
 
 jni!(long bridgeVoxelColliderFromDirectBuffer(long world, long voxel_address, int size_x, int size_y, int size_z, double voxel_size, double origin_x, double origin_y, double origin_z, int mode, int dynamic_body, int small_voxel_limit, int mesh_voxel_limit) {
     br::voxel_collider_from_direct_buffer(m::<WH>(world), voxel_address, size_x, size_y, size_z, voxel_size, origin_x, origin_y, origin_z, mode, dynamic_body != 0, small_voxel_limit, mesh_voxel_limit)
+});
+
+// =========================================================================
+// Space flight — apply-to-body functions
+//
+// NOTE: These accept `out_accel` as a native-memory output pointer (long).
+// Callers allocate 3×f64 (=24 bytes) of native memory and pass the address.
+// =========================================================================
+
+jni!(boolean spaceApplyJ2ForceToBody(long world, long body, double mu, double equatorial_radius, double j2, double mass, int wake_up, long out_acceleration) {
+    sf::space_apply_j2_force_to_body(m::<WH>(world), body as RRaw, mu, equatorial_radius, j2, mass, jb(wake_up), pm::<Vec3>(out_acceleration)).0 as jbyte
+});
+
+jni!(boolean spaceApplySolarRadiationPressureToBody(long world, long body, double sun_x, double sun_y, double sun_z, double solar_flux, double reflectivity, double area, double mass, int wake_up, long out_acceleration) {
+    sf::space_apply_solar_radiation_pressure_to_body(m::<WH>(world), body as RRaw, v3(sun_x, sun_y, sun_z), solar_flux, reflectivity, area, mass, jb(wake_up), pm::<Vec3>(out_acceleration)).0 as jbyte
+});
+
+jni!(boolean spaceApplyGravityGradientTorqueToBody(long world, long body, double ix, double iy, double iz, double mu, int wake_up, long out_torque) {
+    sf::space_apply_gravity_gradient_torque_to_body(m::<WH>(world), body as RRaw, v3(ix, iy, iz), mu, jb(wake_up), pm::<Vec3>(out_torque)).0 as jbyte
 });
