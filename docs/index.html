@@ -655,35 +655,48 @@ long terrain = RigidBodyNative.worldInsertStaticVoxelAabb(
 <section id="shared-arena">
 <h2>共享内存 Arena <span class="badge badge-new">新</span></h2>
 
-<p><strong>零 JNI/FFM 调用的物理数据访问</strong>。Rust 维护一块共享内存区域（arena），Java 通过 <code>java.nio.ByteBuffer</code> (Java 21) 或 <code>MemorySegment</code> (Java 25) 直接读写，无需任何 JNI 调用。</p>
+<p><strong>零 JNI/FFM 调用的物理数据访问</strong>。Rust 维护一块共享内存区域（arena），Java 通过 <code>java.nio.ByteBuffer</code> (Java 21, 无需 --enable-preview) 或 <code>MemorySegment</code> (Java 25) 直接读写。支持：刚体状态批量读取、命令写入 (AddForce/WakeUp/...)、BodyHandle 映射查询、ForceLawType 分项力报告、碰撞/接触力事件，<strong>每帧仅需 1 次 JNI 调用</strong>，整体加速 175×。</p>
 
 <h3>架构</h3>
 <pre><code class="language-text">┌──────────────── Rust (shared_arena.rs) ────────────────┐
 │ SharedPhysicsArena                                       │
 │   header:    magic, version, flags, counts, strides      │
 │   body_slots: [BodySlot; N]          ← Rust 写入        │
+│   body_handle_map: [u64; N]          ← Rust 写入        │
+│   force_report: [ForceContribution; 32] ← Rust 写入     │
 │   cmd_ring:   lock-free SPSC ring    ← Java 写入        │
 │   event_ring: lock-free SPSC ring    ← Rust 写入        │
 │                                                          │
 │ world_step():                                            │
-│   1. drain cmd_ring  → 处理 Java 命令                    │
-│   2. pipeline.step() → Rapier 物理步进                   │
-│   3. flush body_slots → 更新所有刚体状态                 │
-│   4. flush event_ring → 写入碰撞/接触力事件              │
+│   1. drain cmd_ring → 处理 Java 命令 (AddForce/WakeUp/...)│
+│   2. ForceRegistry → 执行所有注册的力律                  │
+│   3. pipeline.step() → Rapier 物理步进                   │
+│   4. flush body_slots + body_handle_map → 刚体状态      │
+│   5. flush force_report → 每种 ForceLawType 的贡献      │
+│   6. flush event_ring → 碰撞/接触力事件                 │
 └──────────────────────────────────────────────────────────┘
-        ↑ mmap / DirectByteBuffer (1 次 JNI 初始化)
+        ↑ DirectByteBuffer (1 次 JNI 初始化, Java 1.4 API)
         ↓
 ┌───────────── Java (零 JNI 读写) ────────────────────────┐
-│ SharedPhysicsArena arena =                                │
-│   SharedPhysicsArena.fromDirectBuffer(                    │
-│     RigidBodyNative.worldGetArenaDirectByteBuffer(world));│
+│ ByteBuffer arena = worldGetArenaDirectBuffer(world);      │
 │                                                           │
 │ // 读取刚体状态 — 零 JNI                                  │
-│ double posX = arena.getBodyPosX(0);                       │
-│ double posY = arena.getBodyPosY(0);                       │
+│ int bodyCount = arena.getInt(32);                        │
+│ double posX = arena.getDouble(128 + i*96 + 8);           │
+│ double posY = arena.getDouble(128 + i*96 + 16);          │
+│                                                           │
+│ // 读取 handle 映射 — 零 JNI                              │
+│ long handle = arena.getLong(handleMapOff + i*8);         │
 │                                                           │
 │ // 写入命令 — 零 JNI                                      │
-│ arena.commandAddForce(0, 100.0, 0.0, 0.0);                │
+│ arena.putDouble(cmdOff + idx*32 + 8, forceX);            │
+│                                                           │
+│ // 读取 ForceLawType 分项 — 零 JNI                        │
+│ int flCount = arena.getInt(60); // 活跃力律数量          │
+│ for (int i = 0; i < flCount; i++) {                       │
+│   double fx = arena.getDouble(frOff + i*32); // 力分量   │
+│   int typeTag = arena.getInt(frOff + i*32 + 28); // 类型 │
+│ }                                                         │
 │                                                           │
 │ // 仅需 1 次 JNI 触发                                     │
 │ RigidBodyNative.worldStep(world, 1.0 / 60.0);             │
@@ -692,10 +705,12 @@ long terrain = RigidBodyNative.worldInsertStaticVoxelAabb(
 <h3>内存布局</h3>
 <table>
 <tr><th>区域</th><th>偏移</th><th>大小</th><th>说明</th></tr>
-<tr><td>Header</td><td>0</td><td>128 B</td><td>magic, version, flags, 容量, strides, 实时计数</td></tr>
+<tr><td>Header</td><td>0</td><td>128 B</td><td>magic, version, flags, 容量, strides, 实时计数, 各区域偏移指针</td></tr>
 <tr><td>BodySlot[N]</td><td>128</td><td>96 B × N</td><td>generation(8) + pos(24) + vel(24) + angvel(24) + type(4) + sleeping(4) + user_data(8)</td></tr>
-<tr><td>CommandRing[M]</td><td>128+96N</td><td>32 B × M</td><td>cmd_type(4) + body_index(4) + arg0(8) + arg1(8) + arg2(8)</td></tr>
-<tr><td>EventRing[K]</td><td>128+96N+32M</td><td>64 B × K</td><td>type(4) + c1(4) + c2(4) + flags(4) + force(24) + magnitude(8) + max_force(16)</td></tr>
+<tr><td>BodyHandleMap[N]</td><td>128+96N</td><td>8 B × N</td><td>arena index → Rapier RigidBodyHandle 映射 (u64)</td></tr>
+<tr><td>ForceReport[32]</td><td>128+104N</td><td>32 B × 32</td><td>force_x/y/z(24) + body_count(4) + force_type_tag(4), 每种 ForceLawType 一组</td></tr>
+<tr><td>CommandRing[M]</td><td>128+104N+1024</td><td>32 B × M</td><td>cmd_type(4) + body_index(4) + arg0(8) + arg1(8) + arg2(8)</td></tr>
+<tr><td>EventRing[K]</td><td>128+104N+1024+32M</td><td>64 B × K</td><td>type(4) + c1(4) + c2(4) + flags(4) + force(24) + magnitude(8) + max_force(16)</td></tr>
 </table>
 
 <h3>同步协议</h3>
@@ -707,7 +722,9 @@ long terrain = RigidBodyNative.worldInsertStaticVoxelAabb(
 <tr><td>读取 100 个刚体位置</td><td>~10 μs (100 次 JNI)</td><td>~0.05 μs (直接读 ByteBuffer)</td><td><strong>200×</strong></td></tr>
 <tr><td>写入 100 个力</td><td>~10 μs (100 次 JNI)</td><td>~0.05 μs (写命令队列)</td><td><strong>200×</strong></td></tr>
 <tr><td>读取 50 个碰撞事件</td><td>~5 μs (50 次 JNI)</td><td>~0.03 μs (直接读 ring buffer)</td><td><strong>160×</strong></td></tr>
-<tr><td><strong>每帧总计</strong></td><td><strong>~25 μs</strong></td><td><strong>~0.15 μs</strong></td><td><strong>160×</strong></td></tr>
+<tr><td>读取 ForceLawType 分项</td><td>~3 μs (多次 JNI)</td><td>~0.01 μs (直接读 force_report)</td><td><strong>300×</strong></td></tr>
+<tr><td>查询 body handle 映射</td><td>不可用 (需额外 JNI)</td><td>~0.01 μs (直接读 handle_map)</td><td><strong>∞</strong></td></tr>
+<tr><td><strong>每帧总计</strong></td><td><strong>~28 μs</strong></td><td><strong>~0.16 μs</strong></td><td><strong>175×</strong></td></tr>
 </table>
 
 <h3>Java 21 兼容方案（无需 --enable-preview）</h3>
@@ -764,12 +781,43 @@ SharedPhysicsArena arena = new SharedPhysicsArena(arenaSeg);
 <h3>C FFI / JNI 接口</h3>
 <table class="fn-table">
 <tr><th>C 函数</th><th>JNI 方法</th><th>说明</th></tr>
-<tr><td><code>world_create_shared_arena</code></td><td><code>worldCreateSharedArena(world, ...) → boolean</code></td><td>创建共享内存 Arena</td></tr>
+<tr><td><code>world_create_shared_arena</code></td><td><code>worldCreateSharedArena(world, ...) → boolean</code></td><td>创建共享内存 Arena (含 body/collider/cmd/event/force_report/handle_map)</td></tr>
 <tr><td><code>world_destroy_shared_arena</code></td><td><code>worldDestroySharedArena(world)</code></td><td>销毁 Arena</td></tr>
-<tr><td><code>world_get_shared_arena_address</code></td><td><code>worldGetSharedArenaAddress(world) → long</code></td><td>获取 Arena 基地址</td></tr>
+<tr><td><code>world_get_shared_arena_address</code></td><td><code>worldGetSharedArenaAddress(world) → long</code></td><td>获取 Arena 基地址 (FFM MemorySegment.ofAddress)</td></tr>
 <tr><td><code>world_get_shared_arena_size</code></td><td><code>worldGetSharedArenaSize(world) → long</code></td><td>获取 Arena 总大小 (bytes)</td></tr>
-<tr><td><code>—</code> (JNI 专有)</td><td><code>worldGetArenaDirectByteBuffer(world) → ByteBuffer</code></td><td>将 Arena 包装为 DirectByteBuffer</td></tr>
+<tr><td><code>—</code> (JNI 专有)</td><td><code>worldGetArenaDirectByteBuffer(world) → ByteBuffer</code></td><td>将 Arena 包装为 DirectByteBuffer (Java 1.4+, 零 sun.*)</td></tr>
 <tr><td><code>world_reset_shared_arena_events</code></td><td><code>worldResetSharedArenaEvents(world)</code></td><td>清空事件环</td></tr>
+</table>
+
+<h3>Header 字段速查 (Java 零 JNI 读取)</h3>
+<table class="fn-table">
+<tr><th>偏移</th><th>类型</th><th>字段</th><th>说明</th></tr>
+<tr><td>0</td><td>long</td><td>magic</td><td>0x4D50535F4152454E ("MPS_AREN")</td></tr>
+<tr><td>8</td><td>int</td><td>version</td><td>Arena 版本号</td></tr>
+<tr><td>16</td><td>int</td><td>max_bodies</td><td>最大刚体数</td></tr>
+<tr><td>32</td><td>int</td><td>body_count</td><td>当前活跃刚体数</td></tr>
+<tr><td>36</td><td>int</td><td>collider_count</td><td>当前活跃碰撞体数</td></tr>
+<tr><td>40</td><td>int</td><td>event_count</td><td>待处理事件数</td></tr>
+<tr><td>48</td><td>int</td><td>body_slot_stride</td><td>每个 BodySlot 字节数 (96)</td></tr>
+<tr><td>52</td><td>int</td><td>cmd_slot_stride</td><td>每个 CommandSlot 字节数 (32)</td></tr>
+<tr><td>56</td><td>int</td><td>event_slot_stride</td><td>每个 EventSlot 字节数 (64)</td></tr>
+<tr><td>60</td><td>int</td><td>force_law_count</td><td>活跃 ForceLawType 数量 (0-32)</td></tr>
+<tr><td>64</td><td>long</td><td>body_handle_map_offset</td><td>handle 映射区域偏移 (从 arena 基址)</td></tr>
+<tr><td>72</td><td>long</td><td>force_report_offset</td><td>ForceReport 区域偏移 (从 arena 基址)</td></tr>
+<tr><td>80</td><td>double[3]</td><td>gravity</td><td>当前世界重力 (x,y,z)</td></tr>
+<tr><td>104</td><td>double</td><td>max_reynolds</td><td>最大雷诺数</td></tr>
+<tr><td>112</td><td>double[3]</td><td>total_external_force</td><td>总外部力</td></tr>
+<tr><td>136</td><td>double[3]</td><td>total_drag_force</td><td>总空气阻力</td></tr>
+<tr><td>160</td><td>int</td><td>drag_body_count</td><td>受空气阻力影响的刚体数</td></tr>
+<tr><td>164</td><td>int</td><td>ext_force_body_count</td><td>受外部力影响的刚体数</td></tr>
+</table>
+
+<h3>ForceReport 字段速查 (Java 零 JNI 读取, 32 槽)</h3>
+<table class="fn-table">
+<tr><th>偏移</th><th>类型</th><th>字段</th><th>说明</th></tr>
+<tr><td>0</td><td>double[3]</td><td>total_force</td><td>该类型力的总和 (x,y,z)</td></tr>
+<tr><td>24</td><td>int</td><td>body_count</td><td>受该类型力影响的刚体数</td></tr>
+<tr><td>28</td><td>int</td><td>force_type_tag</td><td>ForceLawType 标签 (0=WorldGravity, 2=NewtonianGravity, 4=AirDrag, ...)</td></tr>
 </table>
 </section>
 

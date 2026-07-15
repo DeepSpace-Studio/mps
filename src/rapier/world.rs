@@ -100,7 +100,86 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
 
     world.inner.integration_parameters.dt = delta_seconds;
 
-    // --- Coulomb hook setup (unchanged) ---
+    // --- Arena: drain Java commands before applying forces ---
+    // Java writes forces/set-poses/impulses via shared memory, Rust reads them here.
+    if let Some(ref arena) = world.inner.shared_arena {
+        let commands = arena.drain_commands();
+        if !commands.is_empty() {
+            // Build index → handle map for O(1) lookup
+            let mut idx_to_handle: Vec<Option<rapier3d::prelude::RigidBodyHandle>> = Vec::new();
+            for (h, _) in world.inner.bodies.iter() {
+                idx_to_handle.push(Some(h));
+            }
+            for (cmd_type, body_idx, a0, a1, a2) in commands {
+                if let Some(Some(h)) = idx_to_handle.get(body_idx as usize) {
+                    if let Some(body) = world.inner.bodies.get_mut(*h) {
+                        match cmd_type {
+                            0 => { // AddForce
+                                body.add_force(
+                                    rapier3d::prelude::Vector::new(a0, a1, a2), true);
+                            }
+                            1 => { // AddTorque
+                                body.add_torque(
+                                    rapier3d::prelude::Vector::new(a0, a1, a2), true);
+                            }
+                            2 => { // SetPose
+                                // a0..a2 = position, rest packed into user_data via cmd encoding
+                                let pos = rapier3d::prelude::Pose::from_parts(
+                                    rapier3d::prelude::Vector::new(a0, a1, a2),
+                                    *body.rotation(),
+                                );
+                                body.set_position(pos, true);
+                            }
+                            3 => { // SetVelocity
+                                body.set_linvel(
+                                    rapier3d::prelude::Vector::new(a0, a1, a2), true);
+                            }
+                            4 => { // ApplyImpulse
+                                body.apply_impulse(
+                                    rapier3d::prelude::Vector::new(a0, a1, a2), true);
+                            }
+                            5 => { // ApplyTorqueImpulse
+                                body.apply_torque_impulse(
+                                    rapier3d::prelude::Vector::new(a0, a1, a2), true);
+                            }
+                            6 => { // WakeUp
+                                body.wake_up(true);
+                            }
+                            7 => { // Sleep
+                                body.sleep();
+                            }
+                            8 => { // SetRotation — a0..a2 = rotation vector (axis-angle)
+                                let axis_angle = rapier3d::prelude::Vector::new(a0, a1, a2);
+                                let angle = axis_angle.length();
+                                if angle > 1e-12 {
+                                    let unit_axis = axis_angle / angle;
+                                    body.set_rotation(
+                                        rapier3d::prelude::Rotation::from_axis_angle(
+                                            unit_axis, angle), true);
+                                }
+                            }
+                            9 => { // SetGravityScale — a0 = scale
+                                body.set_gravity_scale(a0, true);
+                            }
+                            10 => { // SetLinearDamping — a0 = damping
+                                body.set_linear_damping(a0);
+                            }
+                            11 => { // SetAngularDamping — a0 = damping
+                                body.set_angular_damping(a0);
+                            }
+                            12 => { // AddForceAtPoint — a0..a2 = force, need point from next cmd or use COM
+                                body.add_force(
+                                    rapier3d::prelude::Vector::new(a0, a1, a2), true);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // --- Coulomb hook setup ---
     let custom = world.inner.events.custom_physics();
     let coulomb_active = custom
         .coulomb_friction
@@ -171,53 +250,27 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
         &*world.inner.events,
     );
 
-    // 5. Flush shared arena (if enabled) — zero-JNI state for Java
+    // 5. Flush shared arena body/collider state → Java zero-JNI read
     if let Some(ref arena) = world.inner.shared_arena {
-        // Process any commands Java wrote before stepping
-        let commands = arena.drain_commands();
-        if !commands.is_empty() {
-            for (cmd_type, body_idx, a0, a1, a2) in commands {
-                // Find the body by index (sequential mapping)
-                let mut handle = None;
-                let mut idx = 0u32;
-                for (h, _) in world.inner.bodies.iter() {
-                    if idx == body_idx { handle = Some(h); break; }
-                    idx += 1;
-                }
-                if let Some(h) = handle {
-                    if let Some(body) = world.inner.bodies.get_mut(h) {
-                        match cmd_type {
-                            0 => body.add_force(
-                                rapier3d::prelude::Vector::new(a0, a1, a2), true),
-                            1 => body.add_torque(
-                                rapier3d::prelude::Vector::new(a0, a1, a2), true),
-                            4 => body.apply_impulse(
-                                rapier3d::prelude::Vector::new(a0, a1, a2), true),
-                            6 => body.wake_up(true),
-                            7 => body.sleep(),
-                            _ => {}
-                        }
-                    }
-                }
-            }
-            // Re-run pipeline step with newly applied commands
-            world.inner.pipeline.step(
-                world.inner.gravity,
-                &world.inner.integration_parameters,
-                &mut world.inner.islands,
-                &mut world.inner.broad_phase,
-                &mut world.inner.narrow_phase,
-                &mut world.inner.bodies,
-                &mut world.inner.colliders,
-                &mut world.inner.impulse_joints,
-                &mut world.inner.multibody_joints,
-                &mut world.inner.ccd_solver,
-                &world.inner.hooks,
-                &*world.inner.events,
-            );
-        }
-        // Flush body state to arena after step
         arena.flush_all_bodies(&world.inner.bodies);
+        arena.flush_all_colliders(&world.inner.colliders);
+        arena.flush_integration_params(
+            world.inner.integration_parameters.dt,
+            world.inner.integration_parameters.num_solver_iterations as u32,
+            world.inner.integration_parameters.max_ccd_substeps as u32,
+            &world.inner.gravity,
+        );
+        let legacy = &force_report.to_legacy_report();
+        arena.flush_force_report(
+            force_report.max_reynolds_number,
+            &legacy.total_external_force,
+            &legacy.total_drag_force,
+            legacy.drag_body_count,
+            legacy.external_force_body_count,
+        );
+        // Per-type breakdown (zero-JNI for Java to inspect)
+        arena.flush_force_breakdown(&force_report);
+        arena.flush_events_from_handler(&world.inner.events);
     }
 }
 
