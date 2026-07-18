@@ -1,4 +1,4 @@
-use parking_lot::{Mutex, RwLock};
+use std::sync::{Mutex, RwLock};
 use rapier3d::geometry::{CollisionEvent, CollisionEventFlags, ContactPair, SolverFlags};
 use rapier3d::prelude::{
     ColliderSet, ContactForceEvent, EventHandler, PhysicsHooks, Real, RigidBodySet, Vector,
@@ -47,46 +47,46 @@ unsafe impl Sync for CollectingEventHandler {}
 
 impl CollectingEventHandler {
     pub(crate) fn clear(&self) {
-        self.collision_events.lock().clear();
-        self.contact_force_events.lock().clear();
+        self.collision_events.lock().unwrap_or_else(|e| e.into_inner()).clear();
+        self.contact_force_events.lock().unwrap_or_else(|e| e.into_inner()).clear();
     }
 
     pub(crate) fn collision_event_count(&self) -> usize {
-        self.collision_events.lock().len()
+        self.collision_events.lock().unwrap_or_else(|e| e.into_inner()).len()
     }
 
     pub(crate) fn collision_event(&self, index: usize) -> Option<CollisionEventRecord> {
-        self.collision_events.lock().get(index).copied()
+        self.collision_events.lock().unwrap_or_else(|e| e.into_inner()).get(index).copied()
     }
 
     pub(crate) fn collision_events(&self, out: &mut [CollisionEventRecord]) -> u32 {
-        let events = self.collision_events.lock();
+        let events = self.collision_events.lock().unwrap_or_else(|e| e.into_inner());
         let count = out.len().min(events.len());
         out[..count].copy_from_slice(&events[..count]);
         count as u32
     }
 
     pub(crate) fn contact_force_event_count(&self) -> usize {
-        self.contact_force_events.lock().len()
+        self.contact_force_events.lock().unwrap_or_else(|e| e.into_inner()).len()
     }
 
     pub(crate) fn contact_force_event(&self, index: usize) -> Option<ContactForceEventRecord> {
-        self.contact_force_events.lock().get(index).copied()
+        self.contact_force_events.lock().unwrap_or_else(|e| e.into_inner()).get(index).copied()
     }
 
     pub(crate) fn contact_force_events(&self, out: &mut [ContactForceEventRecord]) -> u32 {
-        let events = self.contact_force_events.lock();
+        let events = self.contact_force_events.lock().unwrap_or_else(|e| e.into_inner());
         let count = out.len().min(events.len());
         out[..count].copy_from_slice(&events[..count]);
         count as u32
     }
 
     pub(crate) fn custom_physics(&self) -> CustomPhysicsState {
-        self.custom_physics.read().clone()
+        self.custom_physics.read().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
     pub(crate) fn set_last_custom_physics_report(&self, report: CustomPhysicsReport) {
-        self.custom_physics.write().last_report = report;
+        self.custom_physics.write().unwrap_or_else(|e| e.into_inner()).last_report = report;
     }
 }
 
@@ -412,7 +412,7 @@ impl EventHandler for CollectingEventHandler {
         };
 
         // Always push to the legacy Vec for backward compatibility.
-        push_event(&mut self.collision_events.lock(), record);
+        push_event(&mut self.collision_events.lock().unwrap_or_else(|e| e.into_inner()), record);
 
         // P4 fix: lock-free dispatch via UnsafeCell (single producer during step)
         let pc = unsafe { &*self.producer_cache.get() };
@@ -437,7 +437,7 @@ impl EventHandler for CollectingEventHandler {
             max_force_magnitude: event.max_force_magnitude,
         };
 
-        push_event(&mut self.contact_force_events.lock(), record);
+        push_event(&mut self.contact_force_events.lock().unwrap_or_else(|e| e.into_inner()), record);
 
         // P4 fix: lock-free dispatch
         let pc = unsafe { &*self.producer_cache.get() };
@@ -772,7 +772,7 @@ pub extern "C" fn world_set_coulomb_friction_law(
         return Bool::FALSE;
     }
 
-    world.inner.events.custom_physics.write().coulomb_friction =
+    world.inner.events.custom_physics.write().unwrap_or_else(|e| e.into_inner()).coulomb_friction =
         if law.enabled.0 != 0 { Some(law) } else { None };
     clear_error();
     Bool::TRUE
@@ -791,7 +791,7 @@ pub extern "C" fn world_clear_coulomb_friction_law(world: *mut WorldHandle) {
     let Some(world) = (unsafe { world.as_mut() }) else {
         return;
     };
-    world.inner.events.custom_physics.write().coulomb_friction = None;
+    world.inner.events.custom_physics.write().unwrap_or_else(|e| e.into_inner()).coulomb_friction = None;
     clear_error();
 }
 
@@ -830,7 +830,7 @@ pub extern "C" fn world_set_air_drag_law(world: *mut WorldHandle, law: AirDragLa
         return Bool::FALSE;
     }
 
-    world.inner.events.custom_physics.write().air_drag =
+    world.inner.events.custom_physics.write().unwrap_or_else(|e| e.into_inner()).air_drag =
         if law.enabled.0 != 0 { Some(law) } else { None };
 
     // Also register into the ForceRegistry for the new dispatch path.
@@ -868,7 +868,7 @@ pub extern "C" fn world_clear_air_drag_law(world: *mut WorldHandle) {
     let Some(world) = (unsafe { world.as_mut() }) else {
         return;
     };
-    world.inner.events.custom_physics.write().air_drag = None;
+    world.inner.events.custom_physics.write().unwrap_or_else(|e| e.into_inner()).air_drag = None;
     world
         .inner
         .events
@@ -914,7 +914,7 @@ pub extern "C" fn world_set_external_force_law(
         return Bool::FALSE;
     }
 
-    world.inner.events.custom_physics.write().external_force =
+    world.inner.events.custom_physics.write().unwrap_or_else(|e| e.into_inner()).external_force =
         if law.enabled.0 != 0 { Some(law) } else { None };
     clear_error();
     Bool::TRUE
@@ -933,7 +933,7 @@ pub extern "C" fn world_clear_external_force_law(world: *mut WorldHandle) {
     let Some(world) = (unsafe { world.as_mut() }) else {
         return;
     };
-    world.inner.events.custom_physics.write().external_force = None;
+    world.inner.events.custom_physics.write().unwrap_or_else(|e| e.into_inner()).external_force = None;
     clear_error();
 }
 
@@ -984,7 +984,7 @@ pub extern "C" fn world_set_newton_gravity_law(
         set_error(ERR_INVALID_ARGUMENT, "invalid Newton gravity law");
         return Bool::FALSE;
     }
-    world.inner.events.custom_physics.write().newton_gravity =
+    world.inner.events.custom_physics.write().unwrap_or_else(|e| e.into_inner()).newton_gravity =
         if law.enabled.0 != 0 { Some(law) } else { None };
 
     // Also register into the ForceRegistry.
@@ -1020,7 +1020,7 @@ pub extern "C" fn world_clear_newton_gravity_law(world: *mut WorldHandle) {
     let Some(world) = (unsafe { world.as_mut() }) else {
         return;
     };
-    world.inner.events.custom_physics.write().newton_gravity = None;
+    world.inner.events.custom_physics.write().unwrap_or_else(|e| e.into_inner()).newton_gravity = None;
     clear_error();
 }
 

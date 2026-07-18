@@ -1,0 +1,18 @@
+[package]
+name = "mps-wasm"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+mps-core = { path = "../mps-core", default-features = false }
+wasm-bindgen = { workspace = true }
+js-sys = { workspace = true }
+console_error_panic_hook = { workspace = true }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1

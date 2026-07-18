@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/mps-core", "crates/mps-jni", "crates/mps-ffm"]
+members = ["crates/mps-core", "crates/mps-jni", "crates/mps-ffm", "crates/mps-wasm"]
 resolver = "2"
 
 [workspace.package]
@@ -7,7 +7,7 @@ version = "0.1.4"
 edition = "2024"
 
 [workspace.dependencies]
-rapier3d = { package = "rapier3d-f64", version = "0.34.0", features = ["parallel"] }
+rapier3d = { package = "rapier3d-f64", version = "0.34.0" }
 ljni = { version = "0.21.0", package = "jni" }
 parking_lot = "0.12.5"
 hashbrown = "0.17.1"
@@ -16,3 +16,9 @@ mimalloc = "0.1.52"
 rayon = "1.12"
 anvilkit = { version = "0.1", features = ["rapier"] }
 bevy_ecs = { version = "0.19.0" }
+
+# wasm-bindgen and JS interop (for mps-wasm crate)
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = ["console"] }
+console_error_panic_hook = "0.1"

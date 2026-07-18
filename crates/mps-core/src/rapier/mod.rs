@@ -5,8 +5,9 @@ pub mod anvilkit;
 pub(crate) mod astrophysics;
 pub(crate) mod biomechanics;
 pub mod bounds;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod bridge;
-pub(crate) mod celestial_data;
+pub mod celestial_data;
 pub(crate) mod chaos;
 pub mod collider;
 pub mod compat;
@@ -36,6 +37,7 @@ pub mod query;
 pub(crate) mod relativity;
 pub mod rigid_body;
 pub mod rtree;
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) mod shared_arena;
 pub(crate) mod softbody;
 pub mod spaceflight;

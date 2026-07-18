@@ -7,18 +7,33 @@ edition.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-rapier3d = { workspace = true }
-ljni = { workspace = true }
-parking_lot = { workspace = true }
 hashbrown = { workspace = true }
 smallvec = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rapier3d = { workspace = true, features = ["parallel"] }
+ljni = { workspace = true }
+parking_lot = { workspace = true }
 rayon = { workspace = true }
-anvilkit = { workspace = true, optional = true }
-bevy_ecs = { workspace = true, optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+rapier3d = { package = "rapier3d-f64", version = "0.34.0", default-features = false, features = ["dim3", "f64", "std"] }
+wasm-bindgen = { workspace = true }
+js-sys = { workspace = true }
+web-sys = { workspace = true }
+console_error_panic_hook = { workspace = true }
 
 [features]
 default = []
 anvilkit-bridge = ["dep:anvilkit", "dep:bevy_ecs"]
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.anvilkit]
+workspace = true
+optional = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.bevy_ecs]
+workspace = true
+optional = true
 
 [build-dependencies]
 cbindgen = "0.29.4"

@@ -1,5 +1,6 @@
 use std::slice;
 
+#[cfg(not(target_arch = "wasm32"))]
 use rayon::prelude::*;
 
 use rapier3d::math::{Pose, Rotation, Vector};
@@ -155,8 +156,8 @@ fn build_greedy_cuboids(grid: &VoxelGrid<'_>) -> Option<ColliderBuilder> {
     let chunk_size = 32usize;
     let y_starts: Vec<_> = (0..grid.size_y).step_by(chunk_size).collect();
     let chunk_parts = y_starts
-        .into_par_iter()
-        .map(|y_start| {
+        .iter()
+        .map(|&y_start| {
             build_greedy_cuboids_y_range(grid, y_start, (y_start + chunk_size).min(grid.size_y))
         })
         .collect::<Option<Vec<_>>>()?;

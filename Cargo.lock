@@ -940,6 +940,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "console_error_panic_hook"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a06aeb73f470f66dcdbf7223caeebb85984942f22f1adb2a088cf9668146bbbc"
+dependencies = [
+ "cfg-if",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "convert_case"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2047,12 +2057,16 @@ dependencies = [
  "anvilkit",
  "bevy_ecs 0.19.0",
  "cbindgen",
+ "console_error_panic_hook",
  "hashbrown 0.17.1",
  "jni 0.21.1",
+ "js-sys",
  "parking_lot",
  "rapier3d-f64",
  "rayon",
  "smallvec",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]
@@ -2069,6 +2083,16 @@ dependencies = [
  "jni 0.21.1",
  "mps-core",
  "mps-ffm",
+]
+
+[[package]]
+name = "mps-wasm"
+version = "0.1.4"
+dependencies = [
+ "console_error_panic_hook",
+ "js-sys",
+ "mps-core",
+ "wasm-bindgen",
 ]
 
 [[package]]
