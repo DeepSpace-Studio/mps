@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>关节与角色控制器 — MPS</title>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/rust.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/java.min.js"></script></head>
+
+<body>
+<header class="site-header"><a class="brand" href="../index.html"><span class="brand-mark">MPS</span><span class="brand-caption">PHYSICS / 0.1.4</span></a>
+<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">首页</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">核心</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">物理</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">领域</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">集成</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">参考</span><span data-lang="en">REFERENCE</span></a></nav>
+
+<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select></div>
+</header>
+
+<main class="page-shell">
+<div data-lang="zh" class="language-page language-zh">
+<header class="page-masthead accent-core">
+<div>
+<div class="section-kicker">/ CORE MODULE</div>
+
+<h1>
+关节与角色控制器</h1>
+</div>
+
+<div class="page-index">04</div>
+</header>
+
+<div class="module-stack">
+<section class="doc-module">
+<h2>
+关节类型 (6 种)</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>类型</th><th>自由度</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>Fixed</td><td>0</td><td>刚性连接，无相对运动</td></tr>
+
+<tr>
+<td>Spherical</td><td>3 (旋转)</td><td>球窝关节</td></tr>
+
+<tr>
+<td>Prismatic</td><td>1 (平移)</td><td>沿单轴滑动</td></tr>
+
+<tr>
+<td>Revolute</td><td>1 (旋转)</td><td>绕单轴铰链</td></tr>
+
+<tr>
+<td>Universal</td><td>2 (旋转)</td><td>万向节/虎克接头</td></tr>
+
+<tr>
+<td>Cylindrical</td><td>2 (1平+1转)</td><td>组合滑动+旋转</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+关节 API</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C 函数</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>joint_builder_create</td><td>创建关节构建器</td></tr>
+
+<tr>
+<td>joint_builder_set_limits</td><td>设置平移/旋转限位</td></tr>
+
+<tr>
+<td>joint_builder_set_motor</td><td>配置电机 (速度/位置控制)</td></tr>
+
+<tr>
+<td>world_insert_impulse_joint</td><td>插入关节</td></tr>
+
+<tr>
+<td>world_remove_impulse_joint</td><td>移除关节</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+角色控制器</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C 函数</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>controller_create</td><td>创建角色控制器</td></tr>
+
+<tr>
+<td>controller_set_slide_enabled</td><td>启用/禁用墙壁滑动</td></tr>
+
+<tr>
+<td>controller_set_max_slope_climb_angle</td><td>设置最大可攀爬坡度</td></tr>
+
+<tr>
+<td>controller_set_snap_to_ground</td><td>启用地面对齐</td></tr>
+
+<tr>
+<td>controller_move_shape</td><td>移动角色，返回 EffectiveCharacterMovement</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+</div>
+</div>
+
+<div data-lang="en" class="language-page language-en">
+<header class="page-masthead accent-core">
+<div>
+<div class="section-kicker">/ CORE MODULE</div>
+
+<h1>
+Joints & Character Controller</h1>
+</div>
+
+<div class="page-index">04</div>
+</header>
+
+<div class="module-stack">
+<section class="doc-module">
+<h2>
+Joint Types (6)</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>Type</th><th>DOF</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>Fixed</td><td>0</td><td>Rigid attachment, no relative motion</td></tr>
+
+<tr>
+<td>Spherical</td><td>3 (rotation)</td><td>Ball-and-socket</td></tr>
+
+<tr>
+<td>Prismatic</td><td>1 (translation)</td><td>Sliding joint</td></tr>
+
+<tr>
+<td>Revolute</td><td>1 (rotation)</td><td>Hinge joint</td></tr>
+
+<tr>
+<td>Universal</td><td>2 (rotation)</td><td>Cardan/Hooke joint</td></tr>
+
+<tr>
+<td>Cylindrical</td><td>2 (1 trans + 1 rot)</td><td>Combined sliding+rotation</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Joint API</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C Function</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>joint_builder_create</td><td>Create joint builder</td></tr>
+
+<tr>
+<td>joint_builder_set_limits</td><td>Set translation/rotation limits</td></tr>
+
+<tr>
+<td>joint_builder_set_motor</td><td>Configure motor (velocity/position control)</td></tr>
+
+<tr>
+<td>world_insert_impulse_joint</td><td>Insert joint</td></tr>
+
+<tr>
+<td>world_remove_impulse_joint</td><td>Remove joint</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Character Controller</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C Function</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>controller_create</td><td>Create character controller</td></tr>
+
+<tr>
+<td>controller_set_slide_enabled</td><td>Enable/disable wall sliding</td></tr>
+
+<tr>
+<td>controller_set_max_slope_climb_angle</td><td>Set max climbable slope</td></tr>
+
+<tr>
+<td>controller_set_snap_to_ground</td><td>Enable ground snapping</td></tr>
+
+<tr>
+<td>controller_move_shape</td><td>Move character, returns EffectiveCharacterMovement</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+</div>
+</div>
+</main>
+
+<script src="../i18n.js"></script></body></html>

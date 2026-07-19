@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>地形引力 — MPS</title>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/rust.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/java.min.js"></script></head>
+
+<body>
+<header class="site-header"><a class="brand" href="../index.html"><span class="brand-mark">MPS</span><span class="brand-caption">PHYSICS / 0.1.4</span></a>
+<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">首页</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">核心</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">物理</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">领域</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">集成</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">参考</span><span data-lang="en">REFERENCE</span></a></nav>
+
+<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select></div>
+</header>
+
+<main class="page-shell">
+<div data-lang="zh" class="language-page language-zh">
+<header class="page-masthead accent-physics">
+<div>
+<div class="section-kicker">/ PHYSICS MODULE</div>
+
+<h1>
+地形引力</h1>
+</div>
+
+<div class="page-index">02</div>
+</header>
+
+<div class="module-stack">
+<section class="doc-module">
+<h2>
+多面体引力</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C 函数</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>terrain_polyhedron_gravity</td><td>多面体引力加速度</td></tr>
+
+<tr>
+<td>terrain_gravity_dem</td><td>DEM 地形引力 (直接求和)</td></tr>
+
+<tr>
+<td>terrain_gravity_dem_fft</td><td>DEM 地形引力 (FFT 加速)</td></tr>
+
+<tr>
+<td>terrain_lunar_mascon_gravity</td><td>月球 Mascon 总引力加速度</td></tr>
+
+<tr>
+<td>terrain_lunar_mascon_count</td><td>内置 Mascon 数量</td></tr>
+
+<tr>
+<td>terrain_lunar_mascon_get</td><td>按索引获取 Mascon 参数</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+DEM 地形引力</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C 函数</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>terrain_polyhedron_gravity</td><td>多面体引力加速度</td></tr>
+
+<tr>
+<td>terrain_gravity_dem</td><td>DEM 地形引力 (直接求和)</td></tr>
+
+<tr>
+<td>terrain_gravity_dem_fft</td><td>DEM 地形引力 (FFT 加速)</td></tr>
+
+<tr>
+<td>terrain_lunar_mascon_gravity</td><td>月球 Mascon 总引力加速度</td></tr>
+
+<tr>
+<td>terrain_lunar_mascon_count</td><td>内置 Mascon 数量</td></tr>
+
+<tr>
+<td>terrain_lunar_mascon_get</td><td>按索引获取 Mascon 参数</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+月球 Mascon 模型</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C 函数</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>terrain_polyhedron_gravity</td><td>多面体引力加速度</td></tr>
+
+<tr>
+<td>terrain_gravity_dem</td><td>DEM 地形引力 (直接求和)</td></tr>
+
+<tr>
+<td>terrain_gravity_dem_fft</td><td>DEM 地形引力 (FFT 加速)</td></tr>
+
+<tr>
+<td>terrain_lunar_mascon_gravity</td><td>月球 Mascon 总引力加速度</td></tr>
+
+<tr>
+<td>terrain_lunar_mascon_count</td><td>内置 Mascon 数量</td></tr>
+
+<tr>
+<td>terrain_lunar_mascon_get</td><td>按索引获取 Mascon 参数</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>Werner & Scheeres (1997) 算法 — 对任意多面体的<strong>精确</strong>引力解。适合不规则小行星、彗星。</p>
+<p>将数字高程模型 (DEM) 转为表面质量分布，直接求和或 FFT 加速。支持任意分辨率。</p>
+<p>12 个 GRAIL 任务导出的质量瘤。在 50 km 月轨高度产生 <strong>~10⁻³ 到 10⁻⁵ m/s²</strong> 的额外引力——足以导致未建模时轨道坠毁。</p></section>
+</div>
+</div>
+
+<div data-lang="en" class="language-page language-en">
+<header class="page-masthead accent-physics">
+<div>
+<div class="section-kicker">/ PHYSICS MODULE</div>
+
+<h1>
+Terrain Gravity</h1>
+</div>
+
+<div class="page-index">02</div>
+</header>
+
+<div class="module-stack">
+<section class="doc-module">
+<h2>
+Polyhedron Gravity</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C Function</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>terrain_polyhedron_gravity</td><td>Polyhedron gravity acceleration</td></tr>
+
+<tr>
+<td>terrain_gravity_dem</td><td>DEM terrain gravity (direct sum)</td></tr>
+
+<tr>
+<td>terrain_gravity_dem_fft</td><td>DEM terrain gravity (FFT-accelerated)</td></tr>
+
+<tr>
+<td>terrain_lunar_mascon_gravity</td><td>Lunar Mascon total gravity acceleration</td></tr>
+
+<tr>
+<td>terrain_lunar_mascon_count</td><td>Built-in Mascon count</td></tr>
+
+<tr>
+<td>terrain_lunar_mascon_get</td><td>Get Mascon parameters by index</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+DEM Terrain Gravity</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C Function</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>terrain_polyhedron_gravity</td><td>Polyhedron gravity acceleration</td></tr>
+
+<tr>
+<td>terrain_gravity_dem</td><td>DEM terrain gravity (direct sum)</td></tr>
+
+<tr>
+<td>terrain_gravity_dem_fft</td><td>DEM terrain gravity (FFT-accelerated)</td></tr>
+
+<tr>
+<td>terrain_lunar_mascon_gravity</td><td>Lunar Mascon total gravity acceleration</td></tr>
+
+<tr>
+<td>terrain_lunar_mascon_count</td><td>Built-in Mascon count</td></tr>
+
+<tr>
+<td>terrain_lunar_mascon_get</td><td>Get Mascon parameters by index</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Lunar Mascon Model</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C Function</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>terrain_polyhedron_gravity</td><td>Polyhedron gravity acceleration</td></tr>
+
+<tr>
+<td>terrain_gravity_dem</td><td>DEM terrain gravity (direct sum)</td></tr>
+
+<tr>
+<td>terrain_gravity_dem_fft</td><td>DEM terrain gravity (FFT-accelerated)</td></tr>
+
+<tr>
+<td>terrain_lunar_mascon_gravity</td><td>Lunar Mascon total gravity acceleration</td></tr>
+
+<tr>
+<td>terrain_lunar_mascon_count</td><td>Built-in Mascon count</td></tr>
+
+<tr>
+<td>terrain_lunar_mascon_get</td><td>Get Mascon parameters by index</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>Werner & Scheeres (1997) algorithm — <strong>exact</strong> gravity solution for arbitrary polyhedra. Ideal for irregular asteroids and comets.</p>
+<p>Converts Digital Elevation Models into surface mass distributions. Direct summation or FFT-accelerated. Supports arbitrary resolution.</p>
+<p>12 GRAIL mass concentrations. At 50 km lunar altitude, produces <strong>~10⁻³ to 10⁻⁵ m/s²</strong> additional gravity — enough to crash unmodeled orbits.</p></section>
+</div>
+</div>
+</main>
+
+<script src="../i18n.js"></script></body></html>

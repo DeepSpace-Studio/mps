@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>力注册表 — MPS</title>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/rust.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/java.min.js"></script></head>
+
+<body>
+<header class="site-header"><a class="brand" href="../index.html"><span class="brand-mark">MPS</span><span class="brand-caption">PHYSICS / 0.1.4</span></a>
+<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">首页</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">核心</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">物理</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">领域</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">集成</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">参考</span><span data-lang="en">REFERENCE</span></a></nav>
+
+<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select></div>
+</header>
+
+<main class="page-shell">
+<div data-lang="zh" class="language-page language-zh">
+<header class="page-masthead accent-physics">
+<div>
+<div class="section-kicker">/ PHYSICS MODULE</div>
+
+<h1>
+力注册表</h1>
+
+<p>ForceRegistry 是类型化力调度系统。任何实现 ForceLaw trait 的力都会在 world_step 期间自动调度，通过 ForceFacade 聚合报告。</p></div>
+
+<div class="page-index">03</div>
+</header>
+
+<div class="module-stack">
+<section class="doc-module">
+<h2>
+内置力律</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>ForceLawType</th><th>C 设置器</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>CelestialGravity</td><td>world_register_celestial_gravity</td><td>按高度自动选择谐波/椭球/J2</td></tr>
+
+<tr>
+<td>NewtonianGravity</td><td>world_set_newton_gravity_law</td><td>O(n²) 成对或 Barnes-Hut (N&gt;1000)</td></tr>
+
+<tr>
+<td>AirDrag</td><td>world_set_air_drag_law</td><td>Stokes + 湍流 (Reynolds 感知)</td></tr>
+
+<tr>
+<td>CoulombFriction</td><td>world_set_coulomb_friction_law</td><td>静摩擦+动摩擦，带速度阈值</td></tr>
+
+<tr>
+<td>ExternalForce</td><td>world_set_external_force_law</td><td>浮力、电磁、弹簧、点重力</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+力报告</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C 函数</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>world_get_custom_physics_report</td><td>读取综合物理报告</td></tr>
+</tbody>
+</table>
+</div>
+
+<pre>
+<code class="language-rust">pub struct ForceFacade&lt;'a&gt; {
+    pub bodies: &amp;'a RigidBodySet,
+    pub colliders: &amp;'a ColliderSet,
+    pub gravity: &amp;'a Vector,
+    pub frame_log: &amp;'a mut HashMap&lt;RigidBodyHandle, BodyForceLog&gt;,
+    pub pending_forces: &amp;'a mut SmallVec&lt;[PendingForce; 128]&gt;,
+    pub friction_work: &amp;'a mut Vec&lt;(Handle, Handle, Vector)&gt;,
+    pub max_reynolds: f64,
+}</code></pre>
+</section>
+</div>
+</div>
+
+<div data-lang="en" class="language-page language-en">
+<header class="page-masthead accent-physics">
+<div>
+<div class="section-kicker">/ PHYSICS MODULE</div>
+
+<h1>
+Force Registry</h1>
+
+<p>ForceRegistry is a typed force dispatch system. Any force implementing ForceLaw trait is auto-scheduled during world_step with aggregated reporting via ForceFacade.</p></div>
+
+<div class="page-index">03</div>
+</header>
+
+<div class="module-stack">
+<section class="doc-module">
+<h2>
+Built-in Force Laws</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>ForceLawType</th><th>C Setter</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>CelestialGravity</td><td>world_register_celestial_gravity</td><td>Auto-selects harmonics/ellipsoid/J2 by altitude</td></tr>
+
+<tr>
+<td>NewtonianGravity</td><td>world_set_newton_gravity_law</td><td>O(n²) pairwise or Barnes-Hut (N&gt;1000)</td></tr>
+
+<tr>
+<td>AirDrag</td><td>world_set_air_drag_law</td><td>Stokes + turbulent (Reynolds-aware)</td></tr>
+
+<tr>
+<td>CoulombFriction</td><td>world_set_coulomb_friction_law</td><td>Static + dynamic friction with velocity threshold</td></tr>
+
+<tr>
+<td>ExternalForce</td><td>world_set_external_force_law</td><td>Buoyancy, EM, spring, point gravity</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Force Report</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C Function</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>world_get_custom_physics_report</td><td>Read aggregated physics report</td></tr>
+</tbody>
+</table>
+</div>
+
+<pre>
+<code class="language-rust">pub struct ForceFacade&lt;'a&gt; {
+    pub bodies: &amp;'a RigidBodySet,
+    pub colliders: &amp;'a ColliderSet,
+    pub gravity: &amp;'a Vector,
+    pub frame_log: &amp;'a mut HashMap&lt;RigidBodyHandle, BodyForceLog&gt;,
+    pub pending_forces: &amp;'a mut SmallVec&lt;[PendingForce; 128]&gt;,
+    pub friction_work: &amp;'a mut Vec&lt;(Handle, Handle, Vector)&gt;,
+    pub max_reynolds: f64,
+}</code></pre>
+</section>
+</div>
+</div>
+</main>
+
+<script src="../i18n.js"></script></body></html>

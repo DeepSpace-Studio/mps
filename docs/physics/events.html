@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>事件系统 — MPS</title>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/rust.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/java.min.js"></script></head>
+
+<body>
+<header class="site-header"><a class="brand" href="../index.html"><span class="brand-mark">MPS</span><span class="brand-caption">PHYSICS / 0.1.4</span></a>
+<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">首页</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">核心</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">物理</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">领域</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">集成</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">参考</span><span data-lang="en">REFERENCE</span></a></nav>
+
+<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select></div>
+</header>
+
+<main class="page-shell">
+<div data-lang="zh" class="language-page language-zh">
+<header class="page-masthead accent-physics">
+<div>
+<div class="section-kicker">/ PHYSICS MODULE</div>
+
+<h1>
+事件系统</h1>
+</div>
+
+<div class="page-index">04</div>
+</header>
+
+<div class="module-stack">
+<section class="doc-module">
+<h2>
+事件类型</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>事件</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>CollisionEvent</td><td>两个碰撞体之间接触的开始/停止</td></tr>
+
+<tr>
+<td>ContactForceEvent</td><td>重叠期间每个接触对的力+法线</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+轮询 API</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C 函数</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>world_clear_events</td><td>清除所有待处理事件</td></tr>
+
+<tr>
+<td>world_collision_event_count</td><td>待处理碰撞事件数</td></tr>
+
+<tr>
+<td>world_get_collision_event</td><td>获取单个碰撞事件</td></tr>
+
+<tr>
+<td>world_get_collision_events</td><td>批量获取碰撞事件</td></tr>
+
+<tr>
+<td>world_contact_force_event_count</td><td>待处理接触力事件数</td></tr>
+
+<tr>
+<td>world_get_contact_force_event</td><td>获取单个接触力事件</td></tr>
+
+<tr>
+<td>world_get_contact_force_events</td><td>批量获取接触力事件</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+锁自由环缓冲</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C 函数</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>world_init_collision_event_ring</td><td>初始化碰撞事件环</td></tr>
+
+<tr>
+<td>world_init_contact_force_event_ring</td><td>初始化接触力环</td></tr>
+
+<tr>
+<td>world_drain_collision_event_ring</td><td>排空所有碰撞事件</td></tr>
+
+<tr>
+<td>world_drain_contact_force_event_ring</td><td>排空所有接触力事件</td></tr>
+
+<tr>
+<td>world_collision_event_ring_len</td><td>环缓冲占用</td></tr>
+
+<tr>
+<td>world_collision_event_ring_stats</td><td>环缓冲统计</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+回调系统</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C 函数</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>world_register_collision_callback</td><td>注册碰撞回调 (fn + user_data)</td></tr>
+
+<tr>
+<td>world_register_contact_force_callback</td><td>注册接触力回调</td></tr>
+
+<tr>
+<td>world_unregister_callback</td><td>按 handle 注销回调</td></tr>
+
+<tr>
+<td>world_set_event_dispatch_mode</td><td>设置分发模式: Poll / Callback / Both</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+</div>
+</div>
+
+<div data-lang="en" class="language-page language-en">
+<header class="page-masthead accent-physics">
+<div>
+<div class="section-kicker">/ PHYSICS MODULE</div>
+
+<h1>
+Events System</h1>
+</div>
+
+<div class="page-index">04</div>
+</header>
+
+<div class="module-stack">
+<section class="doc-module">
+<h2>
+Event Types</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>Event</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>CollisionEvent</td><td>Start/stop of contact between two colliders</td></tr>
+
+<tr>
+<td>ContactForceEvent</td><td>Per-contact-pair force + normal during overlap</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Polling API</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C Function</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>world_clear_events</td><td>Clear all pending events</td></tr>
+
+<tr>
+<td>world_collision_event_count</td><td>Pending collision event count</td></tr>
+
+<tr>
+<td>world_get_collision_event</td><td>Get single collision event</td></tr>
+
+<tr>
+<td>world_get_collision_events</td><td>Get batch collision events</td></tr>
+
+<tr>
+<td>world_contact_force_event_count</td><td>Pending contact force event count</td></tr>
+
+<tr>
+<td>world_get_contact_force_event</td><td>Get single contact force event</td></tr>
+
+<tr>
+<td>world_get_contact_force_events</td><td>Get batch contact force events</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Lock-Free Ring Buffer</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C Function</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>world_init_collision_event_ring</td><td>Initialize collision event ring</td></tr>
+
+<tr>
+<td>world_drain_collision_event_ring</td><td>Drain all pending collision events</td></tr>
+
+<tr>
+<td>world_drain_contact_force_event_ring</td><td>Drain all pending contact force events</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Callback System</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C Function</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>world_register_collision_callback</td><td>Register collision callback (fn + user_data)</td></tr>
+
+<tr>
+<td>world_register_contact_force_callback</td><td>Register contact force callback</td></tr>
+
+<tr>
+<td>world_unregister_callback</td><td>Unregister callback by handle</td></tr>
+
+<tr>
+<td>world_set_event_dispatch_mode</td><td>Set dispatch mode: Poll / Callback / Both</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+</div>
+</div>
+</main>
+
+<script src="../i18n.js"></script></body></html>

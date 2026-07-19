@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>碰撞体与扩展边界 — MPS</title>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/rust.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/java.min.js"></script></head>
+
+<body>
+<header class="site-header"><a class="brand" href="../index.html"><span class="brand-mark">MPS</span><span class="brand-caption">PHYSICS / 0.1.4</span></a>
+<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">首页</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">核心</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">物理</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">领域</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">集成</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">参考</span><span data-lang="en">REFERENCE</span></a></nav>
+
+<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select></div>
+</header>
+
+<main class="page-shell">
+<div data-lang="zh" class="language-page language-zh">
+<header class="page-masthead accent-core">
+<div>
+<div class="section-kicker">/ CORE MODULE</div>
+
+<h1>
+碰撞体与扩展边界</h1>
+
+<p>碰撞体定义物理形状。支持标准几何体、扩展边界和体素系统。</p></div>
+
+<div class="page-index">03</div>
+</header>
+
+<div class="module-stack">
+<section class="doc-module">
+<h2>
+标准形状构建器</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C 函数</th><th>形状</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>collider_builder_create_ex</td><td>球体 (半径)</td></tr>
+
+<tr>
+<td>collider_builder_create_obb</td><td>长方体 (半边长)</td></tr>
+
+<tr>
+<td>collider_builder_create_sphere</td><td>球体</td></tr>
+
+<tr>
+<td>collider_builder_create_halfspace</td><td>半空间 (平面)</td></tr>
+
+<tr>
+<td>collider_builder_create_heightmap</td><td>高度场地形</td></tr>
+
+<tr>
+<td>collider_builder_create_convex_hull</td><td>凸包</td></tr>
+
+<tr>
+<td>collider_builder_create_point_cloud</td><td>点云</td></tr>
+
+<tr>
+<td>collider_builder_create_double_bv</td><td>双重包围体</td></tr>
+
+<tr>
+<td>collider_builder_create_skewed_obb</td><td>倾斜包围盒</td></tr>
+
+<tr>
+<td>collider_builder_create_discrete_obb</td><td>离散包围盒</td></tr>
+
+<tr>
+<td>collider_builder_create_fused_collapsing</td><td>融合塌陷壳</td></tr>
+
+<tr>
+<td>collider_builder_create_edge_bvh</td><td>边 BVH</td></tr>
+
+<tr>
+<td>collider_builder_create_medial_spheres</td><td>中轴球近似</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+扩展边界</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C 函数</th><th>形状</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>collider_builder_create_capsule</td><td>胶囊体</td><td>线段 + 半径</td></tr>
+
+<tr>
+<td>collider_builder_create_ssv</td><td>SSV</td><td>扫掠球体</td></tr>
+
+<tr>
+<td>collider_builder_create_ellipsoid</td><td>椭球</td><td>分段近似</td></tr>
+
+<tr>
+<td>collider_builder_create_prism</td><td>棱柱</td><td>正棱柱</td></tr>
+
+<tr>
+<td>collider_builder_create_cylinder</td><td>圆柱</td><td>圆柱体</td></tr>
+
+<tr>
+<td>collider_builder_create_spherical_shell</td><td>球壳</td><td>球壳</td></tr>
+
+<tr>
+<td>collider_builder_create_kdop</td><td>kDOP</td><td>离散方向多面体 (6/14/18/26-DOP)</td></tr>
+
+<tr>
+<td>collider_builder_create_fdh</td><td>FDH</td><td>功能方向直方图</td></tr>
+
+<tr>
+<td>collider_builder_create_neural_bounds</td><td>Neural</td><td>MLP 隐式曲面边界</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+体素碰撞体</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C 函数</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>collider_builder_create_voxels</td><td>从缓冲区构建体素碰撞体</td></tr>
+
+<tr>
+<td>collider_builder_create_voxel_aabb</td><td>从 AABB 区域构建体素</td></tr>
+
+<tr>
+<td>collider_builder_create_voxel_obb</td><td>从 OBB 区域构建体素</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+构建器设置</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C 函数</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>collider_builder_set_translation</td><td>设置相对位置</td></tr>
+
+<tr>
+<td>collider_builder_set_rotation</td><td>设置相对旋转</td></tr>
+
+<tr>
+<td>collider_builder_set_pose</td><td>设置相对位姿</td></tr>
+
+<tr>
+<td>collider_builder_set_sensor</td><td>标记为传感器</td></tr>
+
+<tr>
+<td>collider_builder_set_friction</td><td>设置摩擦系数</td></tr>
+
+<tr>
+<td>collider_builder_set_restitution</td><td>设置弹性</td></tr>
+
+<tr>
+<td>collider_builder_set_density</td><td>设置密度</td></tr>
+
+<tr>
+<td>collider_builder_set_collision_groups</td><td>设置碰撞过滤组</td></tr>
+
+<tr>
+<td>collider_builder_set_solver_groups</td><td>设置求解器过滤组</td></tr>
+
+<tr>
+<td>collider_builder_set_active_events</td><td>设置事件标志</td></tr>
+
+<tr>
+<td>collider_builder_set_active_hooks</td><td>设置钩子标志</td></tr>
+
+<tr>
+<td>collider_builder_set_contact_force_threshold</td><td>接触力阈值</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+世界操作</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C 函数</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>world_insert_collider</td><td>插入独立碰撞体</td></tr>
+
+<tr>
+<td>world_insert_collider_with_parent</td><td>插入子碰撞体 (附加到刚体)</td></tr>
+
+<tr>
+<td>world_remove_collider</td><td>移除碰撞体</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+读写</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C 函数</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>collider_get_translation</td><td>获取世界坐标位置</td></tr>
+
+<tr>
+<td>collider_get_rotation</td><td>获取世界坐标旋转</td></tr>
+
+<tr>
+<td>collider_is_sensor</td><td>检查传感器标志</td></tr>
+
+<tr>
+<td>collider_get_friction</td><td>获取摩擦</td></tr>
+
+<tr>
+<td>collider_get_restitution</td><td>获取弹性</td></tr>
+
+<tr>
+<td>collider_get_collision_groups</td><td>获取碰撞组</td></tr>
+
+<tr>
+<td>collider_get_density</td><td>获取密度</td></tr>
+
+<tr>
+<td>collider_get_shape_count</td><td>获取子形状数量</td></tr>
+</tbody>
+</table>
+</div>
+
+<pre>
+<code class="language-java">// 从 byte[] 构建体素碰撞体
+long collider = RigidBodyNative.colliderBuilderCreateVoxelBytes(
+    voxels, 16, 16, 16, 1.0, 0, 0, 0,
+    0 /*Auto*/, 1 /*dynamic*/, 27, 500);
+// 一步构建静态体素地形
+long terrain = RigidBodyNative.worldInsertStaticVoxelAabb(
+    world, 0, 0, 0, 256, 64, 256, 1.0,
+    0 /*Auto*/, 27, 500, 0.6, 0.3);</code></pre>
+</section>
+</div>
+</div>
+
+<div data-lang="en" class="language-page language-en">
+<header class="page-masthead accent-core">
+<div>
+<div class="section-kicker">/ CORE MODULE</div>
+
+<h1>
+Collider & Extended Bounds</h1>
+
+<p>Colliders define physics shapes. Supports standard geometry, extended bounds, and voxel systems.</p></div>
+
+<div class="page-index">03</div>
+</header>
+
+<div class="module-stack">
+<section class="doc-module">
+<h2>
+Standard Shape Builders</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C Function</th><th>Shape</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>collider_builder_create_ex</td><td>Ball</td></tr>
+
+<tr>
+<td>collider_builder_create_obb</td><td>Cuboid</td></tr>
+
+<tr>
+<td>collider_builder_create_sphere</td><td>Sphere</td></tr>
+
+<tr>
+<td>collider_builder_create_halfspace</td><td>Half-space</td></tr>
+
+<tr>
+<td>collider_builder_create_heightmap</td><td>Heightfield</td></tr>
+
+<tr>
+<td>collider_builder_create_convex_hull</td><td>Convex hull</td></tr>
+
+<tr>
+<td>collider_builder_create_point_cloud</td><td>Point cloud</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Extended Bounds</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C Function</th><th>Shape</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>collider_builder_create_capsule</td><td>Capsule</td><td>Line segment + radius</td></tr>
+
+<tr>
+<td>collider_builder_create_ssv</td><td>SSV</td><td>Swept sphere volume</td></tr>
+
+<tr>
+<td>collider_builder_create_ellipsoid</td><td>Ellipsoid</td><td>Piecewise approximation</td></tr>
+
+<tr>
+<td>collider_builder_create_prism</td><td>Prism</td><td>Regular prism</td></tr>
+
+<tr>
+<td>collider_builder_create_cylinder</td><td>Cylinder</td><td>Cylinder</td></tr>
+
+<tr>
+<td>collider_builder_create_spherical_shell</td><td>SphericalShell</td><td>Spherical shell</td></tr>
+
+<tr>
+<td>collider_builder_create_kdop</td><td>kDOP</td><td>Discrete orientation polytope</td></tr>
+
+<tr>
+<td>collider_builder_create_fdh</td><td>FDH</td><td>Functional direction histogram</td></tr>
+
+<tr>
+<td>collider_builder_create_neural_bounds</td><td>Neural</td><td>MLP implicit surface bounds</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Voxel Colliders</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C Function</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>collider_builder_create_voxels</td><td>Build voxel collider from buffer</td></tr>
+
+<tr>
+<td>collider_builder_create_voxel_aabb</td><td>Build voxel from AABB region</td></tr>
+
+<tr>
+<td>collider_builder_create_voxel_obb</td><td>Build voxel from OBB region</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Builder Settings</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C Function</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>collider_builder_set_translation</td><td>Set relative position</td></tr>
+
+<tr>
+<td>collider_builder_set_rotation</td><td>Set relative rotation</td></tr>
+
+<tr>
+<td>collider_builder_set_sensor</td><td>Mark as sensor</td></tr>
+
+<tr>
+<td>collider_builder_set_friction</td><td>Set friction coefficient</td></tr>
+
+<tr>
+<td>collider_builder_set_restitution</td><td>Set restitution</td></tr>
+
+<tr>
+<td>collider_builder_set_density</td><td>Set density</td></tr>
+
+<tr>
+<td>collider_builder_set_collision_groups</td><td>Set collision filter groups</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+World Operations</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C Function</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>world_insert_collider</td><td>Insert independent collider</td></tr>
+
+<tr>
+<td>world_insert_collider_with_parent</td><td>Insert child collider (attached to body)</td></tr>
+
+<tr>
+<td>world_remove_collider</td><td>Remove collider</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Getters/Setters</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C Function</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>collider_get_translation</td><td>Get world-space position</td></tr>
+
+<tr>
+<td>collider_get_rotation</td><td>Get world-space rotation</td></tr>
+
+<tr>
+<td>collider_is_sensor</td><td>Check sensor flag</td></tr>
+
+<tr>
+<td>collider_get_friction</td><td>Get friction</td></tr>
+
+<tr>
+<td>collider_get_restitution</td><td>Get restitution</td></tr>
+
+<tr>
+<td>collider_get_density</td><td>Get density</td></tr>
+</tbody>
+</table>
+</div>
+
+<pre>
+<code class="language-java">// 从 byte[] 构建体素碰撞体
+long collider = RigidBodyNative.colliderBuilderCreateVoxelBytes(
+    voxels, 16, 16, 16, 1.0, 0, 0, 0,
+    0 /*Auto*/, 1 /*dynamic*/, 27, 500);
+// 一步构建静态体素地形
+long terrain = RigidBodyNative.worldInsertStaticVoxelAabb(
+    world, 0, 0, 0, 256, 64, 256, 1.0,
+    0 /*Auto*/, 27, 500, 0.6, 0.3);</code></pre>
+</section>
+</div>
+</div>
+</main>
+
+<script src="../i18n.js"></script></body></html>

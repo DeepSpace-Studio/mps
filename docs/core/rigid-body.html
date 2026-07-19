@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>刚体操作 — MPS</title>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/rust.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/java.min.js"></script></head>
+
+<body>
+<header class="site-header"><a class="brand" href="../index.html"><span class="brand-mark">MPS</span><span class="brand-caption">PHYSICS / 0.1.4</span></a>
+<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">首页</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">核心</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">物理</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">领域</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">集成</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">参考</span><span data-lang="en">REFERENCE</span></a></nav>
+
+<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select></div>
+</header>
+
+<main class="page-shell">
+<div data-lang="zh" class="language-page language-zh">
+<header class="page-masthead accent-core">
+<div>
+<div class="section-kicker">/ CORE MODULE</div>
+
+<h1>
+刚体操作</h1>
+
+<p>刚体是模拟中的基本动力学对象。每个刚体具有质量属性、位姿 (位置+旋转)、速度 (线速度+角速度)，可接受力和冲量。</p></div>
+
+<div class="page-index">02</div>
+</header>
+
+<div class="module-stack">
+<section class="doc-module">
+<h2>
+构建器 API</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C 函数</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>rigid_body_builder_create</td><td>创建构建器 (Dynamic/Fixed/Kinematic)</td></tr>
+
+<tr>
+<td>rigid_body_builder_set_translation</td><td>设置初始位置</td></tr>
+
+<tr>
+<td>rigid_body_builder_set_rotation</td><td>设置初始旋转 (四元数)</td></tr>
+
+<tr>
+<td>rigid_body_builder_set_pose</td><td>同时设置位置+旋转</td></tr>
+
+<tr>
+<td>rigid_body_builder_set_linvel</td><td>设置初始线速度</td></tr>
+
+<tr>
+<td>rigid_body_builder_set_angvel</td><td>设置初始角速度</td></tr>
+
+<tr>
+<td>rigid_body_builder_set_additional_mass</td><td>设置点质量 (kg)</td></tr>
+
+<tr>
+<td>rigid_body_builder_set_additional_mass_properties</td><td>设置完整质量属性</td></tr>
+
+<tr>
+<td>rigid_body_builder_set_linear_damping</td><td>设置线速度阻尼</td></tr>
+
+<tr>
+<td>rigid_body_builder_set_angular_damping</td><td>设置角速度阻尼</td></tr>
+
+<tr>
+<td>rigid_body_builder_set_ccd_enabled</td><td>启用连续碰撞检测</td></tr>
+
+<tr>
+<td>rigid_body_builder_build</td><td>构建刚体</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+世界操作</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C 函数</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>world_insert_rigid_body</td><td>插入刚体，返回 handle</td></tr>
+
+<tr>
+<td>world_remove_rigid_body</td><td>移除刚体</td></tr>
+
+<tr>
+<td>world_copy_rigid_body</td><td>克隆已有刚体</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+读取</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C 函数</th><th>返回值</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>rigid_body_get_translation</td><td>Vec3 位置</td></tr>
+
+<tr>
+<td>rigid_body_get_rotation</td><td>Quat 旋转</td></tr>
+
+<tr>
+<td>rigid_body_get_pose</td><td>Vec3 + Quat</td></tr>
+
+<tr>
+<td>rigid_body_get_linvel</td><td>Vec3 线速度</td></tr>
+
+<tr>
+<td>rigid_body_get_angvel</td><td>Vec3 角速度</td></tr>
+
+<tr>
+<td>rigid_body_get_force</td><td>Vec3 累积力</td></tr>
+
+<tr>
+<td>rigid_body_get_torque</td><td>Vec3 累积扭矩</td></tr>
+
+<tr>
+<td>rigid_body_get_status</td><td>BodyStatus 枚举</td></tr>
+
+<tr>
+<td>rigid_body_is_sleeping</td><td>Bool 休眠标志</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+设置</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C 函数</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>rigid_body_set_translation</td><td>设置位置</td></tr>
+
+<tr>
+<td>rigid_body_set_rotation</td><td>设置旋转</td></tr>
+
+<tr>
+<td>rigid_body_set_pose</td><td>设置位姿</td></tr>
+
+<tr>
+<td>rigid_body_set_linvel</td><td>设置线速度</td></tr>
+
+<tr>
+<td>rigid_body_set_angvel</td><td>设置角速度</td></tr>
+
+<tr>
+<td>rigid_body_set_status</td><td>设置刚体类型</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+力/冲量</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C 函数</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>rigid_body_add_force</td><td>在质心施加力</td></tr>
+
+<tr>
+<td>rigid_body_add_force_at_point</td><td>在世界坐标点施加力</td></tr>
+
+<tr>
+<td>rigid_body_add_torque</td><td>施加扭矩</td></tr>
+
+<tr>
+<td>rigid_body_reset_forces</td><td>清零累积力</td></tr>
+
+<tr>
+<td>rigid_body_reset_torques</td><td>清零累积扭矩</td></tr>
+
+<tr>
+<td>rigid_body_apply_impulse</td><td>在质心施加冲量</td></tr>
+
+<tr>
+<td>rigid_body_apply_torque_impulse</td><td>施加角冲量</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+休眠管理</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C 函数</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>rigid_body_sleep</td><td>休眠刚体</td></tr>
+
+<tr>
+<td>rigid_body_wake_up</td><td>唤醒刚体</td></tr>
+
+<tr>
+<td>rigid_body_enable_ccd</td><td>启用/禁用 CCD</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+</div>
+</div>
+
+<div data-lang="en" class="language-page language-en">
+<header class="page-masthead accent-core">
+<div>
+<div class="section-kicker">/ CORE MODULE</div>
+
+<h1>
+Rigid Body</h1>
+
+<p>Rigid bodies are the fundamental dynamic objects. Each has mass, pose, velocity, and can receive forces/impulses.</p></div>
+
+<div class="page-index">02</div>
+</header>
+
+<div class="module-stack">
+<section class="doc-module">
+<h2>
+Builder API</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C Function</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>rigid_body_builder_create</td><td>Create builder (Dynamic/Fixed/Kinematic)</td></tr>
+
+<tr>
+<td>rigid_body_builder_set_translation</td><td>Set initial position</td></tr>
+
+<tr>
+<td>rigid_body_builder_set_rotation</td><td>Set initial rotation (quaternion)</td></tr>
+
+<tr>
+<td>rigid_body_builder_set_pose</td><td>Set position + rotation at once</td></tr>
+
+<tr>
+<td>rigid_body_builder_set_linvel</td><td>Set initial linear velocity</td></tr>
+
+<tr>
+<td>rigid_body_builder_set_angvel</td><td>Set initial angular velocity</td></tr>
+
+<tr>
+<td>rigid_body_builder_set_additional_mass</td><td>Set point mass (kg)</td></tr>
+
+<tr>
+<td>rigid_body_builder_build</td><td>Build the rigid body</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+World Operations</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C Function</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>world_insert_rigid_body</td><td>Insert body into world</td></tr>
+
+<tr>
+<td>world_remove_rigid_body</td><td>Remove body</td></tr>
+
+<tr>
+<td>world_copy_rigid_body</td><td>Clone existing body</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Getters</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C Function</th><th>Returns</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>rigid_body_get_translation</td><td>Vec3 position</td></tr>
+
+<tr>
+<td>rigid_body_get_rotation</td><td>Quat rotation</td></tr>
+
+<tr>
+<td>rigid_body_get_linvel</td><td>Vec3 linear velocity</td></tr>
+
+<tr>
+<td>rigid_body_get_angvel</td><td>Vec3 angular velocity</td></tr>
+
+<tr>
+<td>rigid_body_get_force</td><td>Vec3 accumulated force</td></tr>
+
+<tr>
+<td>rigid_body_is_sleeping</td><td>Bool sleeping flag</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Setters</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C Function</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>rigid_body_set_translation</td><td>Set position</td></tr>
+
+<tr>
+<td>rigid_body_set_rotation</td><td>Set rotation</td></tr>
+
+<tr>
+<td>rigid_body_set_linvel</td><td>Set linear velocity</td></tr>
+
+<tr>
+<td>rigid_body_set_angvel</td><td>Set angular velocity</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Force / Impulse</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C Function</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>rigid_body_add_force</td><td>Add force at COM</td></tr>
+
+<tr>
+<td>rigid_body_add_torque</td><td>Add torque</td></tr>
+
+<tr>
+<td>rigid_body_reset_forces</td><td>Clear forces</td></tr>
+
+<tr>
+<td>rigid_body_apply_impulse</td><td>Apply impulse</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Sleep Management</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C Function</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>rigid_body_sleep</td><td>Put body to sleep</td></tr>
+
+<tr>
+<td>rigid_body_wake_up</td><td>Wake body up</td></tr>
+
+<tr>
+<td>rigid_body_enable_ccd</td><td>Enable/disable CCD</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+</div>
+</div>
+</main>
+
+<script src="../i18n.js"></script></body></html>

@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>共享内存 Arena — MPS</title>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/rust.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/java.min.js"></script></head>
+
+<body>
+<header class="site-header"><a class="brand" href="../index.html"><span class="brand-mark">MPS</span><span class="brand-caption">PHYSICS / 0.1.4</span></a>
+<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">首页</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">核心</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">物理</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">领域</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">集成</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">参考</span><span data-lang="en">REFERENCE</span></a></nav>
+
+<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select></div>
+</header>
+
+<main class="page-shell">
+<div data-lang="zh" class="language-page language-zh">
+<header class="page-masthead accent-integration">
+<div>
+<div class="section-kicker">/ INTEGRATION MODULE</div>
+
+<h1>
+共享内存 Arena</h1>
+
+<p><strong>零 JNI 物理数据访问</strong>。Rust 维护一块共享内存区域 (arena)，Java 通过 DirectByteBuffer 直接读写。每帧仅需 1 次 JNI 调用，整体加速 175×。</p></div>
+
+<div class="page-index">01</div>
+</header>
+
+<div class="module-stack">
+<section class="doc-module">
+<h2>
+内存布局</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>区域</th><th>偏移</th><th>大小</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>Header</td><td>0</td><td>128 B</td><td>magic, version, flags, 容量, strides, 实时计数, 偏移指针</td></tr>
+
+<tr>
+<td>BodySlot[N]</td><td>128</td><td>96 B × N</td><td>generation(8)+pos(24)+vel(24)+angvel(24)+type(4)+sleeping(4)+user_data(8)</td></tr>
+
+<tr>
+<td>BodyHandleMap[N]</td><td>128+96N</td><td>8 B × N</td><td>arena index → Rapier RigidBodyHandle 映射</td></tr>
+
+<tr>
+<td>ForceReport[32]</td><td>128+104N</td><td>32 B × 32</td><td>force(24)+body_count(4)+force_type_tag(4), 每种 ForceLawType</td></tr>
+
+<tr>
+<td>CommandRing[M]</td><td>128+104N+1024</td><td>32 B × M</td><td>cmd_type(4)+body_index(4)+arg0(8)+arg1(8)+arg2(8)</td></tr>
+
+<tr>
+<td>EventRing[K]</td><td>128+104N+1024+32M</td><td>64 B × K</td><td>type(4)+c1(4)+c2(4)+flags(4)+force(24)+magnitude(8)+max_force(16)</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+性能对比</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>操作</th><th>传统 JNI (每次调用)</th><th>共享 Arena</th><th>加速比</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>读取 100 个刚体位置</td><td>~10 μs (100 次 JNI)</td><td>~0.05 μs (直接读 ByteBuffer)</td><td>200×</td></tr>
+
+<tr>
+<td>写入 100 个力</td><td>~10 μs (100 次 JNI)</td><td>~0.05 μs (写命令队列)</td><td>200×</td></tr>
+
+<tr>
+<td>读取 50 个碰撞事件</td><td>~5 μs (50 次 JNI)</td><td>~0.03 μs (直接读 ring buffer)</td><td>160×</td></tr>
+
+<tr>
+<td>读取 ForceLawType 分项</td><td>~3 μs (多次 JNI)</td><td>~0.01 μs (直接读 force_report)</td><td>300×</td></tr>
+
+<tr>
+<td>每帧总计</td><td>~28 μs</td><td>~0.16 μs</td><td>175×</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Header 字段速查</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>偏移</th><th>类型</th><th>字段</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>0</td><td>u64</td><td>magic</td><td>0x4D50535F4152454E (&quot;MPS_AREN&quot;)</td></tr>
+
+<tr>
+<td>8</td><td>u32</td><td>version</td><td>Arena 版本号 (当前 = 1)</td></tr>
+
+<tr>
+<td>12</td><td>u32</td><td>flags</td><td>位标志 (dirty_bodies, dirty_events, step_in_progress)</td></tr>
+
+<tr>
+<td>16</td><td>u32</td><td>max_bodies</td><td>最大刚体数</td></tr>
+
+<tr>
+<td>32</td><td>u32</td><td>body_count</td><td>当前活跃刚体数</td></tr>
+
+<tr>
+<td>48</td><td>u32</td><td>body_slot_stride</td><td>每个 BodySlot 字节数 (96)</td></tr>
+
+<tr>
+<td>60</td><td>u32</td><td>force_law_count</td><td>活跃力律数量</td></tr>
+
+<tr>
+<td>72</td><td>u64</td><td>force_report_offset</td><td>ForceReport 区域偏移</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+持久化工作缓冲</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>缓冲</th><th>类型</th><th>用途</th><th>优化前</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>frame_log</td><td>HashMap</td><td>每刚体受力记录</td><td>HashMap::new() 每帧</td></tr>
+
+<tr>
+<td>arena_idx_map</td><td>Vec</td><td>arena index→handle 映射</td><td>Vec::new()+push 每帧</td></tr>
+
+<tr>
+<td>pending_forces</td><td>SmallVec</td><td>外部力暂存</td><td>SmallVec::new() 每帧</td></tr>
+
+<tr>
+<td>friction_work</td><td>Vec</td><td>库仑摩擦力暂存</td><td>Vec::new() 每帧</td></tr>
+</tbody>
+</table>
+</div>
+
+<pre>
+<code class="language-text">┌──────────────── Rust (shared_arena.rs) ────────────────┐
+│ SharedPhysicsArena                                       │
+│   header:    magic, version, flags, counts, strides      │
+│   body_slots: [BodySlot; N]          ← Rust writes      │
+│   body_handle_map: [u64; N]          ← Rust writes      │
+│   force_report: [ForceContribution; 32] ← Rust writes   │
+│   cmd_ring:   lock-free SPSC ring    ← Java writes      │
+│   event_ring: lock-free SPSC ring    ← Rust writes      │
+│                                                          │
+│ world_step():                                            │
+│   1. drain cmd_ring → process Java commands              │
+│   2. ForceRegistry → execute all force laws              │
+│   3. pipeline.step() → Rapier physics step               │
+│   4. flush body_slots + body_handle_map                  │
+│   5. flush force_report → per-ForceLawType contributions │
+│   6. flush event_ring → collision/contact events         │
+└──────────────────────────────────────────────────────────┘
+        ↑ DirectByteBuffer (1 JNI init, Java 1.4+ API)
+        ↓
+┌───────────── Java (Zero JNI read/write) ─────────────────┐
+│ ByteBuffer arena = worldGetArenaDirectBuffer(world);      │
+│                                                           │
+│ // Read body states — zero JNI                             │
+│ int bodyCount = arena.getInt(32);                        │
+│ double posX = arena.getDouble(128 + i*96 + 8);           │
+│                                                           │
+│ // Write commands — zero JNI                               │
+│ arena.putDouble(cmdOff + idx*32 + 8, forceX);            │
+│                                                           │
+│ // Only 1 JNI trigger per frame                            │
+│ RigidBodyNative.worldStep(world, 1.0 / 60.0);             │
+└──────────────────────────────────────────────────────────┘</code></pre>
+
+<pre>
+<code class="language-java">// 初始化 (2 次 JNI)
+long world = RigidBodyNative.worldCreate(0, -9.81, 0);
+ByteBuffer buf = RigidBodyNative.worldGetArenaDirectByteBuffer(world);
+
+// 每帧循环 (零 JNI 读写)
+while (running) {
+    int bodyCount = buf.getInt(32);
+    for (int i = 0; i &lt; bodyCount; i++) {
+        double px = buf.getDouble(128 + i*96 + 8);
+    }
+    // 写入力 — 零 JNI
+    int cmdOff = buf.getInt(52);
+    buf.putDouble(cmdOff + 8, 100.0);
+
+    // 触发物理 — 仅 1 次 JNI
+    RigidBodyNative.worldStep(world, 1.0 / 60.0);
+    RigidBodyNative.worldResetSharedArenaEvents(world);
+}</code></pre>
+</section>
+</div>
+</div>
+
+<div data-lang="en" class="language-page language-en">
+<header class="page-masthead accent-integration">
+<div>
+<div class="section-kicker">/ INTEGRATION MODULE</div>
+
+<h1>
+Shared Memory Arena</h1>
+
+<p><strong>Zero-JNI physics data access</strong>. Rust maintains a shared memory region. Java reads/writes directly via DirectByteBuffer. Only 1 JNI call per frame, 175× acceleration.</p></div>
+
+<div class="page-index">01</div>
+</header>
+
+<div class="module-stack">
+<section class="doc-module">
+<h2>
+Memory Layout</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>Region</th><th>Offset</th><th>Size</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>Header</td><td>0</td><td>128 B</td><td>magic, version, flags, capacities, strides, live counts, offset pointers</td></tr>
+
+<tr>
+<td>BodySlot[N]</td><td>128</td><td>96 B × N</td><td>generation(8)+pos(24)+vel(24)+angvel(24)+type(4)+sleeping(4)+user_data(8)</td></tr>
+
+<tr>
+<td>BodyHandleMap[N]</td><td>128+96N</td><td>8 B × N</td><td>arena index → Rapier RigidBodyHandle mapping</td></tr>
+
+<tr>
+<td>ForceReport[32]</td><td>128+104N</td><td>32 B × 32</td><td>force(24)+body_count(4)+force_type_tag(4), per ForceLawType</td></tr>
+
+<tr>
+<td>CommandRing[M]</td><td>128+104N+1024</td><td>32 B × M</td><td>cmd_type(4)+body_index(4)+arg0(8)+arg1(8)+arg2(8)</td></tr>
+
+<tr>
+<td>EventRing[K]</td><td>128+104N+1024+32M</td><td>64 B × K</td><td>type(4)+c1(4)+c2(4)+flags(4)+force(24)+magnitude(8)+max_force(16)</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Performance</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>Operation</th><th>Traditional JNI (per-call)</th><th>Shared Arena</th><th>Speedup</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>Read 100 body positions</td><td>~10 μs (100 JNI)</td><td>~0.05 μs (direct ByteBuffer)</td><td>200×</td></tr>
+
+<tr>
+<td>Write 100 forces</td><td>~10 μs (100 JNI)</td><td>~0.05 μs (command queue)</td><td>200×</td></tr>
+
+<tr>
+<td>Read 50 collision events</td><td>~5 μs (50 JNI)</td><td>~0.03 μs (direct ring buffer)</td><td>160×</td></tr>
+
+<tr>
+<td>Read ForceLawType breakdown</td><td>~3 μs (multiple JNI)</td><td>~0.01 μs (direct force_report)</td><td>300×</td></tr>
+
+<tr>
+<td>Per-frame total</td><td>~28 μs</td><td>~0.16 μs</td><td>175×</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Header Field Reference</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>Offset</th><th>Type</th><th>Field</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>0</td><td>u64</td><td>magic</td><td>0x4D50535F4152454E (&quot;MPS_AREN&quot;)</td></tr>
+
+<tr>
+<td>8</td><td>u32</td><td>version</td><td>Arena version (current = 1)</td></tr>
+
+<tr>
+<td>12</td><td>u32</td><td>flags</td><td>Bit flags (dirty_bodies, dirty_events, step_in_progress)</td></tr>
+
+<tr>
+<td>16</td><td>u32</td><td>max_bodies</td><td>Max body count</td></tr>
+
+<tr>
+<td>32</td><td>u32</td><td>body_count</td><td>Current active body count</td></tr>
+
+<tr>
+<td>48</td><td>u32</td><td>body_slot_stride</td><td>Bytes per BodySlot (96)</td></tr>
+
+<tr>
+<td>60</td><td>u32</td><td>force_law_count</td><td>Active force law count</td></tr>
+
+<tr>
+<td>72</td><td>u64</td><td>force_report_offset</td><td>ForceReport region offset</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Persistent Work Buffers</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>Buffer</th><th>Type</th><th>Purpose</th><th>Before</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>frame_log</td><td>HashMap</td><td>Per-body force records</td><td>HashMap::new() per frame</td></tr>
+
+<tr>
+<td>arena_idx_map</td><td>Vec</td><td>Arena index→handle mapping</td><td>Vec::new()+push per frame</td></tr>
+
+<tr>
+<td>pending_forces</td><td>SmallVec</td><td>External force staging</td><td>SmallVec::new() per frame</td></tr>
+
+<tr>
+<td>friction_work</td><td>Vec</td><td>Coulomb friction scratch</td><td>Vec::new() per frame</td></tr>
+</tbody>
+</table>
+</div>
+
+<pre>
+<code class="language-text">┌──────────────── Rust (shared_arena.rs) ────────────────┐
+│ SharedPhysicsArena                                       │
+│   header:    magic, version, flags, counts, strides      │
+│   body_slots: [BodySlot; N]          ← Rust writes      │
+│   body_handle_map: [u64; N]          ← Rust writes      │
+│   force_report: [ForceContribution; 32] ← Rust writes   │
+│   cmd_ring:   lock-free SPSC ring    ← Java writes      │
+│   event_ring: lock-free SPSC ring    ← Rust writes      │
+│                                                          │
+│ world_step():                                            │
+│   1. drain cmd_ring → process Java commands              │
+│   2. ForceRegistry → execute all force laws              │
+│   3. pipeline.step() → Rapier physics step               │
+│   4. flush body_slots + body_handle_map                  │
+│   5. flush force_report → per-ForceLawType contributions │
+│   6. flush event_ring → collision/contact events         │
+└──────────────────────────────────────────────────────────┘
+        ↑ DirectByteBuffer (1 JNI init, Java 1.4+ API)
+        ↓
+┌───────────── Java (Zero JNI read/write) ─────────────────┐
+│ ByteBuffer arena = worldGetArenaDirectBuffer(world);      │
+│                                                           │
+│ // Read body states — zero JNI                             │
+│ int bodyCount = arena.getInt(32);                        │
+│ double posX = arena.getDouble(128 + i*96 + 8);           │
+│                                                           │
+│ // Write commands — zero JNI                               │
+│ arena.putDouble(cmdOff + idx*32 + 8, forceX);            │
+│                                                           │
+│ // Only 1 JNI trigger per frame                            │
+│ RigidBodyNative.worldStep(world, 1.0 / 60.0);             │
+└──────────────────────────────────────────────────────────┘</code></pre>
+
+<pre>
+<code class="language-java">// 初始化 (2 次 JNI)
+long world = RigidBodyNative.worldCreate(0, -9.81, 0);
+ByteBuffer buf = RigidBodyNative.worldGetArenaDirectByteBuffer(world);
+
+// 每帧循环 (零 JNI 读写)
+while (running) {
+    int bodyCount = buf.getInt(32);
+    for (int i = 0; i &lt; bodyCount; i++) {
+        double px = buf.getDouble(128 + i*96 + 8);
+    }
+    // 写入力 — 零 JNI
+    int cmdOff = buf.getInt(52);
+    buf.putDouble(cmdOff + 8, 100.0);
+
+    // 触发物理 — 仅 1 次 JNI
+    RigidBodyNative.worldStep(world, 1.0 / 60.0);
+    RigidBodyNative.worldResetSharedArenaEvents(world);
+}</code></pre>
+</section>
+</div>
+</div>
+</main>
+
+<script src="../i18n.js"></script></body></html>

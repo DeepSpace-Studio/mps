@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>性能优化 — MPS</title>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/rust.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/java.min.js"></script></head>
+
+<body>
+<header class="site-header"><a class="brand" href="../index.html"><span class="brand-mark">MPS</span><span class="brand-caption">PHYSICS / 0.1.4</span></a>
+<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">首页</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">核心</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">物理</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">领域</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">集成</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">参考</span><span data-lang="en">REFERENCE</span></a></nav>
+
+<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select></div>
+</header>
+
+<main class="page-shell">
+<div data-lang="zh" class="language-page language-zh">
+<header class="page-masthead accent-reference">
+<div>
+<div class="section-kicker">/ REFERENCE MODULE</div>
+
+<h1>
+性能优化</h1>
+</div>
+
+<div class="page-index">03</div>
+</header>
+
+<div class="module-stack">
+<section class="doc-module">
+<h2>
+持久化缓冲 (v0.1.4+)</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>优化项</th><th>说明</th><th>消除的分配</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>frame_log 持久化</td><td>HashMap 在 world 生命周期内复用</td><td>HashMap::new() 每帧</td></tr>
+
+<tr>
+<td>arena_idx_map 缓存</td><td>body index→handle 映射缓存</td><td>Vec::new()+push 每帧</td></tr>
+
+<tr>
+<td>force_law_type 固定数组</td><td>用 [Option&lt;KahanVec3&gt;;32] 替代 BTreeMap</td><td>BTreeMap::new() 每帧</td></tr>
+
+<tr>
+<td>pending_forces 持久化</td><td>ForceFacade 接收 &amp;mut SmallVec</td><td>SmallVec::new() 每帧</td></tr>
+
+<tr>
+<td>friction_work 持久化</td><td>库仑摩擦力暂存 Vec 跨帧复用</td><td>Vec::new() 每帧</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+事件系统优化 (v0.1.4+)</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>优化项</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>ProducerCache 锁自由</td><td>UnsafeCell + 原子字段, 不再需要 RwLock</td></tr>
+
+<tr>
+<td>CallbackSlot 原子化</td><td>AtomicUsize/AtomicU64, 注册/注销/热路径均无锁</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+体质查找优化 (v0.1.4+)</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>优化项</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>单次 get_mut 查找</td><td>合并 get()+get_mut() 为单次 get_mut()</td></tr>
+
+<tr>
+<td>unregister_by_type 单次遍历</td><td>合并 find→Vec + 逐个注销为一次遍历</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Java 端优化 (v0.1.4+)</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>优化项</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>getVec3 复用</td><td>ThreadLocal&lt;double[3]&gt; 替代 new double[3]</td></tr>
+
+<tr>
+<td>getVec3(out[], offset) 批量</td><td>无分配重载: 写入调用者提供的数组</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+</div>
+</div>
+
+<div data-lang="en" class="language-page language-en">
+<header class="page-masthead accent-reference">
+<div>
+<div class="section-kicker">/ REFERENCE MODULE</div>
+
+<h1>
+Performance Optimizations</h1>
+</div>
+
+<div class="page-index">03</div>
+</header>
+
+<div class="module-stack">
+<section class="doc-module">
+<h2>
+Persistent Buffers (v0.1.4+)</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>Optimization</th><th>Description</th><th>Allocation Eliminated</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>frame_log persistence</td><td>HashMap reused across world lifetime</td><td>HashMap::new() per frame</td></tr>
+
+<tr>
+<td>arena_idx_map cache</td><td>body index→handle mapping cached</td><td>Vec::new()+push per frame</td></tr>
+
+<tr>
+<td>force_law_type fixed array</td><td>drain_report uses [Option&lt;KahanVec3&gt;;32] instead of BTreeMap</td><td>BTreeMap::new() per body per frame</td></tr>
+
+<tr>
+<td>pending_forces persistence</td><td>ForceFacade receives &amp;mut SmallVec</td><td>SmallVec::new() per frame</td></tr>
+
+<tr>
+<td>friction_work persistence</td><td>Coulomb friction scratch Vec reused</td><td>Vec::new() per frame</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Event System Optimizations (v0.1.4+)</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>Optimization</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>ProducerCache lock-free</td><td>UnsafeCell + atomic fields, no more RwLock</td></tr>
+
+<tr>
+<td>CallbackSlot atomic</td><td>AtomicUsize/AtomicU64, registration/deregistration/hot-path all lock-free</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Body Lookup Optimizations (v0.1.4+)</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>Optimization</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>Single get_mut lookup</td><td>Merges get()+get_mut() into single get_mut()</td></tr>
+
+<tr>
+<td>unregister_by_type single pass</td><td>Merges find→Vec + per-handle unregister into one traversal</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Java-side Optimizations (v0.1.4+)</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>Optimization</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>getVec3 reuse</td><td>ThreadLocal&lt;double[3]&gt; instead of new double[3]</td></tr>
+
+<tr>
+<td>getVec3(out[], offset) bulk</td><td>Allocation-free overload: writes into caller-provided array</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+</div>
+</div>
+</main>
+
+<script src="../i18n.js"></script></body></html>

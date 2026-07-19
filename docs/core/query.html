@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>空间查询 — MPS</title>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/rust.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/java.min.js"></script></head>
+
+<body>
+<header class="site-header"><a class="brand" href="../index.html"><span class="brand-mark">MPS</span><span class="brand-caption">PHYSICS / 0.1.4</span></a>
+<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">首页</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">核心</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">物理</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">领域</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">集成</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">参考</span><span data-lang="en">REFERENCE</span></a></nav>
+
+<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select></div>
+</header>
+
+<main class="page-shell">
+<div data-lang="zh" class="language-page language-zh">
+<header class="page-masthead accent-core">
+<div>
+<div class="section-kicker">/ CORE MODULE</div>
+
+<h1>
+空间查询</h1>
+
+<p>射线投射、形状投射、点投影和相交测试。</p></div>
+
+<div class="page-index">05</div>
+</header>
+
+<div class="module-stack">
+<section class="doc-module">
+<h2>
+射线投射</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C 函数</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>query_cast_ray</td><td>单射线投射</td></tr>
+
+<tr>
+<td>query_cast_rays</td><td>多射线投射 (批量)</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+点投影</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C 函数</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>query_project_point</td><td>点到最近碰撞体表面投影</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+形状投射</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C 函数</th><th>说明</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>query_cast_shape</td><td>在场景中扫描形状</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+相交测试</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C 函数</th><th>测试</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>query_intersect_point_count</td><td>点-碰撞体数量</td></tr>
+
+<tr>
+<td>query_intersect_aabb_count</td><td>AABB 重叠数量</td></tr>
+
+<tr>
+<td>query_intersect_aabb</td><td>AABB 重叠 — 返回 handle</td></tr>
+
+<tr>
+<td>query_intersect_obb_count</td><td>OBB 重叠数量</td></tr>
+
+<tr>
+<td>query_intersect_sphere_count</td><td>球体重叠数量</td></tr>
+
+<tr>
+<td>query_intersect_sphere</td><td>球体重叠 — 返回 handle</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+扩展边界相交</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C 函数</th><th>测试</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>query_intersect_capsule_count_all</td><td>胶囊体重叠</td></tr>
+
+<tr>
+<td>query_intersect_ssv_count_all</td><td>SSV 重叠</td></tr>
+
+<tr>
+<td>query_intersect_cylinder_count_all</td><td>圆柱体重叠</td></tr>
+
+<tr>
+<td>query_intersect_ellipsoid_count_all</td><td>椭球重叠</td></tr>
+
+<tr>
+<td>query_intersect_prism_count_all</td><td>棱柱重叠</td></tr>
+
+<tr>
+<td>query_intersect_spherical_shell_count_all</td><td>球壳重叠</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+体素相交</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C 函数</th><th>测试</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>query_intersect_voxel_aabb_count</td><td>体素 AABB 重叠数量</td></tr>
+
+<tr>
+<td>query_intersect_voxel_aabb</td><td>体素 AABB — 返回 handle</td></tr>
+
+<tr>
+<td>query_intersect_voxel_obb_count</td><td>体素 OBB 重叠数量</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+查询过滤器</h2>
+
+<pre>
+<code class="language-rust">pub struct QueryFilterDesc {
+    pub flags: u32,
+    pub groups: InteractionGroupsDesc,
+    pub use_groups: Bool,
+    pub exclude_collider: ColliderHandleRaw,
+    pub use_exclude_collider: Bool,
+    pub exclude_rigid_body: RigidBodyHandleRaw,
+    pub use_exclude_rigid_body: Bool,
+}</code></pre>
+</section>
+</div>
+</div>
+
+<div data-lang="en" class="language-page language-en">
+<header class="page-masthead accent-core">
+<div>
+<div class="section-kicker">/ CORE MODULE</div>
+
+<h1>
+Spatial Query</h1>
+
+<p>Ray casting, shape casting, point projection, and intersection tests against the physics world.</p></div>
+
+<div class="page-index">05</div>
+</header>
+
+<div class="module-stack">
+<section class="doc-module">
+<h2>
+Ray Casting</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C Function</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>query_cast_ray</td><td>Cast single ray</td></tr>
+
+<tr>
+<td>query_cast_rays</td><td>Cast multiple rays (batch)</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Point Projection</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C Function</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>query_project_point</td><td>Project point onto closest collider surface</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Shape Casting</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C Function</th><th>Description</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>query_cast_shape</td><td>Sweep a shape through the world</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Intersection Tests</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C Function</th><th>Test</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>query_intersect_point_count</td><td>Point-in-collider count</td></tr>
+
+<tr>
+<td>query_intersect_aabb_count</td><td>AABB overlap count</td></tr>
+
+<tr>
+<td>query_intersect_aabb</td><td>AABB overlap — return handles</td></tr>
+
+<tr>
+<td>query_intersect_obb_count</td><td>OBB overlap count</td></tr>
+
+<tr>
+<td>query_intersect_sphere_count</td><td>Sphere overlap count</td></tr>
+
+<tr>
+<td>query_intersect_sphere</td><td>Sphere overlap — return handles</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Extended Bounds Intersection</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C Function</th><th>Test</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>query_intersect_capsule_count_all</td><td>Capsule overlap</td></tr>
+
+<tr>
+<td>query_intersect_ssv_count_all</td><td>SSV overlap</td></tr>
+
+<tr>
+<td>query_intersect_cylinder_count_all</td><td>Cylinder overlap</td></tr>
+
+<tr>
+<td>query_intersect_ellipsoid_count_all</td><td>Ellipsoid overlap</td></tr>
+
+<tr>
+<td>query_intersect_prism_count_all</td><td>Prism overlap</td></tr>
+
+<tr>
+<td>query_intersect_spherical_shell_count_all</td><td>Spherical shell overlap</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Voxel Intersection</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>C Function</th><th>Test</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>query_intersect_voxel_aabb_count</td><td>Voxel AABB overlap count</td></tr>
+
+<tr>
+<td>query_intersect_voxel_aabb</td><td>Voxel AABB — return handles</td></tr>
+
+<tr>
+<td>query_intersect_voxel_obb_count</td><td>Voxel OBB overlap count</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Query Filter</h2>
+
+<pre>
+<code class="language-rust">pub struct QueryFilterDesc {
+    pub flags: u32,
+    pub groups: InteractionGroupsDesc,
+    pub use_groups: Bool,
+    pub exclude_collider: ColliderHandleRaw,
+    pub use_exclude_collider: Bool,
+    pub exclude_rigid_body: RigidBodyHandleRaw,
+    pub use_exclude_rigid_body: Bool,
+}</code></pre>
+</section>
+</div>
+</div>
+</main>
+
+<script src="../i18n.js"></script></body></html>

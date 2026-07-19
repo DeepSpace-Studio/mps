@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>生态与构建 — MPS</title>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/rust.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/java.min.js"></script></head>
+
+<body>
+<header class="site-header"><a class="brand" href="../index.html"><span class="brand-mark">MPS</span><span class="brand-caption">PHYSICS / 0.1.4</span></a>
+<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">首页</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">核心</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">物理</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">领域</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">集成</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">参考</span><span data-lang="en">REFERENCE</span></a></nav>
+
+<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select></div>
+</header>
+
+<main class="page-shell">
+<div data-lang="zh" class="language-page language-zh">
+<header class="page-masthead accent-integration">
+<div>
+<div class="section-kicker">/ INTEGRATION MODULE</div>
+
+<h1>
+生态与构建</h1>
+</div>
+
+<div class="page-index">03</div>
+</header>
+
+<div class="module-stack">
+<section class="doc-module">
+<h2>
+依赖</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>库</th><th>版本</th><th>用途</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>rapier3d-f64</td><td>0.34.0</td><td>核心物理引擎 (碰撞+约束)</td></tr>
+
+<tr>
+<td>ljni</td><td>0.21.0</td><td>JNI 绑定 (无 panic, 零开销)</td></tr>
+
+<tr>
+<td>parking_lot</td><td>0.12.5</td><td>RwLock/Mutex (事件并发)</td></tr>
+
+<tr>
+<td>rayon</td><td>1.12</td><td>并行迭代 (Rapier 并行求解)</td></tr>
+
+<tr>
+<td>mimalloc</td><td>0.1.52</td><td>全局分配器 (性能)</td></tr>
+
+<tr>
+<td>hashbrown</td><td>0.17.1</td><td>高性能 HashMap (ForceRegistry/事件)</td></tr>
+
+<tr>
+<td>smallvec</td><td>1.15.2</td><td>栈内联 Vec (8元素力记录)</td></tr>
+
+<tr>
+<td>bevy_ecs</td><td>0.19.0 (optional)</td><td>AnvilKit ECS 集成</td></tr>
+
+<tr>
+<td>cbindgen</td><td>0.29.4 (build)</td><td>C 头文件自动生成</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+构建与部署</h2>
+
+<pre>
+<code class="language-bash"># 本地构建
+cargo build --release
+
+# 输出:
+# target/release/mps_rigid_body.dll   (Windows)
+# target/release/libmps_rigid_body.so (Linux)
+# target/release/libmps_rigid_body.dylib (macOS)
+
+# JNI 部署: 复制到 java.library.path 或 -Drigidbody.native.path 指定</code></pre>
+</section>
+
+<section class="doc-module">
+<h2>
+验证</h2>
+
+<pre>
+<code class="language-bash">cargo test -p mps-test              # 332 个 Rust 集成测试
+cargo build --release               # 发布构建
+cargo check                          # 快速语法检查 (~2s)
+cargo check -p mps-core -p mps-jni   # 单个 crate 检查</code></pre>
+</section>
+</div>
+</div>
+
+<div data-lang="en" class="language-page language-en">
+<header class="page-masthead accent-integration">
+<div>
+<div class="section-kicker">/ INTEGRATION MODULE</div>
+
+<h1>
+Ecosystem & Build</h1>
+</div>
+
+<div class="page-index">03</div>
+</header>
+
+<div class="module-stack">
+<section class="doc-module">
+<h2>
+Dependencies</h2>
+
+<div class="table-wrap">
+<table>
+
+<thead>
+
+<tr>
+<th>Library</th><th>Version</th><th>Purpose</th></tr>
+</thead>
+
+<tbody>
+
+<tr>
+<td>rapier3d-f64</td><td>0.34.0</td><td>Core physics engine (collision + constraints)</td></tr>
+
+<tr>
+<td>ljni</td><td>0.21.0</td><td>JNI bindings (no panics, zero overhead)</td></tr>
+
+<tr>
+<td>parking_lot</td><td>0.12.5</td><td>RwLock/Mutex (events concurrency)</td></tr>
+
+<tr>
+<td>rayon</td><td>1.12</td><td>Parallel iteration (Rapier parallel solver)</td></tr>
+
+<tr>
+<td>mimalloc</td><td>0.1.52</td><td>Global allocator (performance)</td></tr>
+
+<tr>
+<td>hashbrown</td><td>0.17.1</td><td>High-perf HashMap (ForceRegistry/events)</td></tr>
+
+<tr>
+<td>smallvec</td><td>1.15.2</td><td>Stack-inline Vec (8-element force records)</td></tr>
+
+<tr>
+<td>bevy_ecs</td><td>0.19.0 (optional)</td><td>AnvilKit ECS integration</td></tr>
+
+<tr>
+<td>cbindgen</td><td>0.29.4 (build)</td><td>C header auto-generation</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2>
+Build & Deploy</h2>
+
+<pre>
+<code class="language-bash"># Local build
+cargo build --release
+
+# Output:
+# target/release/mps_rigid_body.dll   (Windows)
+# target/release/libmps_rigid_body.so (Linux)
+# target/release/libmps_rigid_body.dylib (macOS)
+
+# JNI deployment: copy to java.library.path or specify -Drigidbody.native.path</code></pre>
+</section>
+
+<section class="doc-module">
+<h2>
+Verification</h2>
+
+<pre>
+<code class="language-bash">cargo test -p mps-test              # 332 Rust integration tests
+cargo build --release               # Release build
+cargo check                          # Fast syntax/type check (~2s)
+cargo check -p mps-core -p mps-jni   # Individual crate checks</code></pre>
+</section>
+</div>
+</div>
+</main>
+
+<script src="../i18n.js"></script></body></html>
