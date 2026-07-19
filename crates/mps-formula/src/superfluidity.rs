@@ -8,15 +8,15 @@
 //!
 //! All functions are FFI-exported with C-compatible types.
 
-use crate::rapier::error::{
+use crate::error::{
     ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error,
 };
-use crate::rapier::ffi::{
+use crate::ffi::{
     BiotSavartVelocity, Bool, GpEnergyDensity, GpGridPoint, GpOrderParameter,
     GpTimeEvolutionParams, QuantisedCirculation, Vec3, VortexReconnectionReport, VortexRing,
     VortexSegment, VortexTangleStats, finite_non_negative, finite_positive, vec3_finite,
 };
-use crate::rapier::math::KahanSum;
+use crate::math::KahanSum;
 
 const EPSILON: f64 = 1.0e-14;
 const FOUR_PI: f64 = 12.566_370_614_359_172;

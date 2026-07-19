@@ -1,9 +1,9 @@
-﻿use crate::rapier::error::{ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error};
-use crate::rapier::ffi::{
+﻿use crate::error::{ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error};
+use crate::ffi::{
     Bool, QuantumBarrier, QuantumOscillatorReport, QuantumTunnelingReport, QuantumWaveFunction,
 };
 
-use crate::rapier::math::{finite_non_negative, finite_positive};
+use crate::math::{finite_non_negative, finite_positive};
 
 const EPSILON: f64 = 1.0e-12;
 pub const REDUCED_PLANCK: f64 = 1.054_571_817e-34;

@@ -37,9 +37,9 @@
 //! - Forest & Ruth, *4th-order symplectic integration*, Physica D 43 (1990)
 //! - Kahan, *Pracniques: further remarks on reducing truncation errors*, CACM 8 (1965)
 
-use crate::rapier::error::{ERR_INVALID_ARGUMENT, clear_error, set_error};
-use crate::rapier::ffi::{Bool, Vec3, vec3_finite, vec3_from_rapier, vec3_to_rapier};
-use crate::rapier::math::{KahanSum, KahanVec3};
+use crate::error::{ERR_INVALID_ARGUMENT, clear_error, set_error};
+use crate::ffi::{Bool, Vec3, vec3_finite, vec3_from_rapier, vec3_to_rapier};
+use crate::math::{KahanSum, KahanVec3};
 
 /// Physical constants needed for relativistic corrections
 const SPEED_OF_LIGHT: f64 = 299_792_458.0; // m/s
@@ -89,7 +89,7 @@ pub fn leapfrog_step_kahan(
     position: &mut KahanVec3,
     velocity: &mut KahanVec3,
     dt: f64,
-    acceleration_fn: impl Fn(crate::rapier::ffi::Vec3) -> crate::rapier::ffi::Vec3,
+    acceleration_fn: impl Fn(crate::ffi::Vec3) -> crate::ffi::Vec3,
 ) {
     let r0 = position.value();
     let accel0 = acceleration_fn(r0);
@@ -152,7 +152,7 @@ pub fn yoshida4_step_kahan(
     position: &mut KahanVec3,
     velocity: &mut KahanVec3,
     dt: f64,
-    acceleration_fn: impl Fn(crate::rapier::ffi::Vec3) -> crate::rapier::ffi::Vec3,
+    acceleration_fn: impl Fn(crate::ffi::Vec3) -> crate::ffi::Vec3,
 ) {
     let w1: f64 = 1.0 / (2.0 - 2.0_f64.cbrt());
     let w0: f64 = 1.0 - 2.0 * w1;

@@ -1,14 +1,14 @@
 ﻿use std::slice;
 
-use crate::rapier::error::{
+use crate::error::{
     ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, ERR_UNSUPPORTED, clear_error, set_error,
 };
-use crate::rapier::ffi::{
+use crate::ffi::{
     AcousticContactDesc, AcousticExcitationReport, AcousticMaterial, AcousticResonanceReport,
     AcousticWaveReport, Bool, ModalAnalysisReport, ModalSynthesisReport, SpatializedSample,
     StructuralModeReport, Vec3, clamp01, finite_non_negative, finite_positive,
 };
-use crate::rapier::math::KahanSum;
+use crate::math::KahanSum;
 
 const EPSILON: f64 = 1.0e-12;
 const MAX_MODAL_DOF: u32 = 128;

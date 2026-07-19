@@ -7,15 +7,15 @@
 //!
 //! All functions are FFI-exported with C-compatible types.
 
-use crate::rapier::error::{
+use crate::error::{
     ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error,
 };
-use crate::rapier::ffi::{
+use crate::ffi::{
     Bool, BorisPusherParams, ChargeDensityCell, GridField, MagneticXPoint, PicParticle,
     PicStepReport, PlasmaParamsReport, VlasovMomentReport,
 };
 
-use crate::rapier::math::{KahanSum, finite, finite_non_negative, finite_positive};
+use crate::math::{KahanSum, finite, finite_non_negative, finite_positive};
 
 const EPSILON: f64 = 1.0e-14;
 const MASS_EPSILON: f64 = 1.0e-30;

@@ -1,10 +1,10 @@
-﻿use crate::rapier::error::{ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error};
-use crate::rapier::ffi::{
+﻿use crate::error::{ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error};
+use crate::ffi::{
     Bool, CamConstraintDesc, CamConstraintReport, GearConstraintDesc, GearConstraintReport,
     ScrewConstraintDesc, ScrewConstraintReport, SpiralConstraintDesc, SpiralConstraintReport, Vec3,
 };
 
-use crate::rapier::math::{finite, finite_non_negative, finite_positive};
+use crate::math::{finite, finite_non_negative, finite_positive};
 
 const EPSILON: f64 = 1.0e-12;
 pub const TAU: f64 = std::f64::consts::TAU;

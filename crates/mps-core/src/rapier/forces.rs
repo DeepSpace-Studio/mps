@@ -322,7 +322,7 @@ pub struct BodyForceLog {
 ///
 /// # Example
 ///
-/// ```
+/// ```ignore
 /// let mut facade = ForceFacade::new(bodies, colliders, narrow_phase);
 /// facade.add_force(handle, force_vec, ForceLawType::AirDrag);
 /// let report = facade.drain_report(); // auto-aggregated

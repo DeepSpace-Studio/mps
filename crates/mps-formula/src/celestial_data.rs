@@ -11,7 +11,7 @@
 //! zonal harmonics J2–J6, and low-degree spherical-harmonic coefficients
 //! for use with [`super::gravitational_models`].
 
-use crate::rapier::ffi::{Bool, Vec3};
+use crate::ffi::{Bool, Vec3};
 
 // ---------------------------------------------------------------------------
 // Fundamental constants (CODATA 2018 / IERS 2010)
@@ -608,8 +608,8 @@ pub extern "C" fn celestial_get_body(
         8 => CelestialBodyId::Uranus,
         9 => CelestialBodyId::Neptune,
         _ => {
-            crate::rapier::error::set_error(
-                crate::rapier::error::ERR_INVALID_ARGUMENT,
+            crate::error::set_error(
+                crate::error::ERR_INVALID_ARGUMENT,
                 "invalid celestial body ID",
             );
             return Bool::FALSE;
@@ -631,7 +631,7 @@ pub extern "C" fn celestial_get_body(
     if let Some(p) = (unsafe { out_surface_density.as_mut() }) { *p = body.surface_density; }
     if let Some(p) = (unsafe { out_scale_height.as_mut() }) { *p = body.scale_height; }
 
-    crate::rapier::error::clear_error();
+    crate::error::clear_error();
     Bool::TRUE
 }
 

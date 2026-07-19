@@ -10,7 +10,7 @@
 //!
 //! ## Architecture
 //!
-//! ```
+//! ```text
 //! CelestialBody (celestial_data.rs)
 //!   ↓ provides μ, R, Jn, C̄ₙₘ, S̄ₙₘ
 //! GravityModel (this module)
@@ -25,10 +25,10 @@
 //! - Pavlis et al., *EGM2008*, JGR 117 (2012)
 //! - Carlson, *Elliptic Integrals*, Num. Math. 33 (1979)
 
-use crate::rapier::celestial_data::CelestialBody;
-use crate::rapier::error::{ERR_INVALID_ARGUMENT, clear_error, set_error};
-use crate::rapier::ffi::{Bool, Vec3, vec3_finite, vec3_from_rapier, vec3_to_rapier};
-use crate::rapier::math::{KahanSum, KahanVec3};
+use crate::celestial_data::CelestialBody;
+use crate::error::{ERR_INVALID_ARGUMENT, clear_error, set_error};
+use crate::ffi::{Bool, Vec3, vec3_finite, vec3_from_rapier, vec3_to_rapier};
+use crate::math::{KahanSum, KahanVec3};
 
 // ---------------------------------------------------------------------------
 // Legendre polynomials & associated Legendre functions
@@ -444,7 +444,7 @@ pub fn quadrupole_tensor_acceleration(
 ///   Q₃₃ = J₂ · M · R²
 ///   Q_{ij} = 0 for i≠j
 pub fn quadrupole_from_j2(gm: f64, equatorial_radius: f64, j2: f64) -> [f64; 9] {
-    let g = crate::rapier::celestial_data::G;
+    let g = crate::celestial_data::G;
     let mass = gm / g;
     let q_scale = j2 * mass * equatorial_radius * equatorial_radius;
 
@@ -535,13 +535,13 @@ pub extern "C" fn gravity_spherical_harmonics(
         return Bool::FALSE;
     }
     let id = match body_id {
-        0..=9 => unsafe { std::mem::transmute::<u32, crate::rapier::celestial_data::CelestialBodyId>(body_id) },
+        0..=9 => unsafe { std::mem::transmute::<u32, crate::celestial_data::CelestialBodyId>(body_id) },
         _ => {
             set_error(ERR_INVALID_ARGUMENT, "invalid celestial body ID");
             return Bool::FALSE;
         }
     };
-    let body = crate::rapier::celestial_data::get_celestial_body(id);
+    let body = crate::celestial_data::get_celestial_body(id);
     let accel = spherical_harmonics_acceleration(position, body, max_degree);
 
     unsafe { *out_acceleration = accel; }
@@ -561,13 +561,13 @@ pub extern "C" fn gravity_ellipsoid(
         return Bool::FALSE;
     }
     let id = match body_id {
-        0..=9 => unsafe { std::mem::transmute::<u32, crate::rapier::celestial_data::CelestialBodyId>(body_id) },
+        0..=9 => unsafe { std::mem::transmute::<u32, crate::celestial_data::CelestialBodyId>(body_id) },
         _ => {
             set_error(ERR_INVALID_ARGUMENT, "invalid celestial body ID");
             return Bool::FALSE;
         }
     };
-    let body = crate::rapier::celestial_data::get_celestial_body(id);
+    let body = crate::celestial_data::get_celestial_body(id);
     let accel = ellipsoid_gravity(position, body);
 
     unsafe { *out_acceleration = accel; }

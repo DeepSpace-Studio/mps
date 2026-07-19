@@ -11,16 +11,16 @@
 
 use core::f64;
 
-use crate::rapier::error::{
+use crate::error::{
     ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error,
 };
-use crate::rapier::ffi::{
+use crate::ffi::{
     BifurcationPoint, Bool, ChaosDetectionParams, ChaosDetectionReport, DoublePendulumAccel,
     DoublePendulumParams, DoublePendulumState, LogisticMapState, LorenzParams, LorenzState,
     LorenzStepReport, LyapunovReport,
 };
 
-use crate::rapier::math::{KahanSum, finite, finite_positive};
+use crate::math::{KahanSum, finite, finite_positive};
 
 const EPSILON: f64 = 1.0e-14;
 const DIST_EPSILON: f64 = 1.0e-16;

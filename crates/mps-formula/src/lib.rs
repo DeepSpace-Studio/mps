@@ -1,0 +1,26 @@
+#![allow(clippy::missing_safety_doc)]
+
+pub extern crate rapier3d;
+pub mod error;
+pub mod ffi;
+pub mod math;
+pub mod acoustics;
+pub mod astrophysics;
+pub mod biomechanics;
+pub mod celestial_data;
+pub mod chaos;
+pub mod continuum;
+pub mod control_theory;
+pub mod electromagnetism;
+pub mod gravitational_models;
+pub mod integrators;
+pub mod physchem;
+pub mod plasma;
+pub mod quantum;
+pub mod relativity;
+pub mod softbody;
+pub mod superfluidity;
+pub mod thermodynamics;
+pub mod topology;
+pub mod transmission;
+pub mod wave_optics;

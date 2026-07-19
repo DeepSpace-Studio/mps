@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+mps-formula = { path = "../mps-formula" }
 ljni = { workspace = true }
 mps-core = { path = "../mps-core" }
 mps-ffm = { path = "../mps-ffm" }

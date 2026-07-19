@@ -344,7 +344,7 @@ impl ProducerCache {
                 }
             }
         }
-        if mode.has_poll() {
+        if event_dispatch_has_poll(mode) {
             if let Some(ref ring) = self.collisions {
                 ring.push(record);
             }
@@ -372,7 +372,7 @@ impl ProducerCache {
                 }
             }
         }
-        if mode.has_poll() {
+        if event_dispatch_has_poll(mode) {
             if let Some(ref ring) = self.contact_forces {
                 ring.push(record);
             }
@@ -380,10 +380,8 @@ impl ProducerCache {
     }
 }
 
-impl EventDispatchMode {
-    fn has_poll(&self) -> bool {
-        matches!(self, EventDispatchMode::Poll | EventDispatchMode::Both)
-    }
+fn event_dispatch_has_poll(mode: EventDispatchMode) -> bool {
+    matches!(mode, EventDispatchMode::Poll | EventDispatchMode::Both)
 }
 
 impl EventHandler for CollectingEventHandler {

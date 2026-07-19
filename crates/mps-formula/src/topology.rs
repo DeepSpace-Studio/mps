@@ -1,14 +1,14 @@
 ﻿use std::slice;
 
-use crate::rapier::error::{
+use crate::error::{
     ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error,
 };
-use crate::rapier::ffi::{
+use crate::ffi::{
     Bool, DensityFieldStats, SimpMaterialReport, TopologyOptimizationParams,
     TopologyOptimizationReport,
 };
 
-use crate::rapier::math::{KahanSum, finite_non_negative, finite_positive};
+use crate::math::{KahanSum, finite_non_negative, finite_positive};
 
 const MAX_DENSITY_CELLS: u32 = 2_000_000;
 const EPSILON: f64 = 1.0e-12;

@@ -2,16 +2,16 @@
 
 use rapier3d::prelude::Vector;
 
-use crate::rapier::error::{
+use crate::error::{
     ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error,
 };
-use crate::rapier::ffi::{
+use crate::ffi::{
     Bool, NBodyForceReport, NBodyParticle, NBodySolverParams, OrbitalResonanceReport,
     RelativisticOrbitReport, RocheLimitReport, Vec3, vec3_finite, vec3_from_rapier, vec3_to_rapier,
 };
-use crate::rapier::math::mul_add;
+use crate::math::mul_add;
 
-use crate::rapier::math::{finite_non_negative, finite_positive};
+use crate::math::{finite_non_negative, finite_positive};
 
 const MAX_NBODY_PARTICLES: u32 = 100_000;
 const SPEED_OF_LIGHT: f64 = 299_792_458.0;

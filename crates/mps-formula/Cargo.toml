@@ -1,0 +1,14 @@
+[package]
+name = "mps-formula"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+rapier3d = { workspace = true }
+
+[features]
+default = []
+formula-error-abi = []

@@ -1,15 +1,15 @@
 ﻿use std::slice;
 
-use crate::rapier::error::{
+use crate::error::{
     ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error,
 };
-use crate::rapier::ffi::{
+use crate::ffi::{
     Bool, FemHeatDiffusionReport, FemHeatEdge, FemHeatNode, HeatConductionReport,
     MaterialProperties, PhaseChangeReport, ThermalRadiationReport, ThermalStressReport,
     ThermoelasticReport,
 };
 
-use crate::rapier::math::{KahanSum, finite_non_negative, finite_positive};
+use crate::math::{KahanSum, finite_non_negative, finite_positive};
 
 const STEFAN_BOLTZMANN: f64 = 5.670_374_419e-8;
 const MAX_FEM_NODES: u32 = 1_000_000;

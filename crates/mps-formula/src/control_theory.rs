@@ -1,13 +1,13 @@
 ﻿use std::slice;
 
-use crate::rapier::error::{
+use crate::error::{
     ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error,
 };
-use crate::rapier::ffi::{
+use crate::ffi::{
     Bool, MpcConfig, MpcReport, PidGains, PidReport, PidState, StateSpaceReport,
 };
 
-use crate::rapier::math::{finite, finite_positive};
+use crate::math::{finite, finite_positive};
 
 const MAX_STATE_COUNT: u32 = 64;
 const MAX_INPUT_COUNT: u32 = 32;

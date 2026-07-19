@@ -1,15 +1,15 @@
 ﻿use std::slice;
 
-use crate::rapier::error::{
+use crate::error::{
     ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error,
 };
-use crate::rapier::ffi::{
+use crate::ffi::{
     Bool, CatalystEffect, CatalystReport, ConcentrationBuoyancyReport, GrayScottParams,
     GrayScottReactionReport, ReactionDiffusionReport, Vec3, vec3_finite, vec3_from_rapier,
     vec3_to_rapier,
 };
 
-use crate::rapier::math::{KahanSum, finite_non_negative, finite_positive};
+use crate::math::{KahanSum, finite_non_negative, finite_positive};
 
 const MAX_GRID_CELLS: u32 = 2_000_000;
 

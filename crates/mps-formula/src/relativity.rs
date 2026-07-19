@@ -6,16 +6,16 @@
 
 use rapier3d::prelude::Vector;
 
-use crate::rapier::error::{
+use crate::error::{
     ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, ERR_UNSUPPORTED, clear_error, set_error,
 };
-use crate::rapier::ffi::{
+use crate::ffi::{
     Bool, GravitationalTimeDilation, LengthContraction, LorentzBoost, LorentzTransformedFrame,
     RelativisticParticle, SchwarzschildMetric, Vec3, vec3_finite, vec3_from_rapier, vec3_to_rapier,
 };
-use crate::rapier::math::mul_add;
+use crate::math::mul_add;
 
-use crate::rapier::math::{finite_non_negative, finite_positive};
+use crate::math::{finite_non_negative, finite_positive};
 
 pub const SPEED_OF_LIGHT: f64 = 299_792_458.0;
 const EPSILON: f64 = 1.0e-12;

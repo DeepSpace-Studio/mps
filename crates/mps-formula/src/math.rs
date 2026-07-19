@@ -14,23 +14,23 @@
 
 #![allow(dead_code)]
 
-use crate::rapier::ffi::{Bool, Vec3};
+use crate::ffi::{Bool, Vec3};
 
 // ---------------------------------------------------------------------------
 // Epsilon constants (project-wide — prefer relative comparison)
 // ---------------------------------------------------------------------------
 
 /// General-purpose absolute epsilon for values in the [0.1, 1000] range.
-pub(crate) const EPS_GENERAL: f64 = 1.0e-12;
+pub const EPS_GENERAL: f64 = 1.0e-12;
 
 /// Tight epsilon for derivative-like near-zero comparisons.
-pub(crate) const EPS_TIGHT: f64 = 1.0e-14;
+pub const EPS_TIGHT: f64 = 1.0e-14;
 
 /// Loose epsilon for geometry / mesh tolerances.
-pub(crate) const EPS_GEOMETRIC: f64 = 1.0e-9;
+pub const EPS_GEOMETRIC: f64 = 1.0e-9;
 
 /// Tiny epsilon for distance-squared comparisons in velocity/momentum.
-pub(crate) const EPS_DIST_SQ: f64 = 1.0e-18;
+pub const EPS_DIST_SQ: f64 = 1.0e-18;
 
 // ---------------------------------------------------------------------------
 // Scalar validation
@@ -38,25 +38,25 @@ pub(crate) const EPS_DIST_SQ: f64 = 1.0e-18;
 
 /// Returns true when `value` is finite.
 #[inline]
-pub(crate) fn finite(value: f64) -> bool {
+pub fn finite(value: f64) -> bool {
     value.is_finite()
 }
 
 /// Returns true when `value` is finite and > 0.
 #[inline]
-pub(crate) fn finite_positive(value: f64) -> bool {
+pub fn finite_positive(value: f64) -> bool {
     value.is_finite() && value > 0.0
 }
 
 /// Returns true when `value` is finite and >= 0.
 #[inline]
-pub(crate) fn finite_non_negative(value: f64) -> bool {
+pub fn finite_non_negative(value: f64) -> bool {
     value.is_finite() && value >= 0.0
 }
 
 /// Clamp `value` to the closed interval [lo, hi].
 #[inline]
-pub(crate) fn clamp(value: f64, lo: f64, hi: f64) -> f64 {
+pub fn clamp(value: f64, lo: f64, hi: f64) -> f64 {
     if value < lo {
         lo
     } else if value > hi {
@@ -78,7 +78,7 @@ pub fn approx_eq(a: f64, b: f64, eps_abs: f64, eps_rel: f64) -> bool {
 
 /// Relative approximate zero test: `|value| <= max(eps_abs, eps_rel * |value|)`.
 #[inline]
-pub(crate) fn approx_zero(value: f64, eps_abs: f64, eps_rel: f64) -> bool {
+pub fn approx_zero(value: f64, eps_abs: f64, eps_rel: f64) -> bool {
     value.abs() <= eps_abs.max(eps_rel * value.abs())
 }
 
@@ -206,13 +206,13 @@ impl KahanVec3 {
 
     /// Return the current compensated sum as a rapier Vector.
     #[inline]
-    pub(crate) fn value_vec(&self) -> rapier3d::prelude::Vector {
+    pub fn value_vec(&self) -> rapier3d::prelude::Vector {
         rapier3d::prelude::Vector::new(self.sum.x, self.sum.y, self.sum.z)
     }
 
     /// Add a rapier Vector using Kahan compensation.
     #[inline]
-    pub(crate) fn add_vec(&mut self, value: rapier3d::prelude::Vector) {
+    pub fn add_vec(&mut self, value: rapier3d::prelude::Vector) {
         self.add(Vec3 { x: value.x, y: value.y, z: value.z });
     }
 
@@ -229,13 +229,13 @@ impl KahanVec3 {
 // ---------------------------------------------------------------------------
 
 /// Write a value through an output pointer, returning `Bool::TRUE` on success.
-pub(crate) fn write_out<T: Copy>(out: *mut T, value: T) -> Bool {
+pub fn write_out<T: Copy>(out: *mut T, value: T) -> Bool {
     let Some(out) = (unsafe { out.as_mut() }) else {
-        crate::rapier::error::set_error(crate::rapier::error::ERR_NULL_POINTER, "output pointer is null");
+        crate::error::set_error(crate::error::ERR_NULL_POINTER, "output pointer is null");
         return Bool::FALSE;
     };
     *out = value;
-    crate::rapier::error::clear_error();
+    crate::error::clear_error();
     Bool::TRUE
 }
 
@@ -244,7 +244,7 @@ pub(crate) fn write_out<T: Copy>(out: *mut T, value: T) -> Bool {
 // ---------------------------------------------------------------------------
 
 #[inline]
-pub(crate) fn vec3_add(a: Vec3, b: Vec3) -> Vec3 {
+pub fn vec3_add(a: Vec3, b: Vec3) -> Vec3 {
     Vec3 {
         x: a.x + b.x,
         y: a.y + b.y,
@@ -253,7 +253,7 @@ pub(crate) fn vec3_add(a: Vec3, b: Vec3) -> Vec3 {
 }
 
 #[inline]
-pub(crate) fn vec3_sub(a: Vec3, b: Vec3) -> Vec3 {
+pub fn vec3_sub(a: Vec3, b: Vec3) -> Vec3 {
     Vec3 {
         x: a.x - b.x,
         y: a.y - b.y,
@@ -262,7 +262,7 @@ pub(crate) fn vec3_sub(a: Vec3, b: Vec3) -> Vec3 {
 }
 
 #[inline]
-pub(crate) fn vec3_scale(v: Vec3, s: f64) -> Vec3 {
+pub fn vec3_scale(v: Vec3, s: f64) -> Vec3 {
     Vec3 {
         x: v.x * s,
         y: v.y * s,
@@ -271,12 +271,12 @@ pub(crate) fn vec3_scale(v: Vec3, s: f64) -> Vec3 {
 }
 
 #[inline]
-pub(crate) fn vec3_dot(a: Vec3, b: Vec3) -> f64 {
+pub fn vec3_dot(a: Vec3, b: Vec3) -> f64 {
     a.x * b.x + a.y * b.y + a.z * b.z
 }
 
 #[inline]
-pub(crate) fn vec3_cross(a: Vec3, b: Vec3) -> Vec3 {
+pub fn vec3_cross(a: Vec3, b: Vec3) -> Vec3 {
     Vec3 {
         x: a.y * b.z - a.z * b.y,
         y: a.z * b.x - a.x * b.z,
@@ -285,17 +285,17 @@ pub(crate) fn vec3_cross(a: Vec3, b: Vec3) -> Vec3 {
 }
 
 #[inline]
-pub(crate) fn vec3_length_sq(v: Vec3) -> f64 {
+pub fn vec3_length_sq(v: Vec3) -> f64 {
     v.x * v.x + v.y * v.y + v.z * v.z
 }
 
 #[inline]
-pub(crate) fn vec3_length(v: Vec3) -> f64 {
+pub fn vec3_length(v: Vec3) -> f64 {
     vec3_length_sq(v).sqrt()
 }
 
 #[inline]
-pub(crate) fn vec3_normalize(v: Vec3) -> Vec3 {
+pub fn vec3_normalize(v: Vec3) -> Vec3 {
     let len = vec3_length(v);
     if len <= f64::EPSILON {
         Vec3::default()

@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/mps-core", "crates/mps-jni", "crates/mps-ffm", "crates/mps-test"]
+members = ["crates/mps-formula", "crates/mps-core", "crates/mps-jni", "crates/mps-ffm", "crates/mps-test"]
 resolver = "2"
 
 [workspace.package]
