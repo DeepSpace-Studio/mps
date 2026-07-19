@@ -84,7 +84,6 @@ pub(crate) struct PhysicsWorld {
     pub(crate) hooks: crate::rapier::events::CallbackPhysicsHooks,
     pub(crate) events: Arc<crate::rapier::events::CollectingEventHandler>,
     pub(crate) force_registry: ForceRegistry,
-    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) shared_arena: Option<Box<crate::rapier::shared_arena::SharedPhysicsArena>>,
     /// Persistent per-frame work buffers — cleared and reused each `world_step`.
     pub(crate) buffers: FrameWorkBuffers,
@@ -115,7 +114,6 @@ impl PhysicsWorld {
             hooks: crate::rapier::events::CallbackPhysicsHooks::new(events.clone()),
             events,
             force_registry: ForceRegistry::new(),
-            #[cfg(not(target_arch = "wasm32"))]
             shared_arena: None,
             buffers: FrameWorkBuffers::default(),
         }
@@ -159,7 +157,6 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
 
     // --- Arena: drain Java commands before applying forces ---
     // Java writes forces/set-poses/impulses via shared memory, Rust reads them here.
-    #[cfg(not(target_arch = "wasm32"))]
     if let Some(ref arena) = world.inner.shared_arena {
         let commands = arena.drain_commands();
         if !commands.is_empty() {
@@ -321,7 +318,6 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
     );
 
     // 5. Flush shared arena body/collider state → Java zero-JNI read
-    #[cfg(not(target_arch = "wasm32"))]
     if let Some(ref arena) = world.inner.shared_arena {
         arena.flush_all_bodies(&world.inner.bodies);
         arena.flush_all_colliders(&world.inner.colliders);
@@ -893,7 +889,6 @@ mod tests {
 }
 
 // ---------------------------------------------------------------------------
-
 // Shared Arena FFI — zero-JNI physics data access
 // ---------------------------------------------------------------------------
 
@@ -907,9 +902,7 @@ mod tests {
 /// `max_commands` — max pending commands (force/set pose etc.)
 /// `out_address` — receives the arena base address
 /// `out_size` — receives the total arena size in bytes (for Java MemorySegment mapping)
-#[cfg(not(target_arch = "wasm32"))]
 #[unsafe(no_mangle)]
-#[cfg(not(target_arch = "wasm32"))]
 pub extern "C" fn world_create_shared_arena(
     world: *mut WorldHandle,
     max_bodies: u32,
@@ -943,17 +936,13 @@ pub extern "C" fn world_create_shared_arena(
 }
 
 /// Destroy the shared arena (if any).
-#[cfg(not(target_arch = "wasm32"))]
-#[cfg(not(target_arch = "wasm32"))]
 #[unsafe(no_mangle)]
 pub extern "C" fn world_destroy_shared_arena(world: *mut WorldHandle) {
     if let Some(world) = (unsafe { world.as_mut() }) {
         world.inner.shared_arena = None;
     }
 }
-#[cfg(not(target_arch = "wasm32"))]
 
-#[cfg(not(target_arch = "wasm32"))]
 /// Get the arena address (returns 0 if no arena).
 #[unsafe(no_mangle)]
 pub extern "C" fn world_get_shared_arena_address(world: *const WorldHandle) -> u64 {
@@ -961,10 +950,8 @@ pub extern "C" fn world_get_shared_arena_address(world: *const WorldHandle) -> u
         return 0;
     };
     world.inner.shared_arena.as_ref().map_or(0, |a| a.address())
-#[cfg(not(target_arch = "wasm32"))]
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 /// Get the arena size (returns 0 if no arena).
 #[unsafe(no_mangle)]
 pub extern "C" fn world_get_shared_arena_size(world: *const WorldHandle) -> u64 {
@@ -973,14 +960,11 @@ pub extern "C" fn world_get_shared_arena_size(world: *const WorldHandle) -> u64 
     };
     world.inner.shared_arena.as_ref().map_or(0, |a| a.size() as u64)
 }
-#[cfg(not(target_arch = "wasm32"))]
 
-#[cfg(not(target_arch = "wasm32"))]
 /// Reset the event ring (Java calls this after draining events).
 #[unsafe(no_mangle)]
 pub extern "C" fn world_reset_shared_arena_events(world: *mut WorldHandle) {
     let Some(world) = (unsafe { world.as_mut() }) else { return };
-    #[cfg(not(target_arch = "wasm32"))]
     if let Some(ref arena) = world.inner.shared_arena {
         arena.reset_event_ring();
     }

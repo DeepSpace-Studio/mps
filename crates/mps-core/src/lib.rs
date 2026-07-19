@@ -1,15 +1,12 @@
 #![allow(clippy::missing_safety_doc)]
 
 pub extern crate rapier3d;
-
-#[cfg(not(target_arch = "wasm32"))]
 pub mod helper;
 pub mod rapier;
 
 pub use rapier::ffi::*;
 
 /// Re-export the JNI-facing types and utilities that `mps-jni` needs.
-#[cfg(not(target_arch = "wasm32"))]
 pub mod jni_api {
     pub use crate::helper::*;
     pub use crate::rapier::{
