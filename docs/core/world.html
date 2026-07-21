@@ -26,7 +26,9 @@
 <h1>
 世界管理</h1>
 
-<p>PhysicsWorld 是模拟的核心容器，拥有所有刚体、碰撞体、关节、力注册表、事件系统和共享内存 Arena。</p></div>
+<p>PhysicsWorld 是模拟的核心容器，拥有所有刚体、碰撞体、关节、力注册表、事件系统和共享内存 Arena。<strong>单一入口</strong>：仅需世界指针即可操作所有子系统。</p>
+
+<div class="callout"><p><strong>快速开始：</strong> <span class="hi">world_create(g)</span> → <span class="hi">world_step(w, dt)</span> → <span class="hi">world_destroy(w)</span>。三行代码即可运行完整物理模拟。</p></div></div>
 
 <div class="page-index">01</div>
 </header>

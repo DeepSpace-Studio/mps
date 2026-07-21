@@ -3,32 +3,69 @@
 `mps_rigid_body` is a Rust native physics library built on `rapier3d-f64`.
 It exposes one native `cdylib` to Java through both JNI and Java FFM.
 
-The project is intended to provide a stable Java-facing rigid body API while
-keeping Rapier-owned world state, bodies, colliders, events, and query pipelines
-inside Rust.
+The project provides a stable Java-facing rigid body API while keeping Rapier-owned
+world state, bodies, colliders, events, and query pipelines inside Rust.
 
 ```text
 Java 21 JNI / Java 25 FFM
-  -> Rust C ABI / JNI wrappers
-    -> project Rapier wrapper modules
-      -> rapier3d-f64
+  └─ Rust C ABI / JNI wrappers
+       ├─ mps-formula — 28 pure formula modules (300+ functions)
+       ├─ mps-core — physics engine + Rapier wrapper
+       ├─ mps-jni — JNI bindings
+       └─ mps-ffm — FFM metadata
 ```
 
 ## Repository Layout
 
 ```text
-src/
-  abi/       Java FFM metadata and JNI wrappers
-  helper/    JNI helper utilities
-  rapier/    physics world, bodies, colliders, queries, events, voxel, indexes
+crates/
+  mps-core/       physics world, bodies, colliders, queries, events, forces, voxel
+  mps-formula/    28 pure physics/engineering formula modules
+  mps-jni/        Java JNI bindings
+  mps-ffm/        Java FFM metadata
+  mps-test/       332 integration tests
 
-test21/      Java 21 JNI smoke test project
-test25/      Java 25 FFM smoke test project
+docs/             documentation site (dark-theme, dual-language zh/en)
 ```
+
+## Formula Library (mps-formula)
+
+The formula crate provides 28 modules with 300+ pure Rust functions covering
+physics, aerospace, and engineering domains. No dependency on Rapier or WorldHandle.
+
+| Module | Functions | Domain |
+|--------|-----------|--------|
+| `spaceflight` | 88 | orbital mechanics, attitude control, thermal, propulsion, environment |
+| `material_mechanics` | 26 | elasticity, plasticity, fracture, fatigue, beam theory |
+| `nuclear` | 23 | decay, binding energy, fission/fusion, neutronics |
+| `relativity` | 23 | Lorentz, Schwarzschild, Kerr, ISCO, gravitational redshift |
+| `thermodynamics` | 23 | conduction, radiation, phase change, gas laws, cycles |
+| `quantum` | 20 | wave functions, tunneling, harmonic oscillator, hydrogen atom |
+| `astrophysics` | 19 | N-body, Barnes-Hut, FMM, Lane-Emden, Eddington, Hubble |
+| `fluid` | 18 | buoyancy/drag, SPH, Navier-Stokes, Bernoulli, turbulence |
+| `electromagnetism` | 16 | Lorentz, Faraday, Maxwell, Biot-Savart, Poynting, wave |
+| `aerodynamics` | 5 | surface force, voxel aero, force estimation |
+| `molecular` | 8 | Lennard-Jones, Coulomb, pair interaction |
+| `acoustics` | 7 | modal analysis, wave equation, resonance, spatialization |
+| `biomechanics` | 4 | Hill muscle model, joint constraints |
+| `celestial_data` | 1 | 10 solar system bodies (JPL DE441) |
+| `chaos` | 6 | Lorenz attractor, double pendulum, Lyapunov exponents |
+| `continuum` | 5 | FEM shape functions, strain/stress tensors |
+| `control_theory` | 7 | PID, state-space, MPC, LQR |
+| `gravitational_models` | 6 | spherical harmonics (EGM2008 8×8), ellipsoid, polyhedron |
+| `integrators` | 7 | Leapfrog, Yoshida 4, Forest-Ruth 8, post-Newtonian |
+| `physchem` | 4 | Gray-Scott reaction-diffusion, catalysis |
+| `plasma` | 7 | Debye shielding, Vlasov, PIC, MHD, magnetic reconnection |
+| `softbody` | 5 | XPBD constraints, hyperelastic constitutive models |
+| `superfluidity` | 4 | Gross-Pitaevskii, vortex lattice, quantized circulation |
+| `topology` | 3 | persistent homology, Betti numbers |
+| `trajectory` | 6 | 6DOF ballistic/glide trajectory, RK4 integration |
+| `transmission` | 3 | gear ratios, torque distribution |
+| `wave_optics` | 5 | Kirchhoff diffraction, Fresnel propagation, interference |
 
 ## Native API Surface
 
-The Rust crate defines C-compatible ABI types in `src/rapier/ffi.rs`.
+The Rust crate defines C-compatible ABI types in `crates/mps-core/src/rapier/ffi/`.
 External callers use opaque native pointers for world and builder ownership,
 and packed `u64` handles for Rapier rigid bodies, colliders, and joints.
 
@@ -44,6 +81,15 @@ Supported areas include:
 - Compact tree and RTree spatial indexes.
 - Extended bounds/collider builders: capsule, SSV, ellipsoid, prism, cylinder, shell, kDOP, FDH, neural bounds.
 - Voxel collider construction from raw grids, AABB, and OBB.
+
+## Formula Modules
+
+Each formula module follows a two-layer architecture:
+
+- **mps-formula**: Pure computation — input values, output values, no `WorldHandle`, `RigidBody`, or Rapier state.
+- **mps-core**: C ABI wrappers + Rapier interaction — reads body state, calls formula, applies forces/torques.
+
+All existing C ABI function names, parameters, error codes, and `_flag` variants are preserved for backward compatibility.
 
 ## Java Entry Points
 
@@ -110,7 +156,8 @@ copyFrom, union, subtract, intersect, toByteArray, address
 Current verified commands:
 
 ```powershell
-cargo test
+cargo test -p mps-test              # 332 integration tests
+cargo check --workspace              # full workspace check
 
 cd test21
 .\gradlew.bat check
@@ -126,6 +173,10 @@ Rust tests: passed
 Java 21 JNI smoke test: passed
 Java 25 FFM smoke test: passed
 ```
+
+## Documentation
+
+Online documentation at `docs/index.html` — dark-theme dual-language (zh/en) site covering all modules, API reference, integration guides, and performance data.
 
 ## Current Gaps
 

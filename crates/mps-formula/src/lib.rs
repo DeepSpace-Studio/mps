@@ -26,6 +26,8 @@ pub mod thermodynamics;
 pub mod topology;
 pub mod transmission;
 pub mod fluid;
+pub mod material_mechanics;
 pub mod molecular;
+pub mod nuclear;
 pub mod trajectory;
 pub mod wave_optics;

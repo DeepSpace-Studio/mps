@@ -600,3 +600,96 @@ pub extern "C" fn rel_invariant_mass(energy: f64, px: f64, py: f64, pz: f64) -> 
 // Tests
 // ---------------------------------------------------------------------------
 
+
+// ---------------------------------------------------------------------------
+// Kerr metric basics
+// ---------------------------------------------------------------------------
+
+/// Kerr metric horizon radii.
+/// Returns (r_outer, r_inner) where r = GM/c^2 +- sqrt((GM/c^2)^2 - a^2)
+pub fn kerr_horizon_radii(mass: f64, spin_parameter: f64, g: f64) -> Option<(f64, f64)> {
+    let c = 299_792_458.0;
+    if !mass.is_finite() || mass <= 0.0 || !spin_parameter.is_finite() || spin_parameter < 0.0 || !g.is_finite() || g <= 0.0 { return None; }
+    let m = g * mass / (c * c); // gravitational radius
+    if spin_parameter > m { return None; } // naked singularity
+    let r = (m * m - spin_parameter * spin_parameter).sqrt();
+    Some((m + r, m - r))
+}
+
+/// Kerr ergosphere radius (outer): r_E = m + sqrt(m^2 - a^2 * cos^2(theta))
+pub fn kerr_ergosphere_radius(mass: f64, spin_parameter: f64, polar_angle: f64, g: f64) -> Option<f64> {
+    let c = 299_792_458.0;
+    if !mass.is_finite() || mass <= 0.0 || !spin_parameter.is_finite() || spin_parameter < 0.0 || !polar_angle.is_finite() || !g.is_finite() || g <= 0.0 { return None; }
+    let m = g * mass / (c * c);
+    if spin_parameter > m { return None; }
+    let r = (m * m - spin_parameter * spin_parameter * polar_angle.cos().powi(2)).sqrt();
+    Some(m + r)
+}
+
+/// Frame-dragging angular velocity at radius r (the Lense-Thirring effect):
+/// omega = 2 * m * a * r / Sigma^2  where Sigma = r^2 + a^2 * cos^2(theta)
+pub fn kerr_frame_dragging_frequency(mass: f64, spin_parameter: f64, r: f64, theta: f64, g: f64) -> Option<f64> {
+    let c = 299_792_458.0;
+    if !mass.is_finite() || mass <= 0.0 || !spin_parameter.is_finite() || spin_parameter < 0.0 || !r.is_finite() || r <= 0.0 || !theta.is_finite() || !g.is_finite() || g <= 0.0 { return None; }
+    let m = g * mass / (c * c);
+    let cos2 = theta.cos().powi(2);
+    let sigma = r * r + spin_parameter * spin_parameter * cos2;
+    Some(2.0 * m * spin_parameter * r / (sigma * sigma))
+}
+
+// ---------------------------------------------------------------------------
+// ISCO radius
+// ---------------------------------------------------------------------------
+
+/// Innermost Stable Circular Orbit (ISCO) for Schwarzschild: 6 M (3 R_s)
+pub fn schwarzschild_isco(mass: f64, g: f64) -> Option<f64> {
+    let c = 299_792_458.0;
+    if !mass.is_finite() || mass <= 0.0 || !g.is_finite() || g <= 0.0 { return None; }
+    Some(6.0 * g * mass / (c * c))
+}
+
+/// ISCO radius for Kerr (prograde orbit): r_isco/M depends on spin
+/// r_isco(prograde) = M * (3 + Z2 - sqrt((3 - Z1)(3 + Z1 + 2*Z2)))
+/// where Z1 = 1 + (1 - a^2)^(1/3) * ((1+a)^(1/3) + (1-a)^(1/3))
+/// Z2 = sqrt(3*a^2 + Z1^2)
+pub fn kerr_isco(mass: f64, spin_parameter: f64, g: f64, prograde: bool) -> Option<f64> {
+    let c = 299_792_458.0;
+    if !mass.is_finite() || mass <= 0.0 || !spin_parameter.is_finite() || spin_parameter < 0.0 || !g.is_finite() || g <= 0.0 { return None; }
+    let m = g * mass / (c * c);
+    let a = if prograde { spin_parameter.min(m) } else { -spin_parameter.min(m) };
+    let a_norm = if m > 0.0 { a / m } else { return None; };
+    let z1 = 1.0 + (1.0 - a_norm * a_norm).powf(1.0/3.0) * ((1.0 + a_norm).powf(1.0/3.0) + (1.0 - a_norm).powf(1.0/3.0));
+    let z2 = (3.0 * a_norm * a_norm + z1 * z1).sqrt();
+    let z3 = ((3.0 - z1) * (3.0 + z1 + 2.0 * z2)).sqrt();
+    Some(m * (3.0 + z2 - z3))
+}
+
+// ---------------------------------------------------------------------------
+// Gravitational redshift
+// ---------------------------------------------------------------------------
+
+/// Gravitational redshift: z = 1 / sqrt(1 - R_s / r) - 1
+pub fn gravitational_redshift(mass: f64, radius: f64, g: f64) -> Option<f64> {
+    let c = 299_792_458.0;
+    if !mass.is_finite() || mass <= 0.0 || !radius.is_finite() || !g.is_finite() || g <= 0.0 { return None; }
+    let rs = 2.0 * g * mass / (c * c);
+    if radius <= rs { return None; } // inside horizon
+    Some(1.0 / (1.0 - rs / radius).sqrt() - 1.0)
+}
+
+// ---------------------------------------------------------------------------
+// Reissner-Nordstrom metric (charged black hole)
+// ---------------------------------------------------------------------------
+
+/// Reissner-Nordstrom horizon radii: r = m +- sqrt(m^2 - Q^2)
+pub fn reissner_nordstrom_horizons(mass: f64, charge: f64, g: f64) -> Option<(f64, f64)> {
+    let c = 299_792_458.0;
+    let k = 8.9875517923e9;
+    if !mass.is_finite() || mass <= 0.0 || !charge.is_finite() || charge < 0.0 || !g.is_finite() || g <= 0.0 { return None; }
+    let m = g * mass / (c * c);
+    let q2 = k * g * charge * charge / (c * c * c * c);
+    let disc = m * m - q2;
+    if disc < 0.0 { return None; }
+    let r = disc.sqrt();
+    Some((m + r, m - r))
+}

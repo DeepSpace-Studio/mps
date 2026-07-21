@@ -1,5 +1,6 @@
 ﻿use std::slice;
 
+use std::f64::consts::PI;
 use rapier3d::prelude::Vector;
 
 use crate::error::{
@@ -514,3 +515,127 @@ pub extern "C" fn astro_barnes_hut_should_open(
 }
 
 
+
+// ---------------------------------------------------------------------------
+// Stellar structure
+// ---------------------------------------------------------------------------
+
+/// Lane-Emden equation (polytropic): dimensionless central density for polytropic index n.
+/// Returns the dimensionless radius xi_1 where theta becomes zero (surface).
+pub fn lane_emden_first_zero(polytropic_index: f64) -> Option<f64> {
+    if !polytropic_index.is_finite() || polytropic_index < 0.0 || polytropic_index > 5.0 { return None; }
+    if (polytropic_index - 0.0).abs() < 1e-6 { return Some(2.449_489_742_783_178_f64); }
+    if (polytropic_index - 1.0).abs() < 1e-6 { return Some(3.141_592_653_589_793_f64); }
+    if (polytropic_index - 1.5).abs() < 1e-6 { return Some(3.653_753_735_236_717_f64); }
+    if (polytropic_index - 3.0).abs() < 1e-6 { return Some(6.896_848_624_348_534_f64); }
+    // n=4: xi_1 ~ 14.97, n=4.5: xi_1 ~ 31.84, n=5: infinite
+    None
+}
+
+/// Mass-luminosity relation for main sequence stars: L ~ M^alpha
+/// alpha ~ 3.5 for solar-type stars
+pub fn mass_luminosity_relation(mass_solar: f64, exponent: f64) -> Option<f64> {
+    if !mass_solar.is_finite() || mass_solar <= 0.0 || !exponent.is_finite() || exponent <= 0.0 { return None; }
+    Some(mass_solar.powf(exponent))
+}
+
+/// Eddington luminosity: L_Edd = 4*pi*G*M*c / kappa (W)
+pub fn eddington_luminosity(mass: f64, opacity: f64) -> Option<f64> {
+    let g = 6.67430e-11;
+    let c = 299_792_458.0;
+    if !mass.is_finite() || mass <= 0.0 || !opacity.is_finite() || opacity <= 0.0 { return None; }
+    Some(4.0 * PI * g * mass * c / opacity)
+}
+
+/// Eddington luminosity in solar units (L/L_sun).
+pub fn eddington_luminosity_solar(mass_solar: f64, opacity: f64) -> Option<f64> {
+    let l_sun = 3.828e26;
+    let m = mass_solar * 1.98847e30;
+    let l = eddington_luminosity(m, opacity)?;
+    Some(l / l_sun)
+}
+
+// ---------------------------------------------------------------------------
+// Hubble's law and cosmology
+// ---------------------------------------------------------------------------
+
+/// Hubble's law: v = H0 * d
+pub fn hubble_velocity(hubble_constant: f64, distance: f64) -> Option<f64> {
+    if !hubble_constant.is_finite() || hubble_constant <= 0.0 || !distance.is_finite() || distance < 0.0 { return None; }
+    Some(hubble_constant * distance)
+}
+
+/// Hubble distance: d = v / H0
+pub fn hubble_distance(velocity: f64, hubble_constant: f64) -> Option<f64> {
+    if !velocity.is_finite() || velocity < 0.0 || !hubble_constant.is_finite() || hubble_constant <= 0.0 { return None; }
+    Some(velocity / hubble_constant)
+}
+
+// ---------------------------------------------------------------------------
+// NFW dark matter profile
+// ---------------------------------------------------------------------------
+
+/// NFW dark matter density profile: rho(r) = rho_0 / (r/r_s * (1 + r/r_s)^2)
+pub fn nfw_density(radius: f64, scale_radius: f64, characteristic_density: f64) -> Option<f64> {
+    if !finite_4(radius, scale_radius, characteristic_density, 0.0) || scale_radius <= 0.0 || characteristic_density < 0.0 { return None; }
+    let x = radius / scale_radius;
+    if x <= 0.0 { return Some(characteristic_density); }
+    Some(characteristic_density / (x * (1.0 + x) * (1.0 + x)))
+}
+
+/// NFW enclosed mass within radius r: M(r) = 4*pi*rho_0*r_s^3 * (ln(1+r/r_s) - r/(r_s+r))
+pub fn nfw_enclosed_mass(radius: f64, scale_radius: f64, characteristic_density: f64) -> Option<f64> {
+    if !finite_4(radius, scale_radius, characteristic_density, 0.0) || scale_radius <= 0.0 || characteristic_density < 0.0 { return None; }
+    let x = radius / scale_radius;
+    let term = (1.0 + x).ln() - x / (1.0 + x);
+    Some(4.0 * PI * characteristic_density * scale_radius.powi(3) * term)
+}
+
+// ---------------------------------------------------------------------------
+// Blackbody radiation
+// ---------------------------------------------------------------------------
+
+/// Planck blackbody spectral radiance: B_lambda(T) = 2hc^2/lambda^5 * 1/(exp(hc/(lambda*kb*T))-1)
+pub fn blackbody_spectral_radiance(wavelength: f64, temperature: f64) -> Option<f64> {
+    let h = 6.62607015e-34;
+    let c = 299_792_458.0;
+    let kb = 1.380649e-23;
+    if !wavelength.is_finite() || wavelength <= 0.0 || !temperature.is_finite() || temperature <= 0.0 { return None; }
+    let exponent = h * c / (wavelength * kb * temperature);
+    if exponent > 700.0 { return Some(0.0); }
+    Some(2.0 * h * c * c / wavelength.powi(5) / (exponent.exp() - 1.0))
+}
+
+/// Wien's displacement law: lambda_max * T = b, where b = 2.898e-3 m·K
+pub fn wien_displacement(temperature: f64) -> Option<f64> {
+    if !temperature.is_finite() || temperature <= 0.0 { return None; }
+    Some(2.897771955e-3 / temperature)
+}
+
+// ---------------------------------------------------------------------------
+// Jeans criterion
+// ---------------------------------------------------------------------------
+
+/// Jeans mass: M_J = (5*kb*T/(G*mu*mH))^(3/2) * (3/(4*pi*rho))^(1/2)
+pub fn jeans_mass(temperature: f64, density: f64, mean_molecular_weight: f64) -> Option<f64> {
+    let g = 6.67430e-11;
+    let kb = 1.380649e-23;
+    let mh = 1.6735575e-27;
+    if !finite_4(temperature, density, mean_molecular_weight, 0.0) || temperature < 0.0 || density <= 0.0 || mean_molecular_weight <= 0.0 { return None; }
+    let cs2 = kb * temperature / (mean_molecular_weight * mh);
+    Some((5.0 * cs2 / (2.0 * g)).powf(1.5) * (3.0 / (4.0 * PI * density)).sqrt())
+}
+
+/// Jeans length: lambda_J = cs * sqrt(pi / (G * rho))
+pub fn jeans_length(temperature: f64, density: f64, mean_molecular_weight: f64) -> Option<f64> {
+    let g = 6.67430e-11;
+    let kb = 1.380649e-23;
+    let mh = 1.6735575e-27;
+    if !finite_4(temperature, density, mean_molecular_weight, 0.0) || temperature < 0.0 || density <= 0.0 || mean_molecular_weight <= 0.0 { return None; }
+    let cs = (kb * temperature / (mean_molecular_weight * mh)).sqrt();
+    Some(cs * (PI / (g * density)).sqrt())
+}
+
+fn finite_4(a: f64, b: f64, c: f64, d: f64) -> bool {
+    a.is_finite() && b.is_finite() && c.is_finite() && d.is_finite()
+}

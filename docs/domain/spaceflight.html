@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>航天工程、弹道、气动与流体 — MPS</title>
+<title>领域公式 — MPS</title>
 <link rel="stylesheet" href="../style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
@@ -12,7 +12,7 @@
 
 <body>
 <header class="site-header"><a class="brand" href="../index.html"><span class="brand-mark">MPS</span><span class="brand-caption">PHYSICS / 0.1.4</span></a>
-<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">首页</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">核心</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">物理</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">领域</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">集成</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">参考</span><span data-lang="en">REFERENCE</span></a></nav>
+<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">首页</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">核心</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">物理</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill active" href="../domain/spaceflight.html"><span data-lang="zh">领域</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">集成</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">参考</span><span data-lang="en">REFERENCE</span></a></nav>
 
 <div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select></div>
 </header>
@@ -23,43 +23,94 @@
 <div>
 <div class="section-kicker">/ DOMAIN MODULE</div>
 
-<h1>
-航天工程、弹道、气动与流体</h1>
+<h1>领域公式库</h1>
 </div>
 
-<div class="page-index">01</div>
+<div class="page-index">03</div>
 </header>
 
+<p><strong>mps-formula</strong> 是独立的纯公式库，包含 28 个模块，覆盖物理、航天、工程等领域的 300+ 公式。所有公式为纯 Rust 函数，不依赖 Rapier 物理引擎或 WorldHandle。</p>
+
 <div class="module-stack">
-<section class="doc-module">
-<h2>
-航天工程</h2>
-
-<p>74 个函数涵盖轨道力学、姿态控制、热管理和任务操作。</p></section>
 
 <section class="doc-module">
-<h2>
-弹道</h2>
+<h2>🚀 航天工程 (spaceflight) — 88 个函数</h2>
 
-<p>6DOF 弹道轨迹，包含科里奥利力、离心力、气动阻力/升力和滑翔积分。</p></section>
+<h3>轨道力学</h3>
+<p>Kepler 周期/半长轴、轨道根数↔状态向量转换、J2/J3/J4 带谐摄动加速度、Gauss 行星摄动方程、Lambert 通用变量求解法、Hohmann 转移、Tsiolkovsky 火箭方程、大气阻力/密度、太阳光压加速度、SGP4 J2 长期项、变分二体问题、轨道衰减率、半长轴衰减率、轨道平面机动 ΔV</p>
 
-<section class="doc-module">
-<h2>
-空气动力学</h2>
+<h3>姿态、控制与机器人</h3>
+<p>四元数导数、刚体 Euler 方程、CMG 交换/鲁棒伪逆、CW 相对运动、TRIAD 姿态确定、最小二乘姿态、EKF 标量预测/增益/更新、D-H 变换、机械臂动力学、bang-off-bang 剖面、人工势场制导、对接口滑翔斜率指令、太阳帆板 PD 控制、重力梯度力矩、磁力矩器偶极矩</p>
 
-<p>基于表面的气动力 (翼型)、体素气动 (方块阻力/升力)、力估算。</p></section>
-
-<section class="doc-module">
-<h2>
-流体力学</h2>
-
-<p>AABB 流体阻力、伯努利压力、SPH (光滑粒子流体动力学)、简化 Navier-Stokes 步进。</p></section>
+<h3>航天器系统与环境</h3>
+<p>太阳帆板功率、热平衡、CO₂ 质量平衡、Friis 链路预算、电池等效电路、Hall 推进器、辐射剂量、柔性模态、晃动摆、单相流体回路、雷达测距/测速、质量特性、对接口缓冲能量、Whipple 防护、表面充电、气闸泄压、Sabatier 甲烷产率、SPE 氧产率、散热器功率、热管热阻、Sagnac 效应、地磁倾斜偶极子模型 (IGRF-13)、碎片碰撞概率、原子氧侵蚀</p>
+</section>
 
 <section class="doc-module">
-<h2>
-控制理论</h2>
+<h2>🌌 天体物理 (astrophysics) — 19 个函数</h2>
+<p>N体直接求和、Barnes-Hut O(N log N)、FMM 单极子加速、后牛顿轨道修正、洛希极限、轨道共振检测、Lane-Emden 多方球、质量-光度关系、Eddington 光度、Hubble 定律、NFW 暗物质密度/质量、Planck 黑体辐射、Wien 位移、Jeans 质量/长度</p>
+</section>
 
-<p>PID 控制器、状态空间系统、MPC 箱式 QP 求解器、LQR-like 稳定输入。</p></section>
+<section class="doc-module">
+<h2>⚛️ 相对论 (relativity) — 23 个函数</h2>
+<p>洛伦兹因子、洛伦兹变换矩阵、4-矢量变换、速度叠加、快度、Schwarzschild 半径/度规、Kerr 视界/能层/参考系拖拽、ISCO (Schwarzschild+Kerr)、引力红移、Reissner-Nordstrom 视界、光线偏折、有效势、引力时间膨胀、长度收缩、相对论粒子属性、不变量质量</p>
+</section>
+
+<section class="doc-module">
+<h2>🔬 量子力学 (quantum) — 20 个函数</h2>
+<p>概率密度、波函数归一化、WKB 透射系数、矩形势垒隧穿、零点能、谐振子能级、自由粒子波函数/能量、德布罗意波长、无限深势阱能级/波函数/概率密度、氢原子能级/轨道半径/跃迁波长、不确定性原理、Pauli 矩阵 (σx/σy/σz)</p>
+</section>
+
+<section class="doc-module">
+<h2>⚡ 电磁学 (electromagnetism) — 16 个函数</h2>
+<p>Lorentz 力、磁通量、Faraday 感应、Maxwell 点更新、FDTD Yee 更新、Biot-Savart 元素/线段、Poynting 矢量、电磁波相速度/波长/阻抗/趋肤深度、真空常数</p>
+</section>
+
+<section class="doc-module">
+<h2>🌊 流体力学 (fluid) — 18 个函数</h2>
+<p>AABB 浮力/阻力、简化 Navier-Stokes、SPH Poly6/Spiky/Viscosity 核函数、SPH 密度/力估计、Bernoulli 压力/报告、Reynolds 数/流态判断、Darcy 摩擦因子 (Colebrook)、k-epsilon 湍流模型 (生产项/涡黏性/源项/长度尺度/湍流 Re)</p>
+</section>
+
+<section class="doc-module">
+<h2>🔥 热力学 (thermodynamics) — 23 个函数</h2>
+<p>Fourier 导热、Stefan-Boltzmann 辐射、相变潜热/条件、FEM 热扩散、热应力、理想气体状态方程、多方过程、对流换热 (Newton/Dittus-Boelter/Prandtl) 、Carnot/Otto/Diesel/Brayton 循环效率、Clausius-Clapeyron、熵变</p>
+</section>
+
+<section class="doc-module">
+<h2>🧪 核物理 (nuclear) — 23 个函数</h2>
+<p>放射性衰变常数、半衰期、平均寿命、活度、Bethe-Weizsäcker 结合能、核反应 Q 值、D-T/D-D 聚变能量、²³⁵U 裂变能量、Bateman 衰变链、中子扩散 (四因子公式/宏观截面/反应率)、γ 衰减、半值层</p>
+</section>
+
+<section class="doc-module">
+<h2>🔩 材料力学 (material_mechanics) — 26 个函数</h2>
+<p>Hooke 定律、剪切/体变模量、Lamé 常数、平面应力刚度、von Mises 应力/屈服、Tresca 屈服、主应力、断裂力学 K_I / 临界裂纹长度、Basquin 疲劳、Coffin-Manson、Miner 损伤、Goodman 修正、Norton 蠕变、梁弯曲/挠度/欧拉屈曲、长细比</p>
+</section>
+
+<section class="doc-module">
+<h2>📐 其他领域模块</h2>
+<table>
+<tr><th>模块</th><th>说明</th></tr>
+<tr><td>acoustics</td><td>声学模态分析、波动方程、共振检测、接触激励、3D 空间化</td></tr>
+<tr><td>aerodynamics</td><td>表面气动力、体素气动网格、力估算</td></tr>
+<tr><td>biomechanics</td><td>Hill 肌肉模型、关节约束</td></tr>
+<tr><td>celestial_data</td><td>10 太阳系天体精密参数 (JPL DE441)</td></tr>
+<tr><td>chaos</td><td>Lorenz 吸引子、双摆、Lyapunov 指数、分岔图</td></tr>
+<tr><td>continuum</td><td>连续介质力学、FEM 形函数、应变/应力张量</td></tr>
+<tr><td>control_theory</td><td>PID、状态空间、MPC、LQR</td></tr>
+<tr><td>gravitational_models</td><td>球谐展开 (EGM2008 8×8)、椭球引力、多面体引力</td></tr>
+<tr><td>integrators</td><td>Leapfrog、Yoshida 4 阶、Forest-Ruth 8 阶辛积分器</td></tr>
+<tr><td>molecular</td><td>Lennard-Jones、Coulomb 势/力、对相互作用</td></tr>
+<tr><td>physchem</td><td>Gray-Scott 反应扩散、催化浮力</td></tr>
+<tr><td>plasma</td><td>Debye 屏蔽、Vlasov 方程、PIC、磁重联、MHD</td></tr>
+<tr><td>softbody</td><td>XPBD 约束求解、超弹性本构</td></tr>
+<tr><td>superfluidity</td><td>Gross-Pitaevskii 方程、涡旋晶格、量子化环流</td></tr>
+<tr><td>topology</td><td>计算拓扑、持久同调、Betti 数</td></tr>
+<tr><td>trajectory</td><td>6DOF 弹道/滑翔轨迹、RK4 积分</td></tr>
+<tr><td>transmission</td><td>传动系统建模、齿轮比、扭矩分配</td></tr>
+<tr><td>wave_optics</td><td>Kirchhoff 衍射、Fresnel 传播、干涉、偏振</td></tr>
+</table>
+</section>
+
 </div>
 </div>
 
@@ -68,43 +119,68 @@
 <div>
 <div class="section-kicker">/ DOMAIN MODULE</div>
 
-<h1>
-Spaceflight, Trajectory, Aero & Fluid</h1>
+<h1>Domain Formula Library</h1>
 </div>
 
-<div class="page-index">01</div>
+<div class="page-index">03</div>
 </header>
 
+<p><strong>mps-formula</strong> is a standalone pure-formula library with 28 modules covering 300+ functions across physics, aerospace, and engineering domains. All formulas are pure Rust functions — no dependency on Rapier or WorldHandle.</p>
+
 <div class="module-stack">
-<section class="doc-module">
-<h2>
-Spaceflight Engineering</h2>
-
-<p>74 functions covering orbital mechanics, attitude control, thermal management, and mission operations.</p></section>
 
 <section class="doc-module">
-<h2>
-Ballistic Trajectory</h2>
-
-<p>6DOF ballistic trajectory with Coriolis, centrifugal, aerodynamic drag/lift, and glide integration.</p></section>
-
-<section class="doc-module">
-<h2>
-Aerodynamics</h2>
-
-<p>Surface-based aerodynamics (airfoils), voxel-based aero (block drag/lift), force estimation.</p></section>
+<h2>🚀 Spaceflight (88 functions)</h2>
+<p><strong>Orbital mechanics:</strong> Kepler period/semi-major-axis, elements↔state, J2/J3/J4 zonal harmonics, Gauss variational equations, Lambert universal solver, Hohmann transfer, Tsiolkovsky rocket equation, atmospheric drag/density, SRP, SGP4 secular rates, plane change ΔV.</p>
+<p><strong>Attitude/control/robotics:</strong> Quaternion derivative, Euler equations, CMG exchange/robust pseudoinverse, CW relative motion, TRIAD attitude, least-squares attitude, EKF scalar predict/gain/update, DH transform, manipulator dynamics, bang-off-bang profile, artificial potential guidance, docking glideslope, magnetic torquer.</p>
+<p><strong>Systems/environment:</strong> Solar panel power, thermal balance, CO₂ mass balance, Friis link, battery circuit, Hall thruster, flexible mode, slosh pendulum, heat pipe, radiator, Whipple shield, IGRF-13 tilted dipole, debris collision probability, atomic oxygen erosion.</p>
+</section>
 
 <section class="doc-module">
-<h2>
-Fluid Mechanics</h2>
-
-<p>AABB fluid drag, Bernoulli pressure, SPH, simplified Navier-Stokes stepping.</p></section>
+<h2>🌌 Astrophysics (19)</h2>
+<p>N-body direct/Barnes-Hut/FMM, post-Newtonian correction, Roche limit, resonance detection, Lane-Emden, mass-luminosity, Eddington luminosity, Hubble law, NFW profile, Planck blackbody, Wien displacement, Jeans mass/length.</p>
+</section>
 
 <section class="doc-module">
-<h2>
-Control Theory</h2>
+<h2>⚛️ Relativity (23)</h2>
+<p>Lorentz factor/boost, 4-vector transform, velocity addition, Schwarzschild metric, Kerr horizons/ergosphere/frame-dragging, ISCO (Schwarzschild+Kerr), gravitational redshift, Reissner-Nordstrom, light deflection, time dilation, length contraction.</p>
+</section>
 
-<p>PID controller, state-space system, MPC box QP solver, LQR-like stable input.</p></section>
+<section class="doc-module">
+<h2>🔬 Quantum (20)</h2>
+<p>Probability density, wave normalization, WKB transmission, barrier tunneling, zero-point energy, harmonic oscillator, free particle, de Broglie wavelength, infinite well, hydrogen atom (Bohr), uncertainty principle, Pauli matrices.</p>
+</section>
+
+<section class="doc-module">
+<h2>⚡ Electromagnetism (16)</h2>
+<p>Lorentz force, magnetic flux, Faraday induction, Maxwell point update, FDTD Yee update, Biot-Savart law, Poynting vector, EM wave propagation, skin depth.</p>
+</section>
+
+<section class="doc-module">
+<h2>🌊 Fluid (18)</h2>
+<p>AABB buoyancy/drag, simplified Navier-Stokes, SPH kernels (Poly6/Spiky/viscosity), SPH density/force estimation, Bernoulli, Reynolds number, Darcy friction factor, k-epsilon turbulence model.</p>
+</section>
+
+<section class="doc-module">
+<h2>🔥 Thermodynamics (23)</h2>
+<p>Fourier conduction, Stefan-Boltzmann radiation, phase change, FEM diffusion, ideal gas law, polytropic process, convective heat transfer, cycle efficiencies (Carnot/Otto/Diesel/Brayton), Clausius-Clapeyron, entropy.</p>
+</section>
+
+<section class="doc-module">
+<h2>🧪 Nuclear (23)</h2>
+<p>Decay constant, half-life, activity, Bethe-Weizsäcker binding energy, reaction Q-value, D-T/D-D fusion, Bateman chain, neutron diffusion, four-factor formula, gamma attenuation.</p>
+</section>
+
+<section class="doc-module">
+<h2>🔩 Material Mechanics (26)</h2>
+<p>Hooke's law, shear/bulk modulus, Lamé constants, von Mises/Tresca yield, principal stress, fracture mechanics K_I, Basquin/Coffin-Manson fatigue, Miner damage, Goodman correction, Norton creep, beam bending/buckling.</p>
+</section>
+
+<section class="doc-module">
+<h2>📐 Other Modules</h2>
+<p>acoustics, aerodynamics, biomechanics, celestial_data, chaos, continuum, control_theory, gravitational_models, integrators, molecular, physchem, plasma, softbody, superfluidity, topology, trajectory, transmission, wave_optics.</p>
+</section>
+
 </div>
 </div>
 </main>

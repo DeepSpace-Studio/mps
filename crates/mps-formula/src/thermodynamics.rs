@@ -368,3 +368,135 @@ pub extern "C" fn thermal_thermoelastic_stress_strain(
 }
 
 
+
+// ---------------------------------------------------------------------------
+// Ideal gas law
+// ---------------------------------------------------------------------------
+
+/// Ideal gas law: PV = nRT. Returns pressure (Pa).
+pub fn ideal_gas_pressure(volume: f64, moles: f64, temperature: f64) -> Option<f64> {
+    if !volume.is_finite() || volume <= 0.0 || !moles.is_finite() || moles < 0.0 || !temperature.is_finite() || temperature < 0.0 { return None; }
+    Some(moles * 8.314462618 * temperature / volume)
+}
+
+/// Returns volume from ideal gas law.
+pub fn ideal_gas_volume(pressure: f64, moles: f64, temperature: f64) -> Option<f64> {
+    if !pressure.is_finite() || pressure < 0.0 || !moles.is_finite() || moles < 0.0 || !temperature.is_finite() || temperature < 0.0 { return None; }
+    Some(moles * 8.314462618 * temperature / pressure)
+}
+
+/// Returns temperature from ideal gas law.
+pub fn ideal_gas_temperature(pressure: f64, volume: f64, moles: f64) -> Option<f64> {
+    if !pressure.is_finite() || pressure < 0.0 || !volume.is_finite() || volume <= 0.0 || !moles.is_finite() || moles <= 0.0 { return None; }
+    Some(pressure * volume / (moles * 8.314462618))
+}
+
+// ---------------------------------------------------------------------------
+// Polytropic process
+// ---------------------------------------------------------------------------
+
+/// Polytropic process: P2 = P1 * (V1/V2)^gamma
+pub fn polytropic_pressure(p1: f64, v1: f64, v2: f64, gamma: f64) -> Option<f64> {
+    if !finite_4(p1, v1, v2, gamma) || p1 < 0.0 || v1 <= 0.0 || v2 <= 0.0 || gamma <= 0.0 { return None; }
+    Some(p1 * (v1 / v2).powf(gamma))
+}
+
+/// Polytropic work: W = (P2*V2 - P1*V1) / (1 - gamma)
+pub fn polytropic_work(p1: f64, v1: f64, p2: f64, v2: f64, gamma: f64) -> Option<f64> {
+    if !finite_4(p1, v1, gamma, 0.0) || !finite_4(p2, v2, gamma, 0.0) || p1 < 0.0 || v1 <= 0.0 || p2 < 0.0 || v2 <= 0.0 || gamma <= 0.0 { return None; }
+    if (gamma - 1.0).abs() < 1.0e-12 { return None; }
+    Some((p2 * v2 - p1 * v1) / (1.0 - gamma))
+}
+
+// ---------------------------------------------------------------------------
+// Convective heat transfer
+// ---------------------------------------------------------------------------
+
+/// Newton's law of cooling: Q = h * A * (T_surface - T_fluid)
+pub fn convective_heat_flux(h: f64, area: f64, t_surface: f64, t_fluid: f64) -> Option<f64> {
+    if !finite_4(h, area, t_surface, t_fluid) || h < 0.0 || area < 0.0 { return None; }
+    Some(h * area * (t_surface - t_fluid))
+}
+
+/// Reynolds number: Re = rho * v * L / mu
+pub fn reynolds_number(density: f64, velocity: f64, char_length: f64, viscosity: f64) -> Option<f64> {
+    if !finite_4(density, velocity, char_length, viscosity) || density < 0.0 || velocity < 0.0 || char_length <= 0.0 || viscosity <= 0.0 { return None; }
+    Some(density * velocity * char_length / viscosity)
+}
+
+/// Nusselt number (Dittus-Boelter): Nu = 0.023 * Re^0.8 * Pr^n
+pub fn dittus_boelter_nusselt(reynolds: f64, prandtl: f64, heating: bool) -> Option<f64> {
+    if !reynolds.is_finite() || reynolds < 0.0 || !prandtl.is_finite() || prandtl < 0.0 { return None; }
+    if reynolds < 10000.0 { return None; }
+    let n = if heating { 0.4 } else { 0.3 };
+    Some(0.023 * reynolds.powf(0.8) * prandtl.powf(n))
+}
+
+/// Prandtl number: Pr = cp * mu / k
+pub fn prandtl_number(cp: f64, viscosity: f64, conductivity: f64) -> Option<f64> {
+    if !finite_4(cp, viscosity, conductivity, 0.0) || cp <= 0.0 || viscosity <= 0.0 || conductivity <= 0.0 { return None; }
+    Some(cp * viscosity / conductivity)
+}
+
+/// Heat transfer coefficient from Nusselt: h = Nu * k / L
+pub fn htc_from_nusselt(nusselt: f64, conductivity: f64, char_length: f64) -> Option<f64> {
+    if !finite_4(nusselt, conductivity, char_length, 0.0) || nusselt < 0.0 || conductivity <= 0.0 || char_length <= 0.0 { return None; }
+    Some(nusselt * conductivity / char_length)
+}
+
+// ---------------------------------------------------------------------------
+// Thermodynamic cycle efficiencies
+// ---------------------------------------------------------------------------
+
+/// Carnot efficiency: eta = 1 - T_cold / T_hot
+pub fn carnot_efficiency(t_hot: f64, t_cold: f64) -> Option<f64> {
+    if !finite_4(t_hot, t_cold, 0.0, 0.0) || t_hot <= 0.0 || t_cold < 0.0 || t_cold >= t_hot { return None; }
+    Some(1.0 - t_cold / t_hot)
+}
+
+/// Otto cycle efficiency: eta = 1 - 1 / r^(gamma-1)
+pub fn otto_efficiency(compression_ratio: f64, gamma: f64) -> Option<f64> {
+    if !compression_ratio.is_finite() || compression_ratio <= 1.0 || !gamma.is_finite() || gamma <= 1.0 { return None; }
+    Some(1.0 - 1.0 / compression_ratio.powf(gamma - 1.0))
+}
+
+/// Diesel cycle efficiency
+pub fn diesel_efficiency(compression_ratio: f64, cutoff_ratio: f64, gamma: f64) -> Option<f64> {
+    if !finite_4(compression_ratio, cutoff_ratio, gamma, 0.0) || compression_ratio <= 1.0 || cutoff_ratio <= 1.0 || gamma <= 1.0 { return None; }
+    let term = (cutoff_ratio.powf(gamma) - 1.0) / (gamma * (cutoff_ratio - 1.0));
+    Some(1.0 - 1.0 / compression_ratio.powf(gamma - 1.0) * term)
+}
+
+/// Brayton cycle efficiency: eta = 1 - 1 / r_p^((gamma-1)/gamma)
+pub fn brayton_efficiency(pressure_ratio: f64, gamma: f64) -> Option<f64> {
+    if !pressure_ratio.is_finite() || pressure_ratio <= 1.0 || !gamma.is_finite() || gamma <= 1.0 { return None; }
+    Some(1.0 - 1.0 / pressure_ratio.powf((gamma - 1.0) / gamma))
+}
+
+// ---------------------------------------------------------------------------
+// Clausius-Clapeyron
+// ---------------------------------------------------------------------------
+
+/// Clausius-Clapeyron: ln(P2/P1) = -(L/R) * (1/T2 - 1/T1)
+pub fn clausius_clapeyron_pressure(p1: f64, t1: f64, t2: f64, latent_heat: f64) -> Option<f64> {
+    if !finite_4(p1, t1, t2, latent_heat) || p1 <= 0.0 || t1 <= 0.0 || t2 <= 0.0 || latent_heat < 0.0 { return None; }
+    Some(p1 * (-latent_heat / 8.314462618 * (1.0 / t2 - 1.0 / t1)).exp())
+}
+
+// ---------------------------------------------------------------------------
+// Entropy change
+// ---------------------------------------------------------------------------
+
+pub fn entropy_change_constant_volume(moles: f64, cv: f64, t1: f64, t2: f64) -> Option<f64> {
+    if !finite_4(moles, cv, t1, t2) || moles < 0.0 || cv <= 0.0 || t1 <= 0.0 || t2 <= 0.0 { return None; }
+    Some(moles * cv * (t2 / t1).ln())
+}
+
+pub fn entropy_change_constant_pressure(moles: f64, cp: f64, t1: f64, t2: f64) -> Option<f64> {
+    if !finite_4(moles, cp, t1, t2) || moles < 0.0 || cp <= 0.0 || t1 <= 0.0 || t2 <= 0.0 { return None; }
+    Some(moles * cp * (t2 / t1).ln())
+}
+
+fn finite_4(a: f64, b: f64, c: f64, d: f64) -> bool {
+    a.is_finite() && b.is_finite() && c.is_finite() && d.is_finite()
+}

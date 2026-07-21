@@ -25,29 +25,50 @@
 
 <h1>运动物理系统 (米每秒)</h1>
 
-<p>基于 <strong>Rapier3D-f64</strong> 的高精度 Rust 物理引擎。通过 C FFI (~480 函数) 和 Java JNI (~280 方法) 暴露完整 API。支持 <strong>332 项测试</strong>、<strong>5 种引力模型</strong>、<strong>3 种辛积分器</strong>、<strong>共享内存零拷贝 Arena</strong> 和 <strong>10 个太阳系天体</strong>。</p>
+<p>基于 <strong>Rapier3D-f64</strong> 的高精度 Rust 物理引擎。通过 C FFI (~480 函数) 和 Java JNI (~280 方法) 暴露完整 API。支持 <strong>332 项测试</strong>、<strong>5 种引力模型</strong>、<strong>3 种辛积分器</strong>、<strong>共享内存零拷贝 Arena</strong>、<strong>28 个公式模块</strong> 和 <strong>10 个太阳系天体</strong>。</p>
 <div class="btns"><a class="btn btn-primary" href="core/world.html">核心 API</a><a class="btn btn-outline" href="integration/java.html">Java / JNI</a></div>
 </div>
 
 <div class="hero-telemetry">
-<div class="metric-card"><strong>332</strong><span>Tests</span></div>
+<div class="metric-card"><strong>332</strong><span>集成测试</span></div>
 
-<div class="metric-card"><strong>480+</strong><span>C FFI functions</span></div>
+<div class="metric-card"><strong>300+</strong><span>纯公式函数</span></div>
 
-<div class="metric-card"><strong>05</strong><span>Gravity models</span></div>
+<div class="metric-card"><strong>28</strong><span>公式模块</span></div>
 
-<div class="metric-card"><strong>10</strong><span>Celestial bodies</span></div>
+<div class="metric-card"><strong>10</strong><span>太阳系天体</span></div>
+</div>
+
+<div class="stat-grid">
+<div class="stat-card"><span class="num">5</span><span class="lbl">引力模型</span></div>
+<div class="stat-card"><span class="num">3</span><span class="lbl">辛积分器</span></div>
+<div class="stat-card"><span class="num">1PN+2PN</span><span class="lbl">后牛顿修正</span></div>
+<div class="stat-card"><span class="num">175x</span><span class="lbl">Arena 加速比</span></div>
 </div>
 </section>
 
 <section class="module-directory">
 <div class="section-kicker">/ MODULE DIRECTORY</div>
 
-<h2>
-模块目录</h2>
+<h2>模块目录</h2>
 
-<div class="module-grid"><a class="module-card" href="core/world.html"><span class="module-card-index">01</span><strong>核心引擎</strong><small>World、刚体、碰撞体、关节与查询</small><em>↗</em></a><a class="module-card" href="physics/gravity.html"><span class="module-card-index">02</span><strong>物理系统</strong><small>引力、地形、力律与事件</small><em>↗</em></a><a class="module-card" href="domain/spaceflight.html"><span class="module-card-index">03</span><strong>领域公式</strong><small>航天、天体物理与多领域公式</small><em>↗</em></a><a class="module-card" href="integration/arena.html"><span class="module-card-index">04</span><strong>集成方案</strong><small>Arena、Java/JNI 与生态构建</small><em>↗</em></a><a class="module-card" href="reference/api.html"><span class="module-card-index">05</span><strong>参考资料</strong><small>完整 API、精度与性能</small><em>↗</em></a></div>
+<div class="module-grid"><a class="module-card" href="core/world.html"><span class="module-card-index">01</span><strong>核心引擎</strong><small>World、刚体、碰撞体、关节与查询</small><em>↗</em></a><a class="module-card" href="physics/gravity.html"><span class="module-card-index">02</span><strong>物理系统</strong><small>引力、地形、力律与事件</small><em>↗</em></a><a class="module-card" href="domain/spaceflight.html"><span class="module-card-index">03</span><strong>领域公式</strong><small>航天、天体物理、核物理、材料等 28 模块</small><em>↗</em></a><a class="module-card" href="integration/arena.html"><span class="module-card-index">04</span><strong>集成方案</strong><small>Arena、Java/JNI 与生态构建</small><em>↗</em></a><a class="module-card" href="reference/api.html"><span class="module-card-index">05</span><strong>参考资料</strong><small>完整 API、精度与性能</small><em>↗</em></a></div>
 </section>
+
+<h2>公式模块 (28)</h2>
+
+<div class="stat-grid">
+<div class="stat-card"><span class="num">88</span><span class="lbl">航天工程</span></div>
+<div class="stat-card"><span class="num">23</span><span class="lbl">核物理</span></div>
+<div class="stat-card"><span class="num">26</span><span class="lbl">材料力学</span></div>
+<div class="stat-card"><span class="num">19</span><span class="lbl">天体物理</span></div>
+<div class="stat-card"><span class="num">23</span><span class="lbl">相对论</span></div>
+<div class="stat-card"><span class="num">20</span><span class="lbl">量子力学</span></div>
+<div class="stat-card"><span class="num">16</span><span class="lbl">电磁学</span></div>
+<div class="stat-card"><span class="num">18</span><span class="lbl">流体力学</span></div>
+</div>
+
+<div class="callout"><p>全部公式位于独立 crate <span class="hi">mps-formula</span> — 纯 Rust 实现，不依赖 Rapier 或 WorldHandle。</p></div>
 
 <h2>
 核心特性</h2>
@@ -96,7 +117,8 @@ JNI + 共享内存</h3>
 <pre>
 <code class="language-text">Java 21 JNI / Shared Memory
   └─ Rust C ABI (~480 functions)
-       ├─ mps-core — physics engine
+       ├─ mps-formula — 28 pure formula modules
+       ├─ mps-core — physics engine + Rapier wrapper
        ├─ mps-jni — JNI bindings
        └─ mps-ffm — FFM metadata</code></pre>
 </div>
@@ -109,18 +131,25 @@ JNI + 共享内存</h3>
 <h1>
     Motion Physics System (m/s)</h1>
 
-<p>High-precision Rust physics engine built on <strong>Rapier3D-f64</strong>. Exposes complete API via C FFI (~480 functions) and Java JNI (~280 methods). Supports <strong>332 tests</strong>, <strong>5 gravity models</strong>, <strong>3 symplectic integrators</strong>, <strong>shared-memory zero-copy Arena</strong>, and <strong>10 solar system bodies</strong>.</p>
+<p>High-precision Rust physics engine built on <strong>Rapier3D-f64</strong>. Exposes complete API via C FFI (~480 functions) and Java JNI (~280 methods). Supports <strong>332 tests</strong>, <strong>5 gravity models</strong>, <strong>3 symplectic integrators</strong>, <strong>shared-memory zero-copy Arena</strong>, <strong>28 formula modules</strong>, and <strong>10 solar system bodies</strong>.</p>
 <div class="btns"><a class="btn btn-primary" href="core/world.html">Core API</a><a class="btn btn-outline" href="integration/java.html">Java / JNI</a></div>
 </div>
 
 <div class="hero-telemetry">
-<div class="metric-card"><strong>332</strong><span>Tests</span></div>
+<div class="metric-card"><strong>332</strong><span>集成测试</span></div>
 
-<div class="metric-card"><strong>480+</strong><span>C FFI functions</span></div>
+<div class="metric-card"><strong>300+</strong><span>纯公式函数</span></div>
 
-<div class="metric-card"><strong>05</strong><span>Gravity models</span></div>
+<div class="metric-card"><strong>28</strong><span>公式模块</span></div>
 
-<div class="metric-card"><strong>10</strong><span>Celestial bodies</span></div>
+<div class="metric-card"><strong>10</strong><span>太阳系天体</span></div>
+</div>
+
+<div class="stat-grid">
+<div class="stat-card"><span class="num">5</span><span class="lbl">引力模型</span></div>
+<div class="stat-card"><span class="num">3</span><span class="lbl">辛积分器</span></div>
+<div class="stat-card"><span class="num">1PN+2PN</span><span class="lbl">后牛顿修正</span></div>
+<div class="stat-card"><span class="num">175x</span><span class="lbl">Arena 加速比</span></div>
 </div>
 </section>
 
@@ -180,7 +209,8 @@ Architecture</h2>
 <pre>
 <code class="language-text">Java 21 JNI / Shared Memory
   └─ Rust C ABI (~480 functions)
-       ├─ mps-core — physics engine
+       ├─ mps-formula — 28 pure formula modules
+       ├─ mps-core — physics engine + Rapier wrapper
        ├─ mps-jni — JNI bindings
        └─ mps-ffm — FFM metadata</code></pre>
 </div>

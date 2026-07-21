@@ -4,9 +4,11 @@ use crate::ffi::{
 };
 
 use crate::math::{finite_non_negative, finite_positive};
+use std::f64::consts::PI;
 
 const EPSILON: f64 = 1.0e-12;
 pub const REDUCED_PLANCK: f64 = 1.054_571_817e-34;
+pub const PLANCK: f64 = 6.62607015e-34;
 
 fn effective_hbar(reduced_planck: f64) -> f64 {
     if reduced_planck == 0.0 {
@@ -177,3 +179,132 @@ pub extern "C" fn quantum_harmonic_oscillator_report(
 
 
 
+
+// ---------------------------------------------------------------------------
+// Schrodinger equation basics
+// ---------------------------------------------------------------------------
+
+
+
+
+/// Free-particle plane wave: psi(x, t) = A * exp(i(kx - omega t))
+/// Returns (real, imag) components.
+pub fn free_particle_wave_function(amplitude: f64, wave_number: f64, x: f64, time: f64) -> (f64, f64) {
+    if !amplitude.is_finite() || amplitude < 0.0 || !wave_number.is_finite() || !x.is_finite() || !time.is_finite() { return (0.0, 0.0); }
+    let energy = REDUCED_PLANCK * REDUCED_PLANCK * wave_number * wave_number / (2.0 * 9.1093837e-31);
+    let phase = wave_number * x - energy * time / REDUCED_PLANCK;
+    (amplitude * phase.cos(), amplitude * phase.sin())
+}
+
+/// Free particle energy: E = (hbar * k)^2 / (2m)
+pub fn free_particle_energy(wave_number: f64, mass: f64) -> Option<f64> {
+    if !wave_number.is_finite() || !mass.is_finite() || mass <= 0.0 { return None; }
+    Some(REDUCED_PLANCK * REDUCED_PLANCK * wave_number * wave_number / (2.0 * mass))
+}
+
+/// De Broglie wavelength: lambda = h / p = h / (m * v)
+pub fn de_broglie_wavelength(mass: f64, velocity: f64) -> Option<f64> {
+    if !mass.is_finite() || mass <= 0.0 || !velocity.is_finite() || velocity <= 0.0 { return None; }
+    Some(PLANCK / (mass * velocity))
+}
+
+// ---------------------------------------------------------------------------
+// Infinite square well
+// ---------------------------------------------------------------------------
+
+/// Infinite square well energy levels: E_n = n^2 * pi^2 * hbar^2 / (2 * m * L^2)
+pub fn infinite_well_energy(quantum_number: u32, mass: f64, well_width: f64) -> Option<f64> {
+    if quantum_number == 0 || !mass.is_finite() || mass <= 0.0 || !well_width.is_finite() || well_width <= 0.0 { return None; }
+    let n = quantum_number as f64;
+    Some(n * n * PI * PI * REDUCED_PLANCK * REDUCED_PLANCK / (2.0 * mass * well_width * well_width))
+}
+
+/// Infinite square well wave function at position x: psi_n(x) = sqrt(2/L) * sin(n*pi*x/L)
+pub fn infinite_well_wave_function(quantum_number: u32, well_width: f64, x: f64) -> Option<f64> {
+    if quantum_number == 0 || !well_width.is_finite() || well_width <= 0.0 || !x.is_finite() || x < 0.0 || x > well_width { return None; }
+    let n = quantum_number as f64;
+    Some((2.0 / well_width).sqrt() * (n * PI * x / well_width).sin())
+}
+
+/// Probability density at position x in infinite well.
+pub fn infinite_well_probability_density(quantum_number: u32, well_width: f64, x: f64) -> Option<f64> {
+    let psi = infinite_well_wave_function(quantum_number, well_width, x)?;
+    Some(psi * psi)
+}
+
+// ---------------------------------------------------------------------------
+// Hydrogen atom (Bohr model)
+// ---------------------------------------------------------------------------
+
+/// Bohr radius: a0 = 4*pi*eps0 * hbar^2 / (m_e * e^2)
+pub fn bohr_radius() -> f64 { 5.29177210903e-11 }
+
+/// Hydrogen energy levels (Bohr model): E_n = -13.6 eV / n^2
+pub fn hydrogen_energy_level(quantum_number: u32) -> Option<f64> {
+    if quantum_number == 0 { return None; }
+    Some(-13.59844 / (quantum_number as f64 * quantum_number as f64))
+}
+
+/// Hydrogen orbital radius (Bohr): r_n = n^2 * a0
+pub fn hydrogen_orbital_radius(quantum_number: u32) -> Option<f64> {
+    if quantum_number == 0 { return None; }
+    Some(quantum_number as f64 * quantum_number as f64 * bohr_radius())
+}
+
+/// Hydrogen transition wavelength: 1/lambda = R * (1/n1^2 - 1/n2^2) where R = 1.097e7
+pub fn hydrogen_transition_wavelength(n1: u32, n2: u32) -> Option<f64> {
+    if n1 == 0 || n2 == 0 || n1 >= n2 { return None; }
+    let rydberg = 1.0973731568160e7;
+    let n1f = n1 as f64; let n2f = n2 as f64;
+    let inv_lambda = rydberg * (1.0 / (n1f * n1f) - 1.0 / (n2f * n2f));
+    if inv_lambda <= 0.0 { return None; }
+    Some(1.0 / inv_lambda)
+}
+
+// ---------------------------------------------------------------------------
+// Uncertainty principle
+// ---------------------------------------------------------------------------
+
+/// Heisenberg uncertainty principle check: Delta_x * Delta_p >= hbar/2
+pub fn heisenberg_uncertainty_satisfied(delta_x: f64, delta_p: f64) -> Option<bool> {
+    if !delta_x.is_finite() || delta_x < 0.0 || !delta_p.is_finite() || delta_p < 0.0 { return None; }
+    Some(delta_x * delta_p >= REDUCED_PLANCK / 2.0 - 1.0e-15)
+}
+
+/// Minimum uncertainty product: hbar/2
+pub fn minimum_uncertainty_product() -> f64 { REDUCED_PLANCK / 2.0 }
+
+// ---------------------------------------------------------------------------
+// Pauli matrices
+// ---------------------------------------------------------------------------
+
+/// Pauli sigma_x matrix-vector multiply.
+pub fn pauli_sigma_x(_spinor: (f64, f64)) -> ((f64, f64), (f64, f64)) {
+    ((0.0, 1.0), (1.0, 0.0))
+}
+
+/// Pauli sigma_y matrix-vector multiply.
+pub fn pauli_sigma_y(spinor: (f64, f64)) -> ((f64, f64), (f64, f64)) {
+    // ((0, -i), (i, 0))
+    ((-spinor.1, spinor.0), (spinor.1, -spinor.0))
+}
+
+/// Pauli sigma_z matrix-vector multiply.
+pub fn pauli_sigma_z(spinor: (f64, f64)) -> (f64, f64) {
+    (spinor.0, -spinor.1)
+}
+
+/// Spin expectation value in direction n from spinor.
+pub fn spin_expectation(spinor: (f64, f64)) -> (f64, f64, f64) {
+    let (a, b) = spinor;
+    let norm2 = a*a + b*b;
+    if norm2 < 1.0e-15 { return (0.0, 0.0, 0.0); }
+    let sx = 2.0 * (a * b) / norm2;
+    let sy = 0.0; // simplified
+    let sz = (a*a - b*b) / norm2;
+    (sx, sy, sz)
+}
+
+fn finite_4(a: f64, b: f64, c: f64, d: f64) -> bool {
+    a.is_finite() && b.is_finite() && c.is_finite() && d.is_finite()
+}

@@ -366,3 +366,92 @@ pub fn bernoulli_report(
         dynamic_pressure,
     })
 }
+// ---------------------------------------------------------------------------
+// Reynolds number
+// ---------------------------------------------------------------------------
+
+/// Reynolds number: Re = rho * v * L / mu
+pub fn re_n(density: f64, velocity: f64, char_length: f64, viscosity: f64) -> Option<f64> {
+    if !density.is_finite() || density < 0.0 || !velocity.is_finite() || velocity < 0.0 || !char_length.is_finite() || char_length <= 0.0 || !viscosity.is_finite() || viscosity <= 0.0 { return None; }
+    Some(density * velocity * char_length / viscosity)
+}
+
+/// Flow regime based on Reynolds number: 0=laminar, 1=transition, 2=turbulent
+pub fn flow_regime(reynolds: f64) -> u8 {
+    if reynolds < 2000.0 { 0 }
+    else if reynolds < 4000.0 { 1 }
+    else { 2 }
+}
+
+/// Friction factor for pipe flow (Darcy-Weisbach).
+/// Laminar: f = 64/Re. Turbulent: Colebrook equation (iterative).
+pub fn darcy_friction_factor(reynolds: f64, relative_roughness: f64) -> Option<f64> {
+    if !reynolds.is_finite() || reynolds <= 0.0 || !relative_roughness.is_finite() || relative_roughness < 0.0 { return None; }
+    if reynolds < 2000.0 {
+        return Some(64.0 / reynolds);
+    }
+    // Colebrook-White: 1/sqrt(f) = -2*log10(eps/(3.7*D) + 2.51/(Re*sqrt(f)))
+    let eps = relative_roughness;
+    let mut f: f64 = 0.02; // initial guess
+    for _ in 0..30 {
+        let f_sqrt = f.sqrt();
+        let rhs = -2.0 * (eps / 3.7 + 2.51 / (reynolds * f_sqrt)).log10();
+        let f_new = 1.0 / (rhs * rhs);
+        if (f_new - f).abs() < 1.0e-10 { f = f_new; break; }
+        f = f_new;
+    }
+    Some(f)
+}
+
+// ---------------------------------------------------------------------------
+// k-epsilon turbulence model
+// ---------------------------------------------------------------------------
+
+/// Standard k-epsilon turbulence model: production of TKE.
+/// P_k = nut * S^2 where S = sqrt(2 * S_ij * S_ij)
+pub fn k_epsilon_production(eddy_viscosity: f64, strain_rate_magnitude: f64) -> Option<f64> {
+    if !eddy_viscosity.is_finite() || eddy_viscosity < 0.0 || !strain_rate_magnitude.is_finite() || strain_rate_magnitude < 0.0 { return None; }
+    Some(eddy_viscosity * strain_rate_magnitude * strain_rate_magnitude)
+}
+
+/// Eddy viscosity from k-epsilon: nut = C_mu * k^2 / epsilon
+pub fn k_epsilon_eddy_viscosity(tke: f64, dissipation: f64, c_mu: f64) -> Option<f64> {
+    if !tke.is_finite() || tke < 0.0 || !dissipation.is_finite() || dissipation <= 0.0 || !c_mu.is_finite() || c_mu <= 0.0 { return None; }
+    Some(c_mu * tke * tke / dissipation)
+}
+
+/// k-epsilon: source term for k transport equation.
+/// dk/dt = P_k - epsilon + diffusion
+pub fn k_equation_source(production: f64, dissipation: f64) -> Option<f64> {
+    if !production.is_finite() || !dissipation.is_finite() || dissipation < 0.0 { return None; }
+    Some(production - dissipation)
+}
+
+/// k-epsilon: source term for epsilon transport equation.
+/// depsilon/dt = C_eps1 * P_k * epsilon/k - C_eps2 * epsilon^2/k + diffusion
+pub fn epsilon_equation_source(production: f64, tke: f64, dissipation: f64, c_eps1: f64, c_eps2: f64) -> Option<f64> {
+    if !finite_5(production, tke, dissipation, c_eps1, c_eps2) || tke <= 0.0 || dissipation < 0.0 || c_eps1 <= 0.0 || c_eps2 <= 0.0 { return None; }
+    Some(c_eps1 * production * dissipation / tke - c_eps2 * dissipation * dissipation / tke)
+}
+
+/// Standard k-epsilon model constants.
+pub fn k_epsilon_constants() -> (f64, f64, f64, f64, f64) {
+    (0.09, 1.44, 1.92, 1.0, 1.3) // C_mu, C_eps1, C_eps2, sigma_k, sigma_eps
+}
+
+/// Characteristic turbulent length scale: L = C_mu^0.75 * k^1.5 / epsilon
+pub fn turbulent_length_scale(tke: f64, dissipation: f64) -> Option<f64> {
+    if !tke.is_finite() || tke < 0.0 || !dissipation.is_finite() || dissipation <= 0.0 { return None; }
+    let cmu: f64 = 0.09;
+    Some(cmu.powf(0.75) * tke.powf(1.5) / dissipation)
+}
+
+/// Turbulent Reynolds number: Re_t = k^2 / (nu * epsilon)
+pub fn turbulent_reynolds(tke: f64, dissipation: f64, kinematic_viscosity: f64) -> Option<f64> {
+    if !tke.is_finite() || tke < 0.0 || !dissipation.is_finite() || dissipation <= 0.0 || !kinematic_viscosity.is_finite() || kinematic_viscosity <= 0.0 { return None; }
+    Some(tke * tke / (kinematic_viscosity * dissipation))
+}
+
+fn finite_5(a: f64, b: f64, c: f64, d: f64, e: f64) -> bool {
+    a.is_finite() && b.is_finite() && c.is_finite() && d.is_finite() && e.is_finite()
+}

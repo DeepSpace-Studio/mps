@@ -1,4 +1,5 @@
-﻿use std::slice;
+﻿use std::f64::consts::PI;
+use std::slice;
 
 use rapier3d::prelude::Vector;
 
@@ -291,3 +292,110 @@ pub extern "C" fn em_vacuum_permeability() -> f64 {
 }
 
 
+
+// ---------------------------------------------------------------------------
+// Biot-Savart law
+// ---------------------------------------------------------------------------
+
+/// Biot-Savart law: dB = (mu0/4pi) * I * dl x r_hat / r^2
+/// Returns the magnetic field contribution at `point` from a current element.
+pub fn biot_savart_element(current: f64, dl: Vec3, position: Vec3, point: Vec3) -> Option<Vec3> {
+    let mu0 = 1.25663706212e-6;
+    if !vec3_finite(dl) || !vec3_finite(position) || !vec3_finite(point) || !current.is_finite() { return None; }
+    let r_vec = vec3_to_rapier(point) - vec3_to_rapier(position);
+    let r = r_vec.length();
+    if r < 1.0e-12 { return None; }
+    let r_hat = r_vec / r;
+    let cross = vec3_to_rapier(dl).cross(r_hat);
+    let factor = mu0 * current / (4.0 * PI * r * r);
+    Some(vec3_from_rapier(cross * factor))
+}
+
+/// Biot-Savart law for a finite straight wire segment.
+/// Returns B at `point` from wire from `p1` to `p2` carrying current.
+pub fn biot_savart_wire_segment(current: f64, p1: Vec3, p2: Vec3, point: Vec3) -> Option<Vec3> {
+    let mu0 = 1.25663706212e-6;
+    if !finite_6(&[current, p1.x, p1.y, p1.z, p2.x, p2.y]) || !vec3_finite(point) { return None; }
+    let a = vec3_to_rapier(p1); let b = vec3_to_rapier(p2); let p = vec3_to_rapier(point);
+    let l = b - a; let l_len = l.length();
+    if l_len < 1.0e-12 { return None; }
+    let r1 = p - a; let r2 = p - b;
+    let r1_len = r1.length(); let r2_len = r2.length();
+    if r1_len < 1.0e-12 || r2_len < 1.0e-12 { return None; }
+    let l_hat = l / l_len;
+    let sin_theta1 = l_hat.cross(r1 / r1_len).length();
+    let sin_theta2 = l_hat.cross(r2 / r2_len).length();
+    let direction = l_hat.cross(r1 / r1_len).try_normalize()?;
+    let factor = mu0 * current / (4.0 * PI);
+    let term = (1.0 / r1_len + 1.0 / r2_len) * (sin_theta1 + sin_theta2) / 2.0;
+    Some(vec3_from_rapier(direction * factor * term))
+}
+
+// ---------------------------------------------------------------------------
+// Poynting vector
+// ---------------------------------------------------------------------------
+
+/// Poynting vector: S = E x H (W/m^2) where H = B / mu0
+pub fn poynting_vector(e: Vec3, b: Vec3) -> Option<Vec3> {
+    let mu0 = 1.25663706212e-6;
+    if !vec3_finite(e) || !vec3_finite(b) { return None; }
+    let e_v = vec3_to_rapier(e); let b_v = vec3_to_rapier(b);
+    let s = e_v.cross(b_v) / mu0;
+    Some(vec3_from_rapier(s))
+}
+
+/// Poynting vector magnitude for plane wave: |S| = |E|^2 / (mu0 * c)
+pub fn poynting_magnitude_plane_wave(e_field_magnitude: f64) -> Option<f64> {
+    let c = 299_792_458.0;
+    let mu0 = 1.25663706212e-6;
+    if !e_field_magnitude.is_finite() || e_field_magnitude < 0.0 { return None; }
+    Some(e_field_magnitude * e_field_magnitude / (mu0 * c))
+}
+
+// ---------------------------------------------------------------------------
+// EM wave propagation
+// ---------------------------------------------------------------------------
+
+/// Phase velocity in medium: v = c / n
+pub fn phase_velocity(refractive_index: f64) -> Option<f64> {
+    let c = 299_792_458.0;
+    if !refractive_index.is_finite() || refractive_index <= 0.0 { return None; }
+    Some(c / refractive_index)
+}
+
+/// Wavelength: lambda = c / (n * f)
+pub fn wavelength_in_medium(frequency: f64, refractive_index: f64) -> Option<f64> {
+    let c = 299_792_458.0;
+    if !frequency.is_finite() || frequency <= 0.0 || !refractive_index.is_finite() || refractive_index <= 0.0 { return None; }
+    Some(c / (refractive_index * frequency))
+}
+
+/// Intrinsic impedance of medium: eta = sqrt(mu / epsilon)
+pub fn intrinsic_impedance(permeability: f64, permittivity: f64) -> Option<f64> {
+    if !permeability.is_finite() || permeability <= 0.0 || !permittivity.is_finite() || permittivity <= 0.0 { return None; }
+    Some((permeability / permittivity).sqrt())
+}
+
+/// Skin depth: delta = 1 / sqrt(pi * f * mu * sigma)
+pub fn skin_depth(frequency: f64, permeability: f64, conductivity: f64) -> Option<f64> {
+    if !frequency.is_finite() || frequency <= 0.0 || !permeability.is_finite() || permeability <= 0.0 || !conductivity.is_finite() || conductivity <= 0.0 { return None; }
+    Some(1.0 / (PI * frequency * permeability * conductivity).sqrt())
+}
+
+/// EM wave vacuum wavelength: lambda = c / f
+pub fn vacuum_wavelength(frequency: f64) -> Option<f64> {
+    let c = 299_792_458.0;
+    if !frequency.is_finite() || frequency <= 0.0 { return None; }
+    Some(c / frequency)
+}
+
+/// EM wave frequency: f = c / lambda
+pub fn wave_frequency(wavelength: f64) -> Option<f64> {
+    let c = 299_792_458.0;
+    if !wavelength.is_finite() || wavelength <= 0.0 { return None; }
+    Some(c / wavelength)
+}
+
+fn finite_6(v: &[f64; 6]) -> bool {
+    v.iter().all(|x| x.is_finite())
+}

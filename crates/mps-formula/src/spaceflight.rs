@@ -601,3 +601,163 @@ pub fn airlock_depressurization(pressure: f64, ambient_pressure: f64, volume: f6
     let rate = -conductance / volume * (pressure - ambient_pressure);
     Some(AirlockDepressurization { pressure: ambient_pressure + (pressure - ambient_pressure) * (-conductance * dt / volume).exp(), pressure_rate: rate })
 }
+// ---------------------------------------------------------------------------
+// Gauss variational equations (orbit element rates from perturbing acceleration)
+// ---------------------------------------------------------------------------
+
+/// Gauss variational equations in RSW frame.
+/// Returns (da/dt, de/dt, di/dt, dRAAN/dt, domega/dt, dM/dt)
+pub fn gauss_variational_equations(
+    elements: OrbitalElements, mu: f64, perturbing_accel_rsw: Vec3,
+) -> Option<(f64, f64, f64, f64, f64, f64)> {
+    let a = elements.semi_major_axis;
+    let e = elements.eccentricity;
+    let i = elements.inclination;
+    let omega = elements.argument_of_periapsis;
+    let nu = elements.true_anomaly;
+    if !finite(&[a, e, i, omega, nu, mu]) || mu <= 0.0 || a <= 0.0 || e < 0.0 || e >= 1.0 || !vec3_finite(perturbing_accel_rsw) { return None; }
+    let ar = perturbing_accel_rsw.x;
+    let as_ = perturbing_accel_rsw.y;
+    let aw = perturbing_accel_rsw.z;
+    let n = (mu / (a * a * a)).sqrt();
+    let p = a * (1.0 - e * e);
+    if p <= 0.0 { return None; }
+    let r = p / (1.0 + e * nu.cos());
+    let h = (mu * p).sqrt();
+    let b = a * (1.0 - e * e).sqrt();
+    let theta = omega + nu;
+    let da_dt = 2.0 * a * a / h * (e * nu.sin() * ar + (1.0 + e * nu.cos()) * as_);
+    let de_dt = 1.0 / h * (p * nu.sin() * ar + ((p + r) * nu.cos() + r * e) * as_);
+    let di_dt = r * theta.cos() / h * aw;
+    let raan_dot = if i.sin().abs() < EPS { 0.0 } else { r * theta.sin() / (h * i.sin()) * aw };
+    let domega_dt = if e < EPS { 0.0 } else { 1.0 / (h * e) * (-p * nu.cos() * ar + (p + r) * nu.sin() * as_) }
+        - (if i.sin().abs() < EPS { 0.0 } else { r * theta.sin() * i.cos() / (h * i.sin()) * aw });
+    let dM_dt = if e < EPS { n + b / (h * a) * (-2.0 * r * ar + (p + r) * as_) }
+        else { n + b / (h * a * e) * ((p * nu.cos() - 2.0 * r * e) * ar - (p + r) * nu.sin() * as_) };
+    Some((da_dt, de_dt, di_dt, raan_dot, domega_dt, dM_dt))
+}
+
+// ---------------------------------------------------------------------------
+// J3 and J4 zonal harmonic accelerations
+// ---------------------------------------------------------------------------
+
+pub fn j3_acceleration(position: Vec3, mu: f64, equatorial_radius: f64, j3: f64) -> Option<Vec3> {
+    if !vec3_finite(position) || !finite(&[mu, equatorial_radius, j3]) || mu <= 0.0 || equatorial_radius <= 0.0 { return None; }
+    let r = vec3_to_rapier(position);
+    let radius = r.length();
+    if radius <= EPS { return None; }
+    let z_r = r.z / radius;
+    let re_r = equatorial_radius / radius;
+    let factor = 0.5 * j3 * mu * re_r.powi(4) / (radius * radius);
+    Some(Vec3 {
+        x: factor * r.x / radius * z_r * (7.5 * z_r * z_r - 1.5),
+        y: factor * r.y / radius * z_r * (7.5 * z_r * z_r - 1.5),
+        z: factor * (3.0 - z_r * z_r * 5.0 * (7.0 - 3.5 * z_r * z_r)),
+    })
+}
+
+pub fn j4_acceleration(position: Vec3, mu: f64, equatorial_radius: f64, j4: f64) -> Option<Vec3> {
+    if !vec3_finite(position) || !finite(&[mu, equatorial_radius, j4]) || mu <= 0.0 || equatorial_radius <= 0.0 { return None; }
+    let r = vec3_to_rapier(position);
+    let radius = r.length();
+    if radius <= EPS { return None; }
+    let z2_r2 = (r.z * r.z) / (radius * radius);
+    let z4_r4 = z2_r2 * z2_r2;
+    let factor = 0.625 * j4 * mu * equatorial_radius.powi(4) / radius.powi(7);
+    Some(Vec3 {
+        x: factor * r.x * (3.0 - 42.0 * z2_r2 + 63.0 * z4_r4),
+        y: factor * r.y * (3.0 - 42.0 * z2_r2 + 63.0 * z4_r4),
+        z: factor * r.z * (15.0 - 70.0 * z2_r2 + 63.0 * z4_r4),
+    })
+}
+
+pub fn j2_j3_j4_acceleration(position: Vec3, mu: f64, equatorial_radius: f64, j2: f64, j3: f64, j4: f64) -> Option<Vec3> {
+    let a_j2 = j2_acceleration(position, mu, equatorial_radius, j2)?;
+    let a_j3 = j3_acceleration(position, mu, equatorial_radius, j3)?;
+    let a_j4 = j4_acceleration(position, mu, equatorial_radius, j4)?;
+    Some(Vec3 { x: a_j2.x + a_j3.x + a_j4.x, y: a_j2.y + a_j3.y + a_j4.y, z: a_j2.z + a_j3.z + a_j4.z })
+}
+
+// ---------------------------------------------------------------------------
+// IGRF simplified tilted dipole magnetic field model
+// ---------------------------------------------------------------------------
+
+/// Simplified tilted-dipole geomagnetic field in ECEF coordinates.
+/// Returns B in Tesla. Uses IGRF-13 approximate dipole coefficients.
+pub fn igrf_tilted_dipole(position_ecef: Vec3, epoch_year: f64) -> Option<Vec3> {
+    if !vec3_finite(position_ecef) || !epoch_year.is_finite() || epoch_year < 1900.0 || epoch_year > 2100.0 { return None; }
+    let r = vec3_to_rapier(position_ecef);
+    let r_mag = r.length();
+    if r_mag < EPS { return None; }
+    let g10 = -29404.5e-9 + 10.5e-9 * (epoch_year - 2020.0);
+    let g11 = -1450.7e-9 + 7.7e-9 * (epoch_year - 2020.0);
+    let h11 = 4652.9e-9 + (-25.1e-9) * (epoch_year - 2020.0);
+    let a_e3 = 6_371_200.0_f64.powi(3);
+    let m = rapier3d::prelude::Vector::new(g11 * a_e3, h11 * a_e3, g10 * a_e3);
+    let r_hat = r / r_mag;
+    let m_dot_r = m.dot(r_hat);
+    let b = (r_hat * (3.0 * m_dot_r) - m) / (r_mag * r_mag * r_mag);
+    Some(vec3_from_rapier(b))
+}
+
+// ---------------------------------------------------------------------------
+// Lambert universal variable solver
+// ---------------------------------------------------------------------------
+
+fn stumpff_functions(z: f64) -> (f64, f64) {
+    if z > EPS { let sz = z.sqrt(); ((1.0 - sz.cos()) / z, (sz - sz.sin()) / (z * sz)) }
+    else if z < -EPS { let sz = (-z).sqrt(); ((sz.cosh() - 1.0) / (-z), (sz.sinh() - sz) / ((-z) * sz)) }
+    else { (0.5, 1.0 / 6.0) }
+}
+
+/// Lambert universal variable solver. Returns (v1, v2) velocity vectors.
+pub fn lambert_universal_variable(r1: Vec3, r2: Vec3, delta_t: f64, mu: f64, prograde: bool) -> Option<(Vec3, Vec3)> {
+    if !vec3_finite(r1) || !vec3_finite(r2) || !delta_t.is_finite() || delta_t <= 0.0 || !mu.is_finite() || mu <= 0.0 { return None; }
+    let r1v = vec3_to_rapier(r1); let r2v = vec3_to_rapier(r2);
+    let r1m = r1v.length(); let r2m = r2v.length();
+    if r1m < EPS || r2m < EPS { return None; }
+    let cos_dnu = (r1v.dot(r2v) / (r1m * r2m)).clamp(-1.0, 1.0);
+    let dnu = if prograde { cos_dnu.acos() } else { TAU - cos_dnu.acos() };
+    let a = dnu.sin() * (r1m * r2m / (1.0 - cos_dnu)).sqrt();
+    if a < EPS { return None; }
+    let c = (r1m + r2m) / 2.0;
+    let mut x = (1.0 - dnu / TAU) * PI;
+    if dnu > PI { x = -(1.0 - (TAU - dnu) / TAU) * PI; }
+    for _ in 0..50 {
+        let z = x * x / a;
+        let (c2, c3) = stumpff_functions(z);
+        let y_new = r1m + r2m + a * (z * c3 - 1.0) / c2.sqrt();
+        let x_new = (y_new / c).powf(1.5) * c2 * mu.sqrt() * delta_t / (r1m * r2m * dnu.sin()) + x;
+        if (x_new - x).abs() < 1.0e-8 { x = x_new; break; }
+        x = x_new;
+    }
+    let z = x * x / a;
+    let (c2, c3) = stumpff_functions(z);
+    let yf = r1m + r2m + a * (z * c3 - 1.0) / c2.sqrt();
+    let f = 1.0 - yf / r1m;
+    let g = a * (yf / mu).sqrt();
+    let gdot = 1.0 - yf / r2m;
+    let v1 = (r2v - r1v * f) / g;
+    let v2 = (r2v * gdot - r1v) / g;
+    Some((vec3_from_rapier(v1), vec3_from_rapier(v2)))
+}
+
+// ---------------------------------------------------------------------------
+// Plane change delta-V
+// ---------------------------------------------------------------------------
+
+pub fn plane_change_delta_v(circular_velocity: f64, inclination_change: f64) -> Option<f64> {
+    if !circular_velocity.is_finite() || circular_velocity <= 0.0 || !inclination_change.is_finite() || inclination_change < 0.0 { return None; }
+    Some(2.0 * circular_velocity * (inclination_change / 2.0).sin())
+}
+
+pub fn combined_maneuver_delta_v(mu: f64, r1: f64, r2: f64, inclination_change: f64) -> Option<(f64, f64, f64)> {
+    if !finite(&[mu, r1, r2, inclination_change]) || mu <= 0.0 || r1 <= 0.0 || r2 <= 0.0 || inclination_change < 0.0 { return None; }
+    let v1 = (mu / r1).sqrt(); let v2 = (mu / r2).sqrt();
+    let at = 0.5 * (r1 + r2);
+    let vp = (mu * (2.0 / r1 - 1.0 / at)).sqrt();
+    let va = (mu * (2.0 / r2 - 1.0 / at)).sqrt();
+    let dv1 = vp - v1;
+    let dv_plane = (va * va + v2 * v2 - 2.0 * va * v2 * inclination_change.cos()).sqrt();
+    Some((dv1, dv_plane, dv1.abs() + dv_plane))
+}
