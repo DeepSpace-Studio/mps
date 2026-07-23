@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>关节与角色控制器 — MPS</title>
+<title>鍏宠妭涓庤鑹叉帶鍒跺櫒 鈥?MPS</title>
 <link rel="stylesheet" href="../style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
@@ -12,9 +12,9 @@
 
 <body>
 <header class="site-header"><a class="brand" href="../index.html"><span class="brand-mark">MPS</span><span class="brand-caption">PHYSICS / 0.1.4</span></a>
-<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">首页</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">核心</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">物理</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">领域</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">集成</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">参考</span><span data-lang="en">REFERENCE</span></a></nav>
+<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">棣栭〉</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">鏍稿績</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">鐗╃悊</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">棰嗗煙</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">闆嗘垚</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">鍙傝€?/span><span data-lang="en">REFERENCE</span></a></nav>
 
-<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select></div>
+<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">涓枃</option><option value="en">English</option></select></div>
 </header>
 
 <main class="page-shell">
@@ -24,7 +24,7 @@
 <div class="section-kicker">/ CORE MODULE</div>
 
 <h1>
-关节与角色控制器</h1>
+鍏宠妭涓庤鑹叉帶鍒跺櫒</h1>
 </div>
 
 <div class="page-index">04</div>
@@ -32,8 +32,8 @@
 
 <div class="module-stack">
 <section class="doc-module">
-<h2>
-关节类型 (6 种)</h2>
+<h2 id="sec-5c448273"
+鍏宠妭绫诲瀷 (6 绉?</h2>
 
 <div class="table-wrap">
 <table>
@@ -41,36 +41,36 @@
 <thead>
 
 <tr>
-<th>类型</th><th>自由度</th><th>说明</th></tr>
+<th>绫诲瀷</th><th>鑷敱搴?/th><th>璇存槑</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>Fixed</td><td>0</td><td>刚性连接，无相对运动</td></tr>
+<td>Fixed</td><td>0</td><td>鍒氭€ц繛鎺ワ紝鏃犵浉瀵硅繍鍔?/td></tr>
 
 <tr>
-<td>Spherical</td><td>3 (旋转)</td><td>球窝关节</td></tr>
+<td>Spherical</td><td>3 (鏃嬭浆)</td><td>鐞冪獫鍏宠妭</td></tr>
 
 <tr>
-<td>Prismatic</td><td>1 (平移)</td><td>沿单轴滑动</td></tr>
+<td>Prismatic</td><td>1 (骞崇Щ)</td><td>娌垮崟杞存粦鍔?/td></tr>
 
 <tr>
-<td>Revolute</td><td>1 (旋转)</td><td>绕单轴铰链</td></tr>
+<td>Revolute</td><td>1 (鏃嬭浆)</td><td>缁曞崟杞撮摪閾?/td></tr>
 
 <tr>
-<td>Universal</td><td>2 (旋转)</td><td>万向节/虎克接头</td></tr>
+<td>Universal</td><td>2 (鏃嬭浆)</td><td>涓囧悜鑺?铏庡厠鎺ュご</td></tr>
 
 <tr>
-<td>Cylindrical</td><td>2 (1平+1转)</td><td>组合滑动+旋转</td></tr>
+<td>Cylindrical</td><td>2 (1骞?1杞?</td><td>缁勫悎婊戝姩+鏃嬭浆</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
-关节 API</h2>
+<h2 id="api"
+鍏宠妭 API</h2>
 
 <div class="table-wrap">
 <table>
@@ -78,33 +78,33 @@
 <thead>
 
 <tr>
-<th>C 函数</th><th>说明</th></tr>
+<th>C 鍑芥暟</th><th>璇存槑</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>joint_builder_create</td><td>创建关节构建器</td></tr>
+<td>joint_builder_create</td><td>鍒涘缓鍏宠妭鏋勫缓鍣?/td></tr>
 
 <tr>
-<td>joint_builder_set_limits</td><td>设置平移/旋转限位</td></tr>
+<td>joint_builder_set_limits</td><td>璁剧疆骞崇Щ/鏃嬭浆闄愪綅</td></tr>
 
 <tr>
-<td>joint_builder_set_motor</td><td>配置电机 (速度/位置控制)</td></tr>
+<td>joint_builder_set_motor</td><td>閰嶇疆鐢垫満 (閫熷害/浣嶇疆鎺у埗)</td></tr>
 
 <tr>
-<td>world_insert_impulse_joint</td><td>插入关节</td></tr>
+<td>world_insert_impulse_joint</td><td>鎻掑叆鍏宠妭</td></tr>
 
 <tr>
-<td>world_remove_impulse_joint</td><td>移除关节</td></tr>
+<td>world_remove_impulse_joint</td><td>绉婚櫎鍏宠妭</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
-角色控制器</h2>
+<h2 id="sec-03dd32c1"
+瑙掕壊鎺у埗鍣?/h2>
 
 <div class="table-wrap">
 <table>
@@ -112,25 +112,25 @@
 <thead>
 
 <tr>
-<th>C 函数</th><th>说明</th></tr>
+<th>C 鍑芥暟</th><th>璇存槑</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>controller_create</td><td>创建角色控制器</td></tr>
+<td>controller_create</td><td>鍒涘缓瑙掕壊鎺у埗鍣?/td></tr>
 
 <tr>
-<td>controller_set_slide_enabled</td><td>启用/禁用墙壁滑动</td></tr>
+<td>controller_set_slide_enabled</td><td>鍚敤/绂佺敤澧欏婊戝姩</td></tr>
 
 <tr>
-<td>controller_set_max_slope_climb_angle</td><td>设置最大可攀爬坡度</td></tr>
+<td>controller_set_max_slope_climb_angle</td><td>璁剧疆鏈€澶у彲鏀€鐖潯搴?/td></tr>
 
 <tr>
-<td>controller_set_snap_to_ground</td><td>启用地面对齐</td></tr>
+<td>controller_set_snap_to_ground</td><td>鍚敤鍦伴潰瀵归綈</td></tr>
 
 <tr>
-<td>controller_move_shape</td><td>移动角色，返回 EffectiveCharacterMovement</td></tr>
+<td>controller_move_shape</td><td>绉诲姩瑙掕壊锛岃繑鍥?EffectiveCharacterMovement</td></tr>
 </tbody>
 </table>
 </div>
@@ -152,7 +152,7 @@ Joints & Character Controller</h1>
 
 <div class="module-stack">
 <section class="doc-module">
-<h2>
+<h2 id="joint-types-6">
 Joint Types (6)</h2>
 
 <div class="table-wrap">
@@ -189,7 +189,7 @@ Joint Types (6)</h2>
 </section>
 
 <section class="doc-module">
-<h2>
+<h2 id="joint-api"
 Joint API</h2>
 
 <div class="table-wrap">
@@ -223,7 +223,7 @@ Joint API</h2>
 </section>
 
 <section class="doc-module">
-<h2>
+<h2 id="character-controller"
 Character Controller</h2>
 
 <div class="table-wrap">

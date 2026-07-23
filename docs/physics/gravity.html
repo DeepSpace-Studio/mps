@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>引力模型、天体参数与辛积分器 — MPS</title>
+<title>寮曞姏妯″瀷銆佸ぉ浣撳弬鏁颁笌杈涚Н鍒嗗櫒 鈥?MPS</title>
 <link rel="stylesheet" href="../style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
@@ -12,9 +12,9 @@
 
 <body>
 <header class="site-header"><a class="brand" href="../index.html"><span class="brand-mark">MPS</span><span class="brand-caption">PHYSICS / 0.1.4</span></a>
-<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">首页</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">核心</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">物理</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">领域</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">集成</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">参考</span><span data-lang="en">REFERENCE</span></a></nav>
+<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">棣栭〉</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">鏍稿績</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">鐗╃悊</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">棰嗗煙</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">闆嗘垚</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">鍙傝€?/span><span data-lang="en">REFERENCE</span></a></nav>
 
-<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select></div>
+<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">涓枃</option><option value="en">English</option></select></div>
 </header>
 
 <main class="page-shell">
@@ -24,7 +24,7 @@
 <div class="section-kicker">/ PHYSICS MODULE</div>
 
 <h1>
-引力模型、天体参数与辛积分器</h1>
+寮曞姏妯″瀷銆佸ぉ浣撳弬鏁颁笌杈涚Н鍒嗗櫒</h1>
 </div>
 
 <div class="page-index">01</div>
@@ -32,8 +32,8 @@
 
 <div class="module-stack">
 <section class="doc-module">
-<h2>
-内置天体参数</h2>
+<h2 id="sec-eb107315"
+鍐呯疆澶╀綋鍙傛暟</h2>
 
 <div class="table-wrap">
 <table>
@@ -41,47 +41,47 @@
 <thead>
 
 <tr>
-<th>ID</th><th>天体</th><th>GM (m³/s²)</th><th>赤道半径 (km)</th><th>扁率</th><th>J2</th><th>球谐阶数</th></tr>
+<th>ID</th><th>澶╀綋</th><th>GM (m鲁/s虏)</th><th>璧ら亾鍗婂緞 (km)</th><th>鎵佺巼</th><th>J2</th><th>鐞冭皭闃舵暟</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>0</td><td>Sun</td><td>1.327×10²⁰</td><td>695,700</td><td>9×10⁻⁶</td><td>2.22×10⁻⁷</td><td>2</td></tr>
+<td>0</td><td>Sun</td><td>1.327脳10虏鈦?/td><td>695,700</td><td>9脳10鈦烩伓</td><td>2.22脳10鈦烩伔</td><td>2</td></tr>
 
 <tr>
-<td>1</td><td>Mercury</td><td>2.203×10¹³</td><td>2,440</td><td>0</td><td>6.0×10⁻⁵</td><td>2</td></tr>
+<td>1</td><td>Mercury</td><td>2.203脳10鹿鲁</td><td>2,440</td><td>0</td><td>6.0脳10鈦烩伒</td><td>2</td></tr>
 
 <tr>
-<td>2</td><td>Venus</td><td>3.249×10¹⁴</td><td>6,052</td><td>0</td><td>4.46×10⁻⁶</td><td>2</td></tr>
+<td>2</td><td>Venus</td><td>3.249脳10鹿鈦?/td><td>6,052</td><td>0</td><td>4.46脳10鈦烩伓</td><td>2</td></tr>
 
 <tr>
-<td>3</td><td>Earth</td><td>3.986×10¹⁴</td><td>6,378</td><td>1/298.257</td><td>1.083×10⁻³</td><td>8 (EGM2008)</td></tr>
+<td>3</td><td>Earth</td><td>3.986脳10鹿鈦?/td><td>6,378</td><td>1/298.257</td><td>1.083脳10鈦宦?/td><td>8 (EGM2008)</td></tr>
 
 <tr>
-<td>4</td><td>Moon</td><td>4.903×10¹²</td><td>1,737</td><td>1/400</td><td>2.033×10⁻⁴</td><td>4 (LP165)</td></tr>
+<td>4</td><td>Moon</td><td>4.903脳10鹿虏</td><td>1,737</td><td>1/400</td><td>2.033脳10鈦烩伌</td><td>4 (LP165)</td></tr>
 
 <tr>
-<td>5</td><td>Mars</td><td>4.283×10¹³</td><td>3,396</td><td>1/169.8</td><td>1.960×10⁻³</td><td>3 (Mars50c)</td></tr>
+<td>5</td><td>Mars</td><td>4.283脳10鹿鲁</td><td>3,396</td><td>1/169.8</td><td>1.960脳10鈦宦?/td><td>3 (Mars50c)</td></tr>
 
 <tr>
-<td>6</td><td>Jupiter</td><td>1.267×10¹⁷</td><td>71,492</td><td>1/15.41</td><td>1.474×10⁻²</td><td>4</td></tr>
+<td>6</td><td>Jupiter</td><td>1.267脳10鹿鈦?/td><td>71,492</td><td>1/15.41</td><td>1.474脳10鈦宦?/td><td>4</td></tr>
 
 <tr>
-<td>7</td><td>Saturn</td><td>3.793×10¹⁶</td><td>60,268</td><td>1/10.21</td><td>1.629×10⁻²</td><td>4</td></tr>
+<td>7</td><td>Saturn</td><td>3.793脳10鹿鈦?/td><td>60,268</td><td>1/10.21</td><td>1.629脳10鈦宦?/td><td>4</td></tr>
 
 <tr>
-<td>8</td><td>Uranus</td><td>5.794×10¹⁵</td><td>25,559</td><td>1/43.6</td><td>3.343×10⁻³</td><td>4</td></tr>
+<td>8</td><td>Uranus</td><td>5.794脳10鹿鈦?/td><td>25,559</td><td>1/43.6</td><td>3.343脳10鈦宦?/td><td>4</td></tr>
 
 <tr>
-<td>9</td><td>Neptune</td><td>6.835×10¹⁵</td><td>24,764</td><td>1/58.5</td><td>3.408×10⁻³</td><td>4</td></tr>
+<td>9</td><td>Neptune</td><td>6.835脳10鹿鈦?/td><td>24,764</td><td>1/58.5</td><td>3.408脳10鈦宦?/td><td>4</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
+<h2 id="api"
 API</h2>
 
 <div class="table-wrap">
@@ -90,27 +90,27 @@ API</h2>
 <thead>
 
 <tr>
-<th>C 函数</th><th>说明</th></tr>
+<th>C 鍑芥暟</th><th>璇存槑</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>celestial_get_body</td><td>获取天体参数 (GM, Req, J2-J6, 扁率, 自转率)</td></tr>
+<td>celestial_get_body</td><td>鑾峰彇澶╀綋鍙傛暟 (GM, Req, J2-J6, 鎵佺巼, 鑷浆鐜?</td></tr>
 
 <tr>
-<td>celestial_get_sh_coeffs</td><td>获取球谐系数 (EGM2008 等)</td></tr>
+<td>celestial_get_sh_coeffs</td><td>鑾峰彇鐞冭皭绯绘暟 (EGM2008 绛?</td></tr>
 
 <tr>
-<td>celestial_get_sh_coeffs_count</td><td>获取系数数量</td></tr>
+<td>celestial_get_sh_coeffs_count</td><td>鑾峰彇绯绘暟鏁伴噺</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
-引力模型</h2>
+<h2 id="sec-8338265c"
+寮曞姏妯″瀷</h2>
 
 <div class="table-wrap">
 <table>
@@ -118,33 +118,33 @@ API</h2>
 <thead>
 
 <tr>
-<th>模型</th><th>精度</th><th>速度</th><th>最佳场景</th><th>C FFI</th></tr>
+<th>妯″瀷</th><th>绮惧害</th><th>閫熷害</th><th>鏈€浣冲満鏅?/th><th>C FFI</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>点质量</td><td>~1 m/s² @ 500km</td><td>最快</td><td>深空/远距离 (&gt;100R)</td><td>—</td></tr>
+<td>鐐硅川閲?/td><td>~1 m/s虏 @ 500km</td><td>鏈€蹇?/td><td>娣辩┖/杩滆窛绂?(&gt;100R)</td><td>鈥?/td></tr>
 
 <tr>
-<td>J2-J6 带谐</td><td>~0.01 m/s² @ 500km</td><td>快</td><td>中高轨道 (10R–100R)</td><td>gravity_zonal_harmonics</td></tr>
+<td>J2-J6 甯﹁皭</td><td>~0.01 m/s虏 @ 500km</td><td>蹇?/td><td>涓珮杞ㄩ亾 (10R鈥?00R)</td><td>gravity_zonal_harmonics</td></tr>
 
 <tr>
-<td>四极张量</td><td>~0.001 m/s² @ 500km</td><td>快</td><td>不规则小行星</td><td>gravity_quadrupole_tensor</td></tr>
+<td>鍥涙瀬寮犻噺</td><td>~0.001 m/s虏 @ 500km</td><td>蹇?/td><td>涓嶈鍒欏皬琛屾槦</td><td>gravity_quadrupole_tensor</td></tr>
 
 <tr>
-<td>球谐 (8×8)</td><td>~0.0001 m/s² @ 500km</td><td>中</td><td>LEO 精密轨道 (2R–10R)</td><td>gravity_spherical_harmonics</td></tr>
+<td>鐞冭皭 (8脳8)</td><td>~0.0001 m/s虏 @ 500km</td><td>涓?/td><td>LEO 绮惧瘑杞ㄩ亾 (2R鈥?0R)</td><td>gravity_spherical_harmonics</td></tr>
 
 <tr>
-<td>椭球</td><td>精确扁球体</td><td>慢</td><td>近表面 (&lt;2R)</td><td>gravity_ellipsoid</td></tr>
+<td>妞悆</td><td>绮剧‘鎵佺悆浣?/td><td>鎱?/td><td>杩戣〃闈?(&lt;2R)</td><td>gravity_ellipsoid</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
-自动模型选择</h2>
+<h2 id="sec-66a402a9"
+鑷姩妯″瀷閫夋嫨</h2>
 
 <div class="table-wrap">
 <table>
@@ -152,30 +152,30 @@ API</h2>
 <thead>
 
 <tr>
-<th>距离</th><th>有球谐系数</th><th>无球谐系数</th></tr>
+<th>璺濈</th><th>鏈夌悆璋愮郴鏁?/th><th>鏃犵悆璋愮郴鏁?/th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>&lt; 2R</td><td>椭球 + J2</td><td>椭球</td></tr>
+<td>&lt; 2R</td><td>妞悆 + J2</td><td>妞悆</td></tr>
 
 <tr>
-<td>2R – 10R</td><td>球谐展开</td><td>J2-J6 带谐</td></tr>
+<td>2R 鈥?10R</td><td>鐞冭皭灞曞紑</td><td>J2-J6 甯﹁皭</td></tr>
 
 <tr>
-<td>10R – 100R</td><td>J2 + 离心力</td><td>J2 + 离心力</td></tr>
+<td>10R 鈥?100R</td><td>J2 + 绂诲績鍔?/td><td>J2 + 绂诲績鍔?/td></tr>
 
 <tr>
-<td>&gt; 100R</td><td>点质量</td><td>点质量</td></tr>
+<td>&gt; 100R</td><td>鐐硅川閲?/td><td>鐐硅川閲?/td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
-辛积分器</h2>
+<h2 id="sec-15aa8222"
+杈涚Н鍒嗗櫒</h2>
 
 <div class="table-wrap">
 <table>
@@ -183,30 +183,30 @@ API</h2>
 <thead>
 
 <tr>
-<th>积分器</th><th>阶数</th><th>子步/Δt</th><th>能量误差/步</th><th>100年位置误差</th><th>最佳用途</th></tr>
+<th>绉垎鍣?/th><th>闃舵暟</th><th>瀛愭/螖t</th><th>鑳介噺璇樊/姝?/th><th>100骞翠綅缃宸?/th><th>鏈€浣崇敤閫?/th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>Rapier Euler</td><td>1</td><td>1</td><td>~10⁻⁵</td><td>发散 (∞)</td><td>游戏物理</td></tr>
+<td>Rapier Euler</td><td>1</td><td>1</td><td>~10鈦烩伒</td><td>鍙戞暎 (鈭?</td><td>娓告垙鐗╃悊</td></tr>
 
 <tr>
-<td>Leapfrog</td><td>2</td><td>1</td><td>~10⁻¹⁰</td><td>~1 km</td><td>通用轨道传播</td></tr>
+<td>Leapfrog</td><td>2</td><td>1</td><td>~10鈦宦光伆</td><td>~1 km</td><td>閫氱敤杞ㄩ亾浼犳挱</td></tr>
 
 <tr>
-<td>Yoshida 4</td><td>4</td><td>3</td><td>~10⁻¹⁴</td><td>~1 m</td><td>精密轨道预测</td></tr>
+<td>Yoshida 4</td><td>4</td><td>3</td><td>~10鈦宦光伌</td><td>~1 m</td><td>绮惧瘑杞ㄩ亾棰勬祴</td></tr>
 
 <tr>
-<td>Forest-Ruth 8</td><td>8</td><td>15</td><td>~10⁻¹⁶</td><td>&lt; 1 mm</td><td>深空导航</td></tr>
+<td>Forest-Ruth 8</td><td>8</td><td>15</td><td>~10鈦宦光伓</td><td>&lt; 1 mm</td><td>娣辩┖瀵艰埅</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
-积分器 API</h2>
+<h2 id="api"
+绉垎鍣?API</h2>
 
 <div class="table-wrap">
 <table>
@@ -214,37 +214,37 @@ API</h2>
 <thead>
 
 <tr>
-<th>C 函数</th><th>说明</th></tr>
+<th>C 鍑芥暟</th><th>璇存槑</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>integrator_leapfrog_step</td><td>Leapfrog 步进 (位置+速度)</td></tr>
+<td>integrator_leapfrog_step</td><td>Leapfrog 姝ヨ繘 (浣嶇疆+閫熷害)</td></tr>
 
 <tr>
-<td>integrator_leapfrog_step_kahan</td><td>Leapfrog + Kahan 补偿</td></tr>
+<td>integrator_leapfrog_step_kahan</td><td>Leapfrog + Kahan 琛ュ伩</td></tr>
 
 <tr>
-<td>integrator_yoshida4_step</td><td>Yoshida 4 阶步进</td></tr>
+<td>integrator_yoshida4_step</td><td>Yoshida 4 闃舵杩?/td></tr>
 
 <tr>
-<td>integrator_forest_ruth8_step</td><td>Forest-Ruth 8 阶步进</td></tr>
+<td>integrator_forest_ruth8_step</td><td>Forest-Ruth 8 闃舵杩?/td></tr>
 
 <tr>
-<td>integrator_post_newtonian</td><td>后牛顿修正加速度</td></tr>
+<td>integrator_post_newtonian</td><td>鍚庣墰椤夸慨姝ｅ姞閫熷害</td></tr>
 
 <tr>
-<td>integrator_specific_energy</td><td>轨道比机械能</td></tr>
+<td>integrator_specific_energy</td><td>杞ㄩ亾姣旀満姊拌兘</td></tr>
 
 <tr>
-<td>integrator_keplerian_elements</td><td>转换为开普勒轨道根数</td></tr>
+<td>integrator_keplerian_elements</td><td>杞崲涓哄紑鏅嫆杞ㄩ亾鏍规暟</td></tr>
 </tbody>
 </table>
 </div>
 
-<p>月球内置 12 个 Mascon (GRAIL 数据): Imbrium, Serenitatis, Crisium, Nectaris, Humorum, Orientale, SPA, Smythii, Fecunditatis, Tranquillitatis, Procellarum, Frigoris。</p>
-<p>后牛顿修正：<strong>1PN</strong> (水星近日点进动 ~43"/世纪)、<strong>2PN</strong> (引力波阻尼)、完整 <strong>post_newtonian_full</strong>。</p></section>
+<p>鏈堢悆鍐呯疆 12 涓?Mascon (GRAIL 鏁版嵁): Imbrium, Serenitatis, Crisium, Nectaris, Humorum, Orientale, SPA, Smythii, Fecunditatis, Tranquillitatis, Procellarum, Frigoris銆?/p>
+<p>鍚庣墰椤夸慨姝ｏ細<strong>1PN</strong> (姘存槦杩戞棩鐐硅繘鍔?~43"/涓栫邯)銆?strong>2PN</strong> (寮曞姏娉㈤樆灏?銆佸畬鏁?<strong>post_newtonian_full</strong>銆?/p></section>
 </div>
 </div>
 
@@ -262,7 +262,7 @@ Gravity Models, Celestial Data & Integrators</h1>
 
 <div class="module-stack">
 <section class="doc-module">
-<h2>
+<h2 id="built-in-celestial-bodies"
 Built-in Celestial Bodies</h2>
 
 <div class="table-wrap">
@@ -271,47 +271,47 @@ Built-in Celestial Bodies</h2>
 <thead>
 
 <tr>
-<th>ID</th><th>Body</th><th>GM (m³/s²)</th><th>Eq. Radius (km)</th><th>Flattening</th><th>J2</th><th>SH Degree</th></tr>
+<th>ID</th><th>Body</th><th>GM (m鲁/s虏)</th><th>Eq. Radius (km)</th><th>Flattening</th><th>J2</th><th>SH Degree</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>0</td><td>Sun</td><td>1.327×10²⁰</td><td>695,700</td><td>9×10⁻⁶</td><td>2.22×10⁻⁷</td><td>2</td></tr>
+<td>0</td><td>Sun</td><td>1.327脳10虏鈦?/td><td>695,700</td><td>9脳10鈦烩伓</td><td>2.22脳10鈦烩伔</td><td>2</td></tr>
 
 <tr>
-<td>1</td><td>Mercury</td><td>2.203×10¹³</td><td>2,440</td><td>0</td><td>6.0×10⁻⁵</td><td>2</td></tr>
+<td>1</td><td>Mercury</td><td>2.203脳10鹿鲁</td><td>2,440</td><td>0</td><td>6.0脳10鈦烩伒</td><td>2</td></tr>
 
 <tr>
-<td>2</td><td>Venus</td><td>3.249×10¹⁴</td><td>6,052</td><td>0</td><td>4.46×10⁻⁶</td><td>2</td></tr>
+<td>2</td><td>Venus</td><td>3.249脳10鹿鈦?/td><td>6,052</td><td>0</td><td>4.46脳10鈦烩伓</td><td>2</td></tr>
 
 <tr>
-<td>3</td><td>Earth</td><td>3.986×10¹⁴</td><td>6,378</td><td>1/298.257</td><td>1.083×10⁻³</td><td>8 (EGM2008)</td></tr>
+<td>3</td><td>Earth</td><td>3.986脳10鹿鈦?/td><td>6,378</td><td>1/298.257</td><td>1.083脳10鈦宦?/td><td>8 (EGM2008)</td></tr>
 
 <tr>
-<td>4</td><td>Moon</td><td>4.903×10¹²</td><td>1,737</td><td>1/400</td><td>2.033×10⁻⁴</td><td>4 (LP165)</td></tr>
+<td>4</td><td>Moon</td><td>4.903脳10鹿虏</td><td>1,737</td><td>1/400</td><td>2.033脳10鈦烩伌</td><td>4 (LP165)</td></tr>
 
 <tr>
-<td>5</td><td>Mars</td><td>4.283×10¹³</td><td>3,396</td><td>1/169.8</td><td>1.960×10⁻³</td><td>3 (Mars50c)</td></tr>
+<td>5</td><td>Mars</td><td>4.283脳10鹿鲁</td><td>3,396</td><td>1/169.8</td><td>1.960脳10鈦宦?/td><td>3 (Mars50c)</td></tr>
 
 <tr>
-<td>6</td><td>Jupiter</td><td>1.267×10¹⁷</td><td>71,492</td><td>1/15.41</td><td>1.474×10⁻²</td><td>4</td></tr>
+<td>6</td><td>Jupiter</td><td>1.267脳10鹿鈦?/td><td>71,492</td><td>1/15.41</td><td>1.474脳10鈦宦?/td><td>4</td></tr>
 
 <tr>
-<td>7</td><td>Saturn</td><td>3.793×10¹⁶</td><td>60,268</td><td>1/10.21</td><td>1.629×10⁻²</td><td>4</td></tr>
+<td>7</td><td>Saturn</td><td>3.793脳10鹿鈦?/td><td>60,268</td><td>1/10.21</td><td>1.629脳10鈦宦?/td><td>4</td></tr>
 
 <tr>
-<td>8</td><td>Uranus</td><td>5.794×10¹⁵</td><td>25,559</td><td>1/43.6</td><td>3.343×10⁻³</td><td>4</td></tr>
+<td>8</td><td>Uranus</td><td>5.794脳10鹿鈦?/td><td>25,559</td><td>1/43.6</td><td>3.343脳10鈦宦?/td><td>4</td></tr>
 
 <tr>
-<td>9</td><td>Neptune</td><td>6.835×10¹⁵</td><td>24,764</td><td>1/58.5</td><td>3.408×10⁻³</td><td>4</td></tr>
+<td>9</td><td>Neptune</td><td>6.835脳10鹿鈦?/td><td>24,764</td><td>1/58.5</td><td>3.408脳10鈦宦?/td><td>4</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
+<h2 id="api"
 API</h2>
 
 <div class="table-wrap">
@@ -339,7 +339,7 @@ API</h2>
 </section>
 
 <section class="doc-module">
-<h2>
+<h2 id="gravity-models"
 Gravity Models</h2>
 
 <div class="table-wrap">
@@ -354,16 +354,16 @@ Gravity Models</h2>
 <tbody>
 
 <tr>
-<td>Point Mass</td><td>~1 m/s² @ 500km</td><td>Fastest</td><td>Deep space (&gt;100R)</td><td>—</td></tr>
+<td>Point Mass</td><td>~1 m/s虏 @ 500km</td><td>Fastest</td><td>Deep space (&gt;100R)</td><td>鈥?/td></tr>
 
 <tr>
-<td>J2-J6 Zonal</td><td>~0.01 m/s² @ 500km</td><td>Fast</td><td>Mid-high orbit (10R–100R)</td><td>gravity_zonal_harmonics</td></tr>
+<td>J2-J6 Zonal</td><td>~0.01 m/s虏 @ 500km</td><td>Fast</td><td>Mid-high orbit (10R鈥?00R)</td><td>gravity_zonal_harmonics</td></tr>
 
 <tr>
-<td>Quadrupole Tensor</td><td>~0.001 m/s² @ 500km</td><td>Fast</td><td>Irregular asteroids</td><td>gravity_quadrupole_tensor</td></tr>
+<td>Quadrupole Tensor</td><td>~0.001 m/s虏 @ 500km</td><td>Fast</td><td>Irregular asteroids</td><td>gravity_quadrupole_tensor</td></tr>
 
 <tr>
-<td>SH (8×8)</td><td>~0.0001 m/s² @ 500km</td><td>Medium</td><td>LEO precision (2R–10R)</td><td>gravity_spherical_harmonics</td></tr>
+<td>SH (8脳8)</td><td>~0.0001 m/s虏 @ 500km</td><td>Medium</td><td>LEO precision (2R鈥?0R)</td><td>gravity_spherical_harmonics</td></tr>
 
 <tr>
 <td>Ellipsoid</td><td>Exact oblate</td><td>Slow</td><td>Near-surface (&lt;2R)</td><td>gravity_ellipsoid</td></tr>
@@ -373,7 +373,7 @@ Gravity Models</h2>
 </section>
 
 <section class="doc-module">
-<h2>
+<h2 id="automatic-model-selection"
 Automatic Model Selection</h2>
 
 <div class="table-wrap">
@@ -391,10 +391,10 @@ Automatic Model Selection</h2>
 <td>&lt; 2R</td><td>Ellipsoid + J2</td><td>Ellipsoid</td></tr>
 
 <tr>
-<td>2R – 10R</td><td>Spherical harmonic</td><td>J2-J6 zonal</td></tr>
+<td>2R 鈥?10R</td><td>Spherical harmonic</td><td>J2-J6 zonal</td></tr>
 
 <tr>
-<td>10R – 100R</td><td>J2 + centrifugal</td><td>J2 + centrifugal</td></tr>
+<td>10R 鈥?100R</td><td>J2 + centrifugal</td><td>J2 + centrifugal</td></tr>
 
 <tr>
 <td>&gt; 100R</td><td>Point mass</td><td>Point mass</td></tr>
@@ -404,7 +404,7 @@ Automatic Model Selection</h2>
 </section>
 
 <section class="doc-module">
-<h2>
+<h2 id="symplectic-integrators"
 Symplectic Integrators</h2>
 
 <div class="table-wrap">
@@ -413,29 +413,29 @@ Symplectic Integrators</h2>
 <thead>
 
 <tr>
-<th>Integrator</th><th>Order</th><th>Substeps/Δt</th><th>Energy Error/Step</th><th>100yr Pos Error</th><th>Best For</th></tr>
+<th>Integrator</th><th>Order</th><th>Substeps/螖t</th><th>Energy Error/Step</th><th>100yr Pos Error</th><th>Best For</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>Rapier Euler</td><td>1</td><td>1</td><td>~10⁻⁵</td><td>Diverges (∞)</td><td>Game physics</td></tr>
+<td>Rapier Euler</td><td>1</td><td>1</td><td>~10鈦烩伒</td><td>Diverges (鈭?</td><td>Game physics</td></tr>
 
 <tr>
-<td>Leapfrog</td><td>2</td><td>1</td><td>~10⁻¹⁰</td><td>~1 km</td><td>General orbit propagation</td></tr>
+<td>Leapfrog</td><td>2</td><td>1</td><td>~10鈦宦光伆</td><td>~1 km</td><td>General orbit propagation</td></tr>
 
 <tr>
-<td>Yoshida 4</td><td>4</td><td>3</td><td>~10⁻¹⁴</td><td>~1 m</td><td>Precision orbit prediction</td></tr>
+<td>Yoshida 4</td><td>4</td><td>3</td><td>~10鈦宦光伌</td><td>~1 m</td><td>Precision orbit prediction</td></tr>
 
 <tr>
-<td>Forest-Ruth 8</td><td>8</td><td>15</td><td>~10⁻¹⁶</td><td>&lt; 1 mm</td><td>Deep space navigation</td></tr>
+<td>Forest-Ruth 8</td><td>8</td><td>15</td><td>~10鈦宦光伓</td><td>&lt; 1 mm</td><td>Deep space navigation</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
+<h2 id="integrator-api"
 Integrator API</h2>
 
 <div class="table-wrap">

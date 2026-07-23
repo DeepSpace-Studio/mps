@@ -192,6 +192,46 @@ body::after {
 .language-page > header.page-masthead { margin-bottom: 42px; }
 .module-stack { display: grid; gap: 20px; }
 
+/* ─── Page TOC (vertical index) ─── */
+.page-toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -20px 0 32px;
+  padding: 14px 20px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(6, 12, 22, .5);
+}
+.page-toc-label {
+  flex: 0 0 auto;
+  padding: 3px 10px 3px 0;
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: .62rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  border-right: 1px solid var(--line);
+  margin-right: 4px;
+}
+.page-toc a {
+  flex: 0 0 auto;
+  padding: 3px 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: .7rem;
+  white-space: nowrap;
+  transition: all .2s;
+}
+.page-toc a:hover {
+  border-color: rgba(92, 212, 230, .25);
+  color: var(--cyan);
+  background: rgba(92, 212, 230, .06);
+  text-decoration: none;
+}
+
 /* ─── Doc modules ─── */
 .doc-module {
   margin: 0;

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>刚体操作 — MPS</title>
+<title>鍒氫綋鎿嶄綔 鈥?MPS</title>
 <link rel="stylesheet" href="../style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
@@ -12,9 +12,9 @@
 
 <body>
 <header class="site-header"><a class="brand" href="../index.html"><span class="brand-mark">MPS</span><span class="brand-caption">PHYSICS / 0.1.4</span></a>
-<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">首页</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">核心</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">物理</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">领域</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">集成</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">参考</span><span data-lang="en">REFERENCE</span></a></nav>
+<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">棣栭〉</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">鏍稿績</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">鐗╃悊</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">棰嗗煙</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">闆嗘垚</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">鍙傝€?/span><span data-lang="en">REFERENCE</span></a></nav>
 
-<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select></div>
+<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">涓枃</option><option value="en">English</option></select></div>
 </header>
 
 <main class="page-shell">
@@ -24,17 +24,17 @@
 <div class="section-kicker">/ CORE MODULE</div>
 
 <h1>
-刚体操作</h1>
+鍒氫綋鎿嶄綔</h1>
 
-<p>刚体是模拟中的基本动力学对象。每个刚体具有质量属性、位姿 (位置+旋转)、速度 (线速度+角速度)，可接受力和冲量。<strong>三大状态</strong>：Dynamic（受力运动）、Fixed（静止）、Kinematic（程序控制）。</p></div>
+<p>鍒氫綋鏄ā鎷熶腑鐨勫熀鏈姩鍔涘瀵硅薄銆傛瘡涓垰浣撳叿鏈夎川閲忓睘鎬с€佷綅濮?(浣嶇疆+鏃嬭浆)銆侀€熷害 (绾块€熷害+瑙掗€熷害)锛屽彲鎺ュ彈鍔涘拰鍐查噺銆?strong>涓夊ぇ鐘舵€?/strong>锛欴ynamic锛堝彈鍔涜繍鍔級銆丗ixed锛堥潤姝級銆並inematic锛堢▼搴忔帶鍒讹級銆?/p></div>
 
 <div class="page-index">02</div>
 </header>
 
 <div class="module-stack">
 <section class="doc-module">
-<h2>
-构建器 API</h2>
+<h2 id="api"
+鏋勫缓鍣?API</h2>
 
 <div class="table-wrap">
 <table>
@@ -42,54 +42,54 @@
 <thead>
 
 <tr>
-<th>C 函数</th><th>说明</th></tr>
+<th>C 鍑芥暟</th><th>璇存槑</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>rigid_body_builder_create</td><td>创建构建器 (Dynamic/Fixed/Kinematic)</td></tr>
+<td>rigid_body_builder_create</td><td>鍒涘缓鏋勫缓鍣?(Dynamic/Fixed/Kinematic)</td></tr>
 
 <tr>
-<td>rigid_body_builder_set_translation</td><td>设置初始位置</td></tr>
+<td>rigid_body_builder_set_translation</td><td>璁剧疆鍒濆浣嶇疆</td></tr>
 
 <tr>
-<td>rigid_body_builder_set_rotation</td><td>设置初始旋转 (四元数)</td></tr>
+<td>rigid_body_builder_set_rotation</td><td>璁剧疆鍒濆鏃嬭浆 (鍥涘厓鏁?</td></tr>
 
 <tr>
-<td>rigid_body_builder_set_pose</td><td>同时设置位置+旋转</td></tr>
+<td>rigid_body_builder_set_pose</td><td>鍚屾椂璁剧疆浣嶇疆+鏃嬭浆</td></tr>
 
 <tr>
-<td>rigid_body_builder_set_linvel</td><td>设置初始线速度</td></tr>
+<td>rigid_body_builder_set_linvel</td><td>璁剧疆鍒濆绾块€熷害</td></tr>
 
 <tr>
-<td>rigid_body_builder_set_angvel</td><td>设置初始角速度</td></tr>
+<td>rigid_body_builder_set_angvel</td><td>璁剧疆鍒濆瑙掗€熷害</td></tr>
 
 <tr>
-<td>rigid_body_builder_set_additional_mass</td><td>设置点质量 (kg)</td></tr>
+<td>rigid_body_builder_set_additional_mass</td><td>璁剧疆鐐硅川閲?(kg)</td></tr>
 
 <tr>
-<td>rigid_body_builder_set_additional_mass_properties</td><td>设置完整质量属性</td></tr>
+<td>rigid_body_builder_set_additional_mass_properties</td><td>璁剧疆瀹屾暣璐ㄩ噺灞炴€?/td></tr>
 
 <tr>
-<td>rigid_body_builder_set_linear_damping</td><td>设置线速度阻尼</td></tr>
+<td>rigid_body_builder_set_linear_damping</td><td>璁剧疆绾块€熷害闃诲凹</td></tr>
 
 <tr>
-<td>rigid_body_builder_set_angular_damping</td><td>设置角速度阻尼</td></tr>
+<td>rigid_body_builder_set_angular_damping</td><td>璁剧疆瑙掗€熷害闃诲凹</td></tr>
 
 <tr>
-<td>rigid_body_builder_set_ccd_enabled</td><td>启用连续碰撞检测</td></tr>
+<td>rigid_body_builder_set_ccd_enabled</td><td>鍚敤杩炵画纰版挒妫€娴?/td></tr>
 
 <tr>
-<td>rigid_body_builder_build</td><td>构建刚体</td></tr>
+<td>rigid_body_builder_build</td><td>鏋勫缓鍒氫綋</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
-世界操作</h2>
+<h2 id="sec-14427c24"
+涓栫晫鎿嶄綔</h2>
 
 <div class="table-wrap">
 <table>
@@ -97,27 +97,27 @@
 <thead>
 
 <tr>
-<th>C 函数</th><th>说明</th></tr>
+<th>C 鍑芥暟</th><th>璇存槑</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>world_insert_rigid_body</td><td>插入刚体，返回 handle</td></tr>
+<td>world_insert_rigid_body</td><td>鎻掑叆鍒氫綋锛岃繑鍥?handle</td></tr>
 
 <tr>
-<td>world_remove_rigid_body</td><td>移除刚体</td></tr>
+<td>world_remove_rigid_body</td><td>绉婚櫎鍒氫綋</td></tr>
 
 <tr>
-<td>world_copy_rigid_body</td><td>克隆已有刚体</td></tr>
+<td>world_copy_rigid_body</td><td>鍏嬮殕宸叉湁鍒氫綋</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
-读取</h2>
+<h2 id="sec-2eccbde6"
+璇诲彇</h2>
 
 <div class="table-wrap">
 <table>
@@ -125,45 +125,45 @@
 <thead>
 
 <tr>
-<th>C 函数</th><th>返回值</th></tr>
+<th>C 鍑芥暟</th><th>杩斿洖鍊?/th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>rigid_body_get_translation</td><td>Vec3 位置</td></tr>
+<td>rigid_body_get_translation</td><td>Vec3 浣嶇疆</td></tr>
 
 <tr>
-<td>rigid_body_get_rotation</td><td>Quat 旋转</td></tr>
+<td>rigid_body_get_rotation</td><td>Quat 鏃嬭浆</td></tr>
 
 <tr>
 <td>rigid_body_get_pose</td><td>Vec3 + Quat</td></tr>
 
 <tr>
-<td>rigid_body_get_linvel</td><td>Vec3 线速度</td></tr>
+<td>rigid_body_get_linvel</td><td>Vec3 绾块€熷害</td></tr>
 
 <tr>
-<td>rigid_body_get_angvel</td><td>Vec3 角速度</td></tr>
+<td>rigid_body_get_angvel</td><td>Vec3 瑙掗€熷害</td></tr>
 
 <tr>
-<td>rigid_body_get_force</td><td>Vec3 累积力</td></tr>
+<td>rigid_body_get_force</td><td>Vec3 绱Н鍔?/td></tr>
 
 <tr>
-<td>rigid_body_get_torque</td><td>Vec3 累积扭矩</td></tr>
+<td>rigid_body_get_torque</td><td>Vec3 绱Н鎵煩</td></tr>
 
 <tr>
-<td>rigid_body_get_status</td><td>BodyStatus 枚举</td></tr>
+<td>rigid_body_get_status</td><td>BodyStatus 鏋氫妇</td></tr>
 
 <tr>
-<td>rigid_body_is_sleeping</td><td>Bool 休眠标志</td></tr>
+<td>rigid_body_is_sleeping</td><td>Bool 浼戠湢鏍囧織</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
-设置</h2>
+<h2 id="sec-547876cd"
+璁剧疆</h2>
 
 <div class="table-wrap">
 <table>
@@ -171,36 +171,36 @@
 <thead>
 
 <tr>
-<th>C 函数</th><th>说明</th></tr>
+<th>C 鍑芥暟</th><th>璇存槑</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>rigid_body_set_translation</td><td>设置位置</td></tr>
+<td>rigid_body_set_translation</td><td>璁剧疆浣嶇疆</td></tr>
 
 <tr>
-<td>rigid_body_set_rotation</td><td>设置旋转</td></tr>
+<td>rigid_body_set_rotation</td><td>璁剧疆鏃嬭浆</td></tr>
 
 <tr>
-<td>rigid_body_set_pose</td><td>设置位姿</td></tr>
+<td>rigid_body_set_pose</td><td>璁剧疆浣嶅Э</td></tr>
 
 <tr>
-<td>rigid_body_set_linvel</td><td>设置线速度</td></tr>
+<td>rigid_body_set_linvel</td><td>璁剧疆绾块€熷害</td></tr>
 
 <tr>
-<td>rigid_body_set_angvel</td><td>设置角速度</td></tr>
+<td>rigid_body_set_angvel</td><td>璁剧疆瑙掗€熷害</td></tr>
 
 <tr>
-<td>rigid_body_set_status</td><td>设置刚体类型</td></tr>
+<td>rigid_body_set_status</td><td>璁剧疆鍒氫綋绫诲瀷</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
-力/冲量</h2>
+<h2 id="sec-f09b3825"
+鍔?鍐查噺</h2>
 
 <div class="table-wrap">
 <table>
@@ -208,39 +208,39 @@
 <thead>
 
 <tr>
-<th>C 函数</th><th>说明</th></tr>
+<th>C 鍑芥暟</th><th>璇存槑</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>rigid_body_add_force</td><td>在质心施加力</td></tr>
+<td>rigid_body_add_force</td><td>鍦ㄨ川蹇冩柦鍔犲姏</td></tr>
 
 <tr>
-<td>rigid_body_add_force_at_point</td><td>在世界坐标点施加力</td></tr>
+<td>rigid_body_add_force_at_point</td><td>鍦ㄤ笘鐣屽潗鏍囩偣鏂藉姞鍔?/td></tr>
 
 <tr>
-<td>rigid_body_add_torque</td><td>施加扭矩</td></tr>
+<td>rigid_body_add_torque</td><td>鏂藉姞鎵煩</td></tr>
 
 <tr>
-<td>rigid_body_reset_forces</td><td>清零累积力</td></tr>
+<td>rigid_body_reset_forces</td><td>娓呴浂绱Н鍔?/td></tr>
 
 <tr>
-<td>rigid_body_reset_torques</td><td>清零累积扭矩</td></tr>
+<td>rigid_body_reset_torques</td><td>娓呴浂绱Н鎵煩</td></tr>
 
 <tr>
-<td>rigid_body_apply_impulse</td><td>在质心施加冲量</td></tr>
+<td>rigid_body_apply_impulse</td><td>鍦ㄨ川蹇冩柦鍔犲啿閲?/td></tr>
 
 <tr>
-<td>rigid_body_apply_torque_impulse</td><td>施加角冲量</td></tr>
+<td>rigid_body_apply_torque_impulse</td><td>鏂藉姞瑙掑啿閲?/td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
-休眠管理</h2>
+<h2 id="sec-f891dc03"
+浼戠湢绠＄悊</h2>
 
 <div class="table-wrap">
 <table>
@@ -248,19 +248,19 @@
 <thead>
 
 <tr>
-<th>C 函数</th><th>说明</th></tr>
+<th>C 鍑芥暟</th><th>璇存槑</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>rigid_body_sleep</td><td>休眠刚体</td></tr>
+<td>rigid_body_sleep</td><td>浼戠湢鍒氫綋</td></tr>
 
 <tr>
-<td>rigid_body_wake_up</td><td>唤醒刚体</td></tr>
+<td>rigid_body_wake_up</td><td>鍞ら啋鍒氫綋</td></tr>
 
 <tr>
-<td>rigid_body_enable_ccd</td><td>启用/禁用 CCD</td></tr>
+<td>rigid_body_enable_ccd</td><td>鍚敤/绂佺敤 CCD</td></tr>
 </tbody>
 </table>
 </div>
@@ -283,7 +283,7 @@ Rigid Body</h1>
 
 <div class="module-stack">
 <section class="doc-module">
-<h2>
+<h2 id="builder-api"
 Builder API</h2>
 
 <div class="table-wrap">
@@ -326,7 +326,7 @@ Builder API</h2>
 </section>
 
 <section class="doc-module">
-<h2>
+<h2 id="world-operations"
 World Operations</h2>
 
 <div class="table-wrap">
@@ -354,7 +354,7 @@ World Operations</h2>
 </section>
 
 <section class="doc-module">
-<h2>
+<h2 id="getters"
 Getters</h2>
 
 <div class="table-wrap">
@@ -391,7 +391,7 @@ Getters</h2>
 </section>
 
 <section class="doc-module">
-<h2>
+<h2 id="setters"
 Setters</h2>
 
 <div class="table-wrap">
@@ -422,7 +422,7 @@ Setters</h2>
 </section>
 
 <section class="doc-module">
-<h2>
+<h2 id="force-impulse"
 Force / Impulse</h2>
 
 <div class="table-wrap">
@@ -453,7 +453,7 @@ Force / Impulse</h2>
 </section>
 
 <section class="doc-module">
-<h2>
+<h2 id="sleep-management"
 Sleep Management</h2>
 
 <div class="table-wrap">

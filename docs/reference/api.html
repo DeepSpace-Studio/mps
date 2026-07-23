@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>完整 C FFI API 表 — MPS</title>
+<title>瀹屾暣 C FFI API 琛?鈥?MPS</title>
 <link rel="stylesheet" href="../style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
@@ -12,9 +12,9 @@
 
 <body>
 <header class="site-header"><a class="brand" href="../index.html"><span class="brand-mark">MPS</span><span class="brand-caption">PHYSICS / 0.1.4</span></a>
-<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">首页</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">核心</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">物理</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">领域</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">集成</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill active" href="../reference/api.html"><span data-lang="zh">参考</span><span data-lang="en">REFERENCE</span></a></nav>
+<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">棣栭〉</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">鏍稿績</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">鐗╃悊</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">棰嗗煙</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">闆嗘垚</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill active" href="../reference/api.html"><span data-lang="zh">鍙傝€?/span><span data-lang="en">REFERENCE</span></a></nav>
 
-<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select></div>
+<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">涓枃</option><option value="en">English</option></select></div>
 </header>
 
 <main class="page-shell">
@@ -22,295 +22,294 @@
 <header class="page-masthead accent-reference">
 <div>
 <div class="section-kicker">/ REFERENCE MODULE</div>
-<h1>完整 C FFI API 表</h1>
-<p>所有 <code>pub extern "C" fn</code> 导出，按子系统分组。✅ = JNI wrapper 可用。总计约 480 个函数。</p>
+<h1>瀹屾暣 C FFI API 琛?/h1>
+<p>鎵€鏈?<code>pub extern "C" fn</code> 瀵煎嚭锛屾寜瀛愮郴缁熷垎缁勩€傗渽 = JNI wrapper 鍙敤銆傛€昏绾?480 涓嚱鏁般€?/p>
 </div>
 <div class="page-index">01</div>
 </header>
 
 <div class="module-stack">
-
 <section class="doc-module">
-<h2>🌍 世界管理 (World)</h2>
+<h2 id="world"馃實 涓栫晫绠＄悊 (World)</h2>
 <div class="table-wrap">
 <table>
-<thead><tr><th>C 函数</th><th>JNI</th><th>说明</th></tr></thead>
+<thead><tr><th>C 鍑芥暟</th><th>JNI</th><th>璇存槑</th></tr></thead>
 <tbody>
-<tr><td>world_create</td><td>✅</td><td>创建物理世界，设置重力向量</td></tr>
-<tr><td>world_destroy</td><td>✅</td><td>销毁世界及所有资源</td></tr>
-<tr><td>world_step</td><td>✅</td><td>推进模拟 (包含 ForceRegistry 调度)</td></tr>
-<tr><td>world_set_gravity</td><td>✅</td><td>设置重力</td></tr>
-<tr><td>world_get_gravity_out</td><td>✅</td><td>读取重力到出参</td></tr>
-<tr><td>world_set_integration_parameters</td><td>✅</td><td>设置 dt、求解器迭代次数、CCD 子步</td></tr>
-<tr><td>world_get_rigid_body_set_size</td><td>✅</td><td>刚体总数</td></tr>
-<tr><td>world_get_collider_set_size</td><td>✅</td><td>碰撞体总数</td></tr>
-<tr><td>world_body_snapshot</td><td>✅</td><td>批量快照所有刚体状态</td></tr>
-<tr><td>world_update_body_poses</td><td>✅</td><td>批量更新刚体位姿</td></tr>
-<tr><td>world_update_body_velocities</td><td>✅</td><td>批量更新刚体速度</td></tr>
-<tr><td>world_register_celestial_gravity</td><td>✅</td><td>注册天体引力到 ForceRegistry</td></tr>
-<tr><td>world_get_force_registry_count</td><td>✅</td><td>已注册力律数量</td></tr>
+<tr><td>world_create</td><td>鉁?/td><td>鍒涘缓鐗╃悊涓栫晫锛岃缃噸鍔涘悜閲?/td></tr>
+<tr><td>world_destroy</td><td>鉁?/td><td>閿€姣佷笘鐣屽強鎵€鏈夎祫婧?/td></tr>
+<tr><td>world_step</td><td>鉁?/td><td>鎺ㄨ繘妯℃嫙 (鍖呭惈 ForceRegistry 璋冨害)</td></tr>
+<tr><td>world_set_gravity</td><td>鉁?/td><td>璁剧疆閲嶅姏</td></tr>
+<tr><td>world_get_gravity_out</td><td>鉁?/td><td>璇诲彇閲嶅姏鍒板嚭鍙?/td></tr>
+<tr><td>world_set_integration_parameters</td><td>鉁?/td><td>璁剧疆 dt銆佹眰瑙ｅ櫒杩唬娆℃暟銆丆CD 瀛愭</td></tr>
+<tr><td>world_get_rigid_body_set_size</td><td>鉁?/td><td>鍒氫綋鎬绘暟</td></tr>
+<tr><td>world_get_collider_set_size</td><td>鉁?/td><td>纰版挒浣撴€绘暟</td></tr>
+<tr><td>world_body_snapshot</td><td>鉁?/td><td>鎵归噺蹇収鎵€鏈夊垰浣撶姸鎬?/td></tr>
+<tr><td>world_update_body_poses</td><td>鉁?/td><td>鎵归噺鏇存柊鍒氫綋浣嶅Э</td></tr>
+<tr><td>world_update_body_velocities</td><td>鉁?/td><td>鎵归噺鏇存柊鍒氫綋閫熷害</td></tr>
+<tr><td>world_register_celestial_gravity</td><td>鉁?/td><td>娉ㄥ唽澶╀綋寮曞姏鍒?ForceRegistry</td></tr>
+<tr><td>world_get_force_registry_count</td><td>鉁?/td><td>宸叉敞鍐屽姏寰嬫暟閲?/td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>🧱 刚体操作 (Rigid Body)</h2>
+<h2 id="rigid-body"馃П 鍒氫綋鎿嶄綔 (Rigid Body)</h2>
 <div class="table-wrap">
 <table>
-<thead><tr><th>C 函数</th><th>JNI</th><th>说明</th></tr></thead>
+<thead><tr><th>C 鍑芥暟</th><th>JNI</th><th>璇存槑</th></tr></thead>
 <tbody>
-<tr><td>rigid_body_builder_create</td><td>✅</td><td>创建构建器 (Dynamic/Fixed/Kinematic)</td></tr>
-<tr><td>rigid_body_builder_set_translation</td><td>✅</td><td>设置初始位置</td></tr>
-<tr><td>rigid_body_builder_set_rotation</td><td>✅</td><td>设置初始旋转 (四元数)</td></tr>
-<tr><td>rigid_body_builder_set_pose</td><td>✅</td><td>同时设置位置+旋转</td></tr>
-<tr><td>rigid_body_builder_set_linvel</td><td>✅</td><td>设置初始线速度</td></tr>
-<tr><td>rigid_body_builder_set_angvel</td><td>✅</td><td>设置初始角速度</td></tr>
-<tr><td>rigid_body_builder_set_additional_mass</td><td>✅</td><td>设置点质量 (kg)</td></tr>
-<tr><td>rigid_body_builder_set_additional_mass_properties</td><td>✅</td><td>设置完整质量属性</td></tr>
-<tr><td>rigid_body_builder_set_linear_damping</td><td>✅</td><td>设置线速度阻尼</td></tr>
-<tr><td>rigid_body_builder_set_angular_damping</td><td>✅</td><td>设置角速度阻尼</td></tr>
-<tr><td>rigid_body_builder_set_ccd_enabled</td><td>✅</td><td>启用连续碰撞检测</td></tr>
-<tr><td>rigid_body_builder_build</td><td>✅</td><td>构建刚体，返回 handle</td></tr>
-<tr><td>world_insert_rigid_body</td><td>✅</td><td>插入刚体到世界，返回 handle</td></tr>
-<tr><td>world_remove_rigid_body</td><td>✅</td><td>从世界移除刚体</td></tr>
-<tr><td>world_copy_rigid_body</td><td>✅</td><td>克隆已有刚体</td></tr>
-<tr><td>rigid_body_get_translation</td><td>✅</td><td>获取位置 (Vec3)</td></tr>
-<tr><td>rigid_body_get_rotation</td><td>✅</td><td>获取旋转 (Quat)</td></tr>
-<tr><td>rigid_body_get_pose</td><td>✅</td><td>获取位姿 (Vec3 + Quat)</td></tr>
-<tr><td>rigid_body_get_linvel</td><td>✅</td><td>获取线速度 (Vec3)</td></tr>
-<tr><td>rigid_body_get_angvel</td><td>✅</td><td>获取角速度 (Vec3)</td></tr>
-<tr><td>rigid_body_get_force</td><td>✅</td><td>获取累积力 (Vec3)</td></tr>
-<tr><td>rigid_body_get_torque</td><td>✅</td><td>获取累积扭矩 (Vec3)</td></tr>
-<tr><td>rigid_body_get_status</td><td>✅</td><td>获取 BodyStatus 枚举</td></tr>
-<tr><td>rigid_body_is_sleeping</td><td>✅</td><td>检查休眠标志</td></tr>
-<tr><td>rigid_body_set_translation</td><td>✅</td><td>设置位置</td></tr>
-<tr><td>rigid_body_set_rotation</td><td>✅</td><td>设置旋转</td></tr>
-<tr><td>rigid_body_set_pose</td><td>✅</td><td>设置位姿</td></tr>
-<tr><td>rigid_body_set_linvel</td><td>✅</td><td>设置线速度</td></tr>
-<tr><td>rigid_body_set_angvel</td><td>✅</td><td>设置角速度</td></tr>
-<tr><td>rigid_body_set_status</td><td>✅</td><td>设置刚体类型</td></tr>
-<tr><td>rigid_body_add_force</td><td>✅</td><td>在质心施加力</td></tr>
-<tr><td>rigid_body_add_force_at_point</td><td>✅</td><td>在世界坐标点施加力</td></tr>
-<tr><td>rigid_body_add_torque</td><td>✅</td><td>施加扭矩</td></tr>
-<tr><td>rigid_body_reset_forces</td><td>✅</td><td>清零累积力</td></tr>
-<tr><td>rigid_body_reset_torques</td><td>✅</td><td>清零累积扭矩</td></tr>
-<tr><td>rigid_body_apply_impulse</td><td>✅</td><td>在质心施加冲量</td></tr>
-<tr><td>rigid_body_apply_torque_impulse</td><td>✅</td><td>施加角冲量</td></tr>
-<tr><td>rigid_body_sleep</td><td>✅</td><td>休眠刚体</td></tr>
-<tr><td>rigid_body_wake_up</td><td>✅</td><td>唤醒刚体</td></tr>
-<tr><td>rigid_body_enable_ccd</td><td>✅</td><td>启用/禁用 CCD</td></tr>
+<tr><td>rigid_body_builder_create</td><td>鉁?/td><td>鍒涘缓鏋勫缓鍣?(Dynamic/Fixed/Kinematic)</td></tr>
+<tr><td>rigid_body_builder_set_translation</td><td>鉁?/td><td>璁剧疆鍒濆浣嶇疆</td></tr>
+<tr><td>rigid_body_builder_set_rotation</td><td>鉁?/td><td>璁剧疆鍒濆鏃嬭浆 (鍥涘厓鏁?</td></tr>
+<tr><td>rigid_body_builder_set_pose</td><td>鉁?/td><td>鍚屾椂璁剧疆浣嶇疆+鏃嬭浆</td></tr>
+<tr><td>rigid_body_builder_set_linvel</td><td>鉁?/td><td>璁剧疆鍒濆绾块€熷害</td></tr>
+<tr><td>rigid_body_builder_set_angvel</td><td>鉁?/td><td>璁剧疆鍒濆瑙掗€熷害</td></tr>
+<tr><td>rigid_body_builder_set_additional_mass</td><td>鉁?/td><td>璁剧疆鐐硅川閲?(kg)</td></tr>
+<tr><td>rigid_body_builder_set_additional_mass_properties</td><td>鉁?/td><td>璁剧疆瀹屾暣璐ㄩ噺灞炴€?/td></tr>
+<tr><td>rigid_body_builder_set_linear_damping</td><td>鉁?/td><td>璁剧疆绾块€熷害闃诲凹</td></tr>
+<tr><td>rigid_body_builder_set_angular_damping</td><td>鉁?/td><td>璁剧疆瑙掗€熷害闃诲凹</td></tr>
+<tr><td>rigid_body_builder_set_ccd_enabled</td><td>鉁?/td><td>鍚敤杩炵画纰版挒妫€娴?/td></tr>
+<tr><td>rigid_body_builder_build</td><td>鉁?/td><td>鏋勫缓鍒氫綋锛岃繑鍥?handle</td></tr>
+<tr><td>world_insert_rigid_body</td><td>鉁?/td><td>鎻掑叆鍒氫綋鍒颁笘鐣岋紝杩斿洖 handle</td></tr>
+<tr><td>world_remove_rigid_body</td><td>鉁?/td><td>浠庝笘鐣岀Щ闄ゅ垰浣?/td></tr>
+<tr><td>world_copy_rigid_body</td><td>鉁?/td><td>鍏嬮殕宸叉湁鍒氫綋</td></tr>
+<tr><td>rigid_body_get_translation</td><td>鉁?/td><td>鑾峰彇浣嶇疆 (Vec3)</td></tr>
+<tr><td>rigid_body_get_rotation</td><td>鉁?/td><td>鑾峰彇鏃嬭浆 (Quat)</td></tr>
+<tr><td>rigid_body_get_pose</td><td>鉁?/td><td>鑾峰彇浣嶅Э (Vec3 + Quat)</td></tr>
+<tr><td>rigid_body_get_linvel</td><td>鉁?/td><td>鑾峰彇绾块€熷害 (Vec3)</td></tr>
+<tr><td>rigid_body_get_angvel</td><td>鉁?/td><td>鑾峰彇瑙掗€熷害 (Vec3)</td></tr>
+<tr><td>rigid_body_get_force</td><td>鉁?/td><td>鑾峰彇绱Н鍔?(Vec3)</td></tr>
+<tr><td>rigid_body_get_torque</td><td>鉁?/td><td>鑾峰彇绱Н鎵煩 (Vec3)</td></tr>
+<tr><td>rigid_body_get_status</td><td>鉁?/td><td>鑾峰彇 BodyStatus 鏋氫妇</td></tr>
+<tr><td>rigid_body_is_sleeping</td><td>鉁?/td><td>妫€鏌ヤ紤鐪犳爣蹇?/td></tr>
+<tr><td>rigid_body_set_translation</td><td>鉁?/td><td>璁剧疆浣嶇疆</td></tr>
+<tr><td>rigid_body_set_rotation</td><td>鉁?/td><td>璁剧疆鏃嬭浆</td></tr>
+<tr><td>rigid_body_set_pose</td><td>鉁?/td><td>璁剧疆浣嶅Э</td></tr>
+<tr><td>rigid_body_set_linvel</td><td>鉁?/td><td>璁剧疆绾块€熷害</td></tr>
+<tr><td>rigid_body_set_angvel</td><td>鉁?/td><td>璁剧疆瑙掗€熷害</td></tr>
+<tr><td>rigid_body_set_status</td><td>鉁?/td><td>璁剧疆鍒氫綋绫诲瀷</td></tr>
+<tr><td>rigid_body_add_force</td><td>鉁?/td><td>鍦ㄨ川蹇冩柦鍔犲姏</td></tr>
+<tr><td>rigid_body_add_force_at_point</td><td>鉁?/td><td>鍦ㄤ笘鐣屽潗鏍囩偣鏂藉姞鍔?/td></tr>
+<tr><td>rigid_body_add_torque</td><td>鉁?/td><td>鏂藉姞鎵煩</td></tr>
+<tr><td>rigid_body_reset_forces</td><td>鉁?/td><td>娓呴浂绱Н鍔?/td></tr>
+<tr><td>rigid_body_reset_torques</td><td>鉁?/td><td>娓呴浂绱Н鎵煩</td></tr>
+<tr><td>rigid_body_apply_impulse</td><td>鉁?/td><td>鍦ㄨ川蹇冩柦鍔犲啿閲?/td></tr>
+<tr><td>rigid_body_apply_torque_impulse</td><td>鉁?/td><td>鏂藉姞瑙掑啿閲?/td></tr>
+<tr><td>rigid_body_sleep</td><td>鉁?/td><td>浼戠湢鍒氫綋</td></tr>
+<tr><td>rigid_body_wake_up</td><td>鉁?/td><td>鍞ら啋鍒氫綋</td></tr>
+<tr><td>rigid_body_enable_ccd</td><td>鉁?/td><td>鍚敤/绂佺敤 CCD</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>📦 碰撞体 (Collider)</h2>
+<h2 id="collider"馃摝 纰版挒浣?(Collider)</h2>
 <div class="table-wrap">
 <table>
-<thead><tr><th>C 函数</th><th>JNI</th><th>说明</th></tr></thead>
+<thead><tr><th>C 鍑芥暟</th><th>JNI</th><th>璇存槑</th></tr></thead>
 <tbody>
-<tr><td>collider_builder_create_ex</td><td>✅</td><td>球体 (半径)</td></tr>
-<tr><td>collider_builder_create_obb</td><td>✅</td><td>长方体 (半边长)</td></tr>
-<tr><td>collider_builder_create_sphere</td><td>✅</td><td>球体</td></tr>
-<tr><td>collider_builder_create_halfspace</td><td>✅</td><td>半空间 (平面)</td></tr>
-<tr><td>collider_builder_create_heightmap</td><td>✅</td><td>高度场地形</td></tr>
-<tr><td>collider_builder_create_convex_hull</td><td>✅</td><td>凸包</td></tr>
-<tr><td>collider_builder_create_point_cloud</td><td>✅</td><td>点云</td></tr>
-<tr><td>collider_builder_create_capsule</td><td>✅</td><td>胶囊体 (线段+半径)</td></tr>
-<tr><td>collider_builder_create_ssv</td><td>✅</td><td>扫掠球体 (SSV)</td></tr>
-<tr><td>collider_builder_create_ellipsoid</td><td>✅</td><td>椭球 (分段近似)</td></tr>
-<tr><td>collider_builder_create_prism</td><td>✅</td><td>正棱柱</td></tr>
-<tr><td>collider_builder_create_cylinder</td><td>✅</td><td>圆柱体</td></tr>
-<tr><td>collider_builder_create_spherical_shell</td><td>✅</td><td>球壳</td></tr>
-<tr><td>collider_builder_create_kdop</td><td>✅</td><td>离散方向多面体 (6/14/18/26-DOP)</td></tr>
-<tr><td>collider_builder_create_fdh</td><td>✅</td><td>功能方向直方图</td></tr>
-<tr><td>collider_builder_create_neural_bounds</td><td>✅</td><td>MLP 隐式曲面边界</td></tr>
-<tr><td>collider_builder_create_double_bv</td><td>✅</td><td>双重包围体</td></tr>
-<tr><td>collider_builder_create_skewed_obb</td><td>✅</td><td>倾斜包围盒</td></tr>
-<tr><td>collider_builder_create_discrete_obb</td><td>✅</td><td>离散包围盒</td></tr>
-<tr><td>collider_builder_create_fused_collapsing</td><td>✅</td><td>融合塌陷壳</td></tr>
-<tr><td>collider_builder_create_edge_bvh</td><td>✅</td><td>边 BVH</td></tr>
-<tr><td>collider_builder_create_medial_spheres</td><td>✅</td><td>中轴球近似</td></tr>
-<tr><td>collider_builder_create_voxels</td><td>✅</td><td>从缓冲区构建体素碰撞体</td></tr>
-<tr><td>collider_builder_create_voxel_aabb</td><td>✅</td><td>从 AABB 区域构建体素</td></tr>
-<tr><td>collider_builder_create_voxel_obb</td><td>✅</td><td>从 OBB 区域构建体素</td></tr>
-<tr><td>collider_builder_set_translation</td><td>✅</td><td>设置相对位置</td></tr>
-<tr><td>collider_builder_set_rotation</td><td>✅</td><td>设置相对旋转</td></tr>
-<tr><td>collider_builder_set_pose</td><td>✅</td><td>设置相对位姿</td></tr>
-<tr><td>collider_builder_set_sensor</td><td>✅</td><td>标记为传感器</td></tr>
-<tr><td>collider_builder_set_friction</td><td>✅</td><td>设置摩擦系数</td></tr>
-<tr><td>collider_builder_set_restitution</td><td>✅</td><td>设置弹性系数</td></tr>
-<tr><td>collider_builder_set_density</td><td>✅</td><td>设置密度</td></tr>
-<tr><td>collider_builder_set_collision_groups</td><td>✅</td><td>设置碰撞过滤组</td></tr>
-<tr><td>collider_builder_set_solver_groups</td><td>✅</td><td>设置求解器过滤组</td></tr>
-<tr><td>collider_builder_set_active_events</td><td>✅</td><td>设置事件标志</td></tr>
-<tr><td>collider_builder_set_active_hooks</td><td>✅</td><td>设置钩子标志</td></tr>
-<tr><td>collider_builder_set_contact_force_threshold</td><td>✅</td><td>接触力阈值</td></tr>
-<tr><td>world_insert_collider</td><td>✅</td><td>插入独立碰撞体</td></tr>
-<tr><td>world_insert_collider_with_parent</td><td>✅</td><td>插入子碰撞体 (附加到刚体)</td></tr>
-<tr><td>world_remove_collider</td><td>✅</td><td>移除碰撞体</td></tr>
-<tr><td>collider_get_translation</td><td>✅</td><td>获取世界坐标位置</td></tr>
-<tr><td>collider_get_rotation</td><td>✅</td><td>获取世界坐标旋转</td></tr>
-<tr><td>collider_is_sensor</td><td>✅</td><td>检查传感器标志</td></tr>
-<tr><td>collider_get_friction</td><td>✅</td><td>获取摩擦系数</td></tr>
-<tr><td>collider_get_restitution</td><td>✅</td><td>获取弹性系数</td></tr>
-<tr><td>collider_get_collision_groups</td><td>✅</td><td>获取碰撞组</td></tr>
-<tr><td>collider_get_density</td><td>✅</td><td>获取密度</td></tr>
-<tr><td>collider_get_shape_count</td><td>✅</td><td>获取子形状数量</td></tr>
+<tr><td>collider_builder_create_ex</td><td>鉁?/td><td>鐞冧綋 (鍗婂緞)</td></tr>
+<tr><td>collider_builder_create_obb</td><td>鉁?/td><td>闀挎柟浣?(鍗婅竟闀?</td></tr>
+<tr><td>collider_builder_create_sphere</td><td>鉁?/td><td>鐞冧綋</td></tr>
+<tr><td>collider_builder_create_halfspace</td><td>鉁?/td><td>鍗婄┖闂?(骞抽潰)</td></tr>
+<tr><td>collider_builder_create_heightmap</td><td>鉁?/td><td>楂樺害鍦哄湴褰?/td></tr>
+<tr><td>collider_builder_create_convex_hull</td><td>鉁?/td><td>鍑稿寘</td></tr>
+<tr><td>collider_builder_create_point_cloud</td><td>鉁?/td><td>鐐逛簯</td></tr>
+<tr><td>collider_builder_create_capsule</td><td>鉁?/td><td>鑳跺泭浣?(绾挎+鍗婂緞)</td></tr>
+<tr><td>collider_builder_create_ssv</td><td>鉁?/td><td>鎵帬鐞冧綋 (SSV)</td></tr>
+<tr><td>collider_builder_create_ellipsoid</td><td>鉁?/td><td>妞悆 (鍒嗘杩戜技)</td></tr>
+<tr><td>collider_builder_create_prism</td><td>鉁?/td><td>姝ｆ１鏌?/td></tr>
+<tr><td>collider_builder_create_cylinder</td><td>鉁?/td><td>鍦嗘煴浣?/td></tr>
+<tr><td>collider_builder_create_spherical_shell</td><td>鉁?/td><td>鐞冨３</td></tr>
+<tr><td>collider_builder_create_kdop</td><td>鉁?/td><td>绂绘暎鏂瑰悜澶氶潰浣?(6/14/18/26-DOP)</td></tr>
+<tr><td>collider_builder_create_fdh</td><td>鉁?/td><td>鍔熻兘鏂瑰悜鐩存柟鍥?/td></tr>
+<tr><td>collider_builder_create_neural_bounds</td><td>鉁?/td><td>MLP 闅愬紡鏇查潰杈圭晫</td></tr>
+<tr><td>collider_builder_create_double_bv</td><td>鉁?/td><td>鍙岄噸鍖呭洿浣?/td></tr>
+<tr><td>collider_builder_create_skewed_obb</td><td>鉁?/td><td>鍊炬枩鍖呭洿鐩?/td></tr>
+<tr><td>collider_builder_create_discrete_obb</td><td>鉁?/td><td>绂绘暎鍖呭洿鐩?/td></tr>
+<tr><td>collider_builder_create_fused_collapsing</td><td>鉁?/td><td>铻嶅悎濉岄櫡澹?/td></tr>
+<tr><td>collider_builder_create_edge_bvh</td><td>鉁?/td><td>杈?BVH</td></tr>
+<tr><td>collider_builder_create_medial_spheres</td><td>鉁?/td><td>涓酱鐞冭繎浼?/td></tr>
+<tr><td>collider_builder_create_voxels</td><td>鉁?/td><td>浠庣紦鍐插尯鏋勫缓浣撶礌纰版挒浣?/td></tr>
+<tr><td>collider_builder_create_voxel_aabb</td><td>鉁?/td><td>浠?AABB 鍖哄煙鏋勫缓浣撶礌</td></tr>
+<tr><td>collider_builder_create_voxel_obb</td><td>鉁?/td><td>浠?OBB 鍖哄煙鏋勫缓浣撶礌</td></tr>
+<tr><td>collider_builder_set_translation</td><td>鉁?/td><td>璁剧疆鐩稿浣嶇疆</td></tr>
+<tr><td>collider_builder_set_rotation</td><td>鉁?/td><td>璁剧疆鐩稿鏃嬭浆</td></tr>
+<tr><td>collider_builder_set_pose</td><td>鉁?/td><td>璁剧疆鐩稿浣嶅Э</td></tr>
+<tr><td>collider_builder_set_sensor</td><td>鉁?/td><td>鏍囪涓轰紶鎰熷櫒</td></tr>
+<tr><td>collider_builder_set_friction</td><td>鉁?/td><td>璁剧疆鎽╂摝绯绘暟</td></tr>
+<tr><td>collider_builder_set_restitution</td><td>鉁?/td><td>璁剧疆寮规€х郴鏁?/td></tr>
+<tr><td>collider_builder_set_density</td><td>鉁?/td><td>璁剧疆瀵嗗害</td></tr>
+<tr><td>collider_builder_set_collision_groups</td><td>鉁?/td><td>璁剧疆纰版挒杩囨护缁?/td></tr>
+<tr><td>collider_builder_set_solver_groups</td><td>鉁?/td><td>璁剧疆姹傝В鍣ㄨ繃婊ょ粍</td></tr>
+<tr><td>collider_builder_set_active_events</td><td>鉁?/td><td>璁剧疆浜嬩欢鏍囧織</td></tr>
+<tr><td>collider_builder_set_active_hooks</td><td>鉁?/td><td>璁剧疆閽╁瓙鏍囧織</td></tr>
+<tr><td>collider_builder_set_contact_force_threshold</td><td>鉁?/td><td>鎺ヨЕ鍔涢槇鍊?/td></tr>
+<tr><td>world_insert_collider</td><td>鉁?/td><td>鎻掑叆鐙珛纰版挒浣?/td></tr>
+<tr><td>world_insert_collider_with_parent</td><td>鉁?/td><td>鎻掑叆瀛愮鎾炰綋 (闄勫姞鍒板垰浣?</td></tr>
+<tr><td>world_remove_collider</td><td>鉁?/td><td>绉婚櫎纰版挒浣?/td></tr>
+<tr><td>collider_get_translation</td><td>鉁?/td><td>鑾峰彇涓栫晫鍧愭爣浣嶇疆</td></tr>
+<tr><td>collider_get_rotation</td><td>鉁?/td><td>鑾峰彇涓栫晫鍧愭爣鏃嬭浆</td></tr>
+<tr><td>collider_is_sensor</td><td>鉁?/td><td>妫€鏌ヤ紶鎰熷櫒鏍囧織</td></tr>
+<tr><td>collider_get_friction</td><td>鉁?/td><td>鑾峰彇鎽╂摝绯绘暟</td></tr>
+<tr><td>collider_get_restitution</td><td>鉁?/td><td>鑾峰彇寮规€х郴鏁?/td></tr>
+<tr><td>collider_get_collision_groups</td><td>鉁?/td><td>鑾峰彇纰版挒缁?/td></tr>
+<tr><td>collider_get_density</td><td>鉁?/td><td>鑾峰彇瀵嗗害</td></tr>
+<tr><td>collider_get_shape_count</td><td>鉁?/td><td>鑾峰彇瀛愬舰鐘舵暟閲?/td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>🔗 关节与控制器 (Joints & Controller)</h2>
+<h2 id="joints-controller"馃敆 鍏宠妭涓庢帶鍒跺櫒 (Joints & Controller)</h2>
 <div class="table-wrap">
 <table>
-<thead><tr><th>C 函数</th><th>JNI</th><th>说明</th></tr></thead>
+<thead><tr><th>C 鍑芥暟</th><th>JNI</th><th>璇存槑</th></tr></thead>
 <tbody>
-<tr><td>joint_builder_create</td><td>✅</td><td>创建关节构建器</td></tr>
-<tr><td>joint_builder_set_limits</td><td>✅</td><td>设置平移/旋转限位</td></tr>
-<tr><td>joint_builder_set_motor</td><td>✅</td><td>配置电机 (速度/位置控制)</td></tr>
-<tr><td>world_insert_impulse_joint</td><td>✅</td><td>插入关节</td></tr>
-<tr><td>world_remove_impulse_joint</td><td>✅</td><td>移除关节</td></tr>
-<tr><td>controller_create</td><td>✅</td><td>创建角色控制器</td></tr>
-<tr><td>controller_set_slide_enabled</td><td>✅</td><td>启用/禁用墙壁滑动</td></tr>
-<tr><td>controller_set_max_slope_climb_angle</td><td>✅</td><td>设置最大可攀爬坡度</td></tr>
-<tr><td>controller_set_snap_to_ground</td><td>✅</td><td>启用地面对齐</td></tr>
-<tr><td>controller_move_shape</td><td>✅</td><td>移动角色，返回 EffectiveCharacterMovement</td></tr>
+<tr><td>joint_builder_create</td><td>鉁?/td><td>鍒涘缓鍏宠妭鏋勫缓鍣?/td></tr>
+<tr><td>joint_builder_set_limits</td><td>鉁?/td><td>璁剧疆骞崇Щ/鏃嬭浆闄愪綅</td></tr>
+<tr><td>joint_builder_set_motor</td><td>鉁?/td><td>閰嶇疆鐢垫満 (閫熷害/浣嶇疆鎺у埗)</td></tr>
+<tr><td>world_insert_impulse_joint</td><td>鉁?/td><td>鎻掑叆鍏宠妭</td></tr>
+<tr><td>world_remove_impulse_joint</td><td>鉁?/td><td>绉婚櫎鍏宠妭</td></tr>
+<tr><td>controller_create</td><td>鉁?/td><td>鍒涘缓瑙掕壊鎺у埗鍣?/td></tr>
+<tr><td>controller_set_slide_enabled</td><td>鉁?/td><td>鍚敤/绂佺敤澧欏婊戝姩</td></tr>
+<tr><td>controller_set_max_slope_climb_angle</td><td>鉁?/td><td>璁剧疆鏈€澶у彲鏀€鐖潯搴?/td></tr>
+<tr><td>controller_set_snap_to_ground</td><td>鉁?/td><td>鍚敤鍦伴潰瀵归綈</td></tr>
+<tr><td>controller_move_shape</td><td>鉁?/td><td>绉诲姩瑙掕壊锛岃繑鍥?EffectiveCharacterMovement</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>🔍 空间查询 (Spatial Query)</h2>
+<h2 id="spatial-query"馃攳 绌洪棿鏌ヨ (Spatial Query)</h2>
 <div class="table-wrap">
 <table>
-<thead><tr><th>C 函数</th><th>JNI</th><th>说明</th></tr></thead>
+<thead><tr><th>C 鍑芥暟</th><th>JNI</th><th>璇存槑</th></tr></thead>
 <tbody>
-<tr><td>query_cast_ray</td><td>✅</td><td>单射线投射</td></tr>
-<tr><td>query_cast_rays</td><td>✅</td><td>多射线投射 (批量)</td></tr>
-<tr><td>query_project_point</td><td>✅</td><td>点到最近碰撞体表面投影</td></tr>
-<tr><td>query_cast_shape</td><td>✅</td><td>在场景中扫描形状</td></tr>
-<tr><td>query_intersect_point_count</td><td>✅</td><td>点-碰撞体相交数量</td></tr>
-<tr><td>query_intersect_aabb_count</td><td>✅</td><td>AABB 重叠数量</td></tr>
-<tr><td>query_intersect_aabb</td><td>✅</td><td>AABB 重叠 — 返回 handle</td></tr>
-<tr><td>query_intersect_obb_count</td><td>✅</td><td>OBB 重叠数量</td></tr>
-<tr><td>query_intersect_sphere_count</td><td>✅</td><td>球体重叠数量</td></tr>
-<tr><td>query_intersect_sphere</td><td>✅</td><td>球体重叠 — 返回 handle</td></tr>
-<tr><td>query_intersect_capsule_count_all</td><td>✅</td><td>胶囊体重叠</td></tr>
-<tr><td>query_intersect_ssv_count_all</td><td>✅</td><td>SSV 重叠</td></tr>
-<tr><td>query_intersect_cylinder_count_all</td><td>✅</td><td>圆柱体重叠</td></tr>
-<tr><td>query_intersect_ellipsoid_count_all</td><td>✅</td><td>椭球重叠</td></tr>
-<tr><td>query_intersect_prism_count_all</td><td>✅</td><td>棱柱重叠</td></tr>
-<tr><td>query_intersect_spherical_shell_count_all</td><td>✅</td><td>球壳重叠</td></tr>
-<tr><td>query_intersect_voxel_aabb_count</td><td>✅</td><td>体素 AABB 重叠数量</td></tr>
-<tr><td>query_intersect_voxel_aabb</td><td>✅</td><td>体素 AABB — 返回 handle</td></tr>
-<tr><td>query_intersect_voxel_obb_count</td><td>✅</td><td>体素 OBB 重叠数量</td></tr>
+<tr><td>query_cast_ray</td><td>鉁?/td><td>鍗曞皠绾挎姇灏?/td></tr>
+<tr><td>query_cast_rays</td><td>鉁?/td><td>澶氬皠绾挎姇灏?(鎵归噺)</td></tr>
+<tr><td>query_project_point</td><td>鉁?/td><td>鐐瑰埌鏈€杩戠鎾炰綋琛ㄩ潰鎶曞奖</td></tr>
+<tr><td>query_cast_shape</td><td>鉁?/td><td>鍦ㄥ満鏅腑鎵弿褰㈢姸</td></tr>
+<tr><td>query_intersect_point_count</td><td>鉁?/td><td>鐐?纰版挒浣撶浉浜ゆ暟閲?/td></tr>
+<tr><td>query_intersect_aabb_count</td><td>鉁?/td><td>AABB 閲嶅彔鏁伴噺</td></tr>
+<tr><td>query_intersect_aabb</td><td>鉁?/td><td>AABB 閲嶅彔 鈥?杩斿洖 handle</td></tr>
+<tr><td>query_intersect_obb_count</td><td>鉁?/td><td>OBB 閲嶅彔鏁伴噺</td></tr>
+<tr><td>query_intersect_sphere_count</td><td>鉁?/td><td>鐞冧綋閲嶅彔鏁伴噺</td></tr>
+<tr><td>query_intersect_sphere</td><td>鉁?/td><td>鐞冧綋閲嶅彔 鈥?杩斿洖 handle</td></tr>
+<tr><td>query_intersect_capsule_count_all</td><td>鉁?/td><td>鑳跺泭浣撻噸鍙?/td></tr>
+<tr><td>query_intersect_ssv_count_all</td><td>鉁?/td><td>SSV 閲嶅彔</td></tr>
+<tr><td>query_intersect_cylinder_count_all</td><td>鉁?/td><td>鍦嗘煴浣撻噸鍙?/td></tr>
+<tr><td>query_intersect_ellipsoid_count_all</td><td>鉁?/td><td>妞悆閲嶅彔</td></tr>
+<tr><td>query_intersect_prism_count_all</td><td>鉁?/td><td>妫辨煴閲嶅彔</td></tr>
+<tr><td>query_intersect_spherical_shell_count_all</td><td>鉁?/td><td>鐞冨３閲嶅彔</td></tr>
+<tr><td>query_intersect_voxel_aabb_count</td><td>鉁?/td><td>浣撶礌 AABB 閲嶅彔鏁伴噺</td></tr>
+<tr><td>query_intersect_voxel_aabb</td><td>鉁?/td><td>浣撶礌 AABB 鈥?杩斿洖 handle</td></tr>
+<tr><td>query_intersect_voxel_obb_count</td><td>鉁?/td><td>浣撶礌 OBB 閲嶅彔鏁伴噺</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>🌌 引力模型与天体 (Gravity & Celestial)</h2>
+<h2 id="gravity-celestial"馃寣 寮曞姏妯″瀷涓庡ぉ浣?(Gravity & Celestial)</h2>
 <div class="table-wrap">
 <table>
-<thead><tr><th>C 函数</th><th>JNI</th><th>说明</th></tr></thead>
+<thead><tr><th>C 鍑芥暟</th><th>JNI</th><th>璇存槑</th></tr></thead>
 <tbody>
-<tr><td>celestial_get_body</td><td>✅</td><td>获取天体参数 (GM, Req, J2-J6, 扁率, 自转率)</td></tr>
-<tr><td>celestial_get_sh_coeffs</td><td>✅</td><td>获取球谐系数 (EGM2008 等)</td></tr>
-<tr><td>celestial_get_sh_coeffs_count</td><td>✅</td><td>获取系数数量</td></tr>
-<tr><td>gravity_spherical_harmonics</td><td>✅</td><td>球谐引力加速度</td></tr>
-<tr><td>gravity_zonal_harmonics</td><td>✅</td><td>J2-J6 带谐引力加速度</td></tr>
-<tr><td>gravity_quadrupole_tensor</td><td>✅</td><td>四极张量引力加速度</td></tr>
-<tr><td>gravity_ellipsoid</td><td>✅</td><td>椭球引力加速度</td></tr>
-<tr><td>terrain_polyhedron_gravity</td><td>✅</td><td>多面体引力加速度 (Werner-Scheeres)</td></tr>
-<tr><td>terrain_gravity_dem</td><td>✅</td><td>DEM 地形引力 (直接求和)</td></tr>
-<tr><td>terrain_gravity_dem_fft</td><td>✅</td><td>DEM 地形引力 (FFT 加速)</td></tr>
-<tr><td>terrain_lunar_mascon_gravity</td><td>✅</td><td>月球 Mascon 总引力加速度</td></tr>
-<tr><td>terrain_lunar_mascon_count</td><td>✅</td><td>内置 Mascon 数量</td></tr>
-<tr><td>terrain_lunar_mascon_get</td><td>✅</td><td>按索引获取 Mascon 参数</td></tr>
+<tr><td>celestial_get_body</td><td>鉁?/td><td>鑾峰彇澶╀綋鍙傛暟 (GM, Req, J2-J6, 鎵佺巼, 鑷浆鐜?</td></tr>
+<tr><td>celestial_get_sh_coeffs</td><td>鉁?/td><td>鑾峰彇鐞冭皭绯绘暟 (EGM2008 绛?</td></tr>
+<tr><td>celestial_get_sh_coeffs_count</td><td>鉁?/td><td>鑾峰彇绯绘暟鏁伴噺</td></tr>
+<tr><td>gravity_spherical_harmonics</td><td>鉁?/td><td>鐞冭皭寮曞姏鍔犻€熷害</td></tr>
+<tr><td>gravity_zonal_harmonics</td><td>鉁?/td><td>J2-J6 甯﹁皭寮曞姏鍔犻€熷害</td></tr>
+<tr><td>gravity_quadrupole_tensor</td><td>鉁?/td><td>鍥涙瀬寮犻噺寮曞姏鍔犻€熷害</td></tr>
+<tr><td>gravity_ellipsoid</td><td>鉁?/td><td>妞悆寮曞姏鍔犻€熷害</td></tr>
+<tr><td>terrain_polyhedron_gravity</td><td>鉁?/td><td>澶氶潰浣撳紩鍔涘姞閫熷害 (Werner-Scheeres)</td></tr>
+<tr><td>terrain_gravity_dem</td><td>鉁?/td><td>DEM 鍦板舰寮曞姏 (鐩存帴姹傚拰)</td></tr>
+<tr><td>terrain_gravity_dem_fft</td><td>鉁?/td><td>DEM 鍦板舰寮曞姏 (FFT 鍔犻€?</td></tr>
+<tr><td>terrain_lunar_mascon_gravity</td><td>鉁?/td><td>鏈堢悆 Mascon 鎬诲紩鍔涘姞閫熷害</td></tr>
+<tr><td>terrain_lunar_mascon_count</td><td>鉁?/td><td>鍐呯疆 Mascon 鏁伴噺</td></tr>
+<tr><td>terrain_lunar_mascon_get</td><td>鉁?/td><td>鎸夌储寮曡幏鍙?Mascon 鍙傛暟</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>⏱ 辛积分器 (Symplectic Integrators)</h2>
+<h2 id="symplectic-integrators"鈴?杈涚Н鍒嗗櫒 (Symplectic Integrators)</h2>
 <div class="table-wrap">
 <table>
-<thead><tr><th>C 函数</th><th>JNI</th><th>说明</th></tr></thead>
+<thead><tr><th>C 鍑芥暟</th><th>JNI</th><th>璇存槑</th></tr></thead>
 <tbody>
-<tr><td>integrator_leapfrog_step</td><td>✅</td><td>Leapfrog 步进 (位置+速度)</td></tr>
-<tr><td>integrator_leapfrog_step_kahan</td><td>✅</td><td>Leapfrog + Kahan 补偿累加</td></tr>
-<tr><td>integrator_yoshida4_step</td><td>✅</td><td>Yoshida 4 阶步进</td></tr>
-<tr><td>integrator_forest_ruth8_step</td><td>✅</td><td>Forest-Ruth 8 阶步进</td></tr>
-<tr><td>integrator_post_newtonian</td><td>✅</td><td>后牛顿修正加速度 (1PN+2PN)</td></tr>
-<tr><td>integrator_specific_energy</td><td>✅</td><td>轨道比机械能</td></tr>
-<tr><td>integrator_keplerian_elements</td><td>✅</td><td>转换为开普勒轨道根数</td></tr>
+<tr><td>integrator_leapfrog_step</td><td>鉁?/td><td>Leapfrog 姝ヨ繘 (浣嶇疆+閫熷害)</td></tr>
+<tr><td>integrator_leapfrog_step_kahan</td><td>鉁?/td><td>Leapfrog + Kahan 琛ュ伩绱姞</td></tr>
+<tr><td>integrator_yoshida4_step</td><td>鉁?/td><td>Yoshida 4 闃舵杩?/td></tr>
+<tr><td>integrator_forest_ruth8_step</td><td>鉁?/td><td>Forest-Ruth 8 闃舵杩?/td></tr>
+<tr><td>integrator_post_newtonian</td><td>鉁?/td><td>鍚庣墰椤夸慨姝ｅ姞閫熷害 (1PN+2PN)</td></tr>
+<tr><td>integrator_specific_energy</td><td>鉁?/td><td>杞ㄩ亾姣旀満姊拌兘</td></tr>
+<tr><td>integrator_keplerian_elements</td><td>鉁?/td><td>杞崲涓哄紑鏅嫆杞ㄩ亾鏍规暟</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>⚡ 力系统 (Force System)</h2>
+<h2 id="force-system"鈿?鍔涚郴缁?(Force System)</h2>
 <div class="table-wrap">
 <table>
-<thead><tr><th>C 函数</th><th>JNI</th><th>说明</th></tr></thead>
+<thead><tr><th>C 鍑芥暟</th><th>JNI</th><th>璇存槑</th></tr></thead>
 <tbody>
-<tr><td>world_set_newton_gravity_law</td><td>✅</td><td>设置万有引力 (O(n²) 或 Barnes-Hut)</td></tr>
-<tr><td>world_set_air_drag_law</td><td>✅</td><td>设置空气阻力 (Stokes+湍流)</td></tr>
-<tr><td>world_set_coulomb_friction_law</td><td>✅</td><td>设置库仑摩擦 (静摩擦+动摩擦)</td></tr>
-<tr><td>world_set_external_force_law</td><td>✅</td><td>设置外部力 (浮力、电磁、弹簧等)</td></tr>
-<tr><td>world_get_custom_physics_report</td><td>✅</td><td>读取综合物理报告</td></tr>
+<tr><td>world_set_newton_gravity_law</td><td>鉁?/td><td>璁剧疆涓囨湁寮曞姏 (O(n虏) 鎴?Barnes-Hut)</td></tr>
+<tr><td>world_set_air_drag_law</td><td>鉁?/td><td>璁剧疆绌烘皵闃诲姏 (Stokes+婀嶆祦)</td></tr>
+<tr><td>world_set_coulomb_friction_law</td><td>鉁?/td><td>璁剧疆搴撲粦鎽╂摝 (闈欐懇鎿?鍔ㄦ懇鎿?</td></tr>
+<tr><td>world_set_external_force_law</td><td>鉁?/td><td>璁剧疆澶栭儴鍔?(娴姏銆佺數纾併€佸脊绨х瓑)</td></tr>
+<tr><td>world_get_custom_physics_report</td><td>鉁?/td><td>璇诲彇缁煎悎鐗╃悊鎶ュ憡</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>📡 事件系统 (Events)</h2>
+<h2 id="events"馃摗 浜嬩欢绯荤粺 (Events)</h2>
 <div class="table-wrap">
 <table>
-<thead><tr><th>C 函数</th><th>JNI</th><th>说明</th></tr></thead>
+<thead><tr><th>C 鍑芥暟</th><th>JNI</th><th>璇存槑</th></tr></thead>
 <tbody>
-<tr><td>world_clear_events</td><td>✅</td><td>清除所有待处理事件</td></tr>
-<tr><td>world_collision_event_count</td><td>✅</td><td>待处理碰撞事件数</td></tr>
-<tr><td>world_get_collision_event</td><td>✅</td><td>获取单个碰撞事件</td></tr>
-<tr><td>world_get_collision_events</td><td>✅</td><td>批量获取碰撞事件</td></tr>
-<tr><td>world_contact_force_event_count</td><td>✅</td><td>待处理接触力事件数</td></tr>
-<tr><td>world_get_contact_force_event</td><td>✅</td><td>获取单个接触力事件</td></tr>
-<tr><td>world_get_contact_force_events</td><td>✅</td><td>批量获取接触力事件</td></tr>
-<tr><td>world_init_collision_event_ring</td><td>✅</td><td>初始化碰撞事件环缓冲</td></tr>
-<tr><td>world_init_contact_force_event_ring</td><td>✅</td><td>初始化接触力事件环缓冲</td></tr>
-<tr><td>world_drain_collision_event_ring</td><td>✅</td><td>排空所有碰撞事件</td></tr>
-<tr><td>world_drain_contact_force_event_ring</td><td>✅</td><td>排空所有接触力事件</td></tr>
-<tr><td>world_collision_event_ring_len</td><td>✅</td><td>环缓冲占用</td></tr>
-<tr><td>world_collision_event_ring_stats</td><td>✅</td><td>环缓冲统计</td></tr>
-<tr><td>world_register_collision_callback</td><td>✅</td><td>注册碰撞回调 (fn + user_data)</td></tr>
-<tr><td>world_register_contact_force_callback</td><td>✅</td><td>注册接触力回调</td></tr>
-<tr><td>world_unregister_callback</td><td>✅</td><td>按 handle 注销回调</td></tr>
-<tr><td>world_set_event_dispatch_mode</td><td>✅</td><td>设置分发模式: Poll / Callback / Both</td></tr>
+<tr><td>world_clear_events</td><td>鉁?/td><td>娓呴櫎鎵€鏈夊緟澶勭悊浜嬩欢</td></tr>
+<tr><td>world_collision_event_count</td><td>鉁?/td><td>寰呭鐞嗙鎾炰簨浠舵暟</td></tr>
+<tr><td>world_get_collision_event</td><td>鉁?/td><td>鑾峰彇鍗曚釜纰版挒浜嬩欢</td></tr>
+<tr><td>world_get_collision_events</td><td>鉁?/td><td>鎵归噺鑾峰彇纰版挒浜嬩欢</td></tr>
+<tr><td>world_contact_force_event_count</td><td>鉁?/td><td>寰呭鐞嗘帴瑙﹀姏浜嬩欢鏁?/td></tr>
+<tr><td>world_get_contact_force_event</td><td>鉁?/td><td>鑾峰彇鍗曚釜鎺ヨЕ鍔涗簨浠?/td></tr>
+<tr><td>world_get_contact_force_events</td><td>鉁?/td><td>鎵归噺鑾峰彇鎺ヨЕ鍔涗簨浠?/td></tr>
+<tr><td>world_init_collision_event_ring</td><td>鉁?/td><td>鍒濆鍖栫鎾炰簨浠剁幆缂撳啿</td></tr>
+<tr><td>world_init_contact_force_event_ring</td><td>鉁?/td><td>鍒濆鍖栨帴瑙﹀姏浜嬩欢鐜紦鍐?/td></tr>
+<tr><td>world_drain_collision_event_ring</td><td>鉁?/td><td>鎺掔┖鎵€鏈夌鎾炰簨浠?/td></tr>
+<tr><td>world_drain_contact_force_event_ring</td><td>鉁?/td><td>鎺掔┖鎵€鏈夋帴瑙﹀姏浜嬩欢</td></tr>
+<tr><td>world_collision_event_ring_len</td><td>鉁?/td><td>鐜紦鍐插崰鐢?/td></tr>
+<tr><td>world_collision_event_ring_stats</td><td>鉁?/td><td>鐜紦鍐茬粺璁?/td></tr>
+<tr><td>world_register_collision_callback</td><td>鉁?/td><td>娉ㄥ唽纰版挒鍥炶皟 (fn + user_data)</td></tr>
+<tr><td>world_register_contact_force_callback</td><td>鉁?/td><td>娉ㄥ唽鎺ヨЕ鍔涘洖璋?/td></tr>
+<tr><td>world_unregister_callback</td><td>鉁?/td><td>鎸?handle 娉ㄩ攢鍥炶皟</td></tr>
+<tr><td>world_set_event_dispatch_mode</td><td>鉁?/td><td>璁剧疆鍒嗗彂妯″紡: Poll / Callback / Both</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>💾 共享内存 Arena</h2>
+<h2 id="arena"馃捑 鍏变韩鍐呭瓨 Arena</h2>
 <div class="table-wrap">
 <table>
-<thead><tr><th>C 函数</th><th>JNI</th><th>说明</th></tr></thead>
+<thead><tr><th>C 鍑芥暟</th><th>JNI</th><th>璇存槑</th></tr></thead>
 <tbody>
-<tr><td>world_create_shared_arena</td><td>✅</td><td>创建共享内存 Arena</td></tr>
-<tr><td>world_destroy_shared_arena</td><td>✅</td><td>销毁 Arena</td></tr>
-<tr><td>world_get_arena_direct_buffer</td><td>✅</td><td>获取 DirectByteBuffer 包装</td></tr>
-<tr><td>world_reset_shared_arena_events</td><td>✅</td><td>清空事件环</td></tr>
+<tr><td>world_create_shared_arena</td><td>鉁?/td><td>鍒涘缓鍏变韩鍐呭瓨 Arena</td></tr>
+<tr><td>world_destroy_shared_arena</td><td>鉁?/td><td>閿€姣?Arena</td></tr>
+<tr><td>world_get_arena_direct_buffer</td><td>鉁?/td><td>鑾峰彇 DirectByteBuffer 鍖呰</td></tr>
+<tr><td>world_reset_shared_arena_events</td><td>鉁?/td><td>娓呯┖浜嬩欢鐜?/td></tr>
 </tbody>
 </table>
 </div>
@@ -324,294 +323,293 @@
 <div>
 <div class="section-kicker">/ REFERENCE MODULE</div>
 <h1>Full C FFI API Table</h1>
-<p>All <code>pub extern "C" fn</code> exports grouped by subsystem. ✅ = JNI wrapper available. ~480 functions total.</p>
+<p>All <code>pub extern "C" fn</code> exports grouped by subsystem. 鉁?= JNI wrapper available. ~480 functions total.</p>
 </div>
 <div class="page-index">01</div>
 </header>
 
 <div class="module-stack">
-
 <section class="doc-module">
-<h2>🌍 World Management</h2>
+<h2 id="world-management"馃實 World Management</h2>
 <div class="table-wrap">
 <table>
 <thead><tr><th>C Function</th><th>JNI</th><th>Description</th></tr></thead>
 <tbody>
-<tr><td>world_create</td><td>✅</td><td>Create physics world with gravity vector</td></tr>
-<tr><td>world_destroy</td><td>✅</td><td>Destroy world and all resources</td></tr>
-<tr><td>world_step</td><td>✅</td><td>Advance simulation (includes ForceRegistry)</td></tr>
-<tr><td>world_set_gravity</td><td>✅</td><td>Set gravity vector</td></tr>
-<tr><td>world_get_gravity_out</td><td>✅</td><td>Read gravity into output param</td></tr>
-<tr><td>world_set_integration_parameters</td><td>✅</td><td>Set dt, solver iterations, CCD substeps</td></tr>
-<tr><td>world_get_rigid_body_set_size</td><td>✅</td><td>Total rigid body count</td></tr>
-<tr><td>world_get_collider_set_size</td><td>✅</td><td>Total collider count</td></tr>
-<tr><td>world_body_snapshot</td><td>✅</td><td>Batch snapshot all body states</td></tr>
-<tr><td>world_update_body_poses</td><td>✅</td><td>Batch update body poses</td></tr>
-<tr><td>world_update_body_velocities</td><td>✅</td><td>Batch update body velocities</td></tr>
-<tr><td>world_register_celestial_gravity</td><td>✅</td><td>Register celestial gravity to ForceRegistry</td></tr>
-<tr><td>world_get_force_registry_count</td><td>✅</td><td>Registered force law count</td></tr>
+<tr><td>world_create</td><td>鉁?/td><td>Create physics world with gravity vector</td></tr>
+<tr><td>world_destroy</td><td>鉁?/td><td>Destroy world and all resources</td></tr>
+<tr><td>world_step</td><td>鉁?/td><td>Advance simulation (includes ForceRegistry)</td></tr>
+<tr><td>world_set_gravity</td><td>鉁?/td><td>Set gravity vector</td></tr>
+<tr><td>world_get_gravity_out</td><td>鉁?/td><td>Read gravity into output param</td></tr>
+<tr><td>world_set_integration_parameters</td><td>鉁?/td><td>Set dt, solver iterations, CCD substeps</td></tr>
+<tr><td>world_get_rigid_body_set_size</td><td>鉁?/td><td>Total rigid body count</td></tr>
+<tr><td>world_get_collider_set_size</td><td>鉁?/td><td>Total collider count</td></tr>
+<tr><td>world_body_snapshot</td><td>鉁?/td><td>Batch snapshot all body states</td></tr>
+<tr><td>world_update_body_poses</td><td>鉁?/td><td>Batch update body poses</td></tr>
+<tr><td>world_update_body_velocities</td><td>鉁?/td><td>Batch update body velocities</td></tr>
+<tr><td>world_register_celestial_gravity</td><td>鉁?/td><td>Register celestial gravity to ForceRegistry</td></tr>
+<tr><td>world_get_force_registry_count</td><td>鉁?/td><td>Registered force law count</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>🧱 Rigid Body</h2>
+<h2 id="rigid-body"馃П Rigid Body</h2>
 <div class="table-wrap">
 <table>
 <thead><tr><th>C Function</th><th>JNI</th><th>Description</th></tr></thead>
 <tbody>
-<tr><td>rigid_body_builder_create</td><td>✅</td><td>Create builder (Dynamic/Fixed/Kinematic)</td></tr>
-<tr><td>rigid_body_builder_set_translation</td><td>✅</td><td>Set initial position</td></tr>
-<tr><td>rigid_body_builder_set_rotation</td><td>✅</td><td>Set initial rotation (quaternion)</td></tr>
-<tr><td>rigid_body_builder_set_pose</td><td>✅</td><td>Set position + rotation at once</td></tr>
-<tr><td>rigid_body_builder_set_linvel</td><td>✅</td><td>Set initial linear velocity</td></tr>
-<tr><td>rigid_body_builder_set_angvel</td><td>✅</td><td>Set initial angular velocity</td></tr>
-<tr><td>rigid_body_builder_set_additional_mass</td><td>✅</td><td>Set point mass (kg)</td></tr>
-<tr><td>rigid_body_builder_set_additional_mass_properties</td><td>✅</td><td>Set full mass properties</td></tr>
-<tr><td>rigid_body_builder_set_linear_damping</td><td>✅</td><td>Set linear damping</td></tr>
-<tr><td>rigid_body_builder_set_angular_damping</td><td>✅</td><td>Set angular damping</td></tr>
-<tr><td>rigid_body_builder_set_ccd_enabled</td><td>✅</td><td>Enable continuous collision detection</td></tr>
-<tr><td>rigid_body_builder_build</td><td>✅</td><td>Build body, return handle</td></tr>
-<tr><td>world_insert_rigid_body</td><td>✅</td><td>Insert body into world</td></tr>
-<tr><td>world_remove_rigid_body</td><td>✅</td><td>Remove body from world</td></tr>
-<tr><td>world_copy_rigid_body</td><td>✅</td><td>Clone existing body</td></tr>
-<tr><td>rigid_body_get_translation</td><td>✅</td><td>Get position (Vec3)</td></tr>
-<tr><td>rigid_body_get_rotation</td><td>✅</td><td>Get rotation (Quat)</td></tr>
-<tr><td>rigid_body_get_pose</td><td>✅</td><td>Get pose (Vec3 + Quat)</td></tr>
-<tr><td>rigid_body_get_linvel</td><td>✅</td><td>Get linear velocity (Vec3)</td></tr>
-<tr><td>rigid_body_get_angvel</td><td>✅</td><td>Get angular velocity (Vec3)</td></tr>
-<tr><td>rigid_body_get_force</td><td>✅</td><td>Get accumulated force (Vec3)</td></tr>
-<tr><td>rigid_body_get_torque</td><td>✅</td><td>Get accumulated torque (Vec3)</td></tr>
-<tr><td>rigid_body_get_status</td><td>✅</td><td>Get BodyStatus enum</td></tr>
-<tr><td>rigid_body_is_sleeping</td><td>✅</td><td>Check sleeping flag</td></tr>
-<tr><td>rigid_body_set_translation</td><td>✅</td><td>Set position</td></tr>
-<tr><td>rigid_body_set_rotation</td><td>✅</td><td>Set rotation</td></tr>
-<tr><td>rigid_body_set_pose</td><td>✅</td><td>Set pose</td></tr>
-<tr><td>rigid_body_set_linvel</td><td>✅</td><td>Set linear velocity</td></tr>
-<tr><td>rigid_body_set_angvel</td><td>✅</td><td>Set angular velocity</td></tr>
-<tr><td>rigid_body_set_status</td><td>✅</td><td>Set body type</td></tr>
-<tr><td>rigid_body_add_force</td><td>✅</td><td>Add force at COM</td></tr>
-<tr><td>rigid_body_add_force_at_point</td><td>✅</td><td>Add force at world-space point</td></tr>
-<tr><td>rigid_body_add_torque</td><td>✅</td><td>Add torque</td></tr>
-<tr><td>rigid_body_reset_forces</td><td>✅</td><td>Clear accumulated forces</td></tr>
-<tr><td>rigid_body_reset_torques</td><td>✅</td><td>Clear accumulated torques</td></tr>
-<tr><td>rigid_body_apply_impulse</td><td>✅</td><td>Apply impulse at COM</td></tr>
-<tr><td>rigid_body_apply_torque_impulse</td><td>✅</td><td>Apply torque impulse</td></tr>
-<tr><td>rigid_body_sleep</td><td>✅</td><td>Put body to sleep</td></tr>
-<tr><td>rigid_body_wake_up</td><td>✅</td><td>Wake body up</td></tr>
-<tr><td>rigid_body_enable_ccd</td><td>✅</td><td>Enable/disable CCD</td></tr>
+<tr><td>rigid_body_builder_create</td><td>鉁?/td><td>Create builder (Dynamic/Fixed/Kinematic)</td></tr>
+<tr><td>rigid_body_builder_set_translation</td><td>鉁?/td><td>Set initial position</td></tr>
+<tr><td>rigid_body_builder_set_rotation</td><td>鉁?/td><td>Set initial rotation (quaternion)</td></tr>
+<tr><td>rigid_body_builder_set_pose</td><td>鉁?/td><td>Set position + rotation at once</td></tr>
+<tr><td>rigid_body_builder_set_linvel</td><td>鉁?/td><td>Set initial linear velocity</td></tr>
+<tr><td>rigid_body_builder_set_angvel</td><td>鉁?/td><td>Set initial angular velocity</td></tr>
+<tr><td>rigid_body_builder_set_additional_mass</td><td>鉁?/td><td>Set point mass (kg)</td></tr>
+<tr><td>rigid_body_builder_set_additional_mass_properties</td><td>鉁?/td><td>Set full mass properties</td></tr>
+<tr><td>rigid_body_builder_set_linear_damping</td><td>鉁?/td><td>Set linear damping</td></tr>
+<tr><td>rigid_body_builder_set_angular_damping</td><td>鉁?/td><td>Set angular damping</td></tr>
+<tr><td>rigid_body_builder_set_ccd_enabled</td><td>鉁?/td><td>Enable continuous collision detection</td></tr>
+<tr><td>rigid_body_builder_build</td><td>鉁?/td><td>Build body, return handle</td></tr>
+<tr><td>world_insert_rigid_body</td><td>鉁?/td><td>Insert body into world</td></tr>
+<tr><td>world_remove_rigid_body</td><td>鉁?/td><td>Remove body from world</td></tr>
+<tr><td>world_copy_rigid_body</td><td>鉁?/td><td>Clone existing body</td></tr>
+<tr><td>rigid_body_get_translation</td><td>鉁?/td><td>Get position (Vec3)</td></tr>
+<tr><td>rigid_body_get_rotation</td><td>鉁?/td><td>Get rotation (Quat)</td></tr>
+<tr><td>rigid_body_get_pose</td><td>鉁?/td><td>Get pose (Vec3 + Quat)</td></tr>
+<tr><td>rigid_body_get_linvel</td><td>鉁?/td><td>Get linear velocity (Vec3)</td></tr>
+<tr><td>rigid_body_get_angvel</td><td>鉁?/td><td>Get angular velocity (Vec3)</td></tr>
+<tr><td>rigid_body_get_force</td><td>鉁?/td><td>Get accumulated force (Vec3)</td></tr>
+<tr><td>rigid_body_get_torque</td><td>鉁?/td><td>Get accumulated torque (Vec3)</td></tr>
+<tr><td>rigid_body_get_status</td><td>鉁?/td><td>Get BodyStatus enum</td></tr>
+<tr><td>rigid_body_is_sleeping</td><td>鉁?/td><td>Check sleeping flag</td></tr>
+<tr><td>rigid_body_set_translation</td><td>鉁?/td><td>Set position</td></tr>
+<tr><td>rigid_body_set_rotation</td><td>鉁?/td><td>Set rotation</td></tr>
+<tr><td>rigid_body_set_pose</td><td>鉁?/td><td>Set pose</td></tr>
+<tr><td>rigid_body_set_linvel</td><td>鉁?/td><td>Set linear velocity</td></tr>
+<tr><td>rigid_body_set_angvel</td><td>鉁?/td><td>Set angular velocity</td></tr>
+<tr><td>rigid_body_set_status</td><td>鉁?/td><td>Set body type</td></tr>
+<tr><td>rigid_body_add_force</td><td>鉁?/td><td>Add force at COM</td></tr>
+<tr><td>rigid_body_add_force_at_point</td><td>鉁?/td><td>Add force at world-space point</td></tr>
+<tr><td>rigid_body_add_torque</td><td>鉁?/td><td>Add torque</td></tr>
+<tr><td>rigid_body_reset_forces</td><td>鉁?/td><td>Clear accumulated forces</td></tr>
+<tr><td>rigid_body_reset_torques</td><td>鉁?/td><td>Clear accumulated torques</td></tr>
+<tr><td>rigid_body_apply_impulse</td><td>鉁?/td><td>Apply impulse at COM</td></tr>
+<tr><td>rigid_body_apply_torque_impulse</td><td>鉁?/td><td>Apply torque impulse</td></tr>
+<tr><td>rigid_body_sleep</td><td>鉁?/td><td>Put body to sleep</td></tr>
+<tr><td>rigid_body_wake_up</td><td>鉁?/td><td>Wake body up</td></tr>
+<tr><td>rigid_body_enable_ccd</td><td>鉁?/td><td>Enable/disable CCD</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>📦 Collider</h2>
+<h2 id="collider"馃摝 Collider</h2>
 <div class="table-wrap">
 <table>
 <thead><tr><th>C Function</th><th>JNI</th><th>Description</th></tr></thead>
 <tbody>
-<tr><td>collider_builder_create_ex</td><td>✅</td><td>Ball (radius)</td></tr>
-<tr><td>collider_builder_create_obb</td><td>✅</td><td>Cuboid (half-extents)</td></tr>
-<tr><td>collider_builder_create_sphere</td><td>✅</td><td>Sphere</td></tr>
-<tr><td>collider_builder_create_halfspace</td><td>✅</td><td>Half-space (plane)</td></tr>
-<tr><td>collider_builder_create_heightmap</td><td>✅</td><td>Heightfield terrain</td></tr>
-<tr><td>collider_builder_create_convex_hull</td><td>✅</td><td>Convex hull</td></tr>
-<tr><td>collider_builder_create_point_cloud</td><td>✅</td><td>Point cloud</td></tr>
-<tr><td>collider_builder_create_capsule</td><td>✅</td><td>Capsule (segment + radius)</td></tr>
-<tr><td>collider_builder_create_ssv</td><td>✅</td><td>Swept sphere volume</td></tr>
-<tr><td>collider_builder_create_ellipsoid</td><td>✅</td><td>Ellipsoid (piecewise approx)</td></tr>
-<tr><td>collider_builder_create_prism</td><td>✅</td><td>Regular prism</td></tr>
-<tr><td>collider_builder_create_cylinder</td><td>✅</td><td>Cylinder</td></tr>
-<tr><td>collider_builder_create_spherical_shell</td><td>✅</td><td>Spherical shell</td></tr>
-<tr><td>collider_builder_create_kdop</td><td>✅</td><td>k-DOP (6/14/18/26-DOP)</td></tr>
-<tr><td>collider_builder_create_fdh</td><td>✅</td><td>Functional direction histogram</td></tr>
-<tr><td>collider_builder_create_neural_bounds</td><td>✅</td><td>MLP implicit surface bounds</td></tr>
-<tr><td>collider_builder_create_double_bv</td><td>✅</td><td>Double bounding volume</td></tr>
-<tr><td>collider_builder_create_skewed_obb</td><td>✅</td><td>Skewed bounding box</td></tr>
-<tr><td>collider_builder_create_discrete_obb</td><td>✅</td><td>Discrete oriented bounding box</td></tr>
-<tr><td>collider_builder_create_fused_collapsing</td><td>✅</td><td>Fused collapsing shell</td></tr>
-<tr><td>collider_builder_create_edge_bvh</td><td>✅</td><td>Edge BVH</td></tr>
-<tr><td>collider_builder_create_medial_spheres</td><td>✅</td><td>Medial axis sphere approximation</td></tr>
-<tr><td>collider_builder_create_voxels</td><td>✅</td><td>Build voxel collider from buffer</td></tr>
-<tr><td>collider_builder_create_voxel_aabb</td><td>✅</td><td>Build voxel from AABB region</td></tr>
-<tr><td>collider_builder_create_voxel_obb</td><td>✅</td><td>Build voxel from OBB region</td></tr>
-<tr><td>collider_builder_set_translation</td><td>✅</td><td>Set relative position</td></tr>
-<tr><td>collider_builder_set_rotation</td><td>✅</td><td>Set relative rotation</td></tr>
-<tr><td>collider_builder_set_pose</td><td>✅</td><td>Set relative pose</td></tr>
-<tr><td>collider_builder_set_sensor</td><td>✅</td><td>Mark as sensor</td></tr>
-<tr><td>collider_builder_set_friction</td><td>✅</td><td>Set friction coefficient</td></tr>
-<tr><td>collider_builder_set_restitution</td><td>✅</td><td>Set restitution</td></tr>
-<tr><td>collider_builder_set_density</td><td>✅</td><td>Set density</td></tr>
-<tr><td>collider_builder_set_collision_groups</td><td>✅</td><td>Set collision filter groups</td></tr>
-<tr><td>collider_builder_set_solver_groups</td><td>✅</td><td>Set solver filter groups</td></tr>
-<tr><td>collider_builder_set_active_events</td><td>✅</td><td>Set event flags</td></tr>
-<tr><td>collider_builder_set_active_hooks</td><td>✅</td><td>Set hook flags</td></tr>
-<tr><td>collider_builder_set_contact_force_threshold</td><td>✅</td><td>Contact force threshold</td></tr>
-<tr><td>world_insert_collider</td><td>✅</td><td>Insert independent collider</td></tr>
-<tr><td>world_insert_collider_with_parent</td><td>✅</td><td>Insert child collider (attached to body)</td></tr>
-<tr><td>world_remove_collider</td><td>✅</td><td>Remove collider</td></tr>
-<tr><td>collider_get_translation</td><td>✅</td><td>Get world-space position</td></tr>
-<tr><td>collider_get_rotation</td><td>✅</td><td>Get world-space rotation</td></tr>
-<tr><td>collider_is_sensor</td><td>✅</td><td>Check sensor flag</td></tr>
-<tr><td>collider_get_friction</td><td>✅</td><td>Get friction</td></tr>
-<tr><td>collider_get_restitution</td><td>✅</td><td>Get restitution</td></tr>
-<tr><td>collider_get_collision_groups</td><td>✅</td><td>Get collision groups</td></tr>
-<tr><td>collider_get_density</td><td>✅</td><td>Get density</td></tr>
-<tr><td>collider_get_shape_count</td><td>✅</td><td>Get sub-shape count</td></tr>
+<tr><td>collider_builder_create_ex</td><td>鉁?/td><td>Ball (radius)</td></tr>
+<tr><td>collider_builder_create_obb</td><td>鉁?/td><td>Cuboid (half-extents)</td></tr>
+<tr><td>collider_builder_create_sphere</td><td>鉁?/td><td>Sphere</td></tr>
+<tr><td>collider_builder_create_halfspace</td><td>鉁?/td><td>Half-space (plane)</td></tr>
+<tr><td>collider_builder_create_heightmap</td><td>鉁?/td><td>Heightfield terrain</td></tr>
+<tr><td>collider_builder_create_convex_hull</td><td>鉁?/td><td>Convex hull</td></tr>
+<tr><td>collider_builder_create_point_cloud</td><td>鉁?/td><td>Point cloud</td></tr>
+<tr><td>collider_builder_create_capsule</td><td>鉁?/td><td>Capsule (segment + radius)</td></tr>
+<tr><td>collider_builder_create_ssv</td><td>鉁?/td><td>Swept sphere volume</td></tr>
+<tr><td>collider_builder_create_ellipsoid</td><td>鉁?/td><td>Ellipsoid (piecewise approx)</td></tr>
+<tr><td>collider_builder_create_prism</td><td>鉁?/td><td>Regular prism</td></tr>
+<tr><td>collider_builder_create_cylinder</td><td>鉁?/td><td>Cylinder</td></tr>
+<tr><td>collider_builder_create_spherical_shell</td><td>鉁?/td><td>Spherical shell</td></tr>
+<tr><td>collider_builder_create_kdop</td><td>鉁?/td><td>k-DOP (6/14/18/26-DOP)</td></tr>
+<tr><td>collider_builder_create_fdh</td><td>鉁?/td><td>Functional direction histogram</td></tr>
+<tr><td>collider_builder_create_neural_bounds</td><td>鉁?/td><td>MLP implicit surface bounds</td></tr>
+<tr><td>collider_builder_create_double_bv</td><td>鉁?/td><td>Double bounding volume</td></tr>
+<tr><td>collider_builder_create_skewed_obb</td><td>鉁?/td><td>Skewed bounding box</td></tr>
+<tr><td>collider_builder_create_discrete_obb</td><td>鉁?/td><td>Discrete oriented bounding box</td></tr>
+<tr><td>collider_builder_create_fused_collapsing</td><td>鉁?/td><td>Fused collapsing shell</td></tr>
+<tr><td>collider_builder_create_edge_bvh</td><td>鉁?/td><td>Edge BVH</td></tr>
+<tr><td>collider_builder_create_medial_spheres</td><td>鉁?/td><td>Medial axis sphere approximation</td></tr>
+<tr><td>collider_builder_create_voxels</td><td>鉁?/td><td>Build voxel collider from buffer</td></tr>
+<tr><td>collider_builder_create_voxel_aabb</td><td>鉁?/td><td>Build voxel from AABB region</td></tr>
+<tr><td>collider_builder_create_voxel_obb</td><td>鉁?/td><td>Build voxel from OBB region</td></tr>
+<tr><td>collider_builder_set_translation</td><td>鉁?/td><td>Set relative position</td></tr>
+<tr><td>collider_builder_set_rotation</td><td>鉁?/td><td>Set relative rotation</td></tr>
+<tr><td>collider_builder_set_pose</td><td>鉁?/td><td>Set relative pose</td></tr>
+<tr><td>collider_builder_set_sensor</td><td>鉁?/td><td>Mark as sensor</td></tr>
+<tr><td>collider_builder_set_friction</td><td>鉁?/td><td>Set friction coefficient</td></tr>
+<tr><td>collider_builder_set_restitution</td><td>鉁?/td><td>Set restitution</td></tr>
+<tr><td>collider_builder_set_density</td><td>鉁?/td><td>Set density</td></tr>
+<tr><td>collider_builder_set_collision_groups</td><td>鉁?/td><td>Set collision filter groups</td></tr>
+<tr><td>collider_builder_set_solver_groups</td><td>鉁?/td><td>Set solver filter groups</td></tr>
+<tr><td>collider_builder_set_active_events</td><td>鉁?/td><td>Set event flags</td></tr>
+<tr><td>collider_builder_set_active_hooks</td><td>鉁?/td><td>Set hook flags</td></tr>
+<tr><td>collider_builder_set_contact_force_threshold</td><td>鉁?/td><td>Contact force threshold</td></tr>
+<tr><td>world_insert_collider</td><td>鉁?/td><td>Insert independent collider</td></tr>
+<tr><td>world_insert_collider_with_parent</td><td>鉁?/td><td>Insert child collider (attached to body)</td></tr>
+<tr><td>world_remove_collider</td><td>鉁?/td><td>Remove collider</td></tr>
+<tr><td>collider_get_translation</td><td>鉁?/td><td>Get world-space position</td></tr>
+<tr><td>collider_get_rotation</td><td>鉁?/td><td>Get world-space rotation</td></tr>
+<tr><td>collider_is_sensor</td><td>鉁?/td><td>Check sensor flag</td></tr>
+<tr><td>collider_get_friction</td><td>鉁?/td><td>Get friction</td></tr>
+<tr><td>collider_get_restitution</td><td>鉁?/td><td>Get restitution</td></tr>
+<tr><td>collider_get_collision_groups</td><td>鉁?/td><td>Get collision groups</td></tr>
+<tr><td>collider_get_density</td><td>鉁?/td><td>Get density</td></tr>
+<tr><td>collider_get_shape_count</td><td>鉁?/td><td>Get sub-shape count</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>🔗 Joints & Controller</h2>
+<h2 id="joints-controller"馃敆 Joints & Controller</h2>
 <div class="table-wrap">
 <table>
 <thead><tr><th>C Function</th><th>JNI</th><th>Description</th></tr></thead>
 <tbody>
-<tr><td>joint_builder_create</td><td>✅</td><td>Create joint builder</td></tr>
-<tr><td>joint_builder_set_limits</td><td>✅</td><td>Set translation/rotation limits</td></tr>
-<tr><td>joint_builder_set_motor</td><td>✅</td><td>Configure motor (velocity/position)</td></tr>
-<tr><td>world_insert_impulse_joint</td><td>✅</td><td>Insert joint</td></tr>
-<tr><td>world_remove_impulse_joint</td><td>✅</td><td>Remove joint</td></tr>
-<tr><td>controller_create</td><td>✅</td><td>Create character controller</td></tr>
-<tr><td>controller_set_slide_enabled</td><td>✅</td><td>Enable/disable wall sliding</td></tr>
-<tr><td>controller_set_max_slope_climb_angle</td><td>✅</td><td>Set max climbable slope</td></tr>
-<tr><td>controller_set_snap_to_ground</td><td>✅</td><td>Enable ground snapping</td></tr>
-<tr><td>controller_move_shape</td><td>✅</td><td>Move character, returns EffectiveCharacterMovement</td></tr>
+<tr><td>joint_builder_create</td><td>鉁?/td><td>Create joint builder</td></tr>
+<tr><td>joint_builder_set_limits</td><td>鉁?/td><td>Set translation/rotation limits</td></tr>
+<tr><td>joint_builder_set_motor</td><td>鉁?/td><td>Configure motor (velocity/position)</td></tr>
+<tr><td>world_insert_impulse_joint</td><td>鉁?/td><td>Insert joint</td></tr>
+<tr><td>world_remove_impulse_joint</td><td>鉁?/td><td>Remove joint</td></tr>
+<tr><td>controller_create</td><td>鉁?/td><td>Create character controller</td></tr>
+<tr><td>controller_set_slide_enabled</td><td>鉁?/td><td>Enable/disable wall sliding</td></tr>
+<tr><td>controller_set_max_slope_climb_angle</td><td>鉁?/td><td>Set max climbable slope</td></tr>
+<tr><td>controller_set_snap_to_ground</td><td>鉁?/td><td>Enable ground snapping</td></tr>
+<tr><td>controller_move_shape</td><td>鉁?/td><td>Move character, returns EffectiveCharacterMovement</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>🔍 Spatial Query</h2>
+<h2 id="spatial-query"馃攳 Spatial Query</h2>
 <div class="table-wrap">
 <table>
 <thead><tr><th>C Function</th><th>JNI</th><th>Description</th></tr></thead>
 <tbody>
-<tr><td>query_cast_ray</td><td>✅</td><td>Cast single ray</td></tr>
-<tr><td>query_cast_rays</td><td>✅</td><td>Cast multiple rays (batch)</td></tr>
-<tr><td>query_project_point</td><td>✅</td><td>Project point onto closest collider surface</td></tr>
-<tr><td>query_cast_shape</td><td>✅</td><td>Sweep a shape through the world</td></tr>
-<tr><td>query_intersect_point_count</td><td>✅</td><td>Point-in-collider intersection count</td></tr>
-<tr><td>query_intersect_aabb_count</td><td>✅</td><td>AABB overlap count</td></tr>
-<tr><td>query_intersect_aabb</td><td>✅</td><td>AABB overlap — return handles</td></tr>
-<tr><td>query_intersect_obb_count</td><td>✅</td><td>OBB overlap count</td></tr>
-<tr><td>query_intersect_sphere_count</td><td>✅</td><td>Sphere overlap count</td></tr>
-<tr><td>query_intersect_sphere</td><td>✅</td><td>Sphere overlap — return handles</td></tr>
-<tr><td>query_intersect_capsule_count_all</td><td>✅</td><td>Capsule overlap</td></tr>
-<tr><td>query_intersect_ssv_count_all</td><td>✅</td><td>SSV overlap</td></tr>
-<tr><td>query_intersect_cylinder_count_all</td><td>✅</td><td>Cylinder overlap</td></tr>
-<tr><td>query_intersect_ellipsoid_count_all</td><td>✅</td><td>Ellipsoid overlap</td></tr>
-<tr><td>query_intersect_prism_count_all</td><td>✅</td><td>Prism overlap</td></tr>
-<tr><td>query_intersect_spherical_shell_count_all</td><td>✅</td><td>Spherical shell overlap</td></tr>
-<tr><td>query_intersect_voxel_aabb_count</td><td>✅</td><td>Voxel AABB overlap count</td></tr>
-<tr><td>query_intersect_voxel_aabb</td><td>✅</td><td>Voxel AABB — return handles</td></tr>
-<tr><td>query_intersect_voxel_obb_count</td><td>✅</td><td>Voxel OBB overlap count</td></tr>
+<tr><td>query_cast_ray</td><td>鉁?/td><td>Cast single ray</td></tr>
+<tr><td>query_cast_rays</td><td>鉁?/td><td>Cast multiple rays (batch)</td></tr>
+<tr><td>query_project_point</td><td>鉁?/td><td>Project point onto closest collider surface</td></tr>
+<tr><td>query_cast_shape</td><td>鉁?/td><td>Sweep a shape through the world</td></tr>
+<tr><td>query_intersect_point_count</td><td>鉁?/td><td>Point-in-collider intersection count</td></tr>
+<tr><td>query_intersect_aabb_count</td><td>鉁?/td><td>AABB overlap count</td></tr>
+<tr><td>query_intersect_aabb</td><td>鉁?/td><td>AABB overlap 鈥?return handles</td></tr>
+<tr><td>query_intersect_obb_count</td><td>鉁?/td><td>OBB overlap count</td></tr>
+<tr><td>query_intersect_sphere_count</td><td>鉁?/td><td>Sphere overlap count</td></tr>
+<tr><td>query_intersect_sphere</td><td>鉁?/td><td>Sphere overlap 鈥?return handles</td></tr>
+<tr><td>query_intersect_capsule_count_all</td><td>鉁?/td><td>Capsule overlap</td></tr>
+<tr><td>query_intersect_ssv_count_all</td><td>鉁?/td><td>SSV overlap</td></tr>
+<tr><td>query_intersect_cylinder_count_all</td><td>鉁?/td><td>Cylinder overlap</td></tr>
+<tr><td>query_intersect_ellipsoid_count_all</td><td>鉁?/td><td>Ellipsoid overlap</td></tr>
+<tr><td>query_intersect_prism_count_all</td><td>鉁?/td><td>Prism overlap</td></tr>
+<tr><td>query_intersect_spherical_shell_count_all</td><td>鉁?/td><td>Spherical shell overlap</td></tr>
+<tr><td>query_intersect_voxel_aabb_count</td><td>鉁?/td><td>Voxel AABB overlap count</td></tr>
+<tr><td>query_intersect_voxel_aabb</td><td>鉁?/td><td>Voxel AABB 鈥?return handles</td></tr>
+<tr><td>query_intersect_voxel_obb_count</td><td>鉁?/td><td>Voxel OBB overlap count</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>🌌 Gravity & Celestial</h2>
+<h2 id="gravity-celestial"馃寣 Gravity & Celestial</h2>
 <div class="table-wrap">
 <table>
 <thead><tr><th>C Function</th><th>JNI</th><th>Description</th></tr></thead>
 <tbody>
-<tr><td>celestial_get_body</td><td>✅</td><td>Get body parameters</td></tr>
-<tr><td>celestial_get_sh_coeffs</td><td>✅</td><td>Get spherical harmonic coefficients</td></tr>
-<tr><td>celestial_get_sh_coeffs_count</td><td>✅</td><td>Get coefficient count</td></tr>
-<tr><td>gravity_spherical_harmonics</td><td>✅</td><td>Spherical harmonic gravity</td></tr>
-<tr><td>gravity_zonal_harmonics</td><td>✅</td><td>J2-J6 zonal harmonic gravity</td></tr>
-<tr><td>gravity_quadrupole_tensor</td><td>✅</td><td>Quadrupole tensor gravity</td></tr>
-<tr><td>gravity_ellipsoid</td><td>✅</td><td>Ellipsoidal gravity</td></tr>
-<tr><td>terrain_polyhedron_gravity</td><td>✅</td><td>Polyhedron gravity (Werner-Scheeres)</td></tr>
-<tr><td>terrain_gravity_dem</td><td>✅</td><td>DEM terrain gravity (direct sum)</td></tr>
-<tr><td>terrain_gravity_dem_fft</td><td>✅</td><td>DEM terrain gravity (FFT-accelerated)</td></tr>
-<tr><td>terrain_lunar_mascon_gravity</td><td>✅</td><td>Lunar Mascon total gravity</td></tr>
-<tr><td>terrain_lunar_mascon_count</td><td>✅</td><td>Built-in Mascon count</td></tr>
-<tr><td>terrain_lunar_mascon_get</td><td>✅</td><td>Get Mascon parameters by index</td></tr>
+<tr><td>celestial_get_body</td><td>鉁?/td><td>Get body parameters</td></tr>
+<tr><td>celestial_get_sh_coeffs</td><td>鉁?/td><td>Get spherical harmonic coefficients</td></tr>
+<tr><td>celestial_get_sh_coeffs_count</td><td>鉁?/td><td>Get coefficient count</td></tr>
+<tr><td>gravity_spherical_harmonics</td><td>鉁?/td><td>Spherical harmonic gravity</td></tr>
+<tr><td>gravity_zonal_harmonics</td><td>鉁?/td><td>J2-J6 zonal harmonic gravity</td></tr>
+<tr><td>gravity_quadrupole_tensor</td><td>鉁?/td><td>Quadrupole tensor gravity</td></tr>
+<tr><td>gravity_ellipsoid</td><td>鉁?/td><td>Ellipsoidal gravity</td></tr>
+<tr><td>terrain_polyhedron_gravity</td><td>鉁?/td><td>Polyhedron gravity (Werner-Scheeres)</td></tr>
+<tr><td>terrain_gravity_dem</td><td>鉁?/td><td>DEM terrain gravity (direct sum)</td></tr>
+<tr><td>terrain_gravity_dem_fft</td><td>鉁?/td><td>DEM terrain gravity (FFT-accelerated)</td></tr>
+<tr><td>terrain_lunar_mascon_gravity</td><td>鉁?/td><td>Lunar Mascon total gravity</td></tr>
+<tr><td>terrain_lunar_mascon_count</td><td>鉁?/td><td>Built-in Mascon count</td></tr>
+<tr><td>terrain_lunar_mascon_get</td><td>鉁?/td><td>Get Mascon parameters by index</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>⏱ Symplectic Integrators</h2>
+<h2 id="symplectic-integrators"鈴?Symplectic Integrators</h2>
 <div class="table-wrap">
 <table>
 <thead><tr><th>C Function</th><th>JNI</th><th>Description</th></tr></thead>
 <tbody>
-<tr><td>integrator_leapfrog_step</td><td>✅</td><td>Leapfrog step (position + velocity)</td></tr>
-<tr><td>integrator_leapfrog_step_kahan</td><td>✅</td><td>Leapfrog with Kahan compensation</td></tr>
-<tr><td>integrator_yoshida4_step</td><td>✅</td><td>Yoshida 4th order step</td></tr>
-<tr><td>integrator_forest_ruth8_step</td><td>✅</td><td>Forest-Ruth 8th order step</td></tr>
-<tr><td>integrator_post_newtonian</td><td>✅</td><td>Post-Newtonian correction (1PN+2PN)</td></tr>
-<tr><td>integrator_specific_energy</td><td>✅</td><td>Orbital specific mechanical energy</td></tr>
-<tr><td>integrator_keplerian_elements</td><td>✅</td><td>Convert to Keplerian orbital elements</td></tr>
+<tr><td>integrator_leapfrog_step</td><td>鉁?/td><td>Leapfrog step (position + velocity)</td></tr>
+<tr><td>integrator_leapfrog_step_kahan</td><td>鉁?/td><td>Leapfrog with Kahan compensation</td></tr>
+<tr><td>integrator_yoshida4_step</td><td>鉁?/td><td>Yoshida 4th order step</td></tr>
+<tr><td>integrator_forest_ruth8_step</td><td>鉁?/td><td>Forest-Ruth 8th order step</td></tr>
+<tr><td>integrator_post_newtonian</td><td>鉁?/td><td>Post-Newtonian correction (1PN+2PN)</td></tr>
+<tr><td>integrator_specific_energy</td><td>鉁?/td><td>Orbital specific mechanical energy</td></tr>
+<tr><td>integrator_keplerian_elements</td><td>鉁?/td><td>Convert to Keplerian orbital elements</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>⚡ Force System</h2>
+<h2 id="force-system"鈿?Force System</h2>
 <div class="table-wrap">
 <table>
 <thead><tr><th>C Function</th><th>JNI</th><th>Description</th></tr></thead>
 <tbody>
-<tr><td>world_set_newton_gravity_law</td><td>✅</td><td>Set Newtonian gravity (O(n²) or Barnes-Hut)</td></tr>
-<tr><td>world_set_air_drag_law</td><td>✅</td><td>Set air drag (Stokes+turbulent)</td></tr>
-<tr><td>world_set_coulomb_friction_law</td><td>✅</td><td>Set Coulomb friction (static+dynamic)</td></tr>
-<tr><td>world_set_external_force_law</td><td>✅</td><td>Set external force (buoyancy, EM, spring, etc.)</td></tr>
-<tr><td>world_get_custom_physics_report</td><td>✅</td><td>Read aggregated physics report</td></tr>
+<tr><td>world_set_newton_gravity_law</td><td>鉁?/td><td>Set Newtonian gravity (O(n虏) or Barnes-Hut)</td></tr>
+<tr><td>world_set_air_drag_law</td><td>鉁?/td><td>Set air drag (Stokes+turbulent)</td></tr>
+<tr><td>world_set_coulomb_friction_law</td><td>鉁?/td><td>Set Coulomb friction (static+dynamic)</td></tr>
+<tr><td>world_set_external_force_law</td><td>鉁?/td><td>Set external force (buoyancy, EM, spring, etc.)</td></tr>
+<tr><td>world_get_custom_physics_report</td><td>鉁?/td><td>Read aggregated physics report</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>📡 Events</h2>
+<h2 id="events"馃摗 Events</h2>
 <div class="table-wrap">
 <table>
 <thead><tr><th>C Function</th><th>JNI</th><th>Description</th></tr></thead>
 <tbody>
-<tr><td>world_clear_events</td><td>✅</td><td>Clear all pending events</td></tr>
-<tr><td>world_collision_event_count</td><td>✅</td><td>Pending collision event count</td></tr>
-<tr><td>world_get_collision_event</td><td>✅</td><td>Get single collision event</td></tr>
-<tr><td>world_get_collision_events</td><td>✅</td><td>Get batch collision events</td></tr>
-<tr><td>world_contact_force_event_count</td><td>✅</td><td>Pending contact force event count</td></tr>
-<tr><td>world_get_contact_force_event</td><td>✅</td><td>Get single contact force event</td></tr>
-<tr><td>world_get_contact_force_events</td><td>✅</td><td>Get batch contact force events</td></tr>
-<tr><td>world_init_collision_event_ring</td><td>✅</td><td>Initialize collision event ring buffer</td></tr>
-<tr><td>world_init_contact_force_event_ring</td><td>✅</td><td>Initialize contact force event ring buffer</td></tr>
-<tr><td>world_drain_collision_event_ring</td><td>✅</td><td>Drain all pending collision events</td></tr>
-<tr><td>world_drain_contact_force_event_ring</td><td>✅</td><td>Drain all pending contact force events</td></tr>
-<tr><td>world_collision_event_ring_len</td><td>✅</td><td>Ring buffer occupancy</td></tr>
-<tr><td>world_collision_event_ring_stats</td><td>✅</td><td>Ring buffer statistics</td></tr>
-<tr><td>world_register_collision_callback</td><td>✅</td><td>Register collision callback (fn + user_data)</td></tr>
-<tr><td>world_register_contact_force_callback</td><td>✅</td><td>Register contact force callback</td></tr>
-<tr><td>world_unregister_callback</td><td>✅</td><td>Unregister callback by handle</td></tr>
-<tr><td>world_set_event_dispatch_mode</td><td>✅</td><td>Set dispatch mode: Poll / Callback / Both</td></tr>
+<tr><td>world_clear_events</td><td>鉁?/td><td>Clear all pending events</td></tr>
+<tr><td>world_collision_event_count</td><td>鉁?/td><td>Pending collision event count</td></tr>
+<tr><td>world_get_collision_event</td><td>鉁?/td><td>Get single collision event</td></tr>
+<tr><td>world_get_collision_events</td><td>鉁?/td><td>Get batch collision events</td></tr>
+<tr><td>world_contact_force_event_count</td><td>鉁?/td><td>Pending contact force event count</td></tr>
+<tr><td>world_get_contact_force_event</td><td>鉁?/td><td>Get single contact force event</td></tr>
+<tr><td>world_get_contact_force_events</td><td>鉁?/td><td>Get batch contact force events</td></tr>
+<tr><td>world_init_collision_event_ring</td><td>鉁?/td><td>Initialize collision event ring buffer</td></tr>
+<tr><td>world_init_contact_force_event_ring</td><td>鉁?/td><td>Initialize contact force event ring buffer</td></tr>
+<tr><td>world_drain_collision_event_ring</td><td>鉁?/td><td>Drain all pending collision events</td></tr>
+<tr><td>world_drain_contact_force_event_ring</td><td>鉁?/td><td>Drain all pending contact force events</td></tr>
+<tr><td>world_collision_event_ring_len</td><td>鉁?/td><td>Ring buffer occupancy</td></tr>
+<tr><td>world_collision_event_ring_stats</td><td>鉁?/td><td>Ring buffer statistics</td></tr>
+<tr><td>world_register_collision_callback</td><td>鉁?/td><td>Register collision callback (fn + user_data)</td></tr>
+<tr><td>world_register_contact_force_callback</td><td>鉁?/td><td>Register contact force callback</td></tr>
+<tr><td>world_unregister_callback</td><td>鉁?/td><td>Unregister callback by handle</td></tr>
+<tr><td>world_set_event_dispatch_mode</td><td>鉁?/td><td>Set dispatch mode: Poll / Callback / Both</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>💾 Shared Memory Arena</h2>
+<h2 id="shared-memory-arena"馃捑 Shared Memory Arena</h2>
 <div class="table-wrap">
 <table>
 <thead><tr><th>C Function</th><th>JNI</th><th>Description</th></tr></thead>
 <tbody>
-<tr><td>world_create_shared_arena</td><td>✅</td><td>Create shared memory arena</td></tr>
-<tr><td>world_destroy_shared_arena</td><td>✅</td><td>Destroy arena</td></tr>
-<tr><td>world_get_arena_direct_buffer</td><td>✅</td><td>Get DirectByteBuffer wrapper</td></tr>
-<tr><td>world_reset_shared_arena_events</td><td>✅</td><td>Clear event ring</td></tr>
+<tr><td>world_create_shared_arena</td><td>鉁?/td><td>Create shared memory arena</td></tr>
+<tr><td>world_destroy_shared_arena</td><td>鉁?/td><td>Destroy arena</td></tr>
+<tr><td>world_get_arena_direct_buffer</td><td>鉁?/td><td>Get DirectByteBuffer wrapper</td></tr>
+<tr><td>world_reset_shared_arena_events</td><td>鉁?/td><td>Clear event ring</td></tr>
 </tbody>
 </table>
 </div>

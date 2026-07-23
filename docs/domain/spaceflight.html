@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>领域公式 — MPS</title>
+<title>棰嗗煙鍏紡 鈥?MPS</title>
 <link rel="stylesheet" href="../style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
@@ -12,9 +12,9 @@
 
 <body>
 <header class="site-header"><a class="brand" href="../index.html"><span class="brand-mark">MPS</span><span class="brand-caption">PHYSICS / 0.1.4</span></a>
-<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">首页</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">核心</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">物理</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill active" href="../domain/spaceflight.html"><span data-lang="zh">领域</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">集成</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">参考</span><span data-lang="en">REFERENCE</span></a></nav>
+<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">棣栭〉</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">鏍稿績</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">鐗╃悊</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill active" href="../domain/spaceflight.html"><span data-lang="zh">棰嗗煙</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">闆嗘垚</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">鍙傝€?/span><span data-lang="en">REFERENCE</span></a></nav>
 
-<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select></div>
+<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">涓枃</option><option value="en">English</option></select></div>
 </header>
 
 <main class="page-shell">
@@ -23,91 +23,90 @@
 <div>
 <div class="section-kicker">/ DOMAIN MODULE</div>
 
-<h1>领域公式库</h1>
+<h1>棰嗗煙鍏紡搴?/h1>
 </div>
 
 <div class="page-index">03</div>
 </header>
 
-<p><strong>mps-formula</strong> 是独立的纯公式库，包含 28 个模块，覆盖物理、航天、工程等领域的 300+ 公式。所有公式为纯 Rust 函数，不依赖 Rapier 物理引擎或 WorldHandle。</p>
+<p><strong>mps-formula</strong> 鏄嫭绔嬬殑绾叕寮忓簱锛屽寘鍚?28 涓ā鍧楋紝瑕嗙洊鐗╃悊銆佽埅澶┿€佸伐绋嬬瓑棰嗗煙鐨?300+ 鍏紡銆傛墍鏈夊叕寮忎负绾?Rust 鍑芥暟锛屼笉渚濊禆 Rapier 鐗╃悊寮曟搸鎴?WorldHandle銆?/p>
 
 <div class="module-stack">
-
 <section class="doc-module">
-<h2>🚀 航天工程 (spaceflight) — 88 个函数</h2>
+<h2>馃殌 鑸ぉ宸ョ▼ (spaceflight) 鈥?88 涓嚱鏁?/h2>
 
-<h3>轨道力学</h3>
-<p>Kepler 周期/半长轴、轨道根数↔状态向量转换、J2/J3/J4 带谐摄动加速度、Gauss 行星摄动方程、Lambert 通用变量求解法、Hohmann 转移、Tsiolkovsky 火箭方程、大气阻力/密度、太阳光压加速度、SGP4 J2 长期项、变分二体问题、轨道衰减率、半长轴衰减率、轨道平面机动 ΔV</p>
+<h3>杞ㄩ亾鍔涘</h3>
+<p>Kepler 鍛ㄦ湡/鍗婇暱杞淬€佽建閬撴牴鏁扳啍鐘舵€佸悜閲忚浆鎹€丣2/J3/J4 甯﹁皭鎽勫姩鍔犻€熷害銆丟auss 琛屾槦鎽勫姩鏂圭▼銆丩ambert 閫氱敤鍙橀噺姹傝В娉曘€丠ohmann 杞Щ銆乀siolkovsky 鐏鏂圭▼銆佸ぇ姘旈樆鍔?瀵嗗害銆佸お闃冲厜鍘嬪姞閫熷害銆丼GP4 J2 闀挎湡椤广€佸彉鍒嗕簩浣撻棶棰樸€佽建閬撹“鍑忕巼銆佸崐闀胯酱琛板噺鐜囥€佽建閬撳钩闈㈡満鍔?螖V</p>
 
-<h3>姿态、控制与机器人</h3>
-<p>四元数导数、刚体 Euler 方程、CMG 交换/鲁棒伪逆、CW 相对运动、TRIAD 姿态确定、最小二乘姿态、EKF 标量预测/增益/更新、D-H 变换、机械臂动力学、bang-off-bang 剖面、人工势场制导、对接口滑翔斜率指令、太阳帆板 PD 控制、重力梯度力矩、磁力矩器偶极矩</p>
+<h3>濮挎€併€佹帶鍒朵笌鏈哄櫒浜?/h3>
+<p>鍥涘厓鏁板鏁般€佸垰浣?Euler 鏂圭▼銆丆MG 浜ゆ崲/椴佹浼€嗐€丆W 鐩稿杩愬姩銆乀RIAD 濮挎€佺‘瀹氥€佹渶灏忎簩涔樺Э鎬併€丒KF 鏍囬噺棰勬祴/澧炵泭/鏇存柊銆丏-H 鍙樻崲銆佹満姊拌噦鍔ㄥ姏瀛︺€乥ang-off-bang 鍓栭潰銆佷汉宸ュ娍鍦哄埗瀵笺€佸鎺ュ彛婊戠繑鏂滅巼鎸囦护銆佸お闃冲竼鏉?PD 鎺у埗銆侀噸鍔涙搴﹀姏鐭┿€佺鍔涚煩鍣ㄥ伓鏋佺煩</p>
 
-<h3>航天器系统与环境</h3>
-<p>太阳帆板功率、热平衡、CO₂ 质量平衡、Friis 链路预算、电池等效电路、Hall 推进器、辐射剂量、柔性模态、晃动摆、单相流体回路、雷达测距/测速、质量特性、对接口缓冲能量、Whipple 防护、表面充电、气闸泄压、Sabatier 甲烷产率、SPE 氧产率、散热器功率、热管热阻、Sagnac 效应、地磁倾斜偶极子模型 (IGRF-13)、碎片碰撞概率、原子氧侵蚀</p>
+<h3>鑸ぉ鍣ㄧ郴缁熶笌鐜</h3>
+<p>澶槼甯嗘澘鍔熺巼銆佺儹骞宠　銆丆O鈧?璐ㄩ噺骞宠　銆丗riis 閾捐矾棰勭畻銆佺數姹犵瓑鏁堢數璺€丠all 鎺ㄨ繘鍣ㄣ€佽緪灏勫墏閲忋€佹煍鎬фā鎬併€佹檭鍔ㄦ憜銆佸崟鐩告祦浣撳洖璺€侀浄杈炬祴璺?娴嬮€熴€佽川閲忕壒鎬с€佸鎺ュ彛缂撳啿鑳介噺銆乄hipple 闃叉姢銆佽〃闈㈠厖鐢点€佹皵闂告硠鍘嬨€丼abatier 鐢茬兎浜х巼銆丼PE 姘т骇鐜囥€佹暎鐑櫒鍔熺巼銆佺儹绠＄儹闃汇€丼agnac 鏁堝簲銆佸湴纾佸€炬枩鍋舵瀬瀛愭ā鍨?(IGRF-13)銆佺鐗囩鎾炴鐜囥€佸師瀛愭哀渚佃殌</p>
 </section>
 
 <section class="doc-module">
-<h2>🌌 天体物理 (astrophysics) — 19 个函数</h2>
-<p>N体直接求和、Barnes-Hut O(N log N)、FMM 单极子加速、后牛顿轨道修正、洛希极限、轨道共振检测、Lane-Emden 多方球、质量-光度关系、Eddington 光度、Hubble 定律、NFW 暗物质密度/质量、Planck 黑体辐射、Wien 位移、Jeans 质量/长度</p>
+<h2 id="sec-4406d552"
+<p>N浣撶洿鎺ユ眰鍜屻€丅arnes-Hut O(N log N)銆丗MM 鍗曟瀬瀛愬姞閫熴€佸悗鐗涢】杞ㄩ亾淇銆佹礇甯屾瀬闄愩€佽建閬撳叡鎸娴嬨€丩ane-Emden 澶氭柟鐞冦€佽川閲?鍏夊害鍏崇郴銆丒ddington 鍏夊害銆丠ubble 瀹氬緥銆丯FW 鏆楃墿璐ㄥ瘑搴?璐ㄩ噺銆丳lanck 榛戜綋杈愬皠銆乄ien 浣嶇Щ銆丣eans 璐ㄩ噺/闀垮害</p>
 </section>
 
 <section class="doc-module">
-<h2>⚛️ 相对论 (relativity) — 23 个函数</h2>
-<p>洛伦兹因子、洛伦兹变换矩阵、4-矢量变换、速度叠加、快度、Schwarzschild 半径/度规、Kerr 视界/能层/参考系拖拽、ISCO (Schwarzschild+Kerr)、引力红移、Reissner-Nordstrom 视界、光线偏折、有效势、引力时间膨胀、长度收缩、相对论粒子属性、不变量质量</p>
+<h2 id="chwarzschild-err-sco-schwarzschildkerreissner-nordstrom"">
+<p>娲涗鸡鍏瑰洜瀛愩€佹礇浼﹀吂鍙樻崲鐭╅樀銆?-鐭㈤噺鍙樻崲銆侀€熷害鍙犲姞銆佸揩搴︺€丼chwarzschild 鍗婂緞/搴﹁銆並err 瑙嗙晫/鑳藉眰/鍙傝€冪郴鎷栨嫿銆両SCO (Schwarzschild+Kerr)銆佸紩鍔涚孩绉汇€丷eissner-Nordstrom 瑙嗙晫銆佸厜绾垮亸鎶樸€佹湁鏁堝娍銆佸紩鍔涙椂闂磋啫鑳€銆侀暱搴︽敹缂┿€佺浉瀵硅绮掑瓙灞炴€с€佷笉鍙橀噺璐ㄩ噺</p>
 </section>
 
 <section class="doc-module">
-<h2>🔬 量子力学 (quantum) — 20 个函数</h2>
-<p>概率密度、波函数归一化、WKB 透射系数、矩形势垒隧穿、零点能、谐振子能级、自由粒子波函数/能量、德布罗意波长、无限深势阱能级/波函数/概率密度、氢原子能级/轨道半径/跃迁波长、不确定性原理、Pauli 矩阵 (σx/σy/σz)</p>
+<h2 id="kb-auli-xyz"">
+<p>姒傜巼瀵嗗害銆佹尝鍑芥暟褰掍竴鍖栥€乄KB 閫忓皠绯绘暟銆佺煩褰㈠娍鍨掗毀绌裤€侀浂鐐硅兘銆佽皭鎸瓙鑳界骇銆佽嚜鐢辩矑瀛愭尝鍑芥暟/鑳介噺銆佸痉甯冪綏鎰忔尝闀裤€佹棤闄愭繁鍔块槺鑳界骇/娉㈠嚱鏁?姒傜巼瀵嗗害銆佹阿鍘熷瓙鑳界骇/杞ㄩ亾鍗婂緞/璺冭縼娉㈤暱銆佷笉纭畾鎬у師鐞嗐€丳auli 鐭╅樀 (蟽x/蟽y/蟽z)</p>
 </section>
 
 <section class="doc-module">
-<h2>⚡ 电磁学 (electromagnetism) — 16 个函数</h2>
-<p>Lorentz 力、磁通量、Faraday 感应、Maxwell 点更新、FDTD Yee 更新、Biot-Savart 元素/线段、Poynting 矢量、电磁波相速度/波长/阻抗/趋肤深度、真空常数</p>
+<h2 id="aabb-navier-stokesph-poly6spikyviscosity-ph-ernoulli-eynolds-arcy-colebrook-epsilon-re"">
+<p>Lorentz 鍔涖€佺閫氶噺銆丗araday 鎰熷簲銆丮axwell 鐐规洿鏂般€丗DTD Yee 鏇存柊銆丅iot-Savart 鍏冪礌/绾挎銆丳oynting 鐭㈤噺銆佺數纾佹尝鐩搁€熷害/娉㈤暱/闃绘姉/瓒嬭偆娣卞害銆佺湡绌哄父鏁?/p>
 </section>
 
 <section class="doc-module">
-<h2>🌊 流体力学 (fluid) — 18 个函数</h2>
-<p>AABB 浮力/阻力、简化 Navier-Stokes、SPH Poly6/Spiky/Viscosity 核函数、SPH 密度/力估计、Bernoulli 压力/报告、Reynolds 数/流态判断、Darcy 摩擦因子 (Colebrook)、k-epsilon 湍流模型 (生产项/涡黏性/源项/长度尺度/湍流 Re)</p>
+<h2 id="aabb-navier-stokesph-poly6spikyviscosity-ph-ernoulli-eynolds-arcy-colebrook-epsilon-re"">
+<p>AABB 娴姏/闃诲姏銆佺畝鍖?Navier-Stokes銆丼PH Poly6/Spiky/Viscosity 鏍稿嚱鏁般€丼PH 瀵嗗害/鍔涗及璁°€丅ernoulli 鍘嬪姏/鎶ュ憡銆丷eynolds 鏁?娴佹€佸垽鏂€丏arcy 鎽╂摝鍥犲瓙 (Colebrook)銆乲-epsilon 婀嶆祦妯″瀷 (鐢熶骇椤?娑￠粡鎬?婧愰」/闀垮害灏哄害/婀嶆祦 Re)</p>
 </section>
 
 <section class="doc-module">
-<h2>🔥 热力学 (thermodynamics) — 23 个函数</h2>
-<p>Fourier 导热、Stefan-Boltzmann 辐射、相变潜热/条件、FEM 热扩散、热应力、理想气体状态方程、多方过程、对流换热 (Newton/Dittus-Boelter/Prandtl) 、Carnot/Otto/Diesel/Brayton 循环效率、Clausius-Clapeyron、熵变</p>
+<h2 id="ethe-weizscker-q-td-d-u-ateman"">
+<p>Fourier 瀵肩儹銆丼tefan-Boltzmann 杈愬皠銆佺浉鍙樻綔鐑?鏉′欢銆丗EM 鐑墿鏁ｃ€佺儹搴斿姏銆佺悊鎯虫皵浣撶姸鎬佹柟绋嬨€佸鏂硅繃绋嬨€佸娴佹崲鐑?(Newton/Dittus-Boelter/Prandtl) 銆丆arnot/Otto/Diesel/Brayton 寰幆鏁堢巼銆丆lausius-Clapeyron銆佺喌鍙?/p>
 </section>
 
 <section class="doc-module">
-<h2>🧪 核物理 (nuclear) — 23 个函数</h2>
-<p>放射性衰变常数、半衰期、平均寿命、活度、Bethe-Weizsäcker 结合能、核反应 Q 值、D-T/D-D 聚变能量、²³⁵U 裂变能量、Bateman 衰变链、中子扩散 (四因子公式/宏观截面/反应率)、γ 衰减、半值层</p>
+<h2 id="ethe-weizscker-q-td-d-u-ateman"">
+<p>鏀惧皠鎬ц“鍙樺父鏁般€佸崐琛版湡銆佸钩鍧囧鍛姐€佹椿搴︺€丅ethe-Weizs盲cker 缁撳悎鑳姐€佹牳鍙嶅簲 Q 鍊笺€丏-T/D-D 鑱氬彉鑳介噺銆伮猜斥伒U 瑁傚彉鑳介噺銆丅ateman 琛板彉閾俱€佷腑瀛愭墿鏁?(鍥涘洜瀛愬叕寮?瀹忚鎴潰/鍙嶅簲鐜?銆佄?琛板噺銆佸崐鍊煎眰</p>
 </section>
 
 <section class="doc-module">
-<h2>🔩 材料力学 (material_mechanics) — 26 个函数</h2>
-<p>Hooke 定律、剪切/体变模量、Lamé 常数、平面应力刚度、von Mises 应力/屈服、Tresca 屈服、主应力、断裂力学 K_I / 临界裂纹长度、Basquin 疲劳、Coffin-Manson、Miner 损伤、Goodman 修正、Norton 蠕变、梁弯曲/挠度/欧拉屈曲、长细比</p>
+<h2 id="hooke-am-on-mises-resca-ki-asquin-offin-mansoniner-oodman-orton"">
+<p>Hooke 瀹氬緥銆佸壀鍒?浣撳彉妯￠噺銆丩am茅 甯告暟銆佸钩闈㈠簲鍔涘垰搴︺€乿on Mises 搴斿姏/灞堟湇銆乀resca 灞堟湇銆佷富搴斿姏銆佹柇瑁傚姏瀛?K_I / 涓寸晫瑁傜汗闀垮害銆丅asquin 鐤插姵銆丆offin-Manson銆丮iner 鎹熶激銆丟oodman 淇銆丯orton 锠曞彉銆佹寮洸/鎸犲害/娆ф媺灞堟洸銆侀暱缁嗘瘮</p>
 </section>
 
 <section class="doc-module">
-<h2>📐 其他领域模块</h2>
+<h2 id="sec-e8b48e08">馃搻 鍏朵粬棰嗗煙妯″潡</h2>
 <table>
-<tr><th>模块</th><th>说明</th></tr>
-<tr><td>acoustics</td><td>声学模态分析、波动方程、共振检测、接触激励、3D 空间化</td></tr>
-<tr><td>aerodynamics</td><td>表面气动力、体素气动网格、力估算</td></tr>
-<tr><td>biomechanics</td><td>Hill 肌肉模型、关节约束</td></tr>
-<tr><td>celestial_data</td><td>10 太阳系天体精密参数 (JPL DE441)</td></tr>
-<tr><td>chaos</td><td>Lorenz 吸引子、双摆、Lyapunov 指数、分岔图</td></tr>
-<tr><td>continuum</td><td>连续介质力学、FEM 形函数、应变/应力张量</td></tr>
-<tr><td>control_theory</td><td>PID、状态空间、MPC、LQR</td></tr>
-<tr><td>gravitational_models</td><td>球谐展开 (EGM2008 8×8)、椭球引力、多面体引力</td></tr>
-<tr><td>integrators</td><td>Leapfrog、Yoshida 4 阶、Forest-Ruth 8 阶辛积分器</td></tr>
-<tr><td>molecular</td><td>Lennard-Jones、Coulomb 势/力、对相互作用</td></tr>
-<tr><td>physchem</td><td>Gray-Scott 反应扩散、催化浮力</td></tr>
-<tr><td>plasma</td><td>Debye 屏蔽、Vlasov 方程、PIC、磁重联、MHD</td></tr>
-<tr><td>softbody</td><td>XPBD 约束求解、超弹性本构</td></tr>
-<tr><td>superfluidity</td><td>Gross-Pitaevskii 方程、涡旋晶格、量子化环流</td></tr>
-<tr><td>topology</td><td>计算拓扑、持久同调、Betti 数</td></tr>
-<tr><td>trajectory</td><td>6DOF 弹道/滑翔轨迹、RK4 积分</td></tr>
-<tr><td>transmission</td><td>传动系统建模、齿轮比、扭矩分配</td></tr>
-<tr><td>wave_optics</td><td>Kirchhoff 衍射、Fresnel 传播、干涉、偏振</td></tr>
+<tr><th>妯″潡</th><th>璇存槑</th></tr>
+<tr><td>acoustics</td><td>澹板妯℃€佸垎鏋愩€佹尝鍔ㄦ柟绋嬨€佸叡鎸娴嬨€佹帴瑙︽縺鍔便€?D 绌洪棿鍖?/td></tr>
+<tr><td>aerodynamics</td><td>琛ㄩ潰姘斿姩鍔涖€佷綋绱犳皵鍔ㄧ綉鏍笺€佸姏浼扮畻</td></tr>
+<tr><td>biomechanics</td><td>Hill 鑲岃倝妯″瀷銆佸叧鑺傜害鏉?/td></tr>
+<tr><td>celestial_data</td><td>10 澶槼绯诲ぉ浣撶簿瀵嗗弬鏁?(JPL DE441)</td></tr>
+<tr><td>chaos</td><td>Lorenz 鍚稿紩瀛愩€佸弻鎽嗐€丩yapunov 鎸囨暟銆佸垎宀斿浘</td></tr>
+<tr><td>continuum</td><td>杩炵画浠嬭川鍔涘銆丗EM 褰㈠嚱鏁般€佸簲鍙?搴斿姏寮犻噺</td></tr>
+<tr><td>control_theory</td><td>PID銆佺姸鎬佺┖闂淬€丮PC銆丩QR</td></tr>
+<tr><td>gravitational_models</td><td>鐞冭皭灞曞紑 (EGM2008 8脳8)銆佹き鐞冨紩鍔涖€佸闈綋寮曞姏</td></tr>
+<tr><td>integrators</td><td>Leapfrog銆乊oshida 4 闃躲€丗orest-Ruth 8 闃惰緵绉垎鍣?/td></tr>
+<tr><td>molecular</td><td>Lennard-Jones銆丆oulomb 鍔?鍔涖€佸鐩镐簰浣滅敤</td></tr>
+<tr><td>physchem</td><td>Gray-Scott 鍙嶅簲鎵╂暎銆佸偓鍖栨诞鍔?/td></tr>
+<tr><td>plasma</td><td>Debye 灞忚斀銆乂lasov 鏂圭▼銆丳IC銆佺閲嶈仈銆丮HD</td></tr>
+<tr><td>softbody</td><td>XPBD 绾︽潫姹傝В銆佽秴寮规€ф湰鏋?/td></tr>
+<tr><td>superfluidity</td><td>Gross-Pitaevskii 鏂圭▼銆佹丁鏃嬫櫠鏍笺€侀噺瀛愬寲鐜祦</td></tr>
+<tr><td>topology</td><td>璁＄畻鎷撴墤銆佹寔涔呭悓璋冦€丅etti 鏁?/td></tr>
+<tr><td>trajectory</td><td>6DOF 寮归亾/婊戠繑杞ㄨ抗銆丷K4 绉垎</td></tr>
+<tr><td>transmission</td><td>浼犲姩绯荤粺寤烘ā銆侀娇杞瘮銆佹壄鐭╁垎閰?/td></tr>
+<tr><td>wave_optics</td><td>Kirchhoff 琛嶅皠銆丗resnel 浼犳挱銆佸共娑夈€佸亸鎸?/td></tr>
 </table>
 </section>
 
@@ -125,59 +124,58 @@
 <div class="page-index">03</div>
 </header>
 
-<p><strong>mps-formula</strong> is a standalone pure-formula library with 28 modules covering 300+ functions across physics, aerospace, and engineering domains. All formulas are pure Rust functions — no dependency on Rapier or WorldHandle.</p>
+<p><strong>mps-formula</strong> is a standalone pure-formula library with 28 modules covering 300+ functions across physics, aerospace, and engineering domains. All formulas are pure Rust functions 鈥?no dependency on Rapier or WorldHandle.</p>
 
 <div class="module-stack">
-
 <section class="doc-module">
-<h2>🚀 Spaceflight (88 functions)</h2>
-<p><strong>Orbital mechanics:</strong> Kepler period/semi-major-axis, elements↔state, J2/J3/J4 zonal harmonics, Gauss variational equations, Lambert universal solver, Hohmann transfer, Tsiolkovsky rocket equation, atmospheric drag/density, SRP, SGP4 secular rates, plane change ΔV.</p>
+<h2 id="spaceflight-88-functions"馃殌 Spaceflight (88 functions)</h2>
+<p><strong>Orbital mechanics:</strong> Kepler period/semi-major-axis, elements鈫攕tate, J2/J3/J4 zonal harmonics, Gauss variational equations, Lambert universal solver, Hohmann transfer, Tsiolkovsky rocket equation, atmospheric drag/density, SRP, SGP4 secular rates, plane change 螖V.</p>
 <p><strong>Attitude/control/robotics:</strong> Quaternion derivative, Euler equations, CMG exchange/robust pseudoinverse, CW relative motion, TRIAD attitude, least-squares attitude, EKF scalar predict/gain/update, DH transform, manipulator dynamics, bang-off-bang profile, artificial potential guidance, docking glideslope, magnetic torquer.</p>
-<p><strong>Systems/environment:</strong> Solar panel power, thermal balance, CO₂ mass balance, Friis link, battery circuit, Hall thruster, flexible mode, slosh pendulum, heat pipe, radiator, Whipple shield, IGRF-13 tilted dipole, debris collision probability, atomic oxygen erosion.</p>
+<p><strong>Systems/environment:</strong> Solar panel power, thermal balance, CO鈧?mass balance, Friis link, battery circuit, Hall thruster, flexible mode, slosh pendulum, heat pipe, radiator, Whipple shield, IGRF-13 tilted dipole, debris collision probability, atomic oxygen erosion.</p>
 </section>
 
 <section class="doc-module">
-<h2>🌌 Astrophysics (19)</h2>
+<h2 id="astrophysics-19"馃寣 Astrophysics (19)</h2>
 <p>N-body direct/Barnes-Hut/FMM, post-Newtonian correction, Roche limit, resonance detection, Lane-Emden, mass-luminosity, Eddington luminosity, Hubble law, NFW profile, Planck blackbody, Wien displacement, Jeans mass/length.</p>
 </section>
 
 <section class="doc-module">
-<h2>⚛️ Relativity (23)</h2>
+<h2 id="relativity-23"鈿涳笍 Relativity (23)</h2>
 <p>Lorentz factor/boost, 4-vector transform, velocity addition, Schwarzschild metric, Kerr horizons/ergosphere/frame-dragging, ISCO (Schwarzschild+Kerr), gravitational redshift, Reissner-Nordstrom, light deflection, time dilation, length contraction.</p>
 </section>
 
 <section class="doc-module">
-<h2>🔬 Quantum (20)</h2>
+<h2 id="quantum-20"馃敩 Quantum (20)</h2>
 <p>Probability density, wave normalization, WKB transmission, barrier tunneling, zero-point energy, harmonic oscillator, free particle, de Broglie wavelength, infinite well, hydrogen atom (Bohr), uncertainty principle, Pauli matrices.</p>
 </section>
 
 <section class="doc-module">
-<h2>⚡ Electromagnetism (16)</h2>
+<h2 id="electromagnetism-16"鈿?Electromagnetism (16)</h2>
 <p>Lorentz force, magnetic flux, Faraday induction, Maxwell point update, FDTD Yee update, Biot-Savart law, Poynting vector, EM wave propagation, skin depth.</p>
 </section>
 
 <section class="doc-module">
-<h2>🌊 Fluid (18)</h2>
+<h2 id="fluid-18"馃寠 Fluid (18)</h2>
 <p>AABB buoyancy/drag, simplified Navier-Stokes, SPH kernels (Poly6/Spiky/viscosity), SPH density/force estimation, Bernoulli, Reynolds number, Darcy friction factor, k-epsilon turbulence model.</p>
 </section>
 
 <section class="doc-module">
-<h2>🔥 Thermodynamics (23)</h2>
+<h2 id="thermodynamics-23"馃敟 Thermodynamics (23)</h2>
 <p>Fourier conduction, Stefan-Boltzmann radiation, phase change, FEM diffusion, ideal gas law, polytropic process, convective heat transfer, cycle efficiencies (Carnot/Otto/Diesel/Brayton), Clausius-Clapeyron, entropy.</p>
 </section>
 
 <section class="doc-module">
-<h2>🧪 Nuclear (23)</h2>
-<p>Decay constant, half-life, activity, Bethe-Weizsäcker binding energy, reaction Q-value, D-T/D-D fusion, Bateman chain, neutron diffusion, four-factor formula, gamma attenuation.</p>
+<h2 id="nuclear-23"馃И Nuclear (23)</h2>
+<p>Decay constant, half-life, activity, Bethe-Weizs盲cker binding energy, reaction Q-value, D-T/D-D fusion, Bateman chain, neutron diffusion, four-factor formula, gamma attenuation.</p>
 </section>
 
 <section class="doc-module">
-<h2>🔩 Material Mechanics (26)</h2>
-<p>Hooke's law, shear/bulk modulus, Lamé constants, von Mises/Tresca yield, principal stress, fracture mechanics K_I, Basquin/Coffin-Manson fatigue, Miner damage, Goodman correction, Norton creep, beam bending/buckling.</p>
+<h2 id="material-mechanics-26"馃敥 Material Mechanics (26)</h2>
+<p>Hooke's law, shear/bulk modulus, Lam茅 constants, von Mises/Tresca yield, principal stress, fracture mechanics K_I, Basquin/Coffin-Manson fatigue, Miner damage, Goodman correction, Norton creep, beam bending/buckling.</p>
 </section>
 
 <section class="doc-module">
-<h2>📐 Other Modules</h2>
+<h2 id="other-modules"馃搻 Other Modules</h2>
 <p>acoustics, aerodynamics, biomechanics, celestial_data, chaos, continuum, control_theory, gravitational_models, integrators, molecular, physchem, plasma, softbody, superfluidity, topology, trajectory, transmission, wave_optics.</p>
 </section>
 

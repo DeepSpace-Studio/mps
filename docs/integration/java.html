@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Java / JNI API — MPS</title>
+<title>Java / JNI API 鈥?MPS</title>
 <link rel="stylesheet" href="../style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
@@ -12,9 +12,9 @@
 
 <body>
 <header class="site-header"><a class="brand" href="../index.html"><span class="brand-mark">MPS</span><span class="brand-caption">PHYSICS / 0.1.4</span></a>
-<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">首页</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">核心</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">物理</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">领域</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">集成</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">参考</span><span data-lang="en">REFERENCE</span></a></nav>
+<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">棣栭〉</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">鏍稿績</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">鐗╃悊</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">棰嗗煙</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">闆嗘垚</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">鍙傝€?/span><span data-lang="en">REFERENCE</span></a></nav>
 
-<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select></div>
+<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">涓枃</option><option value="en">English</option></select></div>
 </header>
 
 <main class="page-shell">
@@ -32,8 +32,8 @@ Java / JNI API</h1>
 
 <div class="module-stack">
 <section class="doc-module">
-<h2>
-世界管理</h2>
+<h2 id="sec-95faf0a2"
+涓栫晫绠＄悊</h2>
 
 <div class="table-wrap">
 <table>
@@ -41,33 +41,33 @@ Java / JNI API</h1>
 <thead>
 
 <tr>
-<th>Java 方法</th><th>说明</th></tr>
+<th>Java 鏂规硶</th><th>璇存槑</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>worldCreate(gx, gy, gz) → long</td><td>创建物理世界</td></tr>
+<td>worldCreate(gx, gy, gz) 鈫?long</td><td>鍒涘缓鐗╃悊涓栫晫</td></tr>
 
 <tr>
-<td>worldDestroy(world)</td><td>销毁世界及所有资源</td></tr>
+<td>worldDestroy(world)</td><td>閿€姣佷笘鐣屽強鎵€鏈夎祫婧?/td></tr>
 
 <tr>
-<td>worldStep(world, dt)</td><td>推进模拟 (包含 ForceRegistry)</td></tr>
+<td>worldStep(world, dt)</td><td>鎺ㄨ繘妯℃嫙 (鍖呭惈 ForceRegistry)</td></tr>
 
 <tr>
-<td>worldSetGravity(world, x, y, z)</td><td>设置重力</td></tr>
+<td>worldSetGravity(world, x, y, z)</td><td>璁剧疆閲嶅姏</td></tr>
 
 <tr>
-<td>worldRegisterCelestialGravity(world, bodyId, degree)</td><td>注册天体引力</td></tr>
+<td>worldRegisterCelestialGravity(world, bodyId, degree)</td><td>娉ㄥ唽澶╀綋寮曞姏</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
-刚体</h2>
+<h2 id="sec-9b3fa5a2"
+鍒氫綋</h2>
 
 <div class="table-wrap">
 <table>
@@ -75,42 +75,42 @@ Java / JNI API</h1>
 <thead>
 
 <tr>
-<th>Java 方法</th><th>说明</th></tr>
+<th>Java 鏂规硶</th><th>璇存槑</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>rigidBodyBuilderCreate(status) → long</td><td>创建刚体构建器</td></tr>
+<td>rigidBodyBuilderCreate(status) 鈫?long</td><td>鍒涘缓鍒氫綋鏋勫缓鍣?/td></tr>
 
 <tr>
-<td>rigidBodyBuilderSetTranslation/Pose(...)</td><td>设置初始位姿</td></tr>
+<td>rigidBodyBuilderSetTranslation/Pose(...)</td><td>璁剧疆鍒濆浣嶅Э</td></tr>
 
 <tr>
-<td>rigidBodyBuilderSetLinvel/Angvel(...)</td><td>设置初始速度</td></tr>
+<td>rigidBodyBuilderSetLinvel/Angvel(...)</td><td>璁剧疆鍒濆閫熷害</td></tr>
 
 <tr>
-<td>rigidBodyBuilderSetAdditionalMass(...)</td><td>设置质量</td></tr>
+<td>rigidBodyBuilderSetAdditionalMass(...)</td><td>璁剧疆璐ㄩ噺</td></tr>
 
 <tr>
-<td>rigidBodyBuilderBuild(builder) → long</td><td>构建刚体</td></tr>
+<td>rigidBodyBuilderBuild(builder) 鈫?long</td><td>鏋勫缓鍒氫綋</td></tr>
 
 <tr>
-<td>worldInsertRigidBody(world, body) → long</td><td>插入世界</td></tr>
+<td>worldInsertRigidBody(world, body) 鈫?long</td><td>鎻掑叆涓栫晫</td></tr>
 
 <tr>
-<td>rigidBodyGetTranslation(world, handle) → double[]</td><td>读取位置</td></tr>
+<td>rigidBodyGetTranslation(world, handle) 鈫?double[]</td><td>璇诲彇浣嶇疆</td></tr>
 
 <tr>
-<td>rigidBodyAddForce(world, handle, x, y, z, wakeUp)</td><td>施力</td></tr>
+<td>rigidBodyAddForce(world, handle, x, y, z, wakeUp)</td><td>鏂藉姏</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
-力系统</h2>
+<h2 id="sec-432986ee"
+鍔涚郴缁?/h2>
 
 <div class="table-wrap">
 <table>
@@ -118,30 +118,30 @@ Java / JNI API</h1>
 <thead>
 
 <tr>
-<th>Java 方法</th><th>说明</th></tr>
+<th>Java 鏂规硶</th><th>璇存槑</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>worldSetAirDragLaw(world, ...)</td><td>设置空气阻力</td></tr>
+<td>worldSetAirDragLaw(world, ...)</td><td>璁剧疆绌烘皵闃诲姏</td></tr>
 
 <tr>
-<td>worldSetNewtonGravityLaw(world, ...)</td><td>设置万有引力</td></tr>
+<td>worldSetNewtonGravityLaw(world, ...)</td><td>璁剧疆涓囨湁寮曞姏</td></tr>
 
 <tr>
-<td>worldSetCoulombFrictionLaw(world, ...)</td><td>设置库仑摩擦</td></tr>
+<td>worldSetCoulombFrictionLaw(world, ...)</td><td>璁剧疆搴撲粦鎽╂摝</td></tr>
 
 <tr>
-<td>worldGetCustomPhysicsReport(world, out) → boolean</td><td>读取物理报告</td></tr>
+<td>worldGetCustomPhysicsReport(world, out) 鈫?boolean</td><td>璇诲彇鐗╃悊鎶ュ憡</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
-引力与轨道</h2>
+<h2 id="gravity-orbit">
+寮曞姏涓庤建閬?/h2>
 
 <div class="table-wrap">
 <table>
@@ -149,33 +149,33 @@ Java / JNI API</h1>
 <thead>
 
 <tr>
-<th>Java 方法</th><th>说明</th></tr>
+<th>Java 鏂规硶</th><th>璇存槑</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>celestialGetBody(id, out) → boolean</td><td>获取天体参数</td></tr>
+<td>celestialGetBody(id, out) 鈫?boolean</td><td>鑾峰彇澶╀綋鍙傛暟</td></tr>
 
 <tr>
-<td>gravitySphericalHarmonics(pos, bodyId, degree, out)</td><td>球谐引力</td></tr>
+<td>gravitySphericalHarmonics(pos, bodyId, degree, out)</td><td>鐞冭皭寮曞姏</td></tr>
 
 <tr>
-<td>integratorLeapfrogStep(pos, vel, accel, dt, out)</td><td>Leapfrog 步进</td></tr>
+<td>integratorLeapfrogStep(pos, vel, accel, dt, out)</td><td>Leapfrog 姝ヨ繘</td></tr>
 
 <tr>
-<td>integratorPostNewtonian(pos, vel, gm, order, out)</td><td>后牛顿修正</td></tr>
+<td>integratorPostNewtonian(pos, vel, gm, order, out)</td><td>鍚庣墰椤夸慨姝?/td></tr>
 
 <tr>
-<td>integratorKeplerianElements(pos, vel, gm, out)</td><td>开普勒轨道根数</td></tr>
+<td>integratorKeplerianElements(pos, vel, gm, out)</td><td>寮€鏅嫆杞ㄩ亾鏍规暟</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
-共享 Arena</h2>
+<h2 id="arena">
+鍏变韩 Arena</h2>
 
 <div class="table-wrap">
 <table>
@@ -183,22 +183,22 @@ Java / JNI API</h1>
 <thead>
 
 <tr>
-<th>Java 方法</th><th>说明</th></tr>
+<th>Java 鏂规硶</th><th>璇存槑</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>worldCreateSharedArena(world, ...) → boolean</td><td>创建共享 Arena</td></tr>
+<td>worldCreateSharedArena(world, ...) 鈫?boolean</td><td>鍒涘缓鍏变韩 Arena</td></tr>
 
 <tr>
-<td>worldDestroySharedArena(world)</td><td>销毁 Arena</td></tr>
+<td>worldDestroySharedArena(world)</td><td>閿€姣?Arena</td></tr>
 
 <tr>
-<td>worldGetArenaDirectByteBuffer(world) → ByteBuffer</td><td>包装为 DirectByteBuffer</td></tr>
+<td>worldGetArenaDirectByteBuffer(world) 鈫?ByteBuffer</td><td>鍖呰涓?DirectByteBuffer</td></tr>
 
 <tr>
-<td>worldResetSharedArenaEvents(world)</td><td>清空事件环</td></tr>
+<td>worldResetSharedArenaEvents(world)</td><td>娓呯┖浜嬩欢鐜?/td></tr>
 </tbody>
 </table>
 </div>
@@ -240,7 +240,7 @@ Java / JNI API</h1>
 
 <div class="module-stack">
 <section class="doc-module">
-<h2>
+<h2 id="world-management"
 World Management</h2>
 
 <div class="table-wrap">
@@ -255,7 +255,7 @@ World Management</h2>
 <tbody>
 
 <tr>
-<td>worldCreate(gx, gy, gz) → long</td><td>Create physics world</td></tr>
+<td>worldCreate(gx, gy, gz) 鈫?long</td><td>Create physics world</td></tr>
 
 <tr>
 <td>worldDestroy(world)</td><td>Destroy world and all resources</td></tr>
@@ -274,7 +274,7 @@ World Management</h2>
 </section>
 
 <section class="doc-module">
-<h2>
+<h2 id="rigid-body"
 Rigid Body</h2>
 
 <div class="table-wrap">
@@ -289,7 +289,7 @@ Rigid Body</h2>
 <tbody>
 
 <tr>
-<td>rigidBodyBuilderCreate(status) → long</td><td>Create body builder</td></tr>
+<td>rigidBodyBuilderCreate(status) 鈫?long</td><td>Create body builder</td></tr>
 
 <tr>
 <td>rigidBodyBuilderSetTranslation/Pose(...)</td><td>Set initial pose</td></tr>
@@ -301,13 +301,13 @@ Rigid Body</h2>
 <td>rigidBodyBuilderSetAdditionalMass(...)</td><td>Set mass</td></tr>
 
 <tr>
-<td>rigidBodyBuilderBuild(builder) → long</td><td>Build body</td></tr>
+<td>rigidBodyBuilderBuild(builder) 鈫?long</td><td>Build body</td></tr>
 
 <tr>
-<td>worldInsertRigidBody(world, body) → long</td><td>Insert into world</td></tr>
+<td>worldInsertRigidBody(world, body) 鈫?long</td><td>Insert into world</td></tr>
 
 <tr>
-<td>rigidBodyGetTranslation(world, handle) → double[]</td><td>Read position</td></tr>
+<td>rigidBodyGetTranslation(world, handle) 鈫?double[]</td><td>Read position</td></tr>
 
 <tr>
 <td>rigidBodyAddForce(world, handle, x, y, z, wakeUp)</td><td>Apply force</td></tr>
@@ -317,7 +317,7 @@ Rigid Body</h2>
 </section>
 
 <section class="doc-module">
-<h2>
+<h2 id="force-system"
 Force System</h2>
 
 <div class="table-wrap">
@@ -341,14 +341,14 @@ Force System</h2>
 <td>worldSetCoulombFrictionLaw(world, ...)</td><td>Set Coulomb friction</td></tr>
 
 <tr>
-<td>worldGetCustomPhysicsReport(world, out) → boolean</td><td>Read physics report</td></tr>
+<td>worldGetCustomPhysicsReport(world, out) 鈫?boolean</td><td>Read physics report</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
+<h2 id="gravity-orbit"
 Gravity & Orbit</h2>
 
 <div class="table-wrap">
@@ -363,7 +363,7 @@ Gravity & Orbit</h2>
 <tbody>
 
 <tr>
-<td>celestialGetBody(id, out) → boolean</td><td>Get body parameters</td></tr>
+<td>celestialGetBody(id, out) 鈫?boolean</td><td>Get body parameters</td></tr>
 
 <tr>
 <td>gravitySphericalHarmonics(pos, bodyId, degree, out)</td><td>Spherical harmonic gravity</td></tr>
@@ -382,7 +382,7 @@ Gravity & Orbit</h2>
 </section>
 
 <section class="doc-module">
-<h2>
+<h2 id="shared-arena"
 Shared Arena</h2>
 
 <div class="table-wrap">
@@ -397,13 +397,13 @@ Shared Arena</h2>
 <tbody>
 
 <tr>
-<td>worldCreateSharedArena(world, ...) → boolean</td><td>Create shared arena</td></tr>
+<td>worldCreateSharedArena(world, ...) 鈫?boolean</td><td>Create shared arena</td></tr>
 
 <tr>
 <td>worldDestroySharedArena(world)</td><td>Destroy arena</td></tr>
 
 <tr>
-<td>worldGetArenaDirectByteBuffer(world) → ByteBuffer</td><td>Wrap as DirectByteBuffer</td></tr>
+<td>worldGetArenaDirectByteBuffer(world) 鈫?ByteBuffer</td><td>Wrap as DirectByteBuffer</td></tr>
 
 <tr>
 <td>worldResetSharedArenaEvents(world)</td><td>Clear event ring</td></tr>

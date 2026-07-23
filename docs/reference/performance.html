@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>性能优化 — MPS</title>
+<title>鎬ц兘浼樺寲 鈥?MPS</title>
 <link rel="stylesheet" href="../style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
@@ -12,9 +12,9 @@
 
 <body>
 <header class="site-header"><a class="brand" href="../index.html"><span class="brand-mark">MPS</span><span class="brand-caption">PHYSICS / 0.1.4</span></a>
-<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">首页</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">核心</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">物理</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">领域</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">集成</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">参考</span><span data-lang="en">REFERENCE</span></a></nav>
+<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">棣栭〉</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">鏍稿績</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">鐗╃悊</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">棰嗗煙</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">闆嗘垚</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">鍙傝€?/span><span data-lang="en">REFERENCE</span></a></nav>
 
-<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select></div>
+<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">涓枃</option><option value="en">English</option></select></div>
 </header>
 
 <main class="page-shell">
@@ -24,7 +24,7 @@
 <div class="section-kicker">/ REFERENCE MODULE</div>
 
 <h1>
-性能优化</h1>
+鎬ц兘浼樺寲</h1>
 </div>
 
 <div class="page-index">03</div>
@@ -32,8 +32,8 @@
 
 <div class="module-stack">
 <section class="doc-module">
-<h2>
-持久化缓冲 (v0.1.4+)</h2>
+<h2 id="v014"
+鎸佷箙鍖栫紦鍐?(v0.1.4+)</h2>
 
 <div class="table-wrap">
 <table>
@@ -41,33 +41,33 @@
 <thead>
 
 <tr>
-<th>优化项</th><th>说明</th><th>消除的分配</th></tr>
+<th>浼樺寲椤?/th><th>璇存槑</th><th>娑堥櫎鐨勫垎閰?/th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>frame_log 持久化</td><td>HashMap 在 world 生命周期内复用</td><td>HashMap::new() 每帧</td></tr>
+<td>frame_log 鎸佷箙鍖?/td><td>HashMap 鍦?world 鐢熷懡鍛ㄦ湡鍐呭鐢?/td><td>HashMap::new() 姣忓抚</td></tr>
 
 <tr>
-<td>arena_idx_map 缓存</td><td>body index→handle 映射缓存</td><td>Vec::new()+push 每帧</td></tr>
+<td>arena_idx_map 缂撳瓨</td><td>body index鈫抙andle 鏄犲皠缂撳瓨</td><td>Vec::new()+push 姣忓抚</td></tr>
 
 <tr>
-<td>force_law_type 固定数组</td><td>用 [Option&lt;KahanVec3&gt;;32] 替代 BTreeMap</td><td>BTreeMap::new() 每帧</td></tr>
+<td>force_law_type 鍥哄畾鏁扮粍</td><td>鐢?[Option&lt;KahanVec3&gt;;32] 鏇夸唬 BTreeMap</td><td>BTreeMap::new() 姣忓抚</td></tr>
 
 <tr>
-<td>pending_forces 持久化</td><td>ForceFacade 接收 &amp;mut SmallVec</td><td>SmallVec::new() 每帧</td></tr>
+<td>pending_forces 鎸佷箙鍖?/td><td>ForceFacade 鎺ユ敹 &amp;mut SmallVec</td><td>SmallVec::new() 姣忓抚</td></tr>
 
 <tr>
-<td>friction_work 持久化</td><td>库仑摩擦力暂存 Vec 跨帧复用</td><td>Vec::new() 每帧</td></tr>
+<td>friction_work 鎸佷箙鍖?/td><td>搴撲粦鎽╂摝鍔涙殏瀛?Vec 璺ㄥ抚澶嶇敤</td><td>Vec::new() 姣忓抚</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
-事件系统优化 (v0.1.4+)</h2>
+<h2 id="v014"
+浜嬩欢绯荤粺浼樺寲 (v0.1.4+)</h2>
 
 <div class="table-wrap">
 <table>
@@ -75,24 +75,24 @@
 <thead>
 
 <tr>
-<th>优化项</th><th>说明</th></tr>
+<th>浼樺寲椤?/th><th>璇存槑</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>ProducerCache 锁自由</td><td>UnsafeCell + 原子字段, 不再需要 RwLock</td></tr>
+<td>ProducerCache 閿佽嚜鐢?/td><td>UnsafeCell + 鍘熷瓙瀛楁, 涓嶅啀闇€瑕?RwLock</td></tr>
 
 <tr>
-<td>CallbackSlot 原子化</td><td>AtomicUsize/AtomicU64, 注册/注销/热路径均无锁</td></tr>
+<td>CallbackSlot 鍘熷瓙鍖?/td><td>AtomicUsize/AtomicU64, 娉ㄥ唽/娉ㄩ攢/鐑矾寰勫潎鏃犻攣</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
-体质查找优化 (v0.1.4+)</h2>
+<h2 id="v014"
+浣撹川鏌ユ壘浼樺寲 (v0.1.4+)</h2>
 
 <div class="table-wrap">
 <table>
@@ -100,24 +100,24 @@
 <thead>
 
 <tr>
-<th>优化项</th><th>说明</th></tr>
+<th>浼樺寲椤?/th><th>璇存槑</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>单次 get_mut 查找</td><td>合并 get()+get_mut() 为单次 get_mut()</td></tr>
+<td>鍗曟 get_mut 鏌ユ壘</td><td>鍚堝苟 get()+get_mut() 涓哄崟娆?get_mut()</td></tr>
 
 <tr>
-<td>unregister_by_type 单次遍历</td><td>合并 find→Vec + 逐个注销为一次遍历</td></tr>
+<td>unregister_by_type 鍗曟閬嶅巻</td><td>鍚堝苟 find鈫扸ec + 閫愪釜娉ㄩ攢涓轰竴娆￠亶鍘?/td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
-Java 端优化 (v0.1.4+)</h2>
+<h2 id="java-v014"
+Java 绔紭鍖?(v0.1.4+)</h2>
 
 <div class="table-wrap">
 <table>
@@ -125,16 +125,16 @@ Java 端优化 (v0.1.4+)</h2>
 <thead>
 
 <tr>
-<th>优化项</th><th>说明</th></tr>
+<th>浼樺寲椤?/th><th>璇存槑</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>getVec3 复用</td><td>ThreadLocal&lt;double[3]&gt; 替代 new double[3]</td></tr>
+<td>getVec3 澶嶇敤</td><td>ThreadLocal&lt;double[3]&gt; 鏇夸唬 new double[3]</td></tr>
 
 <tr>
-<td>getVec3(out[], offset) 批量</td><td>无分配重载: 写入调用者提供的数组</td></tr>
+<td>getVec3(out[], offset) 鎵归噺</td><td>鏃犲垎閰嶉噸杞? 鍐欏叆璋冪敤鑰呮彁渚涚殑鏁扮粍</td></tr>
 </tbody>
 </table>
 </div>
@@ -156,7 +156,7 @@ Performance Optimizations</h1>
 
 <div class="module-stack">
 <section class="doc-module">
-<h2>
+<h2 id="persistent-buffers-v014"
 Persistent Buffers (v0.1.4+)</h2>
 
 <div class="table-wrap">
@@ -174,7 +174,7 @@ Persistent Buffers (v0.1.4+)</h2>
 <td>frame_log persistence</td><td>HashMap reused across world lifetime</td><td>HashMap::new() per frame</td></tr>
 
 <tr>
-<td>arena_idx_map cache</td><td>body index→handle mapping cached</td><td>Vec::new()+push per frame</td></tr>
+<td>arena_idx_map cache</td><td>body index鈫抙andle mapping cached</td><td>Vec::new()+push per frame</td></tr>
 
 <tr>
 <td>force_law_type fixed array</td><td>drain_report uses [Option&lt;KahanVec3&gt;;32] instead of BTreeMap</td><td>BTreeMap::new() per body per frame</td></tr>
@@ -190,7 +190,7 @@ Persistent Buffers (v0.1.4+)</h2>
 </section>
 
 <section class="doc-module">
-<h2>
+<h2 id="event-system-optimizations-v014"
 Event System Optimizations (v0.1.4+)</h2>
 
 <div class="table-wrap">
@@ -215,7 +215,7 @@ Event System Optimizations (v0.1.4+)</h2>
 </section>
 
 <section class="doc-module">
-<h2>
+<h2 id="body-lookup-optimizations-v014"
 Body Lookup Optimizations (v0.1.4+)</h2>
 
 <div class="table-wrap">
@@ -233,14 +233,14 @@ Body Lookup Optimizations (v0.1.4+)</h2>
 <td>Single get_mut lookup</td><td>Merges get()+get_mut() into single get_mut()</td></tr>
 
 <tr>
-<td>unregister_by_type single pass</td><td>Merges find→Vec + per-handle unregister into one traversal</td></tr>
+<td>unregister_by_type single pass</td><td>Merges find鈫扸ec + per-handle unregister into one traversal</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
+<h2 id="java-side-optimizations-v014"
 Java-side Optimizations (v0.1.4+)</h2>
 
 <div class="table-wrap">

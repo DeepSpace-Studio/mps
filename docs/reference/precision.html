@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>精度优化 — MPS</title>
+<title>绮惧害浼樺寲 鈥?MPS</title>
 <link rel="stylesheet" href="../style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
@@ -12,9 +12,9 @@
 
 <body>
 <header class="site-header"><a class="brand" href="../index.html"><span class="brand-mark">MPS</span><span class="brand-caption">PHYSICS / 0.1.4</span></a>
-<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">首页</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">核心</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">物理</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">领域</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">集成</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">参考</span><span data-lang="en">REFERENCE</span></a></nav>
+<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">棣栭〉</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">鏍稿績</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">鐗╃悊</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">棰嗗煙</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">闆嗘垚</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">鍙傝€?/span><span data-lang="en">REFERENCE</span></a></nav>
 
-<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select></div>
+<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">涓枃</option><option value="en">English</option></select></div>
 </header>
 
 <main class="page-shell">
@@ -22,82 +22,81 @@
 <header class="page-masthead accent-reference">
 <div>
 <div class="section-kicker">/ REFERENCE MODULE</div>
-<h1>精度优化</h1>
-<p>通过 <strong>Kahan 补偿求和</strong>、<strong>高维辛积分器</strong> 和 <strong>f64 精度模型</strong>，将轨道 100 年位置误差从发散控制到亚毫米级。</p>
+<h1>绮惧害浼樺寲</h1>
+<p>閫氳繃 <strong>Kahan 琛ュ伩姹傚拰</strong>銆?strong>楂樼淮杈涚Н鍒嗗櫒</strong> 鍜?<strong>f64 绮惧害妯″瀷</strong>锛屽皢杞ㄩ亾 100 骞翠綅缃宸粠鍙戞暎鎺у埗鍒颁簹姣背绾с€?/p>
 </div>
 <div class="page-index">02</div>
 </header>
 
 <div class="module-stack">
-
 <section class="doc-module">
-<h2>辛积分器精度对比</h2>
+<h2 id="sec-08ce4cf6"杈涚Н鍒嗗櫒绮惧害瀵规瘮</h2>
 <div class="table-wrap">
 <table>
 <thead>
-<tr><th>积分器</th><th>阶数</th><th>子步/Δt</th><th>能量误差/步</th><th>100 年位置误差</th><th>最佳用途</th></tr>
+<tr><th>绉垎鍣?/th><th>闃舵暟</th><th>瀛愭/螖t</th><th>鑳介噺璇樊/姝?/th><th>100 骞翠綅缃宸?/th><th>鏈€浣崇敤閫?/th></tr>
 </thead>
 <tbody>
-<tr><td>Rapier Euler</td><td>1</td><td>1</td><td>~10⁻⁵</td><td>发散 (∞)</td><td>游戏物理</td></tr>
-<tr><td>Leapfrog</td><td>2</td><td>1</td><td>~10⁻¹⁰</td><td>~1 km</td><td>通用轨道传播</td></tr>
-<tr><td>Leapfrog + Kahan</td><td>2</td><td>1</td><td>~10⁻¹²</td><td>~10 m</td><td>中等精度轨道</td></tr>
-<tr><td>Yoshida 4</td><td>4</td><td>3</td><td>~10⁻¹⁴</td><td>~1 m</td><td>精密轨道预测</td></tr>
-<tr><td>Forest-Ruth 8</td><td>8</td><td>15</td><td>~10⁻¹⁶</td><td>&lt; 1 mm</td><td>深空导航</td></tr>
+<tr><td>Rapier Euler</td><td>1</td><td>1</td><td>~10鈦烩伒</td><td>鍙戞暎 (鈭?</td><td>娓告垙鐗╃悊</td></tr>
+<tr><td>Leapfrog</td><td>2</td><td>1</td><td>~10鈦宦光伆</td><td>~1 km</td><td>閫氱敤杞ㄩ亾浼犳挱</td></tr>
+<tr><td>Leapfrog + Kahan</td><td>2</td><td>1</td><td>~10鈦宦孤?/td><td>~10 m</td><td>涓瓑绮惧害杞ㄩ亾</td></tr>
+<tr><td>Yoshida 4</td><td>4</td><td>3</td><td>~10鈦宦光伌</td><td>~1 m</td><td>绮惧瘑杞ㄩ亾棰勬祴</td></tr>
+<tr><td>Forest-Ruth 8</td><td>8</td><td>15</td><td>~10鈦宦光伓</td><td>&lt; 1 mm</td><td>娣辩┖瀵艰埅</td></tr>
 </tbody>
 </table>
 </div>
 
 <div class="callout">
-<p><strong>Kahan 补偿求和</strong>：将累加器的舍入误差保存在独立的补偿变量中，使有效精度从 15 位提升至约 30 位十进制数字。对长时间的轨道积分效果显著，100 年 Leapfrog 误差从 ~1 km 降至 ~10 m。</p>
+<p><strong>Kahan 琛ュ伩姹傚拰</strong>锛氬皢绱姞鍣ㄧ殑鑸嶅叆璇樊淇濆瓨鍦ㄧ嫭绔嬬殑琛ュ伩鍙橀噺涓紝浣挎湁鏁堢簿搴︿粠 15 浣嶆彁鍗囪嚦绾?30 浣嶅崄杩涘埗鏁板瓧銆傚闀挎椂闂寸殑杞ㄩ亾绉垎鏁堟灉鏄捐憲锛?00 骞?Leapfrog 璇樊浠?~1 km 闄嶈嚦 ~10 m銆?/p>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>精度策略层次</h2>
+<h2 id="sec-2ed21451"绮惧害绛栫暐灞傛</h2>
 <table>
 <thead>
-<tr><th>层级</th><th>方法</th><th>适用场景</th><th>精度增益</th></tr>
+<tr><th>灞傜骇</th><th>鏂规硶</th><th>閫傜敤鍦烘櫙</th><th>绮惧害澧炵泭</th></tr>
 </thead>
 <tbody>
-<tr><td>1</td><td>f64 双精度 + Rapier Euler</td><td>实时游戏、快速原型</td><td>基准</td></tr>
-<tr><td>2</td><td>Leapfrog 辛积分</td><td>游戏/模拟器轨道</td><td>能量守恒，长期稳定</td></tr>
-<tr><td>3</td><td>Leapfrog + Kahan 补偿</td><td>中等精度需求</td><td>+15 位有效数字</td></tr>
-<tr><td>4</td><td>Yoshida 4 阶</td><td>精密轨道预测</td><td>~10⁻¹⁴ 能量误差</td></tr>
-<tr><td>5</td><td>Forest-Ruth 8 阶</td><td>深空导航、长期积分</td><td>&lt; 1 mm / 100 年</td></tr>
+<tr><td>1</td><td>f64 鍙岀簿搴?+ Rapier Euler</td><td>瀹炴椂娓告垙銆佸揩閫熷師鍨?/td><td>鍩哄噯</td></tr>
+<tr><td>2</td><td>Leapfrog 杈涚Н鍒?/td><td>娓告垙/妯℃嫙鍣ㄨ建閬?/td><td>鑳介噺瀹堟亽锛岄暱鏈熺ǔ瀹?/td></tr>
+<tr><td>3</td><td>Leapfrog + Kahan 琛ュ伩</td><td>涓瓑绮惧害闇€姹?/td><td>+15 浣嶆湁鏁堟暟瀛?/td></tr>
+<tr><td>4</td><td>Yoshida 4 闃?/td><td>绮惧瘑杞ㄩ亾棰勬祴</td><td>~10鈦宦光伌 鑳介噺璇樊</td></tr>
+<tr><td>5</td><td>Forest-Ruth 8 闃?/td><td>娣辩┖瀵艰埅銆侀暱鏈熺Н鍒?/td><td>&lt; 1 mm / 100 骞?/td></tr>
 </tbody>
 </table>
 </section>
 
 <section class="doc-module">
-<h2>后牛顿相对论修正</h2>
+<h2 id="sec-cfc6b794"鍚庣墰椤跨浉瀵硅淇</h2>
 <div class="table-wrap">
 <table>
 <thead>
-<tr><th>修正项</th><th>物理效应</th><th>量级 (地球轨道)</th></tr>
+<tr><th>淇椤?/th><th>鐗╃悊鏁堝簲</th><th>閲忕骇 (鍦扮悆杞ㄩ亾)</th></tr>
 </thead>
 <tbody>
-<tr><td>1PN</td><td>水星近日点进动 ~43"/世纪</td><td>~10⁻⁸ m/s²</td></tr>
-<tr><td>2PN</td><td>引力波阻尼</td><td>~10⁻¹² m/s²</td></tr>
-<tr><td>Post-Newtonian Full</td><td>1PN + 2PN 完整修正</td><td>合并计算</td></tr>
+<tr><td>1PN</td><td>姘存槦杩戞棩鐐硅繘鍔?~43"/涓栫邯</td><td>~10鈦烩伕 m/s虏</td></tr>
+<tr><td>2PN</td><td>寮曞姏娉㈤樆灏?/td><td>~10鈦宦孤?m/s虏</td></tr>
+<tr><td>Post-Newtonian Full</td><td>1PN + 2PN 瀹屾暣淇</td><td>鍚堝苟璁＄畻</td></tr>
 </tbody>
 </table>
 </div>
-<p>在精密天体力学中，牛顿引力不足以描述水星轨道。后牛顿修正通过 <code>integrator_post_newtonian</code> 函数独立计算加速度修正，可叠加到任意积分器上。</p>
+<p>鍦ㄧ簿瀵嗗ぉ浣撳姏瀛︿腑锛岀墰椤垮紩鍔涗笉瓒充互鎻忚堪姘存槦杞ㄩ亾銆傚悗鐗涢】淇閫氳繃 <code>integrator_post_newtonian</code> 鍑芥暟鐙珛璁＄畻鍔犻€熷害淇锛屽彲鍙犲姞鍒颁换鎰忕Н鍒嗗櫒涓娿€?/p>
 </section>
 
 <section class="doc-module">
-<h2>引力模型精度</h2>
+<h2 id="sec-87dec0f4"寮曞姏妯″瀷绮惧害</h2>
 <div class="table-wrap">
 <table>
 <thead>
-<tr><th>模型</th><th>500 km 精度</th><th>适用距离</th></tr>
+<tr><th>妯″瀷</th><th>500 km 绮惧害</th><th>閫傜敤璺濈</th></tr>
 </thead>
 <tbody>
-<tr><td>点质量</td><td>~1 m/s²</td><td>&gt; 100R</td></tr>
-<tr><td>J2-J6 带谐</td><td>~0.01 m/s²</td><td>10R – 100R</td></tr>
-<tr><td>四极张量</td><td>~0.001 m/s²</td><td>不规则小行星</td></tr>
-<tr><td>球谐 8×8 (EGM2008)</td><td>~0.0001 m/s²</td><td>2R – 10R</td></tr>
-<tr><td>椭球</td><td>精确扁球体</td><td>&lt; 2R</td></tr>
+<tr><td>鐐硅川閲?/td><td>~1 m/s虏</td><td>&gt; 100R</td></tr>
+<tr><td>J2-J6 甯﹁皭</td><td>~0.01 m/s虏</td><td>10R 鈥?100R</td></tr>
+<tr><td>鍥涙瀬寮犻噺</td><td>~0.001 m/s虏</td><td>涓嶈鍒欏皬琛屾槦</td></tr>
+<tr><td>鐞冭皭 8脳8 (EGM2008)</td><td>~0.0001 m/s虏</td><td>2R 鈥?10R</td></tr>
+<tr><td>妞悆</td><td>绮剧‘鎵佺悆浣?/td><td>&lt; 2R</td></tr>
 </tbody>
 </table>
 </div>
@@ -117,31 +116,30 @@
 </header>
 
 <div class="module-stack">
-
 <section class="doc-module">
-<h2>Symplectic Integrator Comparison</h2>
+<h2 id="symplectic-integrator-comparison"Symplectic Integrator Comparison</h2>
 <div class="table-wrap">
 <table>
 <thead>
-<tr><th>Integrator</th><th>Order</th><th>Substeps/Δt</th><th>Energy Error/Step</th><th>100yr Pos Error</th><th>Best For</th></tr>
+<tr><th>Integrator</th><th>Order</th><th>Substeps/螖t</th><th>Energy Error/Step</th><th>100yr Pos Error</th><th>Best For</th></tr>
 </thead>
 <tbody>
-<tr><td>Rapier Euler</td><td>1</td><td>1</td><td>~10⁻⁵</td><td>Diverges (∞)</td><td>Game physics</td></tr>
-<tr><td>Leapfrog</td><td>2</td><td>1</td><td>~10⁻¹⁰</td><td>~1 km</td><td>General orbit propagation</td></tr>
-<tr><td>Leapfrog + Kahan</td><td>2</td><td>1</td><td>~10⁻¹²</td><td>~10 m</td><td>Medium precision orbit</td></tr>
-<tr><td>Yoshida 4</td><td>4</td><td>3</td><td>~10⁻¹⁴</td><td>~1 m</td><td>Precision orbit prediction</td></tr>
-<tr><td>Forest-Ruth 8</td><td>8</td><td>15</td><td>~10⁻¹⁶</td><td>&lt; 1 mm</td><td>Deep space navigation</td></tr>
+<tr><td>Rapier Euler</td><td>1</td><td>1</td><td>~10鈦烩伒</td><td>Diverges (鈭?</td><td>Game physics</td></tr>
+<tr><td>Leapfrog</td><td>2</td><td>1</td><td>~10鈦宦光伆</td><td>~1 km</td><td>General orbit propagation</td></tr>
+<tr><td>Leapfrog + Kahan</td><td>2</td><td>1</td><td>~10鈦宦孤?/td><td>~10 m</td><td>Medium precision orbit</td></tr>
+<tr><td>Yoshida 4</td><td>4</td><td>3</td><td>~10鈦宦光伌</td><td>~1 m</td><td>Precision orbit prediction</td></tr>
+<tr><td>Forest-Ruth 8</td><td>8</td><td>15</td><td>~10鈦宦光伓</td><td>&lt; 1 mm</td><td>Deep space navigation</td></tr>
 </tbody>
 </table>
 </div>
 
 <div class="callout">
-<p><strong>Kahan compensated summation</strong>: stores rounding error in a separate compensation variable, raising effective precision from ~15 to ~30 decimal digits. Dramatically improves long-term orbital integration — Leapfrog 100yr error drops from ~1 km to ~10 m.</p>
+<p><strong>Kahan compensated summation</strong>: stores rounding error in a separate compensation variable, raising effective precision from ~15 to ~30 decimal digits. Dramatically improves long-term orbital integration 鈥?Leapfrog 100yr error drops from ~1 km to ~10 m.</p>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>Precision Strategy Hierarchy</h2>
+<h2 id="precision-strategy-hierarchy"Precision Strategy Hierarchy</h2>
 <table>
 <thead>
 <tr><th>Level</th><th>Method</th><th>Use Case</th><th>Accuracy Gain</th></tr>
@@ -150,22 +148,22 @@
 <tr><td>1</td><td>f64 + Rapier Euler</td><td>Real-time games, prototyping</td><td>Baseline</td></tr>
 <tr><td>2</td><td>Leapfrog symplectic</td><td>Game/simulator orbits</td><td>Energy conservation</td></tr>
 <tr><td>3</td><td>Leapfrog + Kahan</td><td>Medium precision</td><td>+15 significant digits</td></tr>
-<tr><td>4</td><td>Yoshida 4th order</td><td>Precision orbit prediction</td><td>~10⁻¹⁴ energy error</td></tr>
+<tr><td>4</td><td>Yoshida 4th order</td><td>Precision orbit prediction</td><td>~10鈦宦光伌 energy error</td></tr>
 <tr><td>5</td><td>Forest-Ruth 8th order</td><td>Deep space, long-term integration</td><td>&lt; 1 mm / 100yr</td></tr>
 </tbody>
 </table>
 </section>
 
 <section class="doc-module">
-<h2>Post-Newtonian Corrections</h2>
+<h2 id="post-newtonian-corrections"Post-Newtonian Corrections</h2>
 <div class="table-wrap">
 <table>
 <thead>
 <tr><th>Term</th><th>Physical Effect</th><th>Magnitude (Earth orbit)</th></tr>
 </thead>
 <tbody>
-<tr><td>1PN</td><td>Mercury perihelion precession ~43"/century</td><td>~10⁻⁸ m/s²</td></tr>
-<tr><td>2PN</td><td>Gravitational wave damping</td><td>~10⁻¹² m/s²</td></tr>
+<tr><td>1PN</td><td>Mercury perihelion precession ~43"/century</td><td>~10鈦烩伕 m/s虏</td></tr>
+<tr><td>2PN</td><td>Gravitational wave damping</td><td>~10鈦宦孤?m/s虏</td></tr>
 <tr><td>Post-Newtonian Full</td><td>1PN + 2PN combined</td><td>Aggregate</td></tr>
 </tbody>
 </table>
@@ -174,17 +172,17 @@
 </section>
 
 <section class="doc-module">
-<h2>Gravity Model Precision</h2>
+<h2 id="gravity-model-precision"Gravity Model Precision</h2>
 <div class="table-wrap">
 <table>
 <thead>
 <tr><th>Model</th><th>Accuracy @ 500 km</th><th>Applicable Range</th></tr>
 </thead>
 <tbody>
-<tr><td>Point Mass</td><td>~1 m/s²</td><td>&gt; 100R</td></tr>
-<tr><td>J2-J6 Zonal</td><td>~0.01 m/s²</td><td>10R – 100R</td></tr>
-<tr><td>Quadrupole Tensor</td><td>~0.001 m/s²</td><td>Irregular asteroids</td></tr>
-<tr><td>SH 8×8 (EGM2008)</td><td>~0.0001 m/s²</td><td>2R – 10R</td></tr>
+<tr><td>Point Mass</td><td>~1 m/s虏</td><td>&gt; 100R</td></tr>
+<tr><td>J2-J6 Zonal</td><td>~0.01 m/s虏</td><td>10R 鈥?100R</td></tr>
+<tr><td>Quadrupole Tensor</td><td>~0.001 m/s虏</td><td>Irregular asteroids</td></tr>
+<tr><td>SH 8脳8 (EGM2008)</td><td>~0.0001 m/s虏</td><td>2R 鈥?10R</td></tr>
 <tr><td>Ellipsoid</td><td>Exact oblate</td><td>&lt; 2R</td></tr>
 </tbody>
 </table>

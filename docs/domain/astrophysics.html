@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>天体物理公式详解 — MPS</title>
+<title>澶╀綋鐗╃悊鍏紡璇﹁В 鈥?MPS</title>
 <link rel="stylesheet" href="../style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
@@ -12,9 +12,9 @@
 
 <body>
 <header class="site-header"><a class="brand" href="../index.html"><span class="brand-mark">MPS</span><span class="brand-caption">PHYSICS / 0.1.4</span></a>
-<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">首页</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">核心</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">物理</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">领域</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">集成</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">参考</span><span data-lang="en">REFERENCE</span></a></nav>
+<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">棣栭〉</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">鏍稿績</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">鐗╃悊</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">棰嗗煙</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">闆嗘垚</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">鍙傝€?/span><span data-lang="en">REFERENCE</span></a></nav>
 
-<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select></div>
+<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">涓枃</option><option value="en">English</option></select></div>
 </header>
 
 <main class="page-shell">
@@ -22,90 +22,89 @@
 <header class="page-masthead accent-domain">
 <div>
 <div class="section-kicker">/ DOMAIN MODULE</div>
-<h1>天体物理公式详解</h1>
-<p><strong>astrophysics</strong> 模块的公式详解。涵盖 N 体模拟、暗物质、恒星结构与宇宙学。所有公式为纯 Rust 函数，位于 <code>mps-formula</code> crate。</p>
+<h1>澶╀綋鐗╃悊鍏紡璇﹁В</h1>
+<p><strong>astrophysics</strong> 妯″潡鐨勫叕寮忚瑙ｃ€傛兜鐩?N 浣撴ā鎷熴€佹殫鐗╄川銆佹亽鏄熺粨鏋勪笌瀹囧畽瀛︺€傛墍鏈夊叕寮忎负绾?Rust 鍑芥暟锛屼綅浜?<code>mps-formula</code> crate銆?/p>
 </div>
 <div class="page-index">02</div>
 </header>
 
 <div class="module-stack">
-
 <section class="doc-module">
-<h2>N 体引力模拟 (3 种算法)</h2>
+<h2 id="n-3"N 浣撳紩鍔涙ā鎷?(3 绉嶇畻娉?</h2>
 <div class="table-wrap">
 <table>
 <thead>
-<tr><th>函数</th><th>算法</th><th>复杂度</th><th>最佳场景</th></tr>
+<tr><th>鍑芥暟</th><th>绠楁硶</th><th>澶嶆潅搴?/th><th>鏈€浣冲満鏅?/th></tr>
 </thead>
 <tbody>
-<tr><td>nbody_direct_sum</td><td>直接 O(N²) 求和</td><td>O(N²)</td><td>N &lt; 1000，高精度需求</td></tr>
-<tr><td>nbody_barnes_hut</td><td>Barnes-Hut 树算法</td><td>O(N log N)</td><td>N 1000–100000，中等精度</td></tr>
-<tr><td>nbody_fmm_monopole</td><td>快速多极子 (FMM) 单极子</td><td>O(N)</td><td>N &gt; 100000，大规模模拟</td></tr>
+<tr><td>nbody_direct_sum</td><td>鐩存帴 O(N虏) 姹傚拰</td><td>O(N虏)</td><td>N &lt; 1000锛岄珮绮惧害闇€姹?/td></tr>
+<tr><td>nbody_barnes_hut</td><td>Barnes-Hut 鏍戠畻娉?/td><td>O(N log N)</td><td>N 1000鈥?00000锛屼腑绛夌簿搴?/td></tr>
+<tr><td>nbody_fmm_monopole</td><td>蹇€熷鏋佸瓙 (FMM) 鍗曟瀬瀛?/td><td>O(N)</td><td>N &gt; 100000锛屽ぇ瑙勬ā妯℃嫙</td></tr>
 </tbody>
 </table>
 </div>
-<p>三种算法精度可配置。Barnes-Hut 通过 θ 参数控制展开精度 (θ→0 等价于直接求和)。FMM 单极子目前仅实现单极子 (monopole) 加速，高阶多极子展开为后续版本计划。</p>
+<p>涓夌绠楁硶绮惧害鍙厤缃€侭arnes-Hut 閫氳繃 胃 鍙傛暟鎺у埗灞曞紑绮惧害 (胃鈫? 绛変环浜庣洿鎺ユ眰鍜?銆侳MM 鍗曟瀬瀛愮洰鍓嶄粎瀹炵幇鍗曟瀬瀛?(monopole) 鍔犻€燂紝楂橀樁澶氭瀬瀛愬睍寮€涓哄悗缁増鏈鍒掋€?/p>
 </section>
 
 <section class="doc-module">
-<h2>后牛顿轨道修正</h2>
+<h2 id="sec-d9715ce7"
 <table>
 <thead>
-<tr><th>函数</th><th>说明</th></tr>
+<tr><th>鍑芥暟</th><th>璇存槑</th></tr>
 </thead>
 <tbody>
-<tr><td>post_newtonian_correction</td><td>1PN + 2PN 后牛顿加速度修正</td></tr>
+<tr><td>post_newtonian_correction</td><td>1PN + 2PN 鍚庣墰椤垮姞閫熷害淇</td></tr>
 </tbody>
 </table>
-<p>在强引力场 (如水星、双星系统) 中，牛顿引力需要相对论修正。1PN 项产生水星近日点进动 (~43"/世纪)，2PN 项描述引力波辐射阻尼。</p>
+<p>鍦ㄥ己寮曞姏鍦?(濡傛按鏄熴€佸弻鏄熺郴缁? 涓紝鐗涢】寮曞姏闇€瑕佺浉瀵硅淇銆?PN 椤逛骇鐢熸按鏄熻繎鏃ョ偣杩涘姩 (~43"/涓栫邯)锛?PN 椤规弿杩板紩鍔涙尝杈愬皠闃诲凹銆?/p>
 </section>
 
 <section class="doc-module">
-<h2>天体物理参数</h2>
+<h2 id="sec-98b9f6fb">澶╀綋鐗╃悊鍙傛暟</h2>
 <div class="table-wrap">
 <table>
 <thead>
-<tr><th>函数</th><th>说明</th></tr>
+<tr><th>鍑芥暟</th><th>璇存槑</th></tr>
 </thead>
 <tbody>
-<tr><td>roche_limit</td><td>洛希极限 — 卫星被潮汐力撕裂的最小轨道半径</td></tr>
-<tr><td>orbital_resonance_detection</td><td>轨道共振检测 — 判断两轨道周期是否成整数比</td></tr>
-<tr><td>lane_emden</td><td>Lane-Emden 多方球方程 — 恒星内部结构模型</td></tr>
-<tr><td>mass_luminosity_relation</td><td>主序星质量-光度关系</td></tr>
-<tr><td>eddington_luminosity</td><td>Eddington 光度 — 吸积天体辐射压上限</td></tr>
-<tr><td>hubble_law</td><td>Hubble 定律 — 红移-距离关系</td></tr>
-</tbody>
-</table>
-</div>
-</section>
-
-<section class="doc-module">
-<h2>暗物质模型</h2>
-<div class="table-wrap">
-<table>
-<thead>
-<tr><th>函数</th><th>说明</th></tr>
-</thead>
-<tbody>
-<tr><td>nfw_density</td><td>NFW 暗物质晕密度分布 ρ(r) = ρ₀ / [(r/rₛ)(1+r/rₛ)²]</td></tr>
-<tr><td>nfw_enclosed_mass</td><td>NFW 晕内包质量 M(&lt;r)</td></tr>
+<tr><td>roche_limit</td><td>娲涘笇鏋侀檺 鈥?鍗槦琚疆姹愬姏鎾曡鐨勬渶灏忚建閬撳崐寰?/td></tr>
+<tr><td>orbital_resonance_detection</td><td>杞ㄩ亾鍏辨尟妫€娴?鈥?鍒ゆ柇涓よ建閬撳懆鏈熸槸鍚︽垚鏁存暟姣?/td></tr>
+<tr><td>lane_emden</td><td>Lane-Emden 澶氭柟鐞冩柟绋?鈥?鎭掓槦鍐呴儴缁撴瀯妯″瀷</td></tr>
+<tr><td>mass_luminosity_relation</td><td>涓诲簭鏄熻川閲?鍏夊害鍏崇郴</td></tr>
+<tr><td>eddington_luminosity</td><td>Eddington 鍏夊害 鈥?鍚哥Н澶╀綋杈愬皠鍘嬩笂闄?/td></tr>
+<tr><td>hubble_law</td><td>Hubble 瀹氬緥 鈥?绾㈢Щ-璺濈鍏崇郴</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>辐射与统计物理</h2>
+<h2 id="sec-d9715ce7"
 <div class="table-wrap">
 <table>
 <thead>
-<tr><th>函数</th><th>说明</th></tr>
+<tr><th>鍑芥暟</th><th>璇存槑</th></tr>
 </thead>
 <tbody>
-<tr><td>planck_blackbody</td><td>Planck 黑体辐射谱 B(ν, T)</td></tr>
-<tr><td>wien_displacement</td><td>Wien 位移定律 — 峰值波长 λₘₐₓ = b/T</td></tr>
-<tr><td>jeans_mass</td><td>Jeans 质量 — 分子云引力坍缩临界质量</td></tr>
-<tr><td>jeans_length</td><td>Jeans 长度 — 引力坍缩临界尺度</td></tr>
+<tr><td>nfw_density</td><td>NFW 鏆楃墿璐ㄦ檿瀵嗗害鍒嗗竷 蟻(r) = 蟻鈧€ / [(r/r鈧?(1+r/r鈧?虏]</td></tr>
+<tr><td>nfw_enclosed_mass</td><td>NFW 鏅曞唴鍖呰川閲?M(&lt;r)</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="doc-module">
+<h2 id="radiation-physics">
+<div class="table-wrap">
+<table>
+<thead>
+<tr><th>鍑芥暟</th><th>璇存槑</th></tr>
+</thead>
+<tbody>
+<tr><td>planck_blackbody</td><td>Planck 榛戜綋杈愬皠璋?B(谓, T)</td></tr>
+<tr><td>wien_displacement</td><td>Wien 浣嶇Щ瀹氬緥 鈥?宄板€兼尝闀?位鈧樷倫鈧?= b/T</td></tr>
+<tr><td>jeans_mass</td><td>Jeans 璐ㄩ噺 鈥?鍒嗗瓙浜戝紩鍔涘潔缂╀复鐣岃川閲?/td></tr>
+<tr><td>jeans_length</td><td>Jeans 闀垮害 鈥?寮曞姏鍧嶇缉涓寸晫灏哄害</td></tr>
 </tbody>
 </table>
 </div>
@@ -125,26 +124,25 @@
 </header>
 
 <div class="module-stack">
-
 <section class="doc-module">
-<h2>N-Body Gravity (3 Algorithms)</h2>
+<h2 id="n-body-gravity-3-algorithms">N-Body Gravity (3 Algorithms)</h2>
 <div class="table-wrap">
 <table>
 <thead>
 <tr><th>Function</th><th>Algorithm</th><th>Complexity</th><th>Best For</th></tr>
 </thead>
 <tbody>
-<tr><td>nbody_direct_sum</td><td>Direct O(N²) sum</td><td>O(N²)</td><td>N &lt; 1000, high precision</td></tr>
-<tr><td>nbody_barnes_hut</td><td>Barnes-Hut tree algorithm</td><td>O(N log N)</td><td>N 1000–100000, medium precision</td></tr>
+<tr><td>nbody_direct_sum</td><td>Direct O(N虏) sum</td><td>O(N虏)</td><td>N &lt; 1000, high precision</td></tr>
+<tr><td>nbody_barnes_hut</td><td>Barnes-Hut tree algorithm</td><td>O(N log N)</td><td>N 1000鈥?00000, medium precision</td></tr>
 <tr><td>nbody_fmm_monopole</td><td>Fast Multipole Method monopole</td><td>O(N)</td><td>N &gt; 100000, large-scale sims</td></tr>
 </tbody>
 </table>
 </div>
-<p>All three algorithms have configurable precision. Barnes-Hut uses θ to control expansion accuracy (θ→0 is equivalent to direct sum). FMM currently implements monopole acceleration only; higher multipole orders are planned.</p>
+<p>All three algorithms have configurable precision. Barnes-Hut uses 胃 to control expansion accuracy (胃鈫? is equivalent to direct sum). FMM currently implements monopole acceleration only; higher multipole orders are planned.</p>
 </section>
 
 <section class="doc-module">
-<h2>Post-Newtonian Correction</h2>
+<h2 id="post-newtonian-correction"Post-Newtonian Correction</h2>
 <table>
 <thead>
 <tr><th>Function</th><th>Description</th></tr>
@@ -157,33 +155,33 @@
 </section>
 
 <section class="doc-module">
-<h2>Astrophysical Parameters</h2>
+<h2 id="astrophysical-parameters"Astrophysical Parameters</h2>
 <div class="table-wrap">
 <table>
 <thead>
 <tr><th>Function</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td>roche_limit</td><td>Roche limit — minimum orbital radius before tidal disruption</td></tr>
+<tr><td>roche_limit</td><td>Roche limit 鈥?minimum orbital radius before tidal disruption</td></tr>
 <tr><td>orbital_resonance_detection</td><td>Detect orbital resonance between two periods</td></tr>
-<tr><td>lane_emden</td><td>Lane-Emden polytrope — stellar interior structure model</td></tr>
+<tr><td>lane_emden</td><td>Lane-Emden polytrope 鈥?stellar interior structure model</td></tr>
 <tr><td>mass_luminosity_relation</td><td>Main-sequence mass-luminosity relation</td></tr>
-<tr><td>eddington_luminosity</td><td>Eddington luminosity — radiation pressure upper limit</td></tr>
-<tr><td>hubble_law</td><td>Hubble law — redshift-distance relation</td></tr>
+<tr><td>eddington_luminosity</td><td>Eddington luminosity 鈥?radiation pressure upper limit</td></tr>
+<tr><td>hubble_law</td><td>Hubble law 鈥?redshift-distance relation</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>Dark Matter Models</h2>
+<h2 id="dark-matter-models"Dark Matter Models</h2>
 <div class="table-wrap">
 <table>
 <thead>
 <tr><th>Function</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td>nfw_density</td><td>NFW halo density profile ρ(r) = ρ₀ / [(r/rₛ)(1+r/rₛ)²]</td></tr>
+<tr><td>nfw_density</td><td>NFW halo density profile 蟻(r) = 蟻鈧€ / [(r/r鈧?(1+r/r鈧?虏]</td></tr>
 <tr><td>nfw_enclosed_mass</td><td>NFW enclosed mass M(&lt;r)</td></tr>
 </tbody>
 </table>
@@ -191,17 +189,17 @@
 </section>
 
 <section class="doc-module">
-<h2>Radiation & Statistical Physics</h2>
+<h2 id="radiation-statistical-physics"Radiation & Statistical Physics</h2>
 <div class="table-wrap">
 <table>
 <thead>
 <tr><th>Function</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td>planck_blackbody</td><td>Planck blackbody spectrum B(ν, T)</td></tr>
-<tr><td>wien_displacement</td><td>Wien displacement law — peak wavelength λₘₐₓ = b/T</td></tr>
-<tr><td>jeans_mass</td><td>Jeans mass — critical mass for gravitational collapse</td></tr>
-<tr><td>jeans_length</td><td>Jeans length — critical scale for collapse</td></tr>
+<tr><td>planck_blackbody</td><td>Planck blackbody spectrum B(谓, T)</td></tr>
+<tr><td>wien_displacement</td><td>Wien displacement law 鈥?peak wavelength 位鈧樷倫鈧?= b/T</td></tr>
+<tr><td>jeans_mass</td><td>Jeans mass 鈥?critical mass for gravitational collapse</td></tr>
+<tr><td>jeans_length</td><td>Jeans length 鈥?critical scale for collapse</td></tr>
 </tbody>
 </table>
 </div>

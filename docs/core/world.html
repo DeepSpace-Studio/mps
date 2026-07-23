@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>世界管理 — MPS</title>
+<title>涓栫晫绠＄悊 鈥?MPS</title>
 <link rel="stylesheet" href="../style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
@@ -12,9 +12,9 @@
 
 <body>
 <header class="site-header"><a class="brand" href="../index.html"><span class="brand-mark">MPS</span><span class="brand-caption">PHYSICS / 0.1.4</span></a>
-<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">首页</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">核心</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">物理</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">领域</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">集成</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">参考</span><span data-lang="en">REFERENCE</span></a></nav>
+<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">棣栭〉</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">鏍稿績</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">鐗╃悊</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">棰嗗煙</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">闆嗘垚</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">鍙傝€?/span><span data-lang="en">REFERENCE</span></a></nav>
 
-<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select></div>
+<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">涓枃</option><option value="en">English</option></select></div>
 </header>
 
 <main class="page-shell">
@@ -24,19 +24,19 @@
 <div class="section-kicker">/ CORE MODULE</div>
 
 <h1>
-世界管理</h1>
+涓栫晫绠＄悊</h1>
 
-<p>PhysicsWorld 是模拟的核心容器，拥有所有刚体、碰撞体、关节、力注册表、事件系统和共享内存 Arena。<strong>单一入口</strong>：仅需世界指针即可操作所有子系统。</p>
+<p>PhysicsWorld 鏄ā鎷熺殑鏍稿績瀹瑰櫒锛屾嫢鏈夋墍鏈夊垰浣撱€佺鎾炰綋銆佸叧鑺傘€佸姏娉ㄥ唽琛ㄣ€佷簨浠剁郴缁熷拰鍏变韩鍐呭瓨 Arena銆?strong>鍗曚竴鍏ュ彛</strong>锛氫粎闇€涓栫晫鎸囬拡鍗冲彲鎿嶄綔鎵€鏈夊瓙绯荤粺銆?/p>
 
-<div class="callout"><p><strong>快速开始：</strong> <span class="hi">world_create(g)</span> → <span class="hi">world_step(w, dt)</span> → <span class="hi">world_destroy(w)</span>。三行代码即可运行完整物理模拟。</p></div></div>
+<div class="callout"><p><strong>蹇€熷紑濮嬶細</strong> <span class="hi">world_create(g)</span> 鈫?<span class="hi">world_step(w, dt)</span> 鈫?<span class="hi">world_destroy(w)</span>銆備笁琛屼唬鐮佸嵆鍙繍琛屽畬鏁寸墿鐞嗘ā鎷熴€?/p></div></div>
 
 <div class="page-index">01</div>
 </header>
 
 <div class="module-stack">
 <section class="doc-module">
-<h2>
-API 参考</h2>
+<h2 id="api-h2"
+API 鍙傝€?/h2>
 
 <div class="table-wrap">
 <table>
@@ -44,57 +44,57 @@ API 参考</h2>
 <thead>
 
 <tr>
-<th>C 函数</th><th>JNI</th><th>说明</th></tr>
+<th>C 鍑芥暟</th><th>JNI</th><th>璇存槑</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>world_create</td><td>✅</td><td>创建物理世界，设置重力向量</td></tr>
+<td>world_create</td><td>鉁?/td><td>鍒涘缓鐗╃悊涓栫晫锛岃缃噸鍔涘悜閲?/td></tr>
 
 <tr>
-<td>world_destroy</td><td>✅</td><td>销毁世界及所有资源</td></tr>
+<td>world_destroy</td><td>鉁?/td><td>閿€姣佷笘鐣屽強鎵€鏈夎祫婧?/td></tr>
 
 <tr>
-<td>world_step</td><td>✅</td><td>推进模拟 (包含 ForceRegistry 调度)</td></tr>
+<td>world_step</td><td>鉁?/td><td>鎺ㄨ繘妯℃嫙 (鍖呭惈 ForceRegistry 璋冨害)</td></tr>
 
 <tr>
-<td>world_set_gravity</td><td>✅</td><td>设置重力</td></tr>
+<td>world_set_gravity</td><td>鉁?/td><td>璁剧疆閲嶅姏</td></tr>
 
 <tr>
-<td>world_get_gravity_out</td><td>✅</td><td>读取重力</td></tr>
+<td>world_get_gravity_out</td><td>鉁?/td><td>璇诲彇閲嶅姏</td></tr>
 
 <tr>
-<td>world_set_integration_parameters</td><td>✅</td><td>设置 dt、求解器迭代次数、CCD 子步</td></tr>
+<td>world_set_integration_parameters</td><td>鉁?/td><td>璁剧疆 dt銆佹眰瑙ｅ櫒杩唬娆℃暟銆丆CD 瀛愭</td></tr>
 
 <tr>
-<td>world_get_rigid_body_set_size</td><td>✅</td><td>刚体总数</td></tr>
+<td>world_get_rigid_body_set_size</td><td>鉁?/td><td>鍒氫綋鎬绘暟</td></tr>
 
 <tr>
-<td>world_get_collider_set_size</td><td>✅</td><td>碰撞体总数</td></tr>
+<td>world_get_collider_set_size</td><td>鉁?/td><td>纰版挒浣撴€绘暟</td></tr>
 
 <tr>
-<td>world_body_snapshot</td><td>✅</td><td>批量快照所有刚体状态</td></tr>
+<td>world_body_snapshot</td><td>鉁?/td><td>鎵归噺蹇収鎵€鏈夊垰浣撶姸鎬?/td></tr>
 
 <tr>
-<td>world_update_body_poses</td><td>✅</td><td>批量更新刚体位姿</td></tr>
+<td>world_update_body_poses</td><td>鉁?/td><td>鎵归噺鏇存柊鍒氫綋浣嶅Э</td></tr>
 
 <tr>
-<td>world_update_body_velocities</td><td>✅</td><td>批量更新刚体速度</td></tr>
+<td>world_update_body_velocities</td><td>鉁?/td><td>鎵归噺鏇存柊鍒氫綋閫熷害</td></tr>
 
 <tr>
-<td>world_register_celestial_gravity</td><td>✅</td><td>注册天体引力到 ForceRegistry</td></tr>
+<td>world_register_celestial_gravity</td><td>鉁?/td><td>娉ㄥ唽澶╀綋寮曞姏鍒?ForceRegistry</td></tr>
 
 <tr>
-<td>world_get_force_registry_count</td><td>✅</td><td>已注册力律数量</td></tr>
+<td>world_get_force_registry_count</td><td>鉁?/td><td>宸叉敞鍐屽姏寰嬫暟閲?/td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
-积分参数</h2>
+<h2 id="sec-89969b5b">
+绉垎鍙傛暟</h2>
 
 <div class="table-wrap">
 <table>
@@ -102,33 +102,32 @@ API 参考</h2>
 <thead>
 
 <tr>
-<th>参数</th><th>默认值</th><th>说明</th></tr>
+<th>鍙傛暟</th><th>榛樿鍊?/th><th>璇存槑</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>dt</td><td>1/60</td><td>时间步长 (秒)</td></tr>
+<td>dt</td><td>1/60</td><td>鏃堕棿姝ラ暱 (绉?</td></tr>
 
 <tr>
-<td>num_solver_iterations</td><td>4</td><td>每个子步的约束求解器迭代次数</td></tr>
+<td>num_solver_iterations</td><td>4</td><td>姣忎釜瀛愭鐨勭害鏉熸眰瑙ｅ櫒杩唬娆℃暟</td></tr>
 
 <tr>
-<td>max_ccd_substeps</td><td>1</td><td>快速移动体的 CCD 子步数</td></tr>
+<td>max_ccd_substeps</td><td>1</td><td>蹇€熺Щ鍔ㄤ綋鐨?CCD 瀛愭鏁?/td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
-生命周期</h2>
+<h2 id="sec-6d8e7013"
+鐢熷懡鍛ㄦ湡</h2>
 
 <pre>
-<code class="language-rust">// 创建 → 配置 → 模拟 → 销毁
-let world = world_create(Vec3 { x: 0.0, y: -9.81, z: 0.0 });
+<code class="language-rust">// 鍒涘缓 鈫?閰嶇疆 鈫?妯℃嫙 鈫?閿€姣?let world = world_create(Vec3 { x: 0.0, y: -9.81, z: 0.0 });
 world_set_integration_parameters(world, 1.0/120.0, 8, 2);
-// ... 插入刚体、碰撞体、注册力 ...
+// ... 鎻掑叆鍒氫綋銆佺鎾炰綋銆佹敞鍐屽姏 ...
 loop { world_step(world, dt); }
 world_destroy(world);</code></pre>
 </section>
@@ -150,7 +149,7 @@ World Management</h1>
 
 <div class="module-stack">
 <section class="doc-module">
-<h2>
+<h2 id="api-reference"
 API Reference</h2>
 
 <div class="table-wrap">
@@ -165,50 +164,50 @@ API Reference</h2>
 <tbody>
 
 <tr>
-<td>world_create</td><td>✅</td><td>Create physics world with gravity vector</td></tr>
+<td>world_create</td><td>鉁?/td><td>Create physics world with gravity vector</td></tr>
 
 <tr>
-<td>world_destroy</td><td>✅</td><td>Destroy world and all resources</td></tr>
+<td>world_destroy</td><td>鉁?/td><td>Destroy world and all resources</td></tr>
 
 <tr>
-<td>world_step</td><td>✅</td><td>Advance simulation (includes ForceRegistry dispatch)</td></tr>
+<td>world_step</td><td>鉁?/td><td>Advance simulation (includes ForceRegistry dispatch)</td></tr>
 
 <tr>
-<td>world_set_gravity</td><td>✅</td><td>Set gravity</td></tr>
+<td>world_set_gravity</td><td>鉁?/td><td>Set gravity</td></tr>
 
 <tr>
-<td>world_get_gravity_out</td><td>✅</td><td>Read gravity</td></tr>
+<td>world_get_gravity_out</td><td>鉁?/td><td>Read gravity</td></tr>
 
 <tr>
-<td>world_set_integration_parameters</td><td>✅</td><td>Set dt, solver iterations, CCD substeps</td></tr>
+<td>world_set_integration_parameters</td><td>鉁?/td><td>Set dt, solver iterations, CCD substeps</td></tr>
 
 <tr>
-<td>world_get_rigid_body_set_size</td><td>✅</td><td>Total rigid body count</td></tr>
+<td>world_get_rigid_body_set_size</td><td>鉁?/td><td>Total rigid body count</td></tr>
 
 <tr>
-<td>world_get_collider_set_size</td><td>✅</td><td>Total collider count</td></tr>
+<td>world_get_collider_set_size</td><td>鉁?/td><td>Total collider count</td></tr>
 
 <tr>
-<td>world_body_snapshot</td><td>✅</td><td>Batch snapshot all body states</td></tr>
+<td>world_body_snapshot</td><td>鉁?/td><td>Batch snapshot all body states</td></tr>
 
 <tr>
-<td>world_update_body_poses</td><td>✅</td><td>Batch update body poses</td></tr>
+<td>world_update_body_poses</td><td>鉁?/td><td>Batch update body poses</td></tr>
 
 <tr>
-<td>world_update_body_velocities</td><td>✅</td><td>Batch update body velocities</td></tr>
+<td>world_update_body_velocities</td><td>鉁?/td><td>Batch update body velocities</td></tr>
 
 <tr>
-<td>world_register_celestial_gravity</td><td>✅</td><td>Register celestial gravity to ForceRegistry</td></tr>
+<td>world_register_celestial_gravity</td><td>鉁?/td><td>Register celestial gravity to ForceRegistry</td></tr>
 
 <tr>
-<td>world_get_force_registry_count</td><td>✅</td><td>Registered force law count</td></tr>
+<td>world_get_force_registry_count</td><td>鉁?/td><td>Registered force law count</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
+<h2 id="integration-parameters"
 Integration Parameters</h2>
 
 <div class="table-wrap">
@@ -236,11 +235,11 @@ Integration Parameters</h2>
 </section>
 
 <section class="doc-module">
-<h2>
+<h2 id="lifecycle"
 Lifecycle</h2>
 
 <pre>
-<code class="language-rust">// Create → Configure → Simulate → Destroy
+<code class="language-rust">// Create 鈫?Configure 鈫?Simulate 鈫?Destroy
 let world = world_create(Vec3 { x: 0.0, y: -9.81, z: 0.0 });
 world_set_integration_parameters(world, 1.0/120.0, 8, 2);
 // ... insert bodies, colliders, register forces ...

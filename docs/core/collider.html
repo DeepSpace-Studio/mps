@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>碰撞体与扩展边界 — MPS</title>
+<title>纰版挒浣撲笌鎵╁睍杈圭晫 鈥?MPS</title>
 <link rel="stylesheet" href="../style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
@@ -12,9 +12,9 @@
 
 <body>
 <header class="site-header"><a class="brand" href="../index.html"><span class="brand-mark">MPS</span><span class="brand-caption">PHYSICS / 0.1.4</span></a>
-<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">首页</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">核心</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">物理</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">领域</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">集成</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">参考</span><span data-lang="en">REFERENCE</span></a></nav>
+<nav id="top-nav"><a class="nav-pill" href="../index.html"><span data-lang="zh">棣栭〉</span><span data-lang="en">HOME</span></a><a class="nav-pill" href="../core/world.html"><span data-lang="zh">鏍稿績</span><span data-lang="en">CORE</span></a><a class="nav-pill" href="../physics/gravity.html"><span data-lang="zh">鐗╃悊</span><span data-lang="en">PHYSICS</span></a><a class="nav-pill" href="../domain/spaceflight.html"><span data-lang="zh">棰嗗煙</span><span data-lang="en">DOMAIN</span></a><a class="nav-pill" href="../integration/arena.html"><span data-lang="zh">闆嗘垚</span><span data-lang="en">INTEGRATION</span></a><a class="nav-pill" href="../reference/api.html"><span data-lang="zh">鍙傝€?/span><span data-lang="en">REFERENCE</span></a></nav>
 
-<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select></div>
+<div id="lang-switch"><label for="language-select" class="sr-only">Language</label><select id="language-select" aria-label="Language"><option value="zh">涓枃</option><option value="en">English</option></select></div>
 </header>
 
 <main class="page-shell">
@@ -24,17 +24,17 @@
 <div class="section-kicker">/ CORE MODULE</div>
 
 <h1>
-碰撞体与扩展边界</h1>
+纰版挒浣撲笌鎵╁睍杈圭晫</h1>
 
-<p>碰撞体定义物理形状。支持标准几何体、扩展边界和体素系统。</p></div>
+<p>纰版挒浣撳畾涔夌墿鐞嗗舰鐘躲€傛敮鎸佹爣鍑嗗嚑浣曚綋銆佹墿灞曡竟鐣屽拰浣撶礌绯荤粺銆?/p></div>
 
 <div class="page-index">03</div>
 </header>
 
 <div class="module-stack">
 <section class="doc-module">
-<h2>
-标准形状构建器</h2>
+<h2 id="sec-3f964f84"
+鏍囧噯褰㈢姸鏋勫缓鍣?/h2>
 
 <div class="table-wrap">
 <table>
@@ -42,57 +42,57 @@
 <thead>
 
 <tr>
-<th>C 函数</th><th>形状</th></tr>
+<th>C 鍑芥暟</th><th>褰㈢姸</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>collider_builder_create_ex</td><td>球体 (半径)</td></tr>
+<td>collider_builder_create_ex</td><td>鐞冧綋 (鍗婂緞)</td></tr>
 
 <tr>
-<td>collider_builder_create_obb</td><td>长方体 (半边长)</td></tr>
+<td>collider_builder_create_obb</td><td>闀挎柟浣?(鍗婅竟闀?</td></tr>
 
 <tr>
-<td>collider_builder_create_sphere</td><td>球体</td></tr>
+<td>collider_builder_create_sphere</td><td>鐞冧綋</td></tr>
 
 <tr>
-<td>collider_builder_create_halfspace</td><td>半空间 (平面)</td></tr>
+<td>collider_builder_create_halfspace</td><td>鍗婄┖闂?(骞抽潰)</td></tr>
 
 <tr>
-<td>collider_builder_create_heightmap</td><td>高度场地形</td></tr>
+<td>collider_builder_create_heightmap</td><td>楂樺害鍦哄湴褰?/td></tr>
 
 <tr>
-<td>collider_builder_create_convex_hull</td><td>凸包</td></tr>
+<td>collider_builder_create_convex_hull</td><td>鍑稿寘</td></tr>
 
 <tr>
-<td>collider_builder_create_point_cloud</td><td>点云</td></tr>
+<td>collider_builder_create_point_cloud</td><td>鐐逛簯</td></tr>
 
 <tr>
-<td>collider_builder_create_double_bv</td><td>双重包围体</td></tr>
+<td>collider_builder_create_double_bv</td><td>鍙岄噸鍖呭洿浣?/td></tr>
 
 <tr>
-<td>collider_builder_create_skewed_obb</td><td>倾斜包围盒</td></tr>
+<td>collider_builder_create_skewed_obb</td><td>鍊炬枩鍖呭洿鐩?/td></tr>
 
 <tr>
-<td>collider_builder_create_discrete_obb</td><td>离散包围盒</td></tr>
+<td>collider_builder_create_discrete_obb</td><td>绂绘暎鍖呭洿鐩?/td></tr>
 
 <tr>
-<td>collider_builder_create_fused_collapsing</td><td>融合塌陷壳</td></tr>
+<td>collider_builder_create_fused_collapsing</td><td>铻嶅悎濉岄櫡澹?/td></tr>
 
 <tr>
-<td>collider_builder_create_edge_bvh</td><td>边 BVH</td></tr>
+<td>collider_builder_create_edge_bvh</td><td>杈?BVH</td></tr>
 
 <tr>
-<td>collider_builder_create_medial_spheres</td><td>中轴球近似</td></tr>
+<td>collider_builder_create_medial_spheres</td><td>涓酱鐞冭繎浼?/td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
-扩展边界</h2>
+<h2 id="sec-3d2d9b4f">
+鎵╁睍杈圭晫</h2>
 
 <div class="table-wrap">
 <table>
@@ -100,45 +100,45 @@
 <thead>
 
 <tr>
-<th>C 函数</th><th>形状</th><th>说明</th></tr>
+<th>C 鍑芥暟</th><th>褰㈢姸</th><th>璇存槑</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>collider_builder_create_capsule</td><td>胶囊体</td><td>线段 + 半径</td></tr>
+<td>collider_builder_create_capsule</td><td>鑳跺泭浣?/td><td>绾挎 + 鍗婂緞</td></tr>
 
 <tr>
-<td>collider_builder_create_ssv</td><td>SSV</td><td>扫掠球体</td></tr>
+<td>collider_builder_create_ssv</td><td>SSV</td><td>鎵帬鐞冧綋</td></tr>
 
 <tr>
-<td>collider_builder_create_ellipsoid</td><td>椭球</td><td>分段近似</td></tr>
+<td>collider_builder_create_ellipsoid</td><td>妞悆</td><td>鍒嗘杩戜技</td></tr>
 
 <tr>
-<td>collider_builder_create_prism</td><td>棱柱</td><td>正棱柱</td></tr>
+<td>collider_builder_create_prism</td><td>妫辨煴</td><td>姝ｆ１鏌?/td></tr>
 
 <tr>
-<td>collider_builder_create_cylinder</td><td>圆柱</td><td>圆柱体</td></tr>
+<td>collider_builder_create_cylinder</td><td>鍦嗘煴</td><td>鍦嗘煴浣?/td></tr>
 
 <tr>
-<td>collider_builder_create_spherical_shell</td><td>球壳</td><td>球壳</td></tr>
+<td>collider_builder_create_spherical_shell</td><td>鐞冨３</td><td>鐞冨３</td></tr>
 
 <tr>
-<td>collider_builder_create_kdop</td><td>kDOP</td><td>离散方向多面体 (6/14/18/26-DOP)</td></tr>
+<td>collider_builder_create_kdop</td><td>kDOP</td><td>绂绘暎鏂瑰悜澶氶潰浣?(6/14/18/26-DOP)</td></tr>
 
 <tr>
-<td>collider_builder_create_fdh</td><td>FDH</td><td>功能方向直方图</td></tr>
+<td>collider_builder_create_fdh</td><td>FDH</td><td>鍔熻兘鏂瑰悜鐩存柟鍥?/td></tr>
 
 <tr>
-<td>collider_builder_create_neural_bounds</td><td>Neural</td><td>MLP 隐式曲面边界</td></tr>
+<td>collider_builder_create_neural_bounds</td><td>Neural</td><td>MLP 闅愬紡鏇查潰杈圭晫</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
-体素碰撞体</h2>
+<h2 id="sec-db8875a0"
+浣撶礌纰版挒浣?/h2>
 
 <div class="table-wrap">
 <table>
@@ -146,27 +146,27 @@
 <thead>
 
 <tr>
-<th>C 函数</th><th>说明</th></tr>
+<th>C 鍑芥暟</th><th>璇存槑</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>collider_builder_create_voxels</td><td>从缓冲区构建体素碰撞体</td></tr>
+<td>collider_builder_create_voxels</td><td>浠庣紦鍐插尯鏋勫缓浣撶礌纰版挒浣?/td></tr>
 
 <tr>
-<td>collider_builder_create_voxel_aabb</td><td>从 AABB 区域构建体素</td></tr>
+<td>collider_builder_create_voxel_aabb</td><td>浠?AABB 鍖哄煙鏋勫缓浣撶礌</td></tr>
 
 <tr>
-<td>collider_builder_create_voxel_obb</td><td>从 OBB 区域构建体素</td></tr>
+<td>collider_builder_create_voxel_obb</td><td>浠?OBB 鍖哄煙鏋勫缓浣撶礌</td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
-构建器设置</h2>
+<h2 id="builder-settings">
+鏋勫缓鍣ㄨ缃?/h2>
 
 <div class="table-wrap">
 <table>
@@ -174,54 +174,54 @@
 <thead>
 
 <tr>
-<th>C 函数</th><th>说明</th></tr>
+<th>C 鍑芥暟</th><th>璇存槑</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>collider_builder_set_translation</td><td>设置相对位置</td></tr>
+<td>collider_builder_set_translation</td><td>璁剧疆鐩稿浣嶇疆</td></tr>
 
 <tr>
-<td>collider_builder_set_rotation</td><td>设置相对旋转</td></tr>
+<td>collider_builder_set_rotation</td><td>璁剧疆鐩稿鏃嬭浆</td></tr>
 
 <tr>
-<td>collider_builder_set_pose</td><td>设置相对位姿</td></tr>
+<td>collider_builder_set_pose</td><td>璁剧疆鐩稿浣嶅Э</td></tr>
 
 <tr>
-<td>collider_builder_set_sensor</td><td>标记为传感器</td></tr>
+<td>collider_builder_set_sensor</td><td>鏍囪涓轰紶鎰熷櫒</td></tr>
 
 <tr>
-<td>collider_builder_set_friction</td><td>设置摩擦系数</td></tr>
+<td>collider_builder_set_friction</td><td>璁剧疆鎽╂摝绯绘暟</td></tr>
 
 <tr>
-<td>collider_builder_set_restitution</td><td>设置弹性</td></tr>
+<td>collider_builder_set_restitution</td><td>璁剧疆寮规€?/td></tr>
 
 <tr>
-<td>collider_builder_set_density</td><td>设置密度</td></tr>
+<td>collider_builder_set_density</td><td>璁剧疆瀵嗗害</td></tr>
 
 <tr>
-<td>collider_builder_set_collision_groups</td><td>设置碰撞过滤组</td></tr>
+<td>collider_builder_set_collision_groups</td><td>璁剧疆纰版挒杩囨护缁?/td></tr>
 
 <tr>
-<td>collider_builder_set_solver_groups</td><td>设置求解器过滤组</td></tr>
+<td>collider_builder_set_solver_groups</td><td>璁剧疆姹傝В鍣ㄨ繃婊ょ粍</td></tr>
 
 <tr>
-<td>collider_builder_set_active_events</td><td>设置事件标志</td></tr>
+<td>collider_builder_set_active_events</td><td>璁剧疆浜嬩欢鏍囧織</td></tr>
 
 <tr>
-<td>collider_builder_set_active_hooks</td><td>设置钩子标志</td></tr>
+<td>collider_builder_set_active_hooks</td><td>璁剧疆閽╁瓙鏍囧織</td></tr>
 
 <tr>
-<td>collider_builder_set_contact_force_threshold</td><td>接触力阈值</td></tr>
+<td>collider_builder_set_contact_force_threshold</td><td>鎺ヨЕ鍔涢槇鍊?/td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
-世界操作</h2>
+<h2 id="sec-14427c24">
+涓栫晫鎿嶄綔</h2>
 
 <div class="table-wrap">
 <table>
@@ -229,27 +229,27 @@
 <thead>
 
 <tr>
-<th>C 函数</th><th>说明</th></tr>
+<th>C 鍑芥暟</th><th>璇存槑</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>world_insert_collider</td><td>插入独立碰撞体</td></tr>
+<td>world_insert_collider</td><td>鎻掑叆鐙珛纰版挒浣?/td></tr>
 
 <tr>
-<td>world_insert_collider_with_parent</td><td>插入子碰撞体 (附加到刚体)</td></tr>
+<td>world_insert_collider_with_parent</td><td>鎻掑叆瀛愮鎾炰綋 (闄勫姞鍒板垰浣?</td></tr>
 
 <tr>
-<td>world_remove_collider</td><td>移除碰撞体</td></tr>
+<td>world_remove_collider</td><td>绉婚櫎纰版挒浣?/td></tr>
 </tbody>
 </table>
 </div>
 </section>
 
 <section class="doc-module">
-<h2>
-读写</h2>
+<h2 id="sec-a61d332e"
+璇诲啓</h2>
 
 <div class="table-wrap">
 <table>
@@ -257,45 +257,43 @@
 <thead>
 
 <tr>
-<th>C 函数</th><th>说明</th></tr>
+<th>C 鍑芥暟</th><th>璇存槑</th></tr>
 </thead>
 
 <tbody>
 
 <tr>
-<td>collider_get_translation</td><td>获取世界坐标位置</td></tr>
+<td>collider_get_translation</td><td>鑾峰彇涓栫晫鍧愭爣浣嶇疆</td></tr>
 
 <tr>
-<td>collider_get_rotation</td><td>获取世界坐标旋转</td></tr>
+<td>collider_get_rotation</td><td>鑾峰彇涓栫晫鍧愭爣鏃嬭浆</td></tr>
 
 <tr>
-<td>collider_is_sensor</td><td>检查传感器标志</td></tr>
+<td>collider_is_sensor</td><td>妫€鏌ヤ紶鎰熷櫒鏍囧織</td></tr>
 
 <tr>
-<td>collider_get_friction</td><td>获取摩擦</td></tr>
+<td>collider_get_friction</td><td>鑾峰彇鎽╂摝</td></tr>
 
 <tr>
-<td>collider_get_restitution</td><td>获取弹性</td></tr>
+<td>collider_get_restitution</td><td>鑾峰彇寮规€?/td></tr>
 
 <tr>
-<td>collider_get_collision_groups</td><td>获取碰撞组</td></tr>
+<td>collider_get_collision_groups</td><td>鑾峰彇纰版挒缁?/td></tr>
 
 <tr>
-<td>collider_get_density</td><td>获取密度</td></tr>
+<td>collider_get_density</td><td>鑾峰彇瀵嗗害</td></tr>
 
 <tr>
-<td>collider_get_shape_count</td><td>获取子形状数量</td></tr>
+<td>collider_get_shape_count</td><td>鑾峰彇瀛愬舰鐘舵暟閲?/td></tr>
 </tbody>
 </table>
 </div>
 
 <pre>
-<code class="language-java">// 从 byte[] 构建体素碰撞体
-long collider = RigidBodyNative.colliderBuilderCreateVoxelBytes(
+<code class="language-java">// 浠?byte[] 鏋勫缓浣撶礌纰版挒浣?long collider = RigidBodyNative.colliderBuilderCreateVoxelBytes(
     voxels, 16, 16, 16, 1.0, 0, 0, 0,
     0 /*Auto*/, 1 /*dynamic*/, 27, 500);
-// 一步构建静态体素地形
-long terrain = RigidBodyNative.worldInsertStaticVoxelAabb(
+// 涓€姝ユ瀯寤洪潤鎬佷綋绱犲湴褰?long terrain = RigidBodyNative.worldInsertStaticVoxelAabb(
     world, 0, 0, 0, 256, 64, 256, 1.0,
     0 /*Auto*/, 27, 500, 0.6, 0.3);</code></pre>
 </section>
@@ -317,7 +315,7 @@ Collider & Extended Bounds</h1>
 
 <div class="module-stack">
 <section class="doc-module">
-<h2>
+<h2 id="standard-shape-builders"
 Standard Shape Builders</h2>
 
 <div class="table-wrap">
@@ -357,7 +355,7 @@ Standard Shape Builders</h2>
 </section>
 
 <section class="doc-module">
-<h2>
+<h2 id="extended-bounds"
 Extended Bounds</h2>
 
 <div class="table-wrap">
@@ -403,7 +401,7 @@ Extended Bounds</h2>
 </section>
 
 <section class="doc-module">
-<h2>
+<h2 id="voxel-colliders"
 Voxel Colliders</h2>
 
 <div class="table-wrap">
@@ -431,7 +429,7 @@ Voxel Colliders</h2>
 </section>
 
 <section class="doc-module">
-<h2>
+<h2 id="builder-settings"
 Builder Settings</h2>
 
 <div class="table-wrap">
@@ -471,7 +469,7 @@ Builder Settings</h2>
 </section>
 
 <section class="doc-module">
-<h2>
+<h2 id="world-operations"
 World Operations</h2>
 
 <div class="table-wrap">
@@ -499,7 +497,7 @@ World Operations</h2>
 </section>
 
 <section class="doc-module">
-<h2>
+<h2 id="getterssetters"
 Getters/Setters</h2>
 
 <div class="table-wrap">
@@ -535,12 +533,10 @@ Getters/Setters</h2>
 </div>
 
 <pre>
-<code class="language-java">// 从 byte[] 构建体素碰撞体
-long collider = RigidBodyNative.colliderBuilderCreateVoxelBytes(
+<code class="language-java">// 浠?byte[] 鏋勫缓浣撶礌纰版挒浣?long collider = RigidBodyNative.colliderBuilderCreateVoxelBytes(
     voxels, 16, 16, 16, 1.0, 0, 0, 0,
     0 /*Auto*/, 1 /*dynamic*/, 27, 500);
-// 一步构建静态体素地形
-long terrain = RigidBodyNative.worldInsertStaticVoxelAabb(
+// 涓€姝ユ瀯寤洪潤鎬佷綋绱犲湴褰?long terrain = RigidBodyNative.worldInsertStaticVoxelAabb(
     world, 0, 0, 0, 256, 64, 256, 1.0,
     0 /*Auto*/, 27, 500, 0.6, 0.3);</code></pre>
 </section>
