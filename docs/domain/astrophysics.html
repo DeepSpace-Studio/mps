@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>天体物理、混沌、相对论、核物理与材料力学 — MPS</title>
+<title>天体物理公式详解 — MPS</title>
 <link rel="stylesheet" href="../style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
@@ -22,41 +22,95 @@
 <header class="page-masthead accent-domain">
 <div>
 <div class="section-kicker">/ DOMAIN MODULE</div>
-
-<h1>天体物理、混沌、相对论、核物理与材料力学</h1>
+<h1>天体物理公式详解</h1>
+<p><strong>astrophysics</strong> 模块的公式详解。涵盖 N 体模拟、暗物质、恒星结构与宇宙学。所有公式为纯 Rust 函数，位于 <code>mps-formula</code> crate。</p>
 </div>
-
 <div class="page-index">02</div>
 </header>
 
 <div class="module-stack">
-<section class="doc-module">
-<h2>🌌 天体物理 (astrophysics)</h2>
-<p>N体直接求和、Barnes-Hut O(N log N)、FMM 单极子加速、后牛顿轨道修正、洛希极限、轨道共振检测、Lane-Emden 多方球、质量-光度关系、Eddington 光度、Hubble 定律、NFW 暗物质密度/质量、Planck 黑体辐射、Wien 位移、Jeans 质量/长度</p></section>
 
 <section class="doc-module">
-<h2>⚛️ 相对论 (relativity)</h2>
-<p>洛伦兹变换、四矢量、长度收缩、时间膨胀、施瓦西度规、Kerr 度规、ISCO、引力红移、光线偏折、引力时间延迟、Reissner-Nordstrom 度规、后牛顿展开</p></section>
+<h2>N 体引力模拟 (3 种算法)</h2>
+<div class="table-wrap">
+<table>
+<thead>
+<tr><th>函数</th><th>算法</th><th>复杂度</th><th>最佳场景</th></tr>
+</thead>
+<tbody>
+<tr><td>nbody_direct_sum</td><td>直接 O(N²) 求和</td><td>O(N²)</td><td>N &lt; 1000，高精度需求</td></tr>
+<tr><td>nbody_barnes_hut</td><td>Barnes-Hut 树算法</td><td>O(N log N)</td><td>N 1000–100000，中等精度</td></tr>
+<tr><td>nbody_fmm_monopole</td><td>快速多极子 (FMM) 单极子</td><td>O(N)</td><td>N &gt; 100000，大规模模拟</td></tr>
+</tbody>
+</table>
+</div>
+<p>三种算法精度可配置。Barnes-Hut 通过 θ 参数控制展开精度 (θ→0 等价于直接求和)。FMM 单极子目前仅实现单极子 (monopole) 加速，高阶多极子展开为后续版本计划。</p>
+</section>
 
 <section class="doc-module">
-<h2>🔬 量子力学 (quantum)</h2>
-<p>概率密度、波函数归一化、WKB 透射系数、矩形势垒隧穿、零点能、谐振子能级、自由粒子、无限深势阱、氢原子、不确定性原理、Pauli 矩阵</p></section>
+<h2>后牛顿轨道修正</h2>
+<table>
+<thead>
+<tr><th>函数</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td>post_newtonian_correction</td><td>1PN + 2PN 后牛顿加速度修正</td></tr>
+</tbody>
+</table>
+<p>在强引力场 (如水星、双星系统) 中，牛顿引力需要相对论修正。1PN 项产生水星近日点进动 (~43"/世纪)，2PN 项描述引力波辐射阻尼。</p>
+</section>
 
 <section class="doc-module">
-<h2>🧪 核物理 (nuclear)</h2>
-<p>放射性衰变、半衰期、Bethe-Weizsäcker 结合能、核反应 Q 值、D-T/D-D 聚变、Bateman 衰变链、中子扩散、四因子公式、γ 衰减</p></section>
+<h2>天体物理参数</h2>
+<div class="table-wrap">
+<table>
+<thead>
+<tr><th>函数</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td>roche_limit</td><td>洛希极限 — 卫星被潮汐力撕裂的最小轨道半径</td></tr>
+<tr><td>orbital_resonance_detection</td><td>轨道共振检测 — 判断两轨道周期是否成整数比</td></tr>
+<tr><td>lane_emden</td><td>Lane-Emden 多方球方程 — 恒星内部结构模型</td></tr>
+<tr><td>mass_luminosity_relation</td><td>主序星质量-光度关系</td></tr>
+<tr><td>eddington_luminosity</td><td>Eddington 光度 — 吸积天体辐射压上限</td></tr>
+<tr><td>hubble_law</td><td>Hubble 定律 — 红移-距离关系</td></tr>
+</tbody>
+</table>
+</div>
+</section>
 
 <section class="doc-module">
-<h2>🔩 材料力学 (material_mechanics)</h2>
-<p>Hooke 定律、弹性常数、von Mises/Tresca 屈服、断裂力学、疲劳 (Basquin/Coffin-Manson/Miner)、蠕变、梁弯曲/屈曲</p></section>
+<h2>暗物质模型</h2>
+<div class="table-wrap">
+<table>
+<thead>
+<tr><th>函数</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td>nfw_density</td><td>NFW 暗物质晕密度分布 ρ(r) = ρ₀ / [(r/rₛ)(1+r/rₛ)²]</td></tr>
+<tr><td>nfw_enclosed_mass</td><td>NFW 晕内包质量 M(&lt;r)</td></tr>
+</tbody>
+</table>
+</div>
+</section>
 
 <section class="doc-module">
-<h2>🎲 混沌与非线性 (chaos)</h2>
-<p>Lorenz 吸引子、双摆、逻辑斯蒂映射、李雅普诺夫指数、分岔图、混沌检测</p></section>
+<h2>辐射与统计物理</h2>
+<div class="table-wrap">
+<table>
+<thead>
+<tr><th>函数</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td>planck_blackbody</td><td>Planck 黑体辐射谱 B(ν, T)</td></tr>
+<tr><td>wien_displacement</td><td>Wien 位移定律 — 峰值波长 λₘₐₓ = b/T</td></tr>
+<tr><td>jeans_mass</td><td>Jeans 质量 — 分子云引力坍缩临界质量</td></tr>
+<tr><td>jeans_length</td><td>Jeans 长度 — 引力坍缩临界尺度</td></tr>
+</tbody>
+</table>
+</div>
+</section>
 
-<section class="doc-module">
-<h2>🧬 分子动力学 (molecular)</h2>
-<p>Lennard-Jones 势/力、库仑势/力、对相互作用、真空库仑常数</p></section>
 </div>
 </div>
 
@@ -64,41 +118,95 @@
 <header class="page-masthead accent-domain">
 <div>
 <div class="section-kicker">/ DOMAIN MODULE</div>
-
-<h1>Astrophysics, Chaos, Relativity, Nuclear & Materials</h1>
+<h1>Astrophysics Formula Detail</h1>
+<p>Detailed reference for the <strong>astrophysics</strong> module. Covers N-body simulation, dark matter, stellar structure, and cosmology. All functions are pure Rust, in the <code>mps-formula</code> crate.</p>
 </div>
-
 <div class="page-index">02</div>
 </header>
 
 <div class="module-stack">
-<section class="doc-module">
-<h2>🌌 Astrophysics</h2>
-<p>N-body direct/Barnes-Hut/FMM, post-Newtonian correction, Roche limit, resonance detection, Lane-Emden, mass-luminosity, Eddington luminosity, Hubble law, NFW profile, Planck blackbody, Jeans mass/length.</p></section>
 
 <section class="doc-module">
-<h2>⚛️ Relativity</h2>
-<p>Lorentz transformation, four-vectors, length contraction, time dilation, Schwarzschild metric, Kerr metric, ISCO, gravitational redshift, light deflection, Reissner-Nordstrom.</p></section>
+<h2>N-Body Gravity (3 Algorithms)</h2>
+<div class="table-wrap">
+<table>
+<thead>
+<tr><th>Function</th><th>Algorithm</th><th>Complexity</th><th>Best For</th></tr>
+</thead>
+<tbody>
+<tr><td>nbody_direct_sum</td><td>Direct O(N²) sum</td><td>O(N²)</td><td>N &lt; 1000, high precision</td></tr>
+<tr><td>nbody_barnes_hut</td><td>Barnes-Hut tree algorithm</td><td>O(N log N)</td><td>N 1000–100000, medium precision</td></tr>
+<tr><td>nbody_fmm_monopole</td><td>Fast Multipole Method monopole</td><td>O(N)</td><td>N &gt; 100000, large-scale sims</td></tr>
+</tbody>
+</table>
+</div>
+<p>All three algorithms have configurable precision. Barnes-Hut uses θ to control expansion accuracy (θ→0 is equivalent to direct sum). FMM currently implements monopole acceleration only; higher multipole orders are planned.</p>
+</section>
 
 <section class="doc-module">
-<h2>🔬 Quantum</h2>
-<p>Probability density, wave normalization, WKB transmission, barrier tunneling, zero-point energy, harmonic oscillator, free particle, infinite well, hydrogen atom, uncertainty principle, Pauli matrices.</p></section>
+<h2>Post-Newtonian Correction</h2>
+<table>
+<thead>
+<tr><th>Function</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>post_newtonian_correction</td><td>1PN + 2PN post-Newtonian acceleration correction</td></tr>
+</tbody>
+</table>
+<p>In strong gravitational fields (Mercury, binary systems), Newtonian gravity needs relativistic corrections. The 1PN term produces Mercury's perihelion precession (~43"/century); the 2PN term describes gravitational wave radiation damping.</p>
+</section>
 
 <section class="doc-module">
-<h2>🧪 Nuclear</h2>
-<p>Radioactive decay, half-life, Bethe-Weizsäcker binding energy, reaction Q-value, D-T/D-D fusion, Bateman chain, neutron diffusion, four-factor formula, gamma attenuation.</p></section>
+<h2>Astrophysical Parameters</h2>
+<div class="table-wrap">
+<table>
+<thead>
+<tr><th>Function</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>roche_limit</td><td>Roche limit — minimum orbital radius before tidal disruption</td></tr>
+<tr><td>orbital_resonance_detection</td><td>Detect orbital resonance between two periods</td></tr>
+<tr><td>lane_emden</td><td>Lane-Emden polytrope — stellar interior structure model</td></tr>
+<tr><td>mass_luminosity_relation</td><td>Main-sequence mass-luminosity relation</td></tr>
+<tr><td>eddington_luminosity</td><td>Eddington luminosity — radiation pressure upper limit</td></tr>
+<tr><td>hubble_law</td><td>Hubble law — redshift-distance relation</td></tr>
+</tbody>
+</table>
+</div>
+</section>
 
 <section class="doc-module">
-<h2>🔩 Material Mechanics</h2>
-<p>Hooke's law, elastic constants, von Mises/Tresca yield, fracture mechanics, fatigue (Basquin/Coffin-Manson/Miner), creep, beam bending/buckling.</p></section>
+<h2>Dark Matter Models</h2>
+<div class="table-wrap">
+<table>
+<thead>
+<tr><th>Function</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>nfw_density</td><td>NFW halo density profile ρ(r) = ρ₀ / [(r/rₛ)(1+r/rₛ)²]</td></tr>
+<tr><td>nfw_enclosed_mass</td><td>NFW enclosed mass M(&lt;r)</td></tr>
+</tbody>
+</table>
+</div>
+</section>
 
 <section class="doc-module">
-<h2>🎲 Chaos & Nonlinear Dynamics</h2>
-<p>Lorenz attractor, double pendulum, logistic map, Lyapunov exponents, bifurcation diagram, chaos detection.</p></section>
+<h2>Radiation & Statistical Physics</h2>
+<div class="table-wrap">
+<table>
+<thead>
+<tr><th>Function</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>planck_blackbody</td><td>Planck blackbody spectrum B(ν, T)</td></tr>
+<tr><td>wien_displacement</td><td>Wien displacement law — peak wavelength λₘₐₓ = b/T</td></tr>
+<tr><td>jeans_mass</td><td>Jeans mass — critical mass for gravitational collapse</td></tr>
+<tr><td>jeans_length</td><td>Jeans length — critical scale for collapse</td></tr>
+</tbody>
+</table>
+</div>
+</section>
 
-<section class="doc-module">
-<h2>🧬 Molecular Dynamics</h2>
-<p>Lennard-Jones potential/force, Coulomb potential/force, pairwise interactions, vacuum Coulomb constant.</p></section>
 </div>
 </div>
 </main>

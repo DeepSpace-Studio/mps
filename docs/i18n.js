@@ -10,6 +10,14 @@
     document.querySelectorAll('#language-select').forEach(selector=>{
       selector.value=selected;
     });
+    // Update nav active state — highlight the pill whose text matches current page
+    const path = window.location.pathname;
+    document.querySelectorAll('#top-nav .nav-pill').forEach(pill => {
+      const href = pill.getAttribute('href');
+      const isActive = href === path.substring(path.lastIndexOf('/') + 1) ||
+                       (href === 'index.html' && (path.endsWith('/') || path.endsWith('/docs/')));
+      pill.classList.toggle('active', isActive);
+    });
     localStorage.setItem('mps-docs-lang',selected);
   }
   document.addEventListener('DOMContentLoaded',()=>{
