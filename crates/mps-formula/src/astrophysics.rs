@@ -639,3 +639,177 @@ pub fn jeans_length(temperature: f64, density: f64, mean_molecular_weight: f64) 
 fn finite_4(a: f64, b: f64, c: f64, d: f64) -> bool {
     a.is_finite() && b.is_finite() && c.is_finite() && d.is_finite()
 }
+
+// ---------------------------------------------------------------------------
+// Stellar evolution
+// ---------------------------------------------------------------------------
+
+/// Main sequence lifetime: τ ≈ 10¹⁰ · (M/M☉)^(-2.5) years
+pub fn main_sequence_lifetime(mass_solar: f64) -> Option<f64> {
+    if !mass_solar.is_finite() || mass_solar <= 0.0 { return None; }
+    Some(1.0e10 * mass_solar.powf(-2.5))
+}
+
+/// Mass-radius relation for main sequence stars: R/R☉ ≈ (M/M☉)^0.8
+pub fn mass_radius_relation(mass_solar: f64) -> Option<f64> {
+    if !mass_solar.is_finite() || mass_solar <= 0.0 { return None; }
+    Some(mass_solar.powf(0.8))
+}
+
+/// Chandrasekhar mass: M_ch = 1.44 M☉
+pub fn chandrasekhar_mass_limit() -> f64 { 1.44 }
+
+// ---------------------------------------------------------------------------
+// Binary star systems
+// ---------------------------------------------------------------------------
+
+/// Binary mass function: f(m) = (m₂·sin i)³ / (m₁+m₂)² = P·K₁³/(2πG)
+pub fn mass_function(period_seconds: f64, semi_amplitude: f64) -> Option<f64> {
+    let g = 6.67430e-11;
+    if !period_seconds.is_finite() || period_seconds <= 0.0 || !semi_amplitude.is_finite() || semi_amplitude <= 0.0 { return None; }
+    Some(period_seconds * semi_amplitude.powi(3) / (2.0 * std::f64::consts::PI * g))
+}
+
+/// Kepler's third law for binary: a³ = G·(m₁+m₂)·P²/(4π²)
+pub fn binary_semi_major_axis(total_mass: f64, period: f64) -> Option<f64> {
+    let g = 6.67430e-11;
+    if !total_mass.is_finite() || total_mass <= 0.0 || !period.is_finite() || period <= 0.0 { return None; }
+    Some((g * total_mass * period * period / (4.0 * std::f64::consts::PI * std::f64::consts::PI)).cbrt())
+}
+
+// ---------------------------------------------------------------------------
+// Accretion disk (Shakura-Sunyaev alpha model)
+// ---------------------------------------------------------------------------
+
+/// Shakura-Sunyaev effective temperature at radius:
+/// T_eff(r) = (3GM·M_dot / (8π·σ·r³))^(1/4) · (1 - (R_in/r)^(1/2))^(1/4)
+pub fn ss73_disk_temperature(
+    mass_kg: f64, accretion_rate: f64, radius: f64, inner_radius: f64,
+) -> Option<f64> {
+    let g = 6.67430e-11;
+    let sigma = 5.670_374_419e-8;
+    if !finite_4(mass_kg, accretion_rate, radius, inner_radius) || mass_kg <= 0.0 || accretion_rate < 0.0 || radius <= 0.0 || inner_radius <= 0.0 || radius < inner_radius { return None; }
+    let factor = 3.0 * g * mass_kg * accretion_rate / (8.0 * std::f64::consts::PI * sigma * radius.powi(3));
+    let inner = (1.0 - (inner_radius / radius).sqrt()).max(0.0);
+    Some((factor * inner).powf(0.25))
+}
+
+// ---------------------------------------------------------------------------
+// Supernova
+// ---------------------------------------------------------------------------
+
+/// Chandrasekhar mass (alternative formulation in kg).
+pub fn chandrasekhar_mass_kg() -> f64 { 2.865e30 }
+
+/// Nickel-56 decay contribution to SN light curve: L(t) = M_Ni · ε_Ni · exp(-t/τ_Ni)
+/// τ_Ni ≈ 8.76 days
+pub fn nickel56_decay_luminosity(nickel_mass_kg: f64, time_days: f64) -> Option<f64> {
+    if !nickel_mass_kg.is_finite() || nickel_mass_kg < 0.0 || !time_days.is_finite() || time_days < 0.0 { return None; }
+    let tau = 8.76 * 86400.0; // 8.76 days in seconds
+    let epsilon = 3.90e13; // J/kg
+    Some(nickel_mass_kg * epsilon * (-time_days * 86400.0 / tau).exp())
+}
+
+// ---------------------------------------------------------------------------
+// Exoplanet characterization
+// ---------------------------------------------------------------------------
+
+/// Transit depth: δ = (R_p / R_s)²
+pub fn transit_depth(planet_radius: f64, star_radius: f64) -> Option<f64> {
+    if !finite_4(planet_radius, star_radius, 0.0, 0.0) || planet_radius < 0.0 || star_radius <= 0.0 { return None; }
+    Some((planet_radius / star_radius).powi(2))
+}
+
+/// Radial velocity semi-amplitude: K = (2πG/P)^(1/3) · (m_p·sin i)/((m_s+m_p)^(2/3))
+pub fn radial_velocity_semi_amplitude(planet_mass_kg: f64, star_mass_kg: f64, period: f64, inclination: f64) -> Option<f64> {
+    let g = 6.67430e-11;
+    if !finite_4(planet_mass_kg, star_mass_kg, period, inclination) || planet_mass_kg <= 0.0 || star_mass_kg <= 0.0 || period <= 0.0 { return None; }
+    let total = star_mass_kg + planet_mass_kg;
+    let m_sin_i = planet_mass_kg * inclination.sin();
+    Some((2.0 * std::f64::consts::PI * g / period).cbrt() * m_sin_i / total.powf(2.0 / 3.0))
+}
+
+/// Habitable zone inner and outer boundaries (simplified).
+pub fn habitable_zone_boundaries(star_luminosity_solar: f64) -> Option<(f64, f64)> {
+    if !star_luminosity_solar.is_finite() || star_luminosity_solar <= 0.0 { return None; }
+    let inner = (star_luminosity_solar / 1.1).sqrt();
+    let outer = (star_luminosity_solar / 0.53).sqrt();
+    Some((inner, outer))
+}
+
+// ---------------------------------------------------------------------------
+// Galaxy rotation curve
+// ---------------------------------------------------------------------------
+
+/// Circular velocity for NFW dark matter halo: V_c²(r) = V_c²_r · ln(1+cx) - cx/(1+cx) / (ln(1+c) - c/(1+c))
+/// Returns V_c in km/s at radius r in units of the scale radius.
+pub fn nfw_circular_velocity(r: f64, v_max: f64, r_scale: f64) -> Option<f64> {
+    if !finite_4(r, v_max, r_scale, 0.0) || r < 0.0 || v_max <= 0.0 || r_scale <= 0.0 { return None; }
+    let x = r / r_scale;
+    if x <= 0.0 { return None; }
+    let ln1x = (1.0 + x).ln();
+    Some(v_max * (ln1x / x - 1.0 / (1.0 + x)).sqrt() / (std::f64::consts::LN_2 - 0.5).sqrt())
+}
+
+// ---------------------------------------------------------------------------
+// Stellar initial mass function
+// ---------------------------------------------------------------------------
+
+/// Salpeter IMF: ξ(m) ∝ m^(-2.35)
+pub fn salpeter_imf(mass_solar: f64) -> Option<f64> {
+    if !mass_solar.is_finite() || mass_solar <= 0.0 { return None; }
+    Some(mass_solar.powf(-2.35))
+}
+
+/// Kroupa IMF (piecewise power-law):
+/// ξ(m) ∝ m^(-0.3) for m < 0.08, m^(-1.3) for 0.08 < m < 0.5, m^(-2.3) for m > 0.5
+pub fn kroupa_imf(mass_solar: f64) -> Option<f64> {
+    if !mass_solar.is_finite() || mass_solar <= 0.0 { return None; }
+    let slope = if mass_solar < 0.08 { -0.3 } else if mass_solar < 0.5 { -1.3 } else { -2.3 };
+    Some(mass_solar.powf(slope))
+}
+
+// ---------------------------------------------------------------------------
+// CMB
+// ---------------------------------------------------------------------------
+
+/// CMB temperature at redshift z: T(z) = T_0 · (1+z) where T_0 = 2.725 K
+pub fn cmb_temperature(redshift: f64) -> Option<f64> {
+    if !redshift.is_finite() || redshift < -1.0 { return None; }
+    Some(2.725 * (1.0 + redshift))
+}
+
+/// Sound horizon at recombination (simplified): r_s ≈ 150 Mpc
+pub fn sound_horizon_at_recombination() -> f64 { 150.0 }
+
+// ---------------------------------------------------------------------------
+// Cosmology: Friedmann equation
+// ---------------------------------------------------------------------------
+
+/// Hubble parameter at redshift z: H(z) = H₀·√(Ω_m·(1+z)³ + Ω_r·(1+z)⁴ + Ω_Λ)
+pub fn hubble_parameter_z(redshift: f64, omega_m: f64, omega_r: f64, omega_l: f64, h0: f64) -> Option<f64> {
+    if !finite_4(redshift, omega_m, omega_r, omega_l) || !h0.is_finite() { return None; }
+    if omega_m < 0.0 || omega_r < 0.0 || omega_l < 0.0 || h0 <= 0.0 { return None; }
+    let z1 = 1.0 + redshift;
+    Some(h0 * (omega_m * z1.powi(3) + omega_r * z1.powi(4) + omega_l + (1.0 - omega_m - omega_r - omega_l) * z1 * z1).sqrt())
+}
+
+/// Comoving distance to redshift z (flat universe, matter-dominated approx for low z).
+pub fn comoving_distance_z(redshift: f64, h0: f64) -> Option<f64> {
+    if !redshift.is_finite() || redshift < 0.0 || !h0.is_finite() || h0 <= 0.0 { return None; }
+    let c = 299_792.458; // km/s
+    let h0_si = h0 * 3.240_779_29e-20; // convert to s⁻¹
+    let integrator = |z: f64| -> f64 {
+        // approximation for flat ΛCDM with Ω_m=0.3, Ω_Λ=0.7
+        let mut sum = 0.0;
+        let n = 100;
+        for i in 0..=n {
+            let dz = z / n as f64;
+            let zz = i as f64 * dz;
+            let e = (0.3 * (1.0 + zz).powi(3) + 0.7).sqrt();
+            sum += if i == 0 || i == n { 1.0 / e } else if i % 2 == 0 { 2.0 / e } else { 4.0 / e };
+        }
+        sum * z / (3.0 * n as f64)
+    };
+    Some(c / h0_si * integrator(redshift))
+}

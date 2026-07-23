@@ -693,3 +693,85 @@ pub fn reissner_nordstrom_horizons(mass: f64, charge: f64, g: f64) -> Option<(f6
     let r = disc.sqrt();
     Some((m + r, m - r))
 }
+
+// ---------------------------------------------------------------------------
+// Gravitational wave strain
+// ---------------------------------------------------------------------------
+
+/// Characteristic GW strain amplitude from compact binary.
+/// h = (4/d) · (G M_c / c²)^(5/3) · (πf)^(2/3)
+pub fn gw_strain_amplitude(distance: f64, chirp_mass_kg: f64, orbital_frequency: f64) -> Option<f64> {
+    let g = 6.67430e-11;
+    let c = 299_792_458.0;
+    if !distance.is_finite() || distance <= 0.0 || !chirp_mass_kg.is_finite() || chirp_mass_kg <= 0.0 || !orbital_frequency.is_finite() || orbital_frequency <= 0.0 { return None; }
+    let pi_f = std::f64::consts::PI * orbital_frequency;
+    let gm = g * chirp_mass_kg / (c * c);
+    Some(4.0 / distance * gm.powf(5.0 / 3.0) * pi_f.powf(2.0 / 3.0))
+}
+
+/// Chirp mass: M_c = (m₁·m₂)^(3/5) / (m₁+m₂)^(1/5)
+pub fn chirp_mass(mass1: f64, mass2: f64) -> Option<f64> {
+    if !mass1.is_finite() || mass1 <= 0.0 || !mass2.is_finite() || mass2 <= 0.0 { return None; }
+    Some((mass1 * mass2).powf(0.6) / (mass1 + mass2).powf(0.2))
+}
+
+/// GW frequency evolution: df/dt ∝ f^(11/3)
+pub fn gw_frequency_derivative(frequency: f64, chirp_mass_kg: f64) -> Option<f64> {
+    let g = 6.67430e-11;
+    let c = 299_792_458.0;
+    if !frequency.is_finite() || frequency <= 0.0 || !chirp_mass_kg.is_finite() || chirp_mass_kg <= 0.0 { return None; }
+    let mc = g * chirp_mass_kg / (c * c * c);
+    Some(96.0 / 5.0 * std::f64::consts::PI.powf(8.0 / 3.0) * mc.powf(5.0 / 3.0) * frequency.powf(11.0 / 3.0))
+}
+
+/// Relativistic longitudinal Doppler shift.
+pub fn relativistic_doppler_longitudinal(source_frequency: f64, relative_velocity: f64, approaching: bool) -> Option<f64> {
+    let c = 299_792_458.0;
+    if !source_frequency.is_finite() || source_frequency <= 0.0 || !relative_velocity.is_finite() || relative_velocity < 0.0 || relative_velocity >= c { return None; }
+    let beta = relative_velocity / c;
+    let shift = ((1.0 - beta) / (1.0 + beta)).sqrt();
+    Some(if approaching { source_frequency / shift } else { source_frequency * shift })
+}
+
+/// Relativistic transverse Doppler: f' = f/γ
+pub fn relativistic_doppler_transverse(source_frequency: f64, relative_velocity: f64) -> Option<f64> {
+    let c = 299_792_458.0;
+    if !source_frequency.is_finite() || source_frequency <= 0.0 || !relative_velocity.is_finite() || relative_velocity < 0.0 || relative_velocity >= c { return None; }
+    let gamma = 1.0 / (1.0 - (relative_velocity / c).powi(2)).sqrt();
+    Some(source_frequency / gamma)
+}
+
+/// Gravitational lensing Einstein radius for point mass.
+pub fn einstein_radius(mass_kg: f64, dist_lens: f64, dist_source: f64, dist_ls: f64) -> Option<f64> {
+    let g = 6.67430e-11;
+    let c = 299_792_458.0;
+    if !mass_kg.is_finite() || mass_kg <= 0.0 || !dist_lens.is_finite() || dist_lens <= 0.0 || !dist_source.is_finite() || dist_source <= 0.0 || !dist_ls.is_finite() || dist_ls <= 0.0 { return None; }
+    Some((4.0 * g * mass_kg / (c * c) * dist_ls / (dist_lens * dist_source)).sqrt())
+}
+
+/// Cosmological redshift: z = 1/a - 1
+pub fn cosmological_redshift(scale_factor: f64) -> Option<f64> {
+    if !scale_factor.is_finite() || scale_factor <= 0.0 { return None; }
+    Some(1.0 / scale_factor - 1.0)
+}
+
+/// Redshift from wavelengths: z = (λ_obs - λ_em) / λ_em
+pub fn redshift_from_wavelengths(observed: f64, emitted: f64) -> Option<f64> {
+    if !observed.is_finite() || !emitted.is_finite() || emitted <= 0.0 { return None; }
+    Some(observed / emitted - 1.0)
+}
+
+/// Lense-Thirring frame dragging angular frequency at polar orbit.
+pub fn lense_thirring_angular_frequency(mass_kg: f64, spin_parameter: f64, orbital_radius: f64) -> Option<f64> {
+    let g = 6.67430e-11;
+    let c = 299_792_458.0;
+    if !mass_kg.is_finite() || mass_kg <= 0.0 || !spin_parameter.is_finite() || !orbital_radius.is_finite() || orbital_radius <= 0.0 { return None; }
+    let j = spin_parameter * mass_kg * c;
+    Some(2.0 * g * j / (c * c * orbital_radius * orbital_radius * orbital_radius))
+}
+
+/// Schwarzschild effective potential: V_eff = (1 - r_s/r)(1 + L²/r²)
+pub fn schwarzschild_effective_potential(r: f64, rs: f64, angular_momentum: f64) -> Option<f64> {
+    if !r.is_finite() || r <= 0.0 || !rs.is_finite() || rs <= 0.0 || r <= rs || !angular_momentum.is_finite() { return None; }
+    Some((1.0 - rs / r) * (1.0 + angular_momentum * angular_momentum / (r * r)))
+}

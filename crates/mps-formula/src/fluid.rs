@@ -455,3 +455,169 @@ pub fn turbulent_reynolds(tke: f64, dissipation: f64, kinematic_viscosity: f64) 
 fn finite_5(a: f64, b: f64, c: f64, d: f64, e: f64) -> bool {
     a.is_finite() && b.is_finite() && c.is_finite() && d.is_finite() && e.is_finite()
 }
+
+// ---------------------------------------------------------------------------
+// Compressible flow
+// ---------------------------------------------------------------------------
+
+/// Isentropic pressure ratio: P/P₀ = (1 + (γ-1)/2 · M²)^(-γ/(γ-1))
+pub fn isentropic_pressure_ratio(mach: f64, gamma: f64) -> Option<f64> {
+    if !mach.is_finite() || mach < 0.0 || !gamma.is_finite() || gamma <= 0.0 { return None; }
+    Some((1.0 + (gamma - 1.0) / 2.0 * mach * mach).powf(-gamma / (gamma - 1.0)))
+}
+
+/// Isentropic density ratio: ρ/ρ₀ = (1 + (γ-1)/2 · M²)^(-1/(γ-1))
+pub fn isentropic_density_ratio(mach: f64, gamma: f64) -> Option<f64> {
+    if !mach.is_finite() || mach < 0.0 || !gamma.is_finite() || gamma <= 0.0 { return None; }
+    Some((1.0 + (gamma - 1.0) / 2.0 * mach * mach).powf(-1.0 / (gamma - 1.0)))
+}
+
+/// Isentropic temperature ratio: T/T₀ = 1/(1 + (γ-1)/2 · M²)
+pub fn isentropic_temperature_ratio(mach: f64, gamma: f64) -> Option<f64> {
+    if !mach.is_finite() || mach < 0.0 || !gamma.is_finite() || gamma <= 0.0 { return None; }
+    Some(1.0 / (1.0 + (gamma - 1.0) / 2.0 * mach * mach))
+}
+
+/// Area-Mach relation for isentropic flow: A/A* = (1/M) · ((2/(γ+1))·(1+(γ-1)·M²/2))^((γ+1)/(2(γ-1)))
+pub fn area_mach_ratio(mach: f64, gamma: f64) -> Option<f64> {
+    if !mach.is_finite() || mach < 0.0 || !gamma.is_finite() || gamma <= 0.0 { return None; }
+    let term = (1.0 + (gamma - 1.0) / 2.0 * mach * mach) * 2.0 / (gamma + 1.0);
+    Some(1.0 / mach * term.powf((gamma + 1.0) / (2.0 * (gamma - 1.0))))
+}
+
+/// Normal shock wave: downstream Mach number: M₂² = ((γ-1)M₁² + 2) / (2γ·M₁² - (γ-1))
+pub fn normal_shock_downstream_mach(upstream_mach: f64, gamma: f64) -> Option<f64> {
+    if !upstream_mach.is_finite() || upstream_mach < 1.0 || !gamma.is_finite() || gamma <= 0.0 { return None; }
+    Some(((gamma - 1.0) * upstream_mach * upstream_mach + 2.0) / (2.0 * gamma * upstream_mach * upstream_mach - (gamma - 1.0)))
+}
+
+/// Normal shock pressure ratio: P₂/P₁ = 1 + 2γ/(γ+1) · (M₁² - 1)
+pub fn normal_shock_pressure_ratio(upstream_mach: f64, gamma: f64) -> Option<f64> {
+    if !upstream_mach.is_finite() || upstream_mach < 1.0 || !gamma.is_finite() || gamma <= 0.0 { return None; }
+    Some(1.0 + 2.0 * gamma / (gamma + 1.0) * (upstream_mach * upstream_mach - 1.0))
+}
+
+/// Normal shock density ratio: ρ₂/ρ₁ = (γ+1)·M₁² / ((γ-1)·M₁² + 2)
+pub fn normal_shock_density_ratio(upstream_mach: f64, gamma: f64) -> Option<f64> {
+    if !upstream_mach.is_finite() || upstream_mach < 1.0 || !gamma.is_finite() || gamma <= 0.0 { return None; }
+    Some((gamma + 1.0) * upstream_mach * upstream_mach / ((gamma - 1.0) * upstream_mach * upstream_mach + 2.0))
+}
+
+/// Prandtl-Meyer expansion angle: ν(M) = ((γ+1)/(γ-1))^(1/2) · atan(((γ-1)/(γ+1)·(M²-1))^(1/2)) - atan((M²-1)^(1/2))
+pub fn prandtl_meyer_angle(mach: f64, gamma: f64) -> Option<f64> {
+    if !mach.is_finite() || mach < 1.0 || !gamma.is_finite() || gamma <= 0.0 { return None; }
+    let sqrt = ((gamma - 1.0) / (gamma + 1.0) * (mach * mach - 1.0)).sqrt();
+    Some(((gamma + 1.0) / (gamma - 1.0)).sqrt() * sqrt.atan() - (mach * mach - 1.0).sqrt().atan())
+}
+
+// ---------------------------------------------------------------------------
+// Boundary layer
+// ---------------------------------------------------------------------------
+
+/// Blasius boundary layer thickness: δ ≈ 5.0 · x / Re_x^(1/2)
+pub fn blasius_thickness(x: f64, re_x: f64) -> Option<f64> {
+    if !x.is_finite() || x <= 0.0 || !re_x.is_finite() || re_x <= 0.0 { return None; }
+    Some(5.0 * x / re_x.sqrt())
+}
+
+/// Blasius displacement thickness: δ* ≈ 1.7208 · x / Re_x^(1/2)
+pub fn blasius_displacement_thickness(x: f64, re_x: f64) -> Option<f64> {
+    if !x.is_finite() || x <= 0.0 || !re_x.is_finite() || re_x <= 0.0 { return None; }
+    Some(1.7208 * x / re_x.sqrt())
+}
+
+/// Blasius momentum thickness: θ ≈ 0.664 · x / Re_x^(1/2)
+pub fn blasius_momentum_thickness(x: f64, re_x: f64) -> Option<f64> {
+    if !x.is_finite() || x <= 0.0 || !re_x.is_finite() || re_x <= 0.0 { return None; }
+    Some(0.664 * x / re_x.sqrt())
+}
+
+/// Flat plate skin friction coefficient (laminar): C_f = 0.664 / Re_x^(1/2)
+pub fn laminar_skin_friction(re_x: f64) -> Option<f64> {
+    if !re_x.is_finite() || re_x <= 0.0 { return None; }
+    Some(0.664 / re_x.sqrt())
+}
+
+/// Flat plate skin friction coefficient (turbulent, 1/7th power law): C_f = 0.027 / Re_x^(1/7)
+pub fn turbulent_skin_friction(re_x: f64) -> Option<f64> {
+    if !re_x.is_finite() || re_x <= 0.0 { return None; }
+    Some(0.027 / re_x.powf(1.0 / 7.0))
+}
+
+// ---------------------------------------------------------------------------
+// Potential flow
+// ---------------------------------------------------------------------------
+
+/// 2D point source velocity potential: φ = Q/(2π) · ln(r)
+pub fn source_potential_2d(strength: f64, r: f64) -> Option<f64> {
+    if !strength.is_finite() || !r.is_finite() || r <= 0.0 { return None; }
+    Some(strength / (2.0 * std::f64::consts::PI) * r.ln())
+}
+
+/// 2D doublet stream function: ψ = -κ · sin(θ) / (2π · r)
+pub fn doublet_stream_function_2d(strength: f64, r: f64, theta: f64) -> Option<f64> {
+    if !strength.is_finite() || !r.is_finite() || r <= 0.0 || !theta.is_finite() { return None; }
+    Some(-strength * theta.sin() / (2.0 * std::f64::consts::PI * r))
+}
+
+// ---------------------------------------------------------------------------
+// Non-Newtonian fluids
+// ---------------------------------------------------------------------------
+
+/// Power-law viscosity: μ_eff = K · γ̇^(n-1)
+pub fn power_law_viscosity(consistency: f64, shear_rate: f64, flow_index: f64) -> Option<f64> {
+    if !consistency.is_finite() || consistency <= 0.0 || !shear_rate.is_finite() || shear_rate < 0.0 || !flow_index.is_finite() { return None; }
+    if shear_rate <= 1.0e-12 && flow_index < 1.0 { return None; }
+    Some(consistency * shear_rate.powf(flow_index - 1.0))
+}
+
+/// Bingham plastic: τ = τ_y + μ_p · γ̇
+pub fn bingham_stress(yield_stress: f64, plastic_viscosity: f64, shear_rate: f64) -> Option<f64> {
+    if !yield_stress.is_finite() || yield_stress < 0.0 || !plastic_viscosity.is_finite() || plastic_viscosity < 0.0 || !shear_rate.is_finite() || shear_rate < 0.0 { return None; }
+    Some(yield_stress + plastic_viscosity * shear_rate)
+}
+
+// ---------------------------------------------------------------------------
+// Kelvin-Helmholtz and Rayleigh-Taylor instabilities
+// ---------------------------------------------------------------------------
+
+/// KH instability growth rate for two inviscid fluids with velocity shear.
+pub fn kelvin_helmholtz_growth_rate(k: f64, rho1: f64, rho2: f64, v1: f64, v2: f64) -> Option<f64> {
+    if !finite_5(k, rho1, rho2, v1, v2) || k <= 0.0 || rho1 <= 0.0 || rho2 <= 0.0 { return None; }
+    let dv = v1 - v2;
+    Some(k * (rho1 * rho2).sqrt() * dv.abs() / (rho1 + rho2))
+}
+
+/// RT instability growth rate: ω = sqrt(At · g · k)
+pub fn rayleigh_taylor_growth_rate(atuood_number: f64, gravity: f64, k: f64) -> Option<f64> {
+    if !atuood_number.is_finite() || atuood_number < 0.0 || !gravity.is_finite() || gravity < 0.0 || !k.is_finite() || k <= 0.0 { return None; }
+    Some((atuood_number * gravity * k).sqrt())
+}
+
+/// Atwood number: At = (ρ₂ - ρ₁)/(ρ₂ + ρ₁)
+pub fn atwood_number(density_heavy: f64, density_light: f64) -> Option<f64> {
+    if !density_heavy.is_finite() || density_heavy < 0.0 || !density_light.is_finite() || density_light < 0.0 { return None; }
+    let sum = density_heavy + density_light;
+    if sum <= 0.0 { return None; }
+    Some((density_heavy - density_light) / sum)
+}
+
+// ---------------------------------------------------------------------------
+// Minor losses (pipe flow)
+// ---------------------------------------------------------------------------
+
+/// Minor loss pressure drop: ΔP = K · ½ρV²
+pub fn minor_loss_pressure_drop(loss_coefficient: f64, density: f64, velocity: f64) -> Option<f64> {
+    if !loss_coefficient.is_finite() || loss_coefficient < 0.0 || !density.is_finite() || density < 0.0 || !velocity.is_finite() || velocity < 0.0 { return None; }
+    Some(loss_coefficient * 0.5 * density * velocity * velocity)
+}
+
+// ---------------------------------------------------------------------------
+// Water hammer (Joukowsky)
+// ---------------------------------------------------------------------------
+
+/// Joukowsky pressure surge: ΔP = ρ · c · ΔV
+pub fn water_hammer_pressure_surge(density: f64, wave_speed: f64, velocity_change: f64) -> Option<f64> {
+    if !density.is_finite() || density <= 0.0 || !wave_speed.is_finite() || wave_speed <= 0.0 || !velocity_change.is_finite() { return None; }
+    Some(density * wave_speed * velocity_change.abs())
+}

@@ -308,3 +308,173 @@ pub fn spin_expectation(spinor: (f64, f64)) -> (f64, f64, f64) {
 fn finite_4(a: f64, b: f64, c: f64, d: f64) -> bool {
     a.is_finite() && b.is_finite() && c.is_finite() && d.is_finite()
 }
+
+// ---------------------------------------------------------------------------
+// Degenerate perturbation theory
+// ---------------------------------------------------------------------------
+
+/// 2×2 degenerate perturbation matrix solution.
+/// Given the perturbation matrix elements in the degenerate subspace:
+/// H'_11, H'_12, H'_21 (=H'_12 for Hermitian), H'_22
+/// Returns the two first-order energy corrections.
+pub fn degenerate_perturbation_2x2(h11: f64, h12: f64, h22: f64) -> Option<(f64, f64)> {
+    if !h11.is_finite() || !h12.is_finite() || !h22.is_finite() { return None; }
+    let trace = h11 + h22;
+    let det = h11 * h22 - h12 * h12;
+    let discriminant = trace * trace - 4.0 * det;
+    if discriminant < 0.0 { return None; }
+    let sqrt_disc = discriminant.sqrt();
+    Some(((trace + sqrt_disc) / 2.0, (trace - sqrt_disc) / 2.0))
+}
+
+// ---------------------------------------------------------------------------
+// Fermi's golden rule
+// ---------------------------------------------------------------------------
+
+/// Fermi's golden rule — transition rate: Γ_fi = 2π/ħ · |⟨f|H'|i⟩|² · ρ(E_f)
+pub fn fermi_golden_rule_linear(matrix_element2: f64, density_of_states: f64) -> Option<f64> {
+    let hbar = REDUCED_PLANCK;
+    if !matrix_element2.is_finite() || matrix_element2 < 0.0 || !density_of_states.is_finite() || density_of_states < 0.0 { return None; }
+    Some(2.0 * PI / hbar * matrix_element2 * density_of_states)
+}
+
+/// Fermi's golden rule — emission rate into continuum (single mode).
+pub fn fermi_golden_rule_cavity(coupling_strength: f64, cavity_linewidth: f64, detuning: f64) -> Option<f64> {
+    if !coupling_strength.is_finite() || coupling_strength < 0.0 || !cavity_linewidth.is_finite() || cavity_linewidth <= 0.0 || !detuning.is_finite() { return None; }
+    Some(coupling_strength * cavity_linewidth / (detuning * detuning + 0.25 * cavity_linewidth * cavity_linewidth))
+}
+
+// ---------------------------------------------------------------------------
+// Spin-orbit coupling
+// ---------------------------------------------------------------------------
+
+/// Spin-orbit coupling energy for hydrogen-like atoms: E_SO = (Z·α)² · E_n / (2n) · [j(j+1)-l(l+1)-s(s+1)] / [l(l+1/2)(l+1)]
+pub fn spin_orbit_energy(n: f64, l: f64, j: f64, atomic_number: f64) -> Option<f64> {
+    if !n.is_finite() || !l.is_finite() || !j.is_finite() || !atomic_number.is_finite() { return None; }
+    if n <= 0.0 || l < 0.0 || l >= n || j < (l - 0.5).abs() || j > l + 0.5 || atomic_number <= 0.0 { return None; }
+    let alpha = 1.0 / 137.036; // fine structure constant
+    let e_n = -13.605_693 * atomic_number * atomic_number / (n * n); // eV
+    let numerator = j * (j + 1.0) - l * (l + 1.0) - 0.75; // s(s+1) = 3/4
+    let denominator = l * (l + 0.5) * (l + 1.0);
+    if denominator <= 0.0 { return None; }
+    Some((atomic_number * alpha).powi(2) * e_n / n * numerator / denominator)
+}
+
+/// Fine structure constant: α ≈ 1/137.036
+pub fn fine_structure_constant() -> f64 { 1.0 / 137.035_999_084 }
+
+// ---------------------------------------------------------------------------
+// Born approximation (scattering)
+// ---------------------------------------------------------------------------
+
+/// Born approximation — differential scattering cross-section for Yukawa potential.
+/// dσ/dΩ = (2m/ħ²)² · (A/(q²+μ²))²
+pub fn born_yukawa_cross_section(mass: f64, amplitude: f64, screening: f64, scattering_angle: f64, incident_energy: f64) -> Option<f64> {
+    let hbar = REDUCED_PLANCK;
+    if !mass.is_finite() || !amplitude.is_finite() || !screening.is_finite() || !scattering_angle.is_finite() || !incident_energy.is_finite() { return None; }
+    if mass <= 0.0 || incident_energy <= 0.0 { return None; }
+    let k = (2.0 * mass * incident_energy * 1.602_176_634e-19).sqrt() / hbar; // incident wavenumber (convert eV→J)
+    let q = 2.0 * k * (scattering_angle / 2.0).sin(); // momentum transfer
+    let factor = 2.0 * mass / (hbar * hbar) * amplitude / (q * q + screening * screening);
+    Some(factor * factor)
+}
+
+// ---------------------------------------------------------------------------
+// Variational method
+// ---------------------------------------------------------------------------
+
+/// Variational method — estimate ground state energy upper bound.
+/// E_var = ⟨ψ_α|H|ψ_α⟩ / ⟨ψ_α|ψ_α⟩
+/// For hydrogen with trial wavefunction exp(-αr): E(α) = ħ²α²/(2m) - ke²α
+pub fn variational_hydrogen_energy(alpha: f64) -> Option<f64> {
+    let hbar = REDUCED_PLANCK;
+    let mass_e = 9.109_383_701_5e-31;
+    let e_charge = 1.602_176_634e-19;
+    let epsilon0 = 8.854_187_812_8e-12;
+    if !alpha.is_finite() || alpha <= 0.0 { return None; }
+    let kinetic = hbar * hbar * alpha * alpha / (2.0 * mass_e);
+    let potential = -e_charge * e_charge * alpha / (4.0 * PI * epsilon0);
+    Some(kinetic + potential)
+}
+
+/// Optimal variational parameter for hydrogen: α_opt = m e² / (4π ε₀ ħ²) = 1/a₀
+pub fn variational_hydrogen_optimal_alpha() -> f64 {
+    let hbar = REDUCED_PLANCK;
+    let mass_e = 9.109_383_701_5e-31;
+    let e_charge = 1.602_176_634e-19;
+    let epsilon0 = 8.854_187_812_8e-12;
+    mass_e * e_charge * e_charge / (4.0 * PI * epsilon0 * hbar * hbar)
+}
+
+// ---------------------------------------------------------------------------
+// Time evolution
+// ---------------------------------------------------------------------------
+
+/// Time evolution phase factor for an energy eigenstate: exp(-iEt/ħ)
+/// Returns (cos_term, sin_term) — real and imaginary parts.
+pub fn time_evolution_phase(energy: f64, time: f64) -> Option<(f64, f64)> {
+    let hbar = REDUCED_PLANCK;
+    if !energy.is_finite() || !time.is_finite() { return None; }
+    let omega = energy / hbar;
+    Some(((-omega * time).cos(), (-omega * time).sin()))
+}
+
+// ---------------------------------------------------------------------------
+// Coherent states
+// ---------------------------------------------------------------------------
+
+/// Coherent state amplitude from position/momentum expectation.
+pub fn coherent_state_alpha(mean_position: f64, mean_momentum: f64, mass: f64, frequency: f64) -> Option<f64> {
+    let hbar = REDUCED_PLANCK;
+    if !mean_position.is_finite() || !mean_momentum.is_finite() || !mass.is_finite() || !frequency.is_finite() { return None; }
+    if mass <= 0.0 || frequency <= 0.0 { return None; }
+    let alpha = (mass * frequency / (2.0 * hbar)).sqrt() * mean_position +
+                (1.0 / (2.0 * mass * frequency * hbar)).sqrt() * mean_momentum;
+    Some(alpha)
+}
+
+/// Poisson probability for measuring n photons in a coherent state: P(n) = |α|^(2n) exp(-|α|²) / n!
+pub fn coherent_state_photon_probability(alpha_squared: f64, n: u32) -> Option<f64> {
+    if !alpha_squared.is_finite() || alpha_squared < 0.0 { return None; }
+    if alpha_squared == 0.0 { return if n == 0 { Some(1.0) } else { Some(0.0) }; }
+    let mut factorial = 1.0;
+    for i in 1..=n {
+        if i > 170 { return None; } // avoid overflow
+        factorial *= i as f64;
+    }
+    Some(alpha_squared.powi(n as i32) * (-alpha_squared).exp() / factorial)
+}
+
+// ---------------------------------------------------------------------------
+// Angular momentum
+// ---------------------------------------------------------------------------
+
+/// Spherical harmonic Y_lm(θ, φ) — real-valued combinations (l ≤ 2).
+/// Returns Y_lm for the given angles.
+pub fn spherical_harmonic_real(l: i32, m: i32, theta: f64, phi: f64) -> Option<f64> {
+    if !theta.is_finite() || !phi.is_finite() { return None; }
+    let sqrt_4pi_inv = 1.0 / (4.0 * PI).sqrt();
+    let sqrt_3_4pi = (3.0 / (4.0 * PI)).sqrt();
+    let sqrt_15_4pi = (15.0 / (4.0 * PI)).sqrt();
+    let sqrt_15_16pi = (15.0 / (16.0 * PI)).sqrt();
+    let sqrt_5_16pi = (5.0 / (16.0 * PI)).sqrt();
+    match (l, m) {
+        (0, 0) => Some(sqrt_4pi_inv),
+        (1, -1) => Some(sqrt_3_4pi * theta.sin() * phi.sin()),
+        (1, 0) => Some(sqrt_3_4pi * theta.cos()),
+        (1, 1) => Some(sqrt_3_4pi * theta.sin() * phi.cos()),
+        (2, -2) => Some(sqrt_15_16pi * theta.sin().powi(2) * (2.0 * phi).sin()),
+        (2, -1) => Some(sqrt_15_4pi * theta.sin() * theta.cos() * phi.sin()),
+        (2, 0) => Some(sqrt_5_16pi * (3.0 * theta.cos().powi(2) - 1.0)),
+        (2, 1) => Some(sqrt_15_4pi * theta.sin() * theta.cos() * phi.cos()),
+        (2, 2) => Some(sqrt_15_16pi * theta.sin().powi(2) * (2.0 * phi).cos()),
+        _ => None,
+    }
+}
+
+/// Angular momentum quantum numbers: J²|jm⟩ = ħ²·j(j+1)|jm⟩
+pub fn angular_momentum_squared(j: f64) -> Option<f64> {
+    if !j.is_finite() || j < 0.0 { return None; }
+    let hbar = REDUCED_PLANCK;
+    Some(hbar * hbar * j * (j + 1.0))
+}

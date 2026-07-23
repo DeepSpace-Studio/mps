@@ -399,3 +399,123 @@ pub fn wave_frequency(wavelength: f64) -> Option<f64> {
 fn finite_6(v: &[f64; 6]) -> bool {
     v.iter().all(|x| x.is_finite())
 }
+
+// ---------------------------------------------------------------------------
+// Antenna radiation
+// ---------------------------------------------------------------------------
+
+/// Radiation resistance of a short dipole: R_r = 80π² (L/λ)²
+pub fn dipole_radiation_resistance(dipole_length: f64, wavelength: f64) -> Option<f64> {
+    if !dipole_length.is_finite() || !wavelength.is_finite() || dipole_length < 0.0 || wavelength <= 0.0 { return None; }
+    Some(80.0 * std::f64::consts::PI * std::f64::consts::PI * (dipole_length / wavelength).powi(2))
+}
+
+/// Half-wave dipole directivity: D = 1.64
+pub fn half_wave_dipole_directivity() -> f64 { 1.64 }
+
+/// Effective aperture from gain: A_e = G · λ² / (4π)
+pub fn effective_aperture(gain_linear: f64, wavelength: f64) -> Option<f64> {
+    if !gain_linear.is_finite() || gain_linear <= 0.0 || !wavelength.is_finite() || wavelength <= 0.0 { return None; }
+    Some(gain_linear * wavelength * wavelength / (4.0 * std::f64::consts::PI))
+}
+
+/// Far-field distance (Fraunhofer): r = 2D²/λ where D is the largest antenna dimension.
+pub fn far_field_distance(antenna_size: f64, wavelength: f64) -> Option<f64> {
+    if !antenna_size.is_finite() || antenna_size <= 0.0 || !wavelength.is_finite() || wavelength <= 0.0 { return None; }
+    Some(2.0 * antenna_size * antenna_size / wavelength)
+}
+
+/// Friis transmission equation (power): P_r = P_t · G_t · G_r · (λ/(4πR))²
+pub fn friis_power_received(transmit_power: f64, tx_gain: f64, rx_gain: f64, wavelength: f64, range: f64) -> Option<f64> {
+    if !transmit_power.is_finite() || !tx_gain.is_finite() || !rx_gain.is_finite() || !wavelength.is_finite() || !range.is_finite() { return None; }
+    if transmit_power < 0.0 || tx_gain < 0.0 || rx_gain < 0.0 || wavelength <= 0.0 || range <= 0.0 { return None; }
+    Some(transmit_power * tx_gain * rx_gain * (wavelength / (4.0 * std::f64::consts::PI * range)).powi(2))
+}
+
+// ---------------------------------------------------------------------------
+// Impedance matching and transmission line
+// ---------------------------------------------------------------------------
+
+/// Reflection coefficient: Γ = (Z_L - Z_0) / (Z_L + Z_0)
+pub fn reflection_coefficient(load_impedance: f64, characteristic_impedance: f64) -> Option<f64> {
+    if !load_impedance.is_finite() || !characteristic_impedance.is_finite() || characteristic_impedance <= 0.0 { return None; }
+    let gamma = (load_impedance - characteristic_impedance) / (load_impedance + characteristic_impedance);
+    Some(gamma)
+}
+
+/// Voltage standing wave ratio: VSWR = (1+|Γ|)/(1-|Γ|)
+pub fn vswr(reflection_coeff: f64) -> Option<f64> {
+    if !reflection_coeff.is_finite() || reflection_coeff.abs() >= 1.0 { return None; }
+    Some((1.0 + reflection_coeff.abs()) / (1.0 - reflection_coeff.abs()))
+}
+
+/// Return loss: RL = -20 log₁₀ |Γ| (dB)
+pub fn return_loss(reflection_coeff: f64) -> Option<f64> {
+    if !reflection_coeff.is_finite() || reflection_coeff.abs() <= 0.0 || reflection_coeff.abs() >= 1.0 { return None; }
+    Some(-20.0 * reflection_coeff.abs().log10())
+}
+
+/// Quarter-wave transformer impedance: Z_q = sqrt(Z_0 · Z_L)
+pub fn quarter_wave_transformer(z0: f64, z_load: f64) -> Option<f64> {
+    if !z0.is_finite() || z0 <= 0.0 || !z_load.is_finite() || z_load <= 0.0 { return None; }
+    Some((z0 * z_load).sqrt())
+}
+
+/// Transmission line input impedance: Z_in = Z_0 · (Z_L + j·Z_0·tan(βl)) / (Z_0 + j·Z_L·tan(βl))
+/// Returns (real, imag) for lossless case.
+pub fn transmission_line_input_impedance(
+    z0: f64, z_load_real: f64, z_load_imag: f64, phase_constant: f64, length: f64,
+) -> Option<(f64, f64)> {
+    if !z0.is_finite() || z0 <= 0.0 || !z_load_real.is_finite() || !z_load_imag.is_finite() || !phase_constant.is_finite() || !length.is_finite() { return None; }
+    let tan_bl = (phase_constant * length).tan();
+    let num_real = z_load_real;
+    let num_imag = z_load_imag + z0 * tan_bl;
+    let den_real = z0 - z_load_imag * tan_bl;
+    let den_imag = z_load_real * tan_bl;
+    let den_sq = den_real * den_real + den_imag * den_imag;
+    if den_sq <= 0.0 { return None; }
+    let z_in_real = z0 * (num_real * den_real + num_imag * den_imag) / den_sq;
+    let z_in_imag = z0 * (num_imag * den_real - num_real * den_imag) / den_sq;
+    Some((z_in_real, z_in_imag))
+}
+
+// ---------------------------------------------------------------------------
+// Coaxial cable
+// ---------------------------------------------------------------------------
+
+/// Coaxial cable characteristic impedance: Z_0 = (60/√ε_r) · ln(D/d)
+pub fn coaxial_impedance(inner_diameter: f64, outer_diameter: f64, relative_permittivity: f64) -> Option<f64> {
+    if !inner_diameter.is_finite() || !outer_diameter.is_finite() || !relative_permittivity.is_finite() { return None; }
+    if inner_diameter <= 0.0 || outer_diameter <= inner_diameter || relative_permittivity <= 0.0 { return None; }
+    Some(60.0 / relative_permittivity.sqrt() * (outer_diameter / inner_diameter).ln())
+}
+
+/// Coaxial cable cutoff frequency (TE11 mode): f_c ≈ c/(π·(D+d)/2 · √ε_r)
+pub fn coaxial_cutoff_frequency(inner_diameter: f64, outer_diameter: f64, relative_permittivity: f64) -> Option<f64> {
+    if !inner_diameter.is_finite() || !outer_diameter.is_finite() || !relative_permittivity.is_finite() { return None; }
+    if inner_diameter <= 0.0 || outer_diameter <= inner_diameter || relative_permittivity <= 0.0 { return None; }
+    let c = 299_792_458.0;
+    let mean_diameter = 0.5 * (inner_diameter + outer_diameter);
+    Some(c / (std::f64::consts::PI * mean_diameter * relative_permittivity.sqrt()))
+}
+
+// ---------------------------------------------------------------------------
+// Scattering
+// ---------------------------------------------------------------------------
+
+/// Rayleigh scattering cross-section for a small dielectric sphere.
+/// σ_s = (8π³/3) · ((n²-1)/(n²+2))² · (d/2)⁶ / λ⁴
+pub fn rayleigh_scattering_cross_section(refractive_index: f64, diameter: f64, wavelength: f64) -> Option<f64> {
+    if !refractive_index.is_finite() || !diameter.is_finite() || !wavelength.is_finite() { return None; }
+    if refractive_index <= 0.0 || diameter <= 0.0 || wavelength <= 0.0 { return None; }
+    let r = diameter / 2.0;
+    let polarizability = (refractive_index * refractive_index - 1.0) / (refractive_index * refractive_index + 2.0);
+    Some(8.0 * std::f64::consts::PI.powi(3) / 3.0 * polarizability.powi(2) * r.powi(6) / wavelength.powi(4))
+}
+
+/// Faraday rotation angle: θ = V · B · L
+/// V = Verdet constant (rad/(T·m)), B = magnetic field along path (T), L = path length (m)
+pub fn faraday_rotation(verdet_constant: f64, magnetic_field: f64, path_length: f64) -> Option<f64> {
+    if !verdet_constant.is_finite() || !magnetic_field.is_finite() || !path_length.is_finite() { return None; }
+    Some(verdet_constant * magnetic_field * path_length)
+}

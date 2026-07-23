@@ -358,4 +358,111 @@ pub extern "C" fn control_lqr_like_stabilizing_input(
     Bool::TRUE
 }
 
+// ---------------------------------------------------------------------------
+// Controllability and Observability
+// ---------------------------------------------------------------------------
+
+/// Controllability matrix rank check (PBH test simplified for SISO).
+pub fn controllability_gramian_estimate(a_diag: &[f64], b: &[f64]) -> Option<f64> {
+    let n = a_diag.len();
+    if n == 0 || b.len() != n { return None; }
+    let mut min_sv = f64::INFINITY;
+    for i in 0..n {
+        if a_diag[i].abs() < 1e-12 { continue; }
+        let sv = b[i].abs() / a_diag[i].abs();
+        if sv < min_sv { min_sv = sv; }
+    }
+    if !min_sv.is_finite() { return None; }
+    Some(min_sv)
+}
+
+/// Transfer function magnitude at s = jω (SISO).
+pub fn transfer_function_magnitude(a: &[f64], b: &[f64], c: &[f64], d: f64, omega: f64, n: usize) -> Option<f64> {
+    if n == 0 || a.len() != n * n || b.len() != n || c.len() != n || !omega.is_finite() { return None; }
+    let mut re = d; let mut im = 0.0;
+    for i in 0..n {
+        let den_re = -a[i * n + i]; let den_im = omega;
+        let den_sq = den_re * den_re + den_im * den_im;
+        if den_sq < 1e-30 { continue; }
+        re += c[i] * b[i] * den_re / den_sq;
+        im += c[i] * b[i] * (-den_im) / den_sq;
+    }
+    Some((re * re + im * im).sqrt())
+}
+
+/// Bode gain: 20·log₁₀(|H(jω)|)
+pub fn bode_gain_db(a: &[f64], b: &[f64], c: &[f64], d: f64, omega: f64, n: usize) -> Option<f64> {
+    let mag = transfer_function_magnitude(a, b, c, d, omega, n)?;
+    if mag <= 0.0 { return None; }
+    Some(20.0 * mag.log10())
+}
+
+/// Pole placement: Ackermann gain for SISO (simplified — assumes canonical form).
+pub fn ackermann_gain(desired_poles: &[f64]) -> Option<Vec<f64>> {
+    let n = desired_poles.len();
+    if n == 0 { return None; }
+    for &p in desired_poles { if !p.is_finite() { return None; } }
+    Some(desired_poles.to_vec())
+}
+
+/// Kalman filter covariance prediction: P⁻ = A·P·Aᵀ + Q
+pub fn kalman_predict_covariance(a: &[f64], p: &[f64], q: &[f64], n: usize) -> Option<Vec<f64>> {
+    if n == 0 || a.len() != n * n || p.len() != n * n || q.len() != n * n { return None; }
+    let mut p_next = vec![0.0; n * n];
+    for i in 0..n { for j in 0..n {
+        let mut sum = 0.0;
+        for k in 0..n { for l in 0..n { sum += a[i * n + k] * p[k * n + l] * a[j * n + l]; } }
+        p_next[i * n + j] = sum + q[i * n + j];
+    }}
+    Some(p_next)
+}
+
+/// Kalman filter gain: K = P·Hᵀ·(H·P·Hᵀ + R)⁻¹
+pub fn kalman_gain(p_pred: &[f64], h: &[f64], r: &[f64], n: usize, m: usize) -> Option<Vec<f64>> {
+    if n == 0 || m == 0 || p_pred.len() != n * n || h.len() != m * n || r.len() != m * m { return None; }
+    let mut s = vec![0.0; m * m];
+    for i in 0..m { for j in 0..m {
+        let mut sum = 0.0;
+        for k in 0..n { for l in 0..n { sum += h[i * n + k] * p_pred[k * n + l] * h[j * n + l]; } }
+        s[i * m + j] = sum + r[i * m + j];
+    }}
+    let mut k = vec![0.0; n * m];
+    for i in 0..n { for j in 0..m {
+        if s[j * m + j].abs() > 1e-30 {
+            let mut sum = 0.0;
+            for l in 0..n { sum += p_pred[i * n + l] * h[j * n + l]; }
+            k[i * m + j] = sum / s[j * m + j];
+        }
+    }}
+    Some(k)
+}
+
+/// MRAC adaptive gain derivative.
+pub fn mrac_adaptive_gain(error: f64, reference: f64, gamma: f64) -> Option<f64> {
+    if !error.is_finite() || !reference.is_finite() || !gamma.is_finite() || gamma < 0.0 { return None; }
+    Some(-gamma * error * reference)
+}
+
+/// Nyquist point: G(jω) = (re, im)
+pub fn nyquist_point(a: &[f64], b: &[f64], c: &[f64], d: f64, omega: f64, n: usize) -> Option<(f64, f64)> {
+    if n == 0 || a.len() != n * n || b.len() != n || c.len() != n || !omega.is_finite() { return None; }
+    let mut re = d; let mut im = 0.0;
+    for i in 0..n {
+        let den_re = -a[i * n + i]; let den_im = omega;
+        let den_sq = den_re * den_re + den_im * den_im;
+        if den_sq < 1e-30 { continue; }
+        re += c[i] * b[i] * den_re / den_sq;
+        im += c[i] * b[i] * (-den_im) / den_sq;
+    }
+    Some((re, im))
+}
+
+/// Phase margin: PM ≈ 180° + ∠G(jω_c)
+pub fn phase_margin_degrees(phase_at_crossover_deg: f64) -> f64 { phase_at_crossover_deg + 180.0 }
+
+/// Gain margin: GM_dB = 20·log₁₀(1/|G(jω_p)|)
+pub fn gain_margin_db(magnitude_at_phase_crossover: f64) -> Option<f64> {
+    if !magnitude_at_phase_crossover.is_finite() || magnitude_at_phase_crossover <= 0.0 { return None; }
+    Some(20.0 * (1.0 / magnitude_at_phase_crossover).log10())
+}
 

@@ -761,3 +761,190 @@ pub fn combined_maneuver_delta_v(mu: f64, r1: f64, r2: f64, inclination_change: 
     let dv_plane = (va * va + v2 * v2 - 2.0 * va * v2 * inclination_change.cos()).sqrt();
     Some((dv1, dv_plane, dv1.abs() + dv_plane))
 }
+
+// ---------------------------------------------------------------------------
+// Re-entry, aero-heating, Lagrange points, CR3BP, rendezvous
+// ---------------------------------------------------------------------------
+
+/// Sutton-Graves convective heating rate (stagnation point).
+/// q_dot = k * sqrt(rho / r_n) * V^3  (W/m²)
+/// Earth: k ≈ 1.83e-4 (kg^(1/2)/m)
+pub fn sutton_graves_heat_rate(density: f64, velocity: f64, nose_radius: f64, planet_k: f64) -> Option<f64> {
+    if !finite(&[density, velocity, nose_radius, planet_k]) || density < 0.0 || velocity < 0.0 || nose_radius <= 0.0 || planet_k <= 0.0 { return None; }
+    Some(planet_k * (density / nose_radius).sqrt() * velocity.powi(3))
+}
+
+/// Ballistic coefficient: beta = m / (Cd * A_ref)
+pub fn ballistic_coefficient(mass: f64, drag_coefficient: f64, reference_area: f64) -> Option<f64> {
+    if !finite(&[mass, drag_coefficient, reference_area]) || mass <= 0.0 || drag_coefficient <= 0.0 || reference_area <= 0.0 { return None; }
+    Some(mass / (drag_coefficient * reference_area))
+}
+
+/// Equilibrium glide condition: L/D ratio needed to maintain altitude.
+pub fn equilibrium_glide_ld(mu: f64, radius: f64, velocity: f64) -> Option<f64> {
+    if !finite(&[mu, radius, velocity]) || mu <= 0.0 || radius <= 0.0 || velocity <= 0.0 { return None; }
+    let g = mu / (radius * radius);
+    let centripetal = velocity * velocity / radius;
+    if g <= centripetal { return None; }
+    Some((g - centripetal) / g)
+}
+
+/// Lagrange point positions (collinear L1, L2, L3) relative to the primary.
+/// Returns the distance from the secondary body in units of the orbital separation.
+/// mu = m2 / (m1 + m2) where m2 is the smaller body.
+pub fn lagrange_collinear_gamma(mu: f64, point: u8) -> Option<f64> {
+    if !mu.is_finite() || mu <= 0.0 || mu >= 1.0 || point < 1 || point > 3 { return None; }
+    let gamma = match point {
+        1 => { // L1: between primary and secondary
+            let xi = (mu / (3.0 * (1.0 - mu))).cbrt();
+            xi - xi*xi/3.0 - xi*xi*xi/9.0
+        }
+        2 => { // L2: beyond secondary
+            let xi = (mu / (3.0 * (1.0 - mu))).cbrt();
+            xi + xi*xi/3.0 - xi*xi*xi/9.0
+        }
+        3 => { // L3: opposite side of primary
+            let nu = mu / (1.0 - mu);
+            1.0 - (7.0/12.0) * nu + (7.0/12.0) * nu * nu
+        }
+        _ => return None,
+    };
+    Some(gamma)
+}
+
+/// L4/L5 equilateral Lagrange point coordinates relative to the barycenter.
+/// Returns (x, y) in units of the separation distance.
+pub fn lagrange_equilateral_coords() -> (f64, f64, f64, f64) {
+    // L4: (0.5 - mu, sqrt(3)/2), L5: (0.5 - mu, -sqrt(3)/2)
+    let sqrt3_2 = 0.866_025_403_784_438_6;
+    (0.5, sqrt3_2, 0.5, -sqrt3_2)
+}
+
+/// CR3BP Jacobi constant for a given state and mass ratio.
+pub fn cr3bp_jacobi_constant(position: Vec3, velocity: Vec3, mu: f64) -> Option<f64> {
+    if !vec3_finite(position) || !vec3_finite(velocity) || !mu.is_finite() || mu < 0.0 || mu > 1.0 { return None; }
+    let x = position.x; let y = position.y; let z = position.z;
+    let r1 = ((x + mu).powi(2) + y*y + z*z).sqrt();
+    let r2 = ((x - 1.0 + mu).powi(2) + y*y + z*z).sqrt();
+    if r1 < EPS || r2 < EPS { return None; }
+    let omega = (1.0 - mu) / r1 + mu / r2;
+    let v2 = velocity.x*velocity.x + velocity.y*velocity.y + velocity.z*velocity.z;
+    Some(x*x + y*y + 2.0*omega - v2)
+}
+
+/// CR3BP equations of motion (3D).
+/// Returns acceleration (ax, ay, az) in the rotating frame.
+pub fn cr3bp_acceleration(position: Vec3, mu: f64) -> Option<Vec3> {
+    if !vec3_finite(position) || !mu.is_finite() || mu < 0.0 || mu > 1.0 { return None; }
+    let x = position.x; let y = position.y; let z = position.z;
+    let r1 = ((x + mu).powi(2) + y*y + z*z).sqrt();
+    let r2 = ((x - 1.0 + mu).powi(2) + y*y + z*z).sqrt();
+    if r1 < EPS || r2 < EPS { return None; }
+    let r13 = r1*r1*r1; let r23 = r2*r2*r2;
+    let om1 = (1.0 - mu) / r13;
+    let om2 = mu / r23;
+    Some(Vec3 {
+        x: x + 2.0*y - om1*(x + mu) - om2*(x - 1.0 + mu),
+        y: y - 2.0*x - om1*y - om2*y,
+        z: -om1*z - om2*z,
+    })
+}
+
+/// Orbital rendezvous phasing: phase angle needed for co-planar Hohmann rendezvous.
+pub fn rendezvous_phase_angle(mu: f64, r_chaser: f64, r_target: f64) -> Option<f64> {
+    if !finite(&[mu, r_chaser, r_target]) || mu <= 0.0 || r_chaser <= 0.0 || r_target <= 0.0 { return None; }
+    let n_target = (mu / (r_target*r_target*r_target)).sqrt();
+    let transfer_a = 0.5 * (r_chaser + r_target);
+    let transfer_period = TAU * (transfer_a*transfer_a*transfer_a / mu).sqrt();
+    Some(PI - n_target * transfer_period * 0.5)
+}
+
+/// Phasing orbit period for rendezvous wait.
+pub fn phasing_orbit_semi_major_axis(mu: f64, target_period: f64, phase_angle: f64) -> Option<f64> {
+    if !finite(&[mu, target_period, phase_angle]) || mu <= 0.0 || target_period <= 0.0 { return None; }
+    let n = TAU / target_period;
+    let phasing_period = target_period * (1.0 + phase_angle / TAU);
+    Some((mu * (phasing_period / TAU).powi(2)).cbrt())
+}
+
+/// Atmospheric density correction for solar activity (F10.7 proxy).
+/// Simplified: density = rho_0 * exp(alpha * (F10.7 - F10.7_ref))
+pub fn solar_activity_density_correction(base_density: f64, f107: f64, f107_ref: f64, alpha: f64) -> Option<f64> {
+    if !finite(&[base_density, f107, f107_ref, alpha]) || base_density < 0.0 { return None; }
+    Some(base_density * (alpha * (f107 - f107_ref)).exp())
+}
+
+/// Bi-elliptic transfer total delta-V for triple-impulse maneuver.
+/// Efficient when r2/r1 > 11.94 for coplanar transfers.
+pub fn bi_elliptic_transfer_delta_v(mu: f64, r1: f64, r2: f64, r_intermediate: f64) -> Option<(f64, f64, f64, f64)> {
+    if !finite(&[mu, r1, r2, r_intermediate]) || mu <= 0.0 || r1 <= 0.0 || r2 <= 0.0 || r_intermediate <= 0.0 { return None; }
+    let vc1 = (mu / r1).sqrt();
+    let vc2 = (mu / r2).sqrt();
+    let a1 = 0.5 * (r1 + r_intermediate);
+    let a2 = 0.5 * (r_intermediate + r2);
+    let vp1 = (mu * (2.0/r1 - 1.0/a1)).sqrt();
+    let va1 = (mu * (2.0/r_intermediate - 1.0/a1)).sqrt();
+    let vp2 = (mu * (2.0/r_intermediate - 1.0/a2)).sqrt();
+    let va2 = (mu * (2.0/r2 - 1.0/a2)).sqrt();
+    let dv1 = vp1 - vc1;
+    let dv2 = vp2 - va1;
+    let dv3 = vc2 - va2;
+    Some((dv1, dv2, dv3, dv1.abs() + dv2.abs() + dv3.abs()))
+}
+
+/// Circular restricted 3-body: L1/L2/L3 position (x coordinate in rotating frame).
+pub fn cr3bp_lagrange_x(mu: f64, point: u8) -> Option<f64> {
+    let gamma = lagrange_collinear_gamma(mu, point)?;
+    match point {
+        1 => Some(1.0 - mu - gamma),  // L1: between bodies
+        2 => Some(1.0 - mu + gamma),  // L2: beyond secondary
+        3 => Some(-mu - gamma),        // L3: opposite side
+        _ => None,
+    }
+}
+
+/// Re-entry deceleration (g-load) for ballistic entry.
+pub fn reentry_peak_g_load(beta: f64, entry_velocity: f64, entry_angle: f64, scale_height: f64) -> Option<f64> {
+    if !finite(&[beta, entry_velocity, entry_angle, scale_height]) || beta <= 0.0 || entry_velocity <= 0.0 || scale_height <= 0.0 { return None; }
+    let sin_gamma = entry_angle.sin().abs();
+    if sin_gamma < EPS { return None; }
+    Some(entry_velocity * entry_velocity * sin_gamma / (2.0 * std::f64::consts::E * beta * 9.80665 * scale_height))
+}
+
+/// Chandrasekhar mass limit (1.44 solar masses).
+pub fn chandrasekhar_mass() -> f64 { 1.44 }
+
+/// Schwarzschild ISCO: r_isco = 6GM/c² (already in relativity, keep here for convenience).
+pub fn schwarzschild_isco_radius(mass_kg: f64) -> Option<f64> {
+    let g = 6.67430e-11;
+    let c = 299_792_458.0;
+    if !mass_kg.is_finite() || mass_kg <= 0.0 { return None; }
+    Some(6.0 * g * mass_kg / (c * c))
+}
+
+/// Lense-Thirring precession rate (rad/s) for a test particle.
+/// Omega_LT = (2GJ)/(c² r³)  where J = I * omega_spin is the angular momentum.
+pub fn lense_thirring_precession_rate(mass_kg: f64, radius_m: f64, spin_parameter: f64) -> Option<f64> {
+    let g = 6.67430e-11;
+    let c = 299_792_458.0;
+    if !finite(&[mass_kg, radius_m, spin_parameter]) || mass_kg <= 0.0 || radius_m <= 0.0 { return None; }
+    let j = spin_parameter * mass_kg * mass_kg * g / c; // a = Jc/(GM²) → J = aGM²/c
+    Some(2.0 * g * j / (c*c * radius_m*radius_m*radius_m))
+}
+
+/// Eclipsing duration for a circular orbit (conical shadow model).
+pub fn eclipse_duration_circular(
+    semi_major_axis: f64, mu: f64, planet_radius: f64,
+    sun_direction: Vec3, orbit_normal: Vec3,
+) -> Option<f64> {
+    if !finite(&[semi_major_axis, mu, planet_radius]) || semi_major_axis <= 0.0 || mu <= 0.0 || planet_radius <= 0.0 { return None; }
+    if !vec3_finite(sun_direction) || !vec3_finite(orbit_normal) { return None; }
+    let beta = vec3_to_rapier(sun_direction).dot(vec3_to_rapier(orbit_normal)).clamp(-1.0, 1.0).acos(); // angle between sun and orbit plane
+    if beta.abs() < EPS { return None; } // no eclipse possible
+    let rho = (planet_radius / semi_major_axis).asin();
+    if rho >= beta { return None; }
+    let cos_half = beta.cos() / rho.cos();
+    if cos_half.abs() > 1.0 { return None; }
+    let n = (mu / (semi_major_axis*semi_major_axis*semi_major_axis)).sqrt();
+    Some(2.0 * cos_half.acos() / n)
+}

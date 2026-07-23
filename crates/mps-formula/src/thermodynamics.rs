@@ -500,3 +500,219 @@ pub fn entropy_change_constant_pressure(moles: f64, cp: f64, t1: f64, t2: f64) -
 fn finite_4(a: f64, b: f64, c: f64, d: f64) -> bool {
     a.is_finite() && b.is_finite() && c.is_finite() && d.is_finite()
 }
+
+fn finite_5(a: f64, b: f64, c: f64, d: f64, e: f64) -> bool {
+    a.is_finite() && b.is_finite() && c.is_finite() && d.is_finite() && e.is_finite()
+}
+
+// ---------------------------------------------------------------------------
+// Van der Waals equation of state
+// ---------------------------------------------------------------------------
+
+/// Van der Waals pressure: P = RT/(V-b) - a/V²
+pub fn van_der_waals_pressure(temperature: f64, molar_volume: f64, a: f64, b: f64) -> Option<f64> {
+    if !finite_5(temperature, molar_volume, a, b, 0.0) || temperature <= 0.0 || molar_volume <= 0.0 || a < 0.0 || b < 0.0 { return None; }
+    let r = 8.314462618;
+    Some(r * temperature / (molar_volume - b) - a / (molar_volume * molar_volume))
+}
+
+/// Van der Waals critical point: Tc = 8a/(27Rb), Pc = a/(27b²), Vc = 3b
+pub fn van_der_waals_critical_point(a: f64, b: f64) -> Option<(f64, f64, f64)> {
+    if !finite_5(a, b, 0.0, 0.0, 0.0) || a <= 0.0 || b <= 0.0 { return None; }
+    let r = 8.314462618;
+    let tc = 8.0 * a / (27.0 * r * b);
+    let pc = a / (27.0 * b * b);
+    let vc = 3.0 * b;
+    Some((tc, pc, vc))
+}
+
+// ---------------------------------------------------------------------------
+// Maxwell relations (thermodynamic potentials)
+// ---------------------------------------------------------------------------
+
+/// Maxwell relation 1: (∂T/∂V)_S = -(∂P/∂S)_V
+pub fn maxwell_relation_1(temperature: f64, volume: f64, entropy: f64, pressure: f64) -> f64 {
+    0.0 // stub — analytical form depends on the specific EOS; use as reminder of the identity
+}
+
+/// Enthalpy: H = U + PV
+pub fn enthalpy(internal_energy: f64, pressure: f64, volume: f64) -> Option<f64> {
+    if !finite_5(internal_energy, pressure, volume, 0.0, 0.0) { return None; }
+    Some(internal_energy + pressure * volume)
+}
+
+/// Helmholtz free energy: F = U - TS
+pub fn helmholtz_free_energy(internal_energy: f64, temperature: f64, entropy: f64) -> Option<f64> {
+    if !finite_5(internal_energy, temperature, entropy, 0.0, 0.0) || temperature < 0.0 { return None; }
+    Some(internal_energy - temperature * entropy)
+}
+
+/// Gibbs free energy: G = H - TS = U + PV - TS
+pub fn gibbs_free_energy(internal_energy: f64, pressure: f64, volume: f64, temperature: f64, entropy: f64) -> Option<f64> {
+    if !finite_5(internal_energy, pressure, volume, temperature, entropy) || temperature < 0.0 { return None; }
+    Some(internal_energy + pressure * volume - temperature * entropy)
+}
+
+// ---------------------------------------------------------------------------
+// Joule-Thomson effect
+// ---------------------------------------------------------------------------
+
+/// Joule-Thomson coefficient: μ_JT = (∂T/∂P)_H
+/// For ideal gas: μ_JT = 0. For Van der Waals: μ_JT ≈ (1/Cp)(2a/RT - b)
+pub fn joule_thomson_coefficient(cp: f64, temperature: f64, a: f64, b: f64) -> Option<f64> {
+    if !finite_5(cp, temperature, a, b, 0.0) || cp <= 0.0 || temperature <= 0.0 { return None; }
+    let r = 8.314462618;
+    Some((2.0 * a / (r * temperature) - b) / cp)
+}
+
+/// Joule-Thomson inversion temperature: T_inv = 2a/(Rb)
+pub fn joule_thomson_inversion_temperature(a: f64, b: f64) -> Option<f64> {
+    if !finite_5(a, b, 0.0, 0.0, 0.0) || a <= 0.0 || b <= 0.0 { return None; }
+    let r = 8.314462618;
+    Some(2.0 * a / (r * b))
+}
+
+// ---------------------------------------------------------------------------
+// Heat capacity
+// ---------------------------------------------------------------------------
+
+/// Debye heat capacity: C_V = 9Nk_B (T/θ_D)³ ∫₀^{θ_D/T} x⁴ eˣ/(eˣ-1)² dx
+/// Simplified low-T limit: C_V ≈ 12π⁴/5 Nk_B (T/θ_D)³
+pub fn debye_heat_capacity_low_t(temperature: f64, debye_temperature: f64, n_atoms: f64) -> Option<f64> {
+    if !finite_5(temperature, debye_temperature, n_atoms, 0.0, 0.0) || temperature <= 0.0 || debye_temperature <= 0.0 || n_atoms <= 0.0 { return None; }
+    let r = 8.314462618;
+    let ratio = temperature / debye_temperature;
+    Some(12.0 * std::f64::consts::PI.powi(4) / 5.0 * n_atoms * r * ratio.powi(3))
+}
+
+/// Einstein heat capacity: C_V = 3Nk_B (θ_E/T)² e^{θ_E/T} / (e^{θ_E/T} - 1)²
+pub fn einstein_heat_capacity(temperature: f64, einstein_temperature: f64, n_atoms: f64) -> Option<f64> {
+    if !finite_5(temperature, einstein_temperature, n_atoms, 0.0, 0.0) || temperature <= 0.0 || einstein_temperature <= 0.0 || n_atoms <= 0.0 { return None; }
+    let r = 8.314462618;
+    let x = einstein_temperature / temperature;
+    let ex = x.exp();
+    if ex <= 1.0 { return None; }
+    Some(3.0 * n_atoms * r * x * x * ex / (ex - 1.0).powi(2))
+}
+
+// ---------------------------------------------------------------------------
+// Refrigeration cycle
+// ---------------------------------------------------------------------------
+
+/// Carnot refrigeration coefficient of performance: COP = Tc / (Th - Tc)
+pub fn carnot_refrigeration_cop(t_cold: f64, t_hot: f64) -> Option<f64> {
+    if !finite_5(t_cold, t_hot, 0.0, 0.0, 0.0) || t_cold <= 0.0 || t_hot <= 0.0 || t_hot <= t_cold { return None; }
+    Some(t_cold / (t_hot - t_cold))
+}
+
+/// Heat pump COP: COP = Th / (Th - Tc)
+pub fn heat_pump_cop(t_cold: f64, t_hot: f64) -> Option<f64> {
+    if !finite_5(t_cold, t_hot, 0.0, 0.0, 0.0) || t_cold <= 0.0 || t_hot <= 0.0 || t_hot <= t_cold { return None; }
+    Some(t_hot / (t_hot - t_cold))
+}
+
+// ---------------------------------------------------------------------------
+// Heat exchanger: LMTD and NTU-epsilon methods
+// ---------------------------------------------------------------------------
+
+/// Log-mean temperature difference for counter-flow heat exchanger.
+pub fn lmtd_counter_flow(t_hot_in: f64, t_hot_out: f64, t_cold_in: f64, t_cold_out: f64) -> Option<f64> {
+    if !finite_5(t_hot_in, t_hot_out, t_cold_in, t_cold_out, 0.0) || t_hot_in < t_cold_out || t_hot_out < t_cold_in { return None; }
+    let d1 = t_hot_in - t_cold_out;
+    let d2 = t_hot_out - t_cold_in;
+    if d1 <= 0.0 || d2 <= 0.0 { return None; }
+    Some((d1 - d2) / (d1 / d2).ln())
+}
+
+/// Log-mean temperature difference for parallel-flow heat exchanger.
+pub fn lmtd_parallel_flow(t_hot_in: f64, t_hot_out: f64, t_cold_in: f64, t_cold_out: f64) -> Option<f64> {
+    if !finite_5(t_hot_in, t_hot_out, t_cold_in, t_cold_out, 0.0) { return None; }
+    let d1 = t_hot_in - t_cold_in;
+    let d2 = t_hot_out - t_cold_out;
+    if d1 <= 0.0 || d2 <= 0.0 { return None; }
+    Some((d1 - d2) / (d1 / d2).ln())
+}
+
+/// NTU-epsilon effectiveness for counter-flow heat exchanger.
+pub fn ntu_epsilon_counter_flow(ntu: f64, c_r: f64) -> Option<f64> {
+    if !finite_5(ntu, c_r, 0.0, 0.0, 0.0) || ntu < 0.0 || c_r < 0.0 { return None; }
+    let epsilon = if c_r >= 1.0 {
+        ntu / (1.0 + ntu) // c_r = 1 limiting case
+    } else {
+        let exp = (-ntu * (1.0 - c_r)).exp();
+        (1.0 - exp) / (1.0 - c_r * exp)
+    };
+    Some(epsilon)
+}
+
+/// Number of transfer units: NTU = UA / C_min
+pub fn ntu(overall_htc: f64, area: f64, c_min: f64) -> Option<f64> {
+    if !finite_5(overall_htc, area, c_min, 0.0, 0.0) || overall_htc <= 0.0 || area <= 0.0 || c_min <= 0.0 { return None; }
+    Some(overall_htc * area / c_min)
+}
+
+/// Heat capacity rate: C = m_dot * cp
+pub fn heat_capacity_rate(mass_flow: f64, specific_heat: f64) -> Option<f64> {
+    if !finite_5(mass_flow, specific_heat, 0.0, 0.0, 0.0) || mass_flow <= 0.0 || specific_heat <= 0.0 { return None; }
+    Some(mass_flow * specific_heat)
+}
+
+// ---------------------------------------------------------------------------
+// View factor (simple configurations)
+// ---------------------------------------------------------------------------
+
+/// View factor for two parallel coaxial disks.
+/// R1 = r1/d, R2 = r2/d where d is the separation distance.
+pub fn view_factor_coaxial_disks(radius_ratio_1: f64, radius_ratio_2: f64) -> Option<f64> {
+    if !finite_5(radius_ratio_1, radius_ratio_2, 0.0, 0.0, 0.0) || radius_ratio_1 < 0.0 || radius_ratio_2 < 0.0 { return None; }
+    let x = 1.0 + (1.0 + radius_ratio_2 * radius_ratio_2) / (radius_ratio_1 * radius_ratio_1);
+    Some(0.5 * (x - (x * x - 4.0 * (radius_ratio_2 / radius_ratio_1).powi(2)).sqrt()))
+}
+
+/// View factor for two parallel, equal rectangles.
+/// X = a/d, Y = b/d where a, b are side lengths and d is the separation.
+pub fn view_factor_parallel_rectangles(x: f64, y: f64) -> Option<f64> {
+    if !finite_5(x, y, 0.0, 0.0, 0.0) || x <= 0.0 || y <= 0.0 { return None; }
+    let f = 2.0 / (std::f64::consts::PI * x * y) * (
+        (x * x * (1.0 + y * y) / (1.0 + x * x + y * y)).ln().sqrt() +
+        (y * y * (1.0 + x * x) / (1.0 + x * x + y * y)).ln().sqrt() +
+        x * (1.0 + y * y).atan() / (x * x + y * y + x * x * y * y).sqrt() +
+        y * (1.0 + x * x).atan() / (x * x + y * y + y * y * x * x).sqrt() -
+        x * x.atan() - y * y.atan()
+    );
+    Some(f)
+}
+
+// ---------------------------------------------------------------------------
+// Virial expansion
+// ---------------------------------------------------------------------------
+
+/// Second virial coefficient for Lennard-Jones gas (simplified).
+/// B(T) = b₀ - a₀/RT, where b₀ = 2πN_A σ³/3, a₀ = 2πN_A² ε σ³
+pub fn virial_second_coefficient(temperature: f64, sigma: f64, epsilon: f64) -> Option<f64> {
+    if !finite_5(temperature, sigma, epsilon, 0.0, 0.0) || temperature <= 0.0 || sigma <= 0.0 || epsilon < 0.0 { return None; }
+    let r = 8.314462618;
+    let avogadro = 6.022_140_76e23;
+    let b0 = 2.0 * std::f64::consts::PI * avogadro * sigma.powi(3) / 3.0;
+    let a0 = 2.0 * std::f64::consts::PI * avogadro * avogadro * epsilon * sigma.powi(3);
+    Some(b0 - a0 / (r * temperature))
+}
+
+// ---------------------------------------------------------------------------
+// Two-phase flow
+// ---------------------------------------------------------------------------
+
+/// Quality (vapor mass fraction): x = m_vapor / (m_vapor + m_liquid)
+pub fn quality(vapor_mass: f64, liquid_mass: f64) -> Option<f64> {
+    if !finite_5(vapor_mass, liquid_mass, 0.0, 0.0, 0.0) || vapor_mass < 0.0 || liquid_mass < 0.0 { return None; }
+    let total = vapor_mass + liquid_mass;
+    if total <= 0.0 { return None; }
+    Some(vapor_mass / total)
+}
+
+/// Homogeneous void fraction: α = 1 / (1 + (1-x)/x * ρ_v/ρ_l)
+pub fn homogeneous_void_fraction(quality: f64, rho_vapor: f64, rho_liquid: f64) -> Option<f64> {
+    if !finite_5(quality, rho_vapor, rho_liquid, 0.0, 0.0) || quality < 0.0 || quality > 1.0 || rho_vapor <= 0.0 || rho_liquid <= 0.0 { return None; }
+    if quality <= 0.0 || quality >= 1.0 { return Some(quality); }
+    Some(1.0 / (1.0 + (1.0 - quality) / quality * rho_vapor / rho_liquid))
+}
