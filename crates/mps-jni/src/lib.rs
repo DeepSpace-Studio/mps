@@ -199,7 +199,7 @@ macro_rules! jni {
     (@default bool_array) => { std::ptr::null_mut() };
     ($ret:ident $method:ident ( $($kind:ident $arg:ident),* ) $body:block) => {
         #[unsafe(export_name = concat!(
-            "Java_org_polaris2023_msp_1rigid_1body_RigidBodyNative_",
+            "Java_org_polaris2023_mps_1rigid_1body_RigidBodyNative_",
             stringify!($method)
         ))]
         #[allow(non_snake_case)]
@@ -238,7 +238,7 @@ macro_rules! jni_e_c {
     (@default bool_array) => { std::ptr::null_mut() };
     ($ret:ident $method:ident ( $($kind:ident $arg:ident),* ) $body:block) => {
         #[unsafe(export_name = concat!(
-            "Java_org_polaris2023_msp_1rigid_1body_RigidBodyNative_",
+            "Java_org_polaris2023_mps_1rigid_1body_RigidBodyNative_",
             stringify!($method)
         ))]
         #[allow(non_snake_case)]
@@ -260,7 +260,7 @@ jni!(boolean abiSupportsJni() { abi::abi_supports_jni().0 as jbyte });
 jni!(int abiLastErrorCode() { er::last_error_code() as jint });
 jni!(void abiClearLastError() { er::last_error_clear(); });
 
-#[unsafe(export_name = "Java_org_polaris2023_msp_1rigid_1body_RigidBodyNative_abiLastErrorMessage")]
+#[unsafe(export_name = "Java_org_polaris2023_mps_1rigid_1body_RigidBodyNative_abiLastErrorMessage")]
 #[allow(non_snake_case)]
 pub extern "system" fn abiLastErrorMessage(env: JNIEnv, _class: jclass) -> jstring {
     catch_unwind(AssertUnwindSafe(|| {
@@ -905,7 +905,7 @@ jni!(long worldGetSharedArenaSize(long world) { wo::world_get_shared_arena_size(
 /// This uses `NewDirectByteBuffer` — a standard JNI API since Java 1.4.
 /// The returned ByteBuffer wraps the native arena memory directly, enabling
 /// zero-JNI reads/writes from pure `java.nio.ByteBuffer` / `java.nio.DoubleBuffer`.
-#[unsafe(export_name = "Java_org_polaris2023_msp_1rigid_1body_RigidBodyNative_worldGetArenaDirectByteBuffer")]
+#[unsafe(export_name = "Java_org_polaris2023_mps_1rigid_1body_RigidBodyNative_worldGetArenaDirectByteBuffer")]
 #[allow(non_snake_case)]
 pub extern "system" fn worldGetArenaDirectByteBuffer(env: JNIEnv, _class: jclass, world: jlong) -> ljni::sys::jobject {
     catch_unwind(AssertUnwindSafe(|| {
