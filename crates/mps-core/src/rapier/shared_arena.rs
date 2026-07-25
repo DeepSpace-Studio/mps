@@ -1,4 +1,4 @@
-﻿//! Shared-memory physics arena — zero-JNI data access from Java.
+//! Shared-memory physics arena — zero-JNI data access from Java.
 //!
 //! ## Motivation
 //!
@@ -77,22 +77,34 @@
 //! 32      4      body_count (u32, live bodies)
 //! 36      4      collider_count (u32, live colliders)
 //! 40      4      event_count (u32, pending events)
-//! 44      4      cmd_count (u32, pending commands)
+//! 44      4      cmd_write (u32 — command write index / pending count:
+//!                Java bumps it for each command written,
+//!                Rust resets it to 0 after draining)
 //! 48      4      body_slot_stride (u32)
-//! 52      4      cmd_slot_stride (u32)
-//! 56      4      event_slot_stride (u32)
-//! 60      4      force_law_count (u32, number of active ForceLawType entries)
-//! 64      8      body_handle_map_offset (u64, offset from ptr to handle map, 0=none)
-//! 72      8      force_report_offset (u64, offset from ptr to force contributions, 0=none)
-//! 80      8      reserved_0
-//! 88      8      reserved_1
-//! 96      32     [reserved; 32 bytes]
+//! 52      4      collider_slot_stride (u32)
+//! 56      4      cmd_slot_stride (u32)
+//! 60      4      event_slot_stride (u32)
+//! 64      8      body_handle_map_offset (u64, offset from ptr to handle map)
+//! 72      8      force_report_offset (u64, per-ForceLawType breakdown, 32 × 32 bytes)
+//! 80      8      integration_params_offset (u64, 40-byte region, see below)
+//! 88      8      force_summary_offset (u64, 64-byte region, see below)
+//! 96      8      cmd_ring_offset (u64)
+//! 104     8      event_ring_offset (u64)
+//! 112     8      collider_slots_offset (u64)
+//! 120     4      force_law_count (u32, number of active ForceLawType entries)
+//! 124     4      reserved
 //! 128     —      body_slots[max_bodies × body_slot_stride]
-//! ...     —      body_handle_map[max_bodies × 8]   (optional, after body_slots)
+//! ...     —      collider_slots[max_colliders × collider_slot_stride]
+//! ...     —      body_handle_map[max_bodies × 8]
+//! ...     —      force_report[32 × 32]             (per-ForceLawType contributions)
+//! ...     —      integration_params[40]
+//! ...     —      force_summary[64]
 //! ...     —      cmd_ring[max_commands × cmd_slot_stride]
-//! ...     —      force_report[32 × 32]             (optional: per-ForceLawType contributions)
 //! ...     —      event_ring[max_events × event_slot_stride]
 //! ```
+//!
+//! Region offsets are written into the header by `new()`; Java must read
+//! them from the header instead of recomputing them from capacities.
 //!
 //! ## BodySlot layout (96 bytes, 8-byte aligned)
 //!
@@ -124,6 +136,15 @@
 //! 24      8      arg2 (f64) — force_z / pos_z / vel_z / impulse_z
 //! ```
 //!
+//! ### Command ring protocol
+//!
+//! Java is the sole producer, Rust the sole consumer.  For each command,
+//! Java writes a `CommandSlot` at `cmd_ring_offset + cmd_write * 32` and then
+//! bumps `cmd_write` (header offset 44).  At the start of `world_step`, Rust
+//! drains slots `[0, min(cmd_write, max_commands))` and resets `cmd_write`
+//! to 0, so the ring never wraps within a frame and `cmd_write` doubles as
+//! the pending-command count.
+//!
 //! ## EventSlot layout (64 bytes)
 //!
 //! ```text
@@ -149,6 +170,33 @@
 //! 16      8      total_force_z (f64)
 //! 24      4      body_count (u32, bodies that received this force type)
 //! 28      4      reserved
+//! ```
+//!
+//! ## IntegrationParams layout (40 bytes)
+//!
+//! ```text
+//! Offset  Size   Field
+//! 0       8      dt (f64)
+//! 8       4      solver_iterations (u32)
+//! 12      4      ccd_substeps (u32)
+//! 16      8      gravity_x (f64)
+//! 24      8      gravity_y (f64)
+//! 32      8      gravity_z (f64)
+//! ```
+//!
+//! ## ForceSummary layout (64 bytes)
+//!
+//! ```text
+//! Offset  Size   Field
+//! 0       8      max_reynolds_number (f64)
+//! 8       8      total_external_force_x (f64)
+//! 16      8      total_external_force_y (f64)
+//! 24      8      total_external_force_z (f64)
+//! 32      8      total_drag_force_x (f64)
+//! 40      8      total_drag_force_y (f64)
+//! 48      8      total_drag_force_z (f64)
+//! 56      4      drag_body_count (u32)
+//! 60      4      external_force_body_count (u32)
 //! ```
 //!
 //! ## BodyHandleMap layout (8 bytes per body)
@@ -177,7 +225,7 @@ use crate::rapier::forces::ForceLawType;
 pub const ARENA_MAGIC: u64 = 0x4D50535F4152454E;
 
 /// Current arena layout version — increment when layout changes
-pub const ARENA_VERSION: u32 = 1;
+pub const ARENA_VERSION: u32 = 2;
 
 /// Arena flags
 const FLAG_DIRTY_BODIES: u32 = 1 << 0;
@@ -192,6 +240,30 @@ pub const EVENT_SLOT_STRIDE: u32 = 64;
 
 /// Header size in bytes
 pub const HEADER_SIZE: usize = 128;
+
+/// Upper bounds for arena capacities — defense against absurd FFI requests.
+pub const MAX_ARENA_BODIES: u32 = 1_000_000;
+pub const MAX_ARENA_COLLIDERS: u32 = 1_000_000;
+pub const MAX_ARENA_EVENTS: u32 = 1_000_000;
+pub const MAX_ARENA_COMMANDS: u32 = 1_000_000;
+/// Hard cap on the total arena allocation (256 MiB).
+pub const MAX_ARENA_TOTAL_BYTES: usize = 256 * 1024 * 1024;
+
+/// Integration params region: dt(8) + solver_iterations(4) + ccd_substeps(4) + gravity(24)
+pub const INTEGRATION_PARAMS_SIZE: usize = 40;
+/// Force summary region: max_reynolds(8) + external force(24) + drag force(24) + counts(8)
+pub const FORCE_SUMMARY_SIZE: usize = 64;
+
+// Header offsets (bytes) — see the layout doc at the top of this file
+const OFF_CMD_WRITE: usize = 44;
+const OFF_BODY_HANDLE_MAP: usize = 64;
+const OFF_FORCE_REPORT: usize = 72;
+const OFF_INTEGRATION_PARAMS: usize = 80;
+const OFF_FORCE_SUMMARY: usize = 88;
+const OFF_CMD_RING: usize = 96;
+const OFF_EVENT_RING: usize = 104;
+const OFF_COLLIDER_SLOTS: usize = 112;
+const OFF_FORCE_LAW_COUNT: usize = 120;
 
 /// Default arena sizes
 const DEFAULT_MAX_BODIES: u32 = 1024;
@@ -246,10 +318,14 @@ pub struct SharedPhysicsArena {
     collider_slots_offset: usize,
     /// Offset of body handle map from ptr (0 = disabled)
     body_handle_map_offset: usize,
+    /// Offset of force report (per-ForceLawType breakdown) from ptr (0 = disabled)
+    force_report_offset: usize,
+    /// Offset of integration params region from ptr
+    integration_params_offset: usize,
+    /// Offset of force summary region from ptr
+    force_summary_offset: usize,
     /// Offset of command ring from ptr
     cmd_ring_offset: usize,
-    /// Offset of force report from ptr (0 = disabled)
-    force_report_offset: usize,
     /// Offset of event ring from ptr
     event_ring_offset: usize,
     /// Max bodies
@@ -260,10 +336,6 @@ pub struct SharedPhysicsArena {
     max_commands: u32,
     /// Max events
     max_events: u32,
-    /// Command ring write index (Rust reads from this)
-    cmd_write: AtomicU32,
-    /// Command ring read index (Rust reads from this)
-    cmd_read: AtomicU32,
     /// Event ring write index (Rust writes to this)
     event_write: AtomicU32,
     /// Event ring read index (Java reads from this)
@@ -278,8 +350,19 @@ unsafe impl Sync for SharedPhysicsArena {}
 impl SharedPhysicsArena {
     /// Create a new arena with the given capacities.
     ///
-    /// Returns the arena and the raw pointer (for passing to Java).
-    pub fn new(max_bodies: u32, max_colliders: u32, max_events: u32, max_commands: u32) -> Self {
+    /// Returns the arena and the raw pointer (for passing to Java), or `None`
+    /// if a capacity exceeds `MAX_ARENA_*`, the total size exceeds
+    /// `MAX_ARENA_TOTAL_BYTES`, or the allocation fails.
+    pub fn new(max_bodies: u32, max_colliders: u32, max_events: u32, max_commands: u32) -> Option<Self> {
+        if max_bodies > MAX_ARENA_BODIES
+            || max_colliders > MAX_ARENA_COLLIDERS
+            || max_events > MAX_ARENA_EVENTS
+            || max_commands > MAX_ARENA_COMMANDS
+        {
+            return None;
+        }
+
+        // Capacity caps above keep every product well inside usize range.
         let body_slots_size = max_bodies as usize * BODY_SLOT_STRIDE as usize;
         let collider_slots_size = max_colliders as usize * COLLIDER_SLOT_STRIDE as usize;
         let body_handle_map_size = max_bodies as usize * 8; // u64 per body
@@ -292,19 +375,27 @@ impl SharedPhysicsArena {
             + collider_slots_size
             + body_handle_map_size
             + force_report_size
+            + INTEGRATION_PARAMS_SIZE
+            + FORCE_SUMMARY_SIZE
             + cmd_ring_size
             + event_ring_size;
+        if total_size > MAX_ARENA_TOTAL_BYTES {
+            return None;
+        }
 
-        let layout = Layout::from_size_align(total_size, 64)
-            .expect("arena layout must be valid");
+        let layout = Layout::from_size_align(total_size, 64).ok()?;
         let ptr = unsafe { alloc_zeroed(layout) };
-        assert!(!ptr.is_null(), "arena allocation failed");
+        if ptr.is_null() {
+            return None;
+        }
 
         let body_slots_offset = HEADER_SIZE;
         let collider_slots_offset = body_slots_offset + body_slots_size;
         let body_handle_map_offset = collider_slots_offset + collider_slots_size;
         let force_report_offset = body_handle_map_offset + body_handle_map_size;
-        let cmd_ring_offset = force_report_offset + force_report_size;
+        let integration_params_offset = force_report_offset + force_report_size;
+        let force_summary_offset = integration_params_offset + INTEGRATION_PARAMS_SIZE;
+        let cmd_ring_offset = force_summary_offset + FORCE_SUMMARY_SIZE;
         let event_ring_offset = cmd_ring_offset + cmd_ring_size;
 
         // Write header
@@ -320,29 +411,34 @@ impl SharedPhysicsArena {
             (ptr.add(52) as *mut u32).write_unaligned(COLLIDER_SLOT_STRIDE);
             (ptr.add(56) as *mut u32).write_unaligned(CMD_SLOT_STRIDE);
             (ptr.add(60) as *mut u32).write_unaligned(EVENT_SLOT_STRIDE);
-            // body_handle_map_offset and force_report_offset
-            (ptr.add(64) as *mut u64).write_unaligned(body_handle_map_offset as u64);
-            (ptr.add(72) as *mut u64).write_unaligned(force_report_offset as u64);
+            // Region offsets (Java reads these instead of recomputing)
+            (ptr.add(OFF_BODY_HANDLE_MAP) as *mut u64).write_unaligned(body_handle_map_offset as u64);
+            (ptr.add(OFF_FORCE_REPORT) as *mut u64).write_unaligned(force_report_offset as u64);
+            (ptr.add(OFF_INTEGRATION_PARAMS) as *mut u64).write_unaligned(integration_params_offset as u64);
+            (ptr.add(OFF_FORCE_SUMMARY) as *mut u64).write_unaligned(force_summary_offset as u64);
+            (ptr.add(OFF_CMD_RING) as *mut u64).write_unaligned(cmd_ring_offset as u64);
+            (ptr.add(OFF_EVENT_RING) as *mut u64).write_unaligned(event_ring_offset as u64);
+            (ptr.add(OFF_COLLIDER_SLOTS) as *mut u64).write_unaligned(collider_slots_offset as u64);
         }
 
-        Self {
+        Some(Self {
             ptr,
             size: total_size,
             body_slots_offset,
             collider_slots_offset,
             body_handle_map_offset,
-            cmd_ring_offset,
             force_report_offset,
+            integration_params_offset,
+            force_summary_offset,
+            cmd_ring_offset,
             event_ring_offset,
             max_bodies,
             max_colliders,
             max_commands,
             max_events,
-            cmd_write: AtomicU32::new(0),
-            cmd_read: AtomicU32::new(0),
             event_write: AtomicU32::new(0),
             event_read: AtomicU32::new(0),
-        }
+        })
     }
 
     /// Get the raw pointer for passing to Java.
@@ -526,7 +622,7 @@ impl SharedPhysicsArena {
         }
 
         // Update header: force_law_count
-        self.set_header_u32(60, count);
+        self.set_header_u32(OFF_FORCE_LAW_COUNT, count);
 
         // Clear remaining slots
         for i in count..32 {
@@ -557,12 +653,17 @@ impl SharedPhysicsArena {
     ///
     /// Returns a Vec of (cmd_type, body_index, arg0, arg1, arg2) tuples.
     /// Called at the beginning of `world_step`.
+    ///
+    /// Protocol: Java (sole producer) writes a command slot and then bumps the
+    /// write index at header offset `OFF_CMD_WRITE`; Rust (sole consumer)
+    /// drains `[0, write)` here and resets the write index to 0.
     pub fn drain_commands(&self) -> Vec<(u32, u32, f64, f64, f64)> {
         let mut commands = Vec::new();
-        let write = self.cmd_write.load(Ordering::Acquire);
-        let mut read = self.cmd_read.load(Ordering::Relaxed);
+        // Clamp to ring capacity: a buggy/overflowing producer must not make
+        // us read past the command ring into the event ring.
+        let write = self.header_u32(OFF_CMD_WRITE).min(self.max_commands);
 
-        while read != write {
+        for read in 0..write {
             let slot = self.cmd_slot_ptr(read);
             let cmd_type = unsafe { (slot as *const u32).read_unaligned() };
             let body_index = unsafe { (slot.add(4) as *const u32).read_unaligned() };
@@ -571,13 +672,10 @@ impl SharedPhysicsArena {
             let arg2 = unsafe { (slot.add(24) as *const f64).read_unaligned() };
 
             commands.push((cmd_type, body_index, arg0, arg1, arg2));
-
-            read = read.wrapping_add(1);
         }
 
-        self.cmd_read.store(read, Ordering::Release);
-        // Update header
-        self.set_header_u32(44, 0);
+        // Reset the write index: every drained frame starts with an empty ring.
+        self.set_header_u32(OFF_CMD_WRITE, 0);
 
         commands
     }
@@ -827,7 +925,7 @@ impl SharedPhysicsArena {
     // Integration parameters (zero-JNI read/write by Java)
     // -----------------------------------------------------------------------
 
-    /// Flush integration parameters and force report into the header's reserved space.
+    /// Flush integration parameters into the arena's integration_params region.
     pub fn flush_integration_params(
         &self,
         dt: f64,
@@ -835,17 +933,18 @@ impl SharedPhysicsArena {
         ccd_substeps: u32,
         gravity: &rapier3d::prelude::Vector,
     ) {
+        let base = self.integration_params_offset;
         unsafe {
-            (self.ptr.add(64) as *mut f64).write_unaligned(dt);
-            (self.ptr.add(72) as *mut u32).write_unaligned(solver_iterations);
-            (self.ptr.add(76) as *mut u32).write_unaligned(ccd_substeps);
-            (self.ptr.add(80) as *mut f64).write_unaligned(gravity.x);
-            (self.ptr.add(88) as *mut f64).write_unaligned(gravity.y);
-            (self.ptr.add(96) as *mut f64).write_unaligned(gravity.z);
+            (self.ptr.add(base) as *mut f64).write_unaligned(dt);
+            (self.ptr.add(base + 8) as *mut u32).write_unaligned(solver_iterations);
+            (self.ptr.add(base + 12) as *mut u32).write_unaligned(ccd_substeps);
+            (self.ptr.add(base + 16) as *mut f64).write_unaligned(gravity.x);
+            (self.ptr.add(base + 24) as *mut f64).write_unaligned(gravity.y);
+            (self.ptr.add(base + 32) as *mut f64).write_unaligned(gravity.z);
         }
     }
 
-    /// Flush force report data for zero-JNI reading.
+    /// Flush the aggregate force summary into the arena's force_summary region.
     pub fn flush_force_report(
         &self,
         max_reynolds: f64,
@@ -854,16 +953,17 @@ impl SharedPhysicsArena {
         drag_body_count: u32,
         ext_force_body_count: u32,
     ) {
+        let base = self.force_summary_offset;
         unsafe {
-            (self.ptr.add(104) as *mut f64).write_unaligned(max_reynolds);
-            (self.ptr.add(112) as *mut f64).write_unaligned(total_external_force.x);
-            (self.ptr.add(120) as *mut f64).write_unaligned(total_external_force.y);
-            (self.ptr.add(128) as *mut f64).write_unaligned(total_external_force.z);
-            (self.ptr.add(136) as *mut f64).write_unaligned(total_drag_force.x);
-            (self.ptr.add(144) as *mut f64).write_unaligned(total_drag_force.y);
-            (self.ptr.add(152) as *mut f64).write_unaligned(total_drag_force.z);
-            (self.ptr.add(160) as *mut u32).write_unaligned(drag_body_count);
-            (self.ptr.add(164) as *mut u32).write_unaligned(ext_force_body_count);
+            (self.ptr.add(base) as *mut f64).write_unaligned(max_reynolds);
+            (self.ptr.add(base + 8) as *mut f64).write_unaligned(total_external_force.x);
+            (self.ptr.add(base + 16) as *mut f64).write_unaligned(total_external_force.y);
+            (self.ptr.add(base + 24) as *mut f64).write_unaligned(total_external_force.z);
+            (self.ptr.add(base + 32) as *mut f64).write_unaligned(total_drag_force.x);
+            (self.ptr.add(base + 40) as *mut f64).write_unaligned(total_drag_force.y);
+            (self.ptr.add(base + 48) as *mut f64).write_unaligned(total_drag_force.z);
+            (self.ptr.add(base + 56) as *mut u32).write_unaligned(drag_body_count);
+            (self.ptr.add(base + 60) as *mut u32).write_unaligned(ext_force_body_count);
         }
     }
 

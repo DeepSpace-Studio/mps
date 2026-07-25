@@ -15,6 +15,10 @@ public final class SharedPhysicsArena {
 
     static final long OFF_BODY_COUNT = 32;
     static final long OFF_EVENT_COUNT = 40;
+    static final long OFF_CMD_WRITE = 44;
+    // Region offsets (u64, written by Rust — read these, never recompute)
+    static final long OFF_CMD_RING_OFFSET = 96;
+    static final long OFF_EVENT_RING_OFFSET = 104;
 
     static final int CMD_ADD_FORCE = 0;
 
@@ -31,10 +35,9 @@ public final class SharedPhysicsArena {
             throw new IllegalArgumentException("invalid arena magic: 0x" + Long.toHexString(magic));
         }
         this.maxBodies = seg.get(ValueLayout.JAVA_INT_UNALIGNED, 16);
-        int maxCommands = seg.get(ValueLayout.JAVA_INT_UNALIGNED, 28);
         this.bodySlotsStart = HEADER_SIZE;
-        this.cmdRingStart = bodySlotsStart + (long) maxBodies * BODY_SLOT_STRIDE;
-        this.eventRingStart = cmdRingStart + (long) maxCommands * CMD_SLOT_STRIDE;
+        this.cmdRingStart = seg.get(ValueLayout.JAVA_LONG_UNALIGNED, OFF_CMD_RING_OFFSET);
+        this.eventRingStart = seg.get(ValueLayout.JAVA_LONG_UNALIGNED, OFF_EVENT_RING_OFFSET);
     }
 
     public int getMaxBodies()   { return maxBodies; }
@@ -51,11 +54,15 @@ public final class SharedPhysicsArena {
 
     private long cmdAddr(int i) { return cmdRingStart + (long)i * CMD_SLOT_STRIDE; }
     public void cmdAddForce(int bodyIdx, double fx, double fy, double fz) {
-        long a = cmdAddr(0);
+        // Protocol: write the slot, then bump the write index at header
+        // offset 44; Rust drains [0, write) at worldStep and resets it to 0.
+        int write = seg.get(ValueLayout.JAVA_INT_UNALIGNED, OFF_CMD_WRITE);
+        long a = cmdAddr(write);
         seg.set(ValueLayout.JAVA_INT_UNALIGNED, a, CMD_ADD_FORCE);
         seg.set(ValueLayout.JAVA_INT_UNALIGNED, a + 4, bodyIdx);
         seg.set(ValueLayout.JAVA_DOUBLE_UNALIGNED, a + 8, fx);
         seg.set(ValueLayout.JAVA_DOUBLE_UNALIGNED, a + 16, fy);
         seg.set(ValueLayout.JAVA_DOUBLE_UNALIGNED, a + 24, fz);
+        seg.set(ValueLayout.JAVA_INT_UNALIGNED, OFF_CMD_WRITE, write + 1);
     }
 }

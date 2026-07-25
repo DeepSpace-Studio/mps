@@ -1,8 +1,8 @@
-﻿use rapier3d::geometry::{Aabb, Ray};
+use rapier3d::geometry::{Aabb, Ray};
 use rapier3d::parry::shape::FeatureId;
 use rapier3d::prelude::SharedShape;
 
-use crate::rapier::error::{ERR_CAPACITY, ERR_NULL_POINTER, clear_error, set_error};
+use crate::rapier::error::{ERR_CAPACITY, ERR_NULL_POINTER, clear_error, ffi_guard, set_error};
 use crate::rapier::ffi::{
     AabbDesc, Bool, ColliderHandleRaw, MAX_OUTPUT_CAPACITY, Obb, PointProjection, QueryFilterDesc,
     RayHit, ShapeCastHit, ShapeCastOptionsDesc, ShapeDesc, Sphere, Vec3, WorldHandle,
@@ -75,30 +75,33 @@ pub extern "C" fn query_cast_ray(
     solid: Bool,
     filter: QueryFilterDesc,
 ) -> RayHit {
-    let Some(world) = (unsafe { world.as_ref() }) else {
-        return RayHit::default();
-    };
-    if !vec3_finite(origin) || !vec3_finite(direction) || !max_toi.is_finite() || max_toi < 0.0 {
-        return RayHit::default();
-    }
+    ffi_guard(Default::default(), || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            return RayHit::default();
+        };
+        if !vec3_finite(origin) || !vec3_finite(direction) || !max_toi.is_finite() || max_toi < 0.0
+        {
+            return RayHit::default();
+        }
 
-    let query = world.inner.broad_phase.as_query_pipeline(
-        world.inner.narrow_phase.query_dispatcher(),
-        &world.inner.bodies,
-        &world.inner.colliders,
-        query_filter_from_desc(filter),
-    );
-    let ray = Ray::new(vec3_to_rapier(origin), vec3_to_rapier(direction));
+        let query = world.inner.broad_phase.as_query_pipeline(
+            world.inner.narrow_phase.query_dispatcher(),
+            &world.inner.bodies,
+            &world.inner.colliders,
+            query_filter_from_desc(filter),
+        );
+        let ray = Ray::new(vec3_to_rapier(origin), vec3_to_rapier(direction));
 
-    query
-        .cast_ray_and_get_normal(&ray, max_toi, solid.0 != 0)
-        .map(|(handle, hit)| RayHit {
-            collider: pack_collider_handle(handle),
-            time_of_impact: hit.time_of_impact,
-            normal: vec3_from_rapier(hit.normal),
-            feature: feature_id_to_u32(hit.feature),
-        })
-        .unwrap_or_default()
+        query
+            .cast_ray_and_get_normal(&ray, max_toi, solid.0 != 0)
+            .map(|(handle, hit)| RayHit {
+                collider: pack_collider_handle(handle),
+                time_of_impact: hit.time_of_impact,
+                normal: vec3_from_rapier(hit.normal),
+                feature: feature_id_to_u32(hit.feature),
+            })
+            .unwrap_or_default()
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -111,11 +114,13 @@ pub extern "C" fn query_cast_ray_out(
     filter: QueryFilterDesc,
     out_hit: *mut RayHit,
 ) -> ColliderHandleRaw {
-    let hit = query_cast_ray(world, origin, direction, max_toi, solid, filter);
-    if let Some(out_hit) = unsafe { out_hit.as_mut() } {
-        *out_hit = hit;
-    }
-    hit.collider
+    ffi_guard(0, || {
+        let hit = query_cast_ray(world, origin, direction, max_toi, solid, filter);
+        if let Some(out_hit) = unsafe { out_hit.as_mut() } {
+            *out_hit = hit;
+        }
+        hit.collider
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -129,49 +134,51 @@ pub extern "C" fn query_cast_rays(
     out_hits: *mut RayHit,
     capacity: u32,
 ) -> u32 {
-    let Some(world) = (unsafe { world.as_ref() }) else {
-        set_error(ERR_NULL_POINTER, "world is null");
-        return 0;
-    };
-    if rays.is_null() || out_hits.is_null() {
-        set_error(ERR_NULL_POINTER, "ray input or output is null");
-        return 0;
-    }
-    if ray_count == 0 || capacity < ray_count || ray_count > MAX_OUTPUT_CAPACITY {
-        set_error(ERR_CAPACITY, "invalid ray batch capacity");
-        return 0;
-    }
-    let Some(ray_value_count) = (ray_count as usize).checked_mul(6) else {
-        set_error(ERR_CAPACITY, "ray batch input capacity overflow");
-        return 0;
-    };
+    ffi_guard(0, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return 0;
+        };
+        if rays.is_null() || out_hits.is_null() {
+            set_error(ERR_NULL_POINTER, "ray input or output is null");
+            return 0;
+        }
+        if ray_count == 0 || capacity < ray_count || ray_count > MAX_OUTPUT_CAPACITY {
+            set_error(ERR_CAPACITY, "invalid ray batch capacity");
+            return 0;
+        }
+        let Some(ray_value_count) = (ray_count as usize).checked_mul(6) else {
+            set_error(ERR_CAPACITY, "ray batch input capacity overflow");
+            return 0;
+        };
 
-    let rays = unsafe { std::slice::from_raw_parts(rays, ray_value_count) };
-    let hits = unsafe { std::slice::from_raw_parts_mut(out_hits, capacity as usize) };
-    let mut written = 0usize;
-    for (index, hit) in hits.iter_mut().enumerate().take(ray_count as usize) {
-        let offset = index * 6;
-        *hit = query_cast_ray(
-            world,
-            Vec3 {
-                x: rays[offset],
-                y: rays[offset + 1],
-                z: rays[offset + 2],
-            },
-            Vec3 {
-                x: rays[offset + 3],
-                y: rays[offset + 4],
-                z: rays[offset + 5],
-            },
-            max_toi,
-            solid,
-            filter,
-        );
-        written += 1;
-    }
+        let rays = unsafe { std::slice::from_raw_parts(rays, ray_value_count) };
+        let hits = unsafe { std::slice::from_raw_parts_mut(out_hits, capacity as usize) };
+        let mut written = 0usize;
+        for (index, hit) in hits.iter_mut().enumerate().take(ray_count as usize) {
+            let offset = index * 6;
+            *hit = query_cast_ray(
+                world,
+                Vec3 {
+                    x: rays[offset],
+                    y: rays[offset + 1],
+                    z: rays[offset + 2],
+                },
+                Vec3 {
+                    x: rays[offset + 3],
+                    y: rays[offset + 4],
+                    z: rays[offset + 5],
+                },
+                max_toi,
+                solid,
+                filter,
+            );
+            written += 1;
+        }
 
-    clear_error();
-    written as u32
+        clear_error();
+        written as u32
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -183,34 +190,36 @@ pub extern "C" fn query_project_point(
     filter: QueryFilterDesc,
     out_collider: *mut ColliderHandleRaw,
 ) -> PointProjection {
-    let Some(world) = (unsafe { world.as_ref() }) else {
-        return PointProjection::default();
-    };
-    if !vec3_finite(point) || !max_dist.is_finite() || max_dist < 0.0 {
-        return PointProjection::default();
-    }
+    ffi_guard(Default::default(), || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            return PointProjection::default();
+        };
+        if !vec3_finite(point) || !max_dist.is_finite() || max_dist < 0.0 {
+            return PointProjection::default();
+        }
 
-    let query = world.inner.broad_phase.as_query_pipeline(
-        world.inner.narrow_phase.query_dispatcher(),
-        &world.inner.bodies,
-        &world.inner.colliders,
-        query_filter_from_desc(filter),
-    );
+        let query = world.inner.broad_phase.as_query_pipeline(
+            world.inner.narrow_phase.query_dispatcher(),
+            &world.inner.bodies,
+            &world.inner.colliders,
+            query_filter_from_desc(filter),
+        );
 
-    let Some((handle, projection)) =
-        query.project_point(vec3_to_rapier(point), max_dist, solid.0 != 0)
-    else {
-        return PointProjection::default();
-    };
+        let Some((handle, projection)) =
+            query.project_point(vec3_to_rapier(point), max_dist, solid.0 != 0)
+        else {
+            return PointProjection::default();
+        };
 
-    if let Some(out_collider) = unsafe { out_collider.as_mut() } {
-        *out_collider = pack_collider_handle(handle);
-    }
+        if let Some(out_collider) = unsafe { out_collider.as_mut() } {
+            *out_collider = pack_collider_handle(handle);
+        }
 
-    PointProjection {
-        point: vec3_from_rapier(projection.point),
-        is_inside: projection.is_inside.into(),
-    }
+        PointProjection {
+            point: vec3_from_rapier(projection.point),
+            is_inside: projection.is_inside.into(),
+        }
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -223,16 +232,18 @@ pub extern "C" fn query_project_point_out(
     out_collider: *mut ColliderHandleRaw,
     out_projection: *mut PointProjection,
 ) -> ColliderHandleRaw {
-    let projection = query_project_point(world, point, max_dist, solid, filter, out_collider);
-    let collider = if let Some(out_collider) = unsafe { out_collider.as_ref() } {
-        *out_collider
-    } else {
-        0
-    };
-    if let Some(out_projection) = unsafe { out_projection.as_mut() } {
-        *out_projection = projection;
-    }
-    collider
+    ffi_guard(0, || {
+        let projection = query_project_point(world, point, max_dist, solid, filter, out_collider);
+        let collider = if let Some(out_collider) = unsafe { out_collider.as_ref() } {
+            *out_collider
+        } else {
+            0
+        };
+        if let Some(out_projection) = unsafe { out_projection.as_mut() } {
+            *out_projection = projection;
+        }
+        collider
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -241,21 +252,23 @@ pub extern "C" fn query_intersect_point_count(
     point: Vec3,
     filter: QueryFilterDesc,
 ) -> u32 {
-    let Some(world) = (unsafe { world.as_ref() }) else {
-        return 0;
-    };
-    if !vec3_finite(point) {
-        return 0;
-    }
+    ffi_guard(0, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            return 0;
+        };
+        if !vec3_finite(point) {
+            return 0;
+        }
 
-    let query = world.inner.broad_phase.as_query_pipeline(
-        world.inner.narrow_phase.query_dispatcher(),
-        &world.inner.bodies,
-        &world.inner.colliders,
-        query_filter_from_desc(filter),
-    );
+        let query = world.inner.broad_phase.as_query_pipeline(
+            world.inner.narrow_phase.query_dispatcher(),
+            &world.inner.bodies,
+            &world.inner.colliders,
+            query_filter_from_desc(filter),
+        );
 
-    query.intersect_point(vec3_to_rapier(point)).count() as u32
+        query.intersect_point(vec3_to_rapier(point)).count() as u32
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -264,23 +277,25 @@ pub extern "C" fn query_intersect_aabb_count(
     aabb: AabbDesc,
     filter: QueryFilterDesc,
 ) -> u32 {
-    let Some(world) = (unsafe { world.as_ref() }) else {
-        return 0;
-    };
-    if !aabb_valid(aabb) {
-        return 0;
-    }
+    ffi_guard(0, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            return 0;
+        };
+        if !aabb_valid(aabb) {
+            return 0;
+        }
 
-    let query = world.inner.broad_phase.as_query_pipeline(
-        world.inner.narrow_phase.query_dispatcher(),
-        &world.inner.bodies,
-        &world.inner.colliders,
-        query_filter_from_desc(filter),
-    );
+        let query = world.inner.broad_phase.as_query_pipeline(
+            world.inner.narrow_phase.query_dispatcher(),
+            &world.inner.bodies,
+            &world.inner.colliders,
+            query_filter_from_desc(filter),
+        );
 
-    query
-        .intersect_aabb_conservative(aabb_to_rapier(aabb))
-        .count() as u32
+        query
+            .intersect_aabb_conservative(aabb_to_rapier(aabb))
+            .count() as u32
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -291,37 +306,44 @@ pub extern "C" fn query_intersect_aabb(
     out_handles: *mut ColliderHandleRaw,
     capacity: u32,
 ) -> u32 {
-    let Some(world) = (unsafe { world.as_ref() }) else {
-        return 0;
-    };
-    if out_handles.is_null() || capacity == 0 || capacity > MAX_OUTPUT_CAPACITY || !aabb_valid(aabb)
-    {
-        return 0;
-    }
-
-    let query = world.inner.broad_phase.as_query_pipeline(
-        world.inner.narrow_phase.query_dispatcher(),
-        &world.inner.bodies,
-        &world.inner.colliders,
-        query_filter_from_desc(filter),
-    );
-
-    let out = unsafe { std::slice::from_raw_parts_mut(out_handles, capacity as usize) };
-    let mut written = 0usize;
-    for (handle, _) in query.intersect_aabb_conservative(aabb_to_rapier(aabb)) {
-        if written >= out.len() {
-            break;
+    ffi_guard(0, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            return 0;
+        };
+        if out_handles.is_null()
+            || capacity == 0
+            || capacity > MAX_OUTPUT_CAPACITY
+            || !aabb_valid(aabb)
+        {
+            return 0;
         }
-        out[written] = pack_collider_handle(handle);
-        written += 1;
-    }
 
-    written as u32
+        let query = world.inner.broad_phase.as_query_pipeline(
+            world.inner.narrow_phase.query_dispatcher(),
+            &world.inner.bodies,
+            &world.inner.colliders,
+            query_filter_from_desc(filter),
+        );
+
+        let out = unsafe { std::slice::from_raw_parts_mut(out_handles, capacity as usize) };
+        let mut written = 0usize;
+        for (handle, _) in query.intersect_aabb_conservative(aabb_to_rapier(aabb)) {
+            if written >= out.len() {
+                break;
+            }
+            out[written] = pack_collider_handle(handle);
+            written += 1;
+        }
+
+        written as u32
+    })
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_aabb_count_all(world: *const WorldHandle, aabb: AabbDesc) -> u32 {
-    query_intersect_aabb_count(world, aabb, QueryFilterDesc::default())
+    ffi_guard(0, || {
+        query_intersect_aabb_count(world, aabb, QueryFilterDesc::default())
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -333,27 +355,29 @@ pub extern "C" fn query_intersect_aabb_counts(
     out_counts: *mut u32,
     capacity: u32,
 ) -> u32 {
-    if world.is_null() {
-        set_error(ERR_NULL_POINTER, "world is null");
-        return 0;
-    }
-    if aabbs.is_null() || out_counts.is_null() {
-        set_error(ERR_NULL_POINTER, "AABB input or count output is null");
-        return 0;
-    }
-    if query_count == 0 || capacity < query_count || query_count > MAX_OUTPUT_CAPACITY {
-        set_error(ERR_CAPACITY, "invalid AABB batch capacity");
-        return 0;
-    }
+    ffi_guard(0, || {
+        if world.is_null() {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return 0;
+        }
+        if aabbs.is_null() || out_counts.is_null() {
+            set_error(ERR_NULL_POINTER, "AABB input or count output is null");
+            return 0;
+        }
+        if query_count == 0 || capacity < query_count || query_count > MAX_OUTPUT_CAPACITY {
+            set_error(ERR_CAPACITY, "invalid AABB batch capacity");
+            return 0;
+        }
 
-    let aabbs = unsafe { std::slice::from_raw_parts(aabbs, query_count as usize) };
-    let counts = unsafe { std::slice::from_raw_parts_mut(out_counts, capacity as usize) };
-    for index in 0..query_count as usize {
-        counts[index] = query_intersect_aabb_count(world, aabbs[index], filter);
-    }
+        let aabbs = unsafe { std::slice::from_raw_parts(aabbs, query_count as usize) };
+        let counts = unsafe { std::slice::from_raw_parts_mut(out_counts, capacity as usize) };
+        for index in 0..query_count as usize {
+            counts[index] = query_intersect_aabb_count(world, aabbs[index], filter);
+        }
 
-    clear_error();
-    query_count
+        clear_error();
+        query_count
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -362,31 +386,33 @@ pub extern "C" fn query_intersect_obb_count(
     obb: Obb,
     filter: QueryFilterDesc,
 ) -> u32 {
-    let Some(world) = (unsafe { world.as_ref() }) else {
-        return 0;
-    };
-    let Some(shape) = obb_shape(obb) else {
-        return 0;
-    };
+    ffi_guard(0, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            return 0;
+        };
+        let Some(shape) = obb_shape(obb) else {
+            return 0;
+        };
 
-    let query = world.inner.broad_phase.as_query_pipeline(
-        world.inner.narrow_phase.query_dispatcher(),
-        &world.inner.bodies,
-        &world.inner.colliders,
-        query_filter_from_desc(filter),
-    );
+        let query = world.inner.broad_phase.as_query_pipeline(
+            world.inner.narrow_phase.query_dispatcher(),
+            &world.inner.bodies,
+            &world.inner.colliders,
+            query_filter_from_desc(filter),
+        );
 
-    query
-        .intersect_shape(
-            crate::rapier::ffi::isometry_from_parts(obb.center, obb.rotation),
-            shape.as_ref(),
-        )
-        .count() as u32
+        query
+            .intersect_shape(
+                crate::rapier::ffi::isometry_from_parts(obb.center, obb.rotation),
+                shape.as_ref(),
+            )
+            .count() as u32
+    })
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_obb_count_all(world: *const WorldHandle, obb: Obb) -> u32 {
-    query_intersect_obb_count(world, obb, QueryFilterDesc::default())
+    ffi_guard(0, || query_intersect_obb_count(world, obb, QueryFilterDesc::default()))
 }
 
 #[unsafe(no_mangle)]
@@ -398,27 +424,29 @@ pub extern "C" fn query_intersect_obb_counts(
     out_counts: *mut u32,
     capacity: u32,
 ) -> u32 {
-    if world.is_null() {
-        set_error(ERR_NULL_POINTER, "world is null");
-        return 0;
-    }
-    if obbs.is_null() || out_counts.is_null() {
-        set_error(ERR_NULL_POINTER, "OBB input or count output is null");
-        return 0;
-    }
-    if query_count == 0 || capacity < query_count || query_count > MAX_OUTPUT_CAPACITY {
-        set_error(ERR_CAPACITY, "invalid OBB batch capacity");
-        return 0;
-    }
+    ffi_guard(0, || {
+        if world.is_null() {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return 0;
+        }
+        if obbs.is_null() || out_counts.is_null() {
+            set_error(ERR_NULL_POINTER, "OBB input or count output is null");
+            return 0;
+        }
+        if query_count == 0 || capacity < query_count || query_count > MAX_OUTPUT_CAPACITY {
+            set_error(ERR_CAPACITY, "invalid OBB batch capacity");
+            return 0;
+        }
 
-    let obbs = unsafe { std::slice::from_raw_parts(obbs, query_count as usize) };
-    let counts = unsafe { std::slice::from_raw_parts_mut(out_counts, capacity as usize) };
-    for index in 0..query_count as usize {
-        counts[index] = query_intersect_obb_count(world, obbs[index], filter);
-    }
+        let obbs = unsafe { std::slice::from_raw_parts(obbs, query_count as usize) };
+        let counts = unsafe { std::slice::from_raw_parts_mut(out_counts, capacity as usize) };
+        for index in 0..query_count as usize {
+            counts[index] = query_intersect_obb_count(world, obbs[index], filter);
+        }
 
-    clear_error();
-    query_count
+        clear_error();
+        query_count
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -429,37 +457,39 @@ pub extern "C" fn query_intersect_obb(
     out_handles: *mut ColliderHandleRaw,
     capacity: u32,
 ) -> u32 {
-    let Some(world) = (unsafe { world.as_ref() }) else {
-        return 0;
-    };
-    if out_handles.is_null() || capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
-        return 0;
-    }
-    let Some(shape) = obb_shape(obb) else {
-        return 0;
-    };
-
-    let query = world.inner.broad_phase.as_query_pipeline(
-        world.inner.narrow_phase.query_dispatcher(),
-        &world.inner.bodies,
-        &world.inner.colliders,
-        query_filter_from_desc(filter),
-    );
-
-    let out = unsafe { std::slice::from_raw_parts_mut(out_handles, capacity as usize) };
-    let mut written = 0usize;
-    for (handle, _) in query.intersect_shape(
-        crate::rapier::ffi::isometry_from_parts(obb.center, obb.rotation),
-        shape.as_ref(),
-    ) {
-        if written >= out.len() {
-            break;
+    ffi_guard(0, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            return 0;
+        };
+        if out_handles.is_null() || capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
+            return 0;
         }
-        out[written] = pack_collider_handle(handle);
-        written += 1;
-    }
+        let Some(shape) = obb_shape(obb) else {
+            return 0;
+        };
 
-    written as u32
+        let query = world.inner.broad_phase.as_query_pipeline(
+            world.inner.narrow_phase.query_dispatcher(),
+            &world.inner.bodies,
+            &world.inner.colliders,
+            query_filter_from_desc(filter),
+        );
+
+        let out = unsafe { std::slice::from_raw_parts_mut(out_handles, capacity as usize) };
+        let mut written = 0usize;
+        for (handle, _) in query.intersect_shape(
+            crate::rapier::ffi::isometry_from_parts(obb.center, obb.rotation),
+            shape.as_ref(),
+        ) {
+            if written >= out.len() {
+                break;
+            }
+            out[written] = pack_collider_handle(handle);
+            written += 1;
+        }
+
+        written as u32
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -469,13 +499,15 @@ pub extern "C" fn query_intersect_obb_all(
     out_handles: *mut ColliderHandleRaw,
     capacity: u32,
 ) -> u32 {
-    query_intersect_obb(
-        world,
-        obb,
-        QueryFilterDesc::default(),
-        out_handles,
-        capacity,
-    )
+    ffi_guard(0, || {
+        query_intersect_obb(
+            world,
+            obb,
+            QueryFilterDesc::default(),
+            out_handles,
+            capacity,
+        )
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -484,26 +516,28 @@ pub extern "C" fn query_intersect_sphere_count(
     sphere: Sphere,
     filter: QueryFilterDesc,
 ) -> u32 {
-    let Some(world) = (unsafe { world.as_ref() }) else {
-        return 0;
-    };
-    let Some(shape) = sphere_shape(sphere) else {
-        return 0;
-    };
+    ffi_guard(0, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            return 0;
+        };
+        let Some(shape) = sphere_shape(sphere) else {
+            return 0;
+        };
 
-    let query = world.inner.broad_phase.as_query_pipeline(
-        world.inner.narrow_phase.query_dispatcher(),
-        &world.inner.bodies,
-        &world.inner.colliders,
-        query_filter_from_desc(filter),
-    );
+        let query = world.inner.broad_phase.as_query_pipeline(
+            world.inner.narrow_phase.query_dispatcher(),
+            &world.inner.bodies,
+            &world.inner.colliders,
+            query_filter_from_desc(filter),
+        );
 
-    query
-        .intersect_shape(
-            crate::rapier::ffi::isometry_from_parts(sphere.center, identity_rotation()),
-            shape.as_ref(),
-        )
-        .count() as u32
+        query
+            .intersect_shape(
+                crate::rapier::ffi::isometry_from_parts(sphere.center, identity_rotation()),
+                shape.as_ref(),
+            )
+            .count() as u32
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -511,7 +545,9 @@ pub extern "C" fn query_intersect_sphere_count_all(
     world: *const WorldHandle,
     sphere: Sphere,
 ) -> u32 {
-    query_intersect_sphere_count(world, sphere, QueryFilterDesc::default())
+    ffi_guard(0, || {
+        query_intersect_sphere_count(world, sphere, QueryFilterDesc::default())
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -523,27 +559,29 @@ pub extern "C" fn query_intersect_sphere_counts(
     out_counts: *mut u32,
     capacity: u32,
 ) -> u32 {
-    if world.is_null() {
-        set_error(ERR_NULL_POINTER, "world is null");
-        return 0;
-    }
-    if spheres.is_null() || out_counts.is_null() {
-        set_error(ERR_NULL_POINTER, "sphere input or count output is null");
-        return 0;
-    }
-    if query_count == 0 || capacity < query_count || query_count > MAX_OUTPUT_CAPACITY {
-        set_error(ERR_CAPACITY, "invalid sphere batch capacity");
-        return 0;
-    }
+    ffi_guard(0, || {
+        if world.is_null() {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return 0;
+        }
+        if spheres.is_null() || out_counts.is_null() {
+            set_error(ERR_NULL_POINTER, "sphere input or count output is null");
+            return 0;
+        }
+        if query_count == 0 || capacity < query_count || query_count > MAX_OUTPUT_CAPACITY {
+            set_error(ERR_CAPACITY, "invalid sphere batch capacity");
+            return 0;
+        }
 
-    let spheres = unsafe { std::slice::from_raw_parts(spheres, query_count as usize) };
-    let counts = unsafe { std::slice::from_raw_parts_mut(out_counts, capacity as usize) };
-    for index in 0..query_count as usize {
-        counts[index] = query_intersect_sphere_count(world, spheres[index], filter);
-    }
+        let spheres = unsafe { std::slice::from_raw_parts(spheres, query_count as usize) };
+        let counts = unsafe { std::slice::from_raw_parts_mut(out_counts, capacity as usize) };
+        for index in 0..query_count as usize {
+            counts[index] = query_intersect_sphere_count(world, spheres[index], filter);
+        }
 
-    clear_error();
-    query_count
+        clear_error();
+        query_count
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -554,37 +592,39 @@ pub extern "C" fn query_intersect_sphere(
     out_handles: *mut ColliderHandleRaw,
     capacity: u32,
 ) -> u32 {
-    let Some(world) = (unsafe { world.as_ref() }) else {
-        return 0;
-    };
-    if out_handles.is_null() || capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
-        return 0;
-    }
-    let Some(shape) = sphere_shape(sphere) else {
-        return 0;
-    };
-
-    let query = world.inner.broad_phase.as_query_pipeline(
-        world.inner.narrow_phase.query_dispatcher(),
-        &world.inner.bodies,
-        &world.inner.colliders,
-        query_filter_from_desc(filter),
-    );
-
-    let out = unsafe { std::slice::from_raw_parts_mut(out_handles, capacity as usize) };
-    let mut written = 0usize;
-    for (handle, _) in query.intersect_shape(
-        crate::rapier::ffi::isometry_from_parts(sphere.center, identity_rotation()),
-        shape.as_ref(),
-    ) {
-        if written >= out.len() {
-            break;
+    ffi_guard(0, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            return 0;
+        };
+        if out_handles.is_null() || capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
+            return 0;
         }
-        out[written] = pack_collider_handle(handle);
-        written += 1;
-    }
+        let Some(shape) = sphere_shape(sphere) else {
+            return 0;
+        };
 
-    written as u32
+        let query = world.inner.broad_phase.as_query_pipeline(
+            world.inner.narrow_phase.query_dispatcher(),
+            &world.inner.bodies,
+            &world.inner.colliders,
+            query_filter_from_desc(filter),
+        );
+
+        let out = unsafe { std::slice::from_raw_parts_mut(out_handles, capacity as usize) };
+        let mut written = 0usize;
+        for (handle, _) in query.intersect_shape(
+            crate::rapier::ffi::isometry_from_parts(sphere.center, identity_rotation()),
+            shape.as_ref(),
+        ) {
+            if written >= out.len() {
+                break;
+            }
+            out[written] = pack_collider_handle(handle);
+            written += 1;
+        }
+
+        written as u32
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -594,13 +634,15 @@ pub extern "C" fn query_intersect_sphere_all(
     out_handles: *mut ColliderHandleRaw,
     capacity: u32,
 ) -> u32 {
-    query_intersect_sphere(
-        world,
-        sphere,
-        QueryFilterDesc::default(),
-        out_handles,
-        capacity,
-    )
+    ffi_guard(0, || {
+        query_intersect_sphere(
+            world,
+            sphere,
+            QueryFilterDesc::default(),
+            out_handles,
+            capacity,
+        )
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -608,11 +650,13 @@ pub extern "C" fn query_intersect_aabb_rigid_body_count_all(
     world: *const WorldHandle,
     aabb: AabbDesc,
 ) -> u32 {
-    crate::rapier::compat::query_intersect_aabb_rigid_body_count(
-        world,
-        aabb,
-        QueryFilterDesc::default(),
-    )
+    ffi_guard(0, || {
+        crate::rapier::compat::query_intersect_aabb_rigid_body_count(
+            world,
+            aabb,
+            QueryFilterDesc::default(),
+        )
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -622,13 +666,15 @@ pub extern "C" fn query_intersect_aabb_rigid_bodies_all(
     out_handles: *mut crate::rapier::ffi::RigidBodyHandleRaw,
     capacity: u32,
 ) -> u32 {
-    crate::rapier::compat::query_intersect_aabb_rigid_bodies(
-        world,
-        aabb,
-        QueryFilterDesc::default(),
-        out_handles,
-        capacity,
-    )
+    ffi_guard(0, || {
+        crate::rapier::compat::query_intersect_aabb_rigid_bodies(
+            world,
+            aabb,
+            QueryFilterDesc::default(),
+            out_handles,
+            capacity,
+        )
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -641,46 +687,48 @@ pub extern "C" fn query_cast_shape(
     options: ShapeCastOptionsDesc,
     filter: QueryFilterDesc,
 ) -> ShapeCastHit {
-    let Some(world) = (unsafe { world.as_ref() }) else {
-        return ShapeCastHit::default();
-    };
-    if !shape_desc_valid(shape_desc)
-        || !vec3_finite(translation)
-        || !quat_finite(rotation)
-        || !vec3_finite(velocity)
-        || !options.max_time_of_impact.is_finite()
-        || !options.target_distance.is_finite()
-        || options.max_time_of_impact < 0.0
-        || options.target_distance < 0.0
-    {
-        return ShapeCastHit::default();
-    }
+    ffi_guard(Default::default(), || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            return ShapeCastHit::default();
+        };
+        if !shape_desc_valid(shape_desc)
+            || !vec3_finite(translation)
+            || !quat_finite(rotation)
+            || !vec3_finite(velocity)
+            || !options.max_time_of_impact.is_finite()
+            || !options.target_distance.is_finite()
+            || options.max_time_of_impact < 0.0
+            || options.target_distance < 0.0
+        {
+            return ShapeCastHit::default();
+        }
 
-    let query = world.inner.broad_phase.as_query_pipeline(
-        world.inner.narrow_phase.query_dispatcher(),
-        &world.inner.bodies,
-        &world.inner.colliders,
-        query_filter_from_desc(filter),
-    );
-    let shape = shape_from_desc(shape_desc);
+        let query = world.inner.broad_phase.as_query_pipeline(
+            world.inner.narrow_phase.query_dispatcher(),
+            &world.inner.bodies,
+            &world.inner.colliders,
+            query_filter_from_desc(filter),
+        );
+        let shape = shape_from_desc(shape_desc);
 
-    query
-        .cast_shape(
-            &crate::rapier::ffi::isometry_from_parts(translation, rotation),
-            vec3_to_rapier(velocity),
-            shape.as_ref(),
-            shape_cast_options_to_rapier(options),
-        )
-        .map(|(handle, hit)| ShapeCastHit {
-            collider: pack_collider_handle(handle),
-            time_of_impact: hit.time_of_impact,
-            witness1: vec3_from_rapier(hit.witness1),
-            witness2: vec3_from_rapier(hit.witness2),
-            normal1: vec3_from_rapier(hit.normal1),
-            normal2: vec3_from_rapier(hit.normal2),
-            status: hit.status as u32,
-        })
-        .unwrap_or_default()
+        query
+            .cast_shape(
+                &crate::rapier::ffi::isometry_from_parts(translation, rotation),
+                vec3_to_rapier(velocity),
+                shape.as_ref(),
+                shape_cast_options_to_rapier(options),
+            )
+            .map(|(handle, hit)| ShapeCastHit {
+                collider: pack_collider_handle(handle),
+                time_of_impact: hit.time_of_impact,
+                witness1: vec3_from_rapier(hit.witness1),
+                witness2: vec3_from_rapier(hit.witness2),
+                normal1: vec3_from_rapier(hit.normal1),
+                normal2: vec3_from_rapier(hit.normal2),
+                status: hit.status as u32,
+            })
+            .unwrap_or_default()
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -694,19 +742,19 @@ pub extern "C" fn query_cast_shape_out(
     filter: QueryFilterDesc,
     out_hit: *mut ShapeCastHit,
 ) -> ColliderHandleRaw {
-    let hit = query_cast_shape(
-        world,
-        shape_desc,
-        translation,
-        rotation,
-        velocity,
-        options,
-        filter,
-    );
-    if let Some(out_hit) = unsafe { out_hit.as_mut() } {
-        *out_hit = hit;
-    }
-    hit.collider
+    ffi_guard(0, || {
+        let hit = query_cast_shape(
+            world,
+            shape_desc,
+            translation,
+            rotation,
+            velocity,
+            options,
+            filter,
+        );
+        if let Some(out_hit) = unsafe { out_hit.as_mut() } {
+            *out_hit = hit;
+        }
+        hit.collider
+    })
 }
-
-

@@ -474,7 +474,7 @@ public final class FfmSmokeTest {
         try {
             MemorySegment outAddr = Arena.ofAuto().allocate(8);
             MemorySegment outSize = Arena.ofAuto().allocate(8);
-            if (!api.worldCreateSharedArena(world, 16, 0, 256, 256, outAddr, outSize)) {
+            if (!api.worldCreateSharedArena(world, 16, 16, 256, 256, outAddr, outSize)) {
                 throw new AssertionError("worldCreateSharedArena failed");
             }
 

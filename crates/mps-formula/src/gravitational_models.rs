@@ -1,4 +1,4 @@
-﻿//! Advanced gravitational field models.
+//! Advanced gravitational field models.
 //!
 //! ## Supported models (in order of increasing accuracy)
 //!
@@ -534,9 +534,9 @@ pub extern "C" fn gravity_spherical_harmonics(
         set_error(ERR_INVALID_ARGUMENT, "invalid position or null output");
         return Bool::FALSE;
     }
-    let id = match body_id {
-        0..=9 => unsafe { std::mem::transmute::<u32, crate::celestial_data::CelestialBodyId>(body_id) },
-        _ => {
+    let id = match crate::celestial_data::celestial_body_id_from_u32(body_id) {
+        Some(id) => id,
+        None => {
             set_error(ERR_INVALID_ARGUMENT, "invalid celestial body ID");
             return Bool::FALSE;
         }
@@ -560,9 +560,9 @@ pub extern "C" fn gravity_ellipsoid(
         set_error(ERR_INVALID_ARGUMENT, "invalid position or null output");
         return Bool::FALSE;
     }
-    let id = match body_id {
-        0..=9 => unsafe { std::mem::transmute::<u32, crate::celestial_data::CelestialBodyId>(body_id) },
-        _ => {
+    let id = match crate::celestial_data::celestial_body_id_from_u32(body_id) {
+        Some(id) => id,
+        None => {
             set_error(ERR_INVALID_ARGUMENT, "invalid celestial body ID");
             return Bool::FALSE;
         }

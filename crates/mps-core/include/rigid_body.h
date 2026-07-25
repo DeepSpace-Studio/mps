@@ -23,7 +23,7 @@
 /**
  * Current arena layout version — increment when layout changes
  */
-#define ARENA_VERSION 1
+#define ARENA_VERSION 2
 
 /**
  * Strides (must match Java side exactly)
@@ -40,6 +40,32 @@
  * Header size in bytes
  */
 #define HEADER_SIZE 128
+
+/**
+ * Upper bounds for arena capacities — defense against absurd FFI requests.
+ */
+#define MAX_ARENA_BODIES 1000000
+
+#define MAX_ARENA_COLLIDERS 1000000
+
+#define MAX_ARENA_EVENTS 1000000
+
+#define MAX_ARENA_COMMANDS 1000000
+
+/**
+ * Hard cap on the total arena allocation (256 MiB).
+ */
+#define MAX_ARENA_TOTAL_BYTES ((256 * 1024) * 1024)
+
+/**
+ * Integration params region: dt(8) + solver_iterations(4) + ccd_substeps(4) + gravity(24)
+ */
+#define INTEGRATION_PARAMS_SIZE 40
+
+/**
+ * Force summary region: max_reynolds(8) + external force(24) + drag force(24) + counts(8)
+ */
+#define FORCE_SUMMARY_SIZE 64
 
 typedef struct AnvilKitAppHandle AnvilKitAppHandle;
 
@@ -731,11 +757,22 @@ void world_clear_intersection_pair_filter_callback(struct WorldHandle *world);
  * Allocate a collision-event ring buffer of `capacity` records.
  * Events will be written here during `world_step` instead of (or in addition to)
  * the legacy Vec queue.  Java drains the ring buffer at its own pace.
+ *
+ * # Safety
+ *
+ * Init-time only: must be called before `world_step` runs on any thread and
+ * with no concurrent event-ring FFI calls on the same world.  Re-initializing
+ * the ring while the physics thread produces events is undefined behavior
+ * (the producer cache is an `UnsafeCell`).
  */
 Bool world_init_collision_event_ring(struct WorldHandle *world, uint32_t capacity);
 
 /**
  * Allocate a contact-force-event ring buffer.
+ *
+ * # Safety
+ *
+ * Same init-time-only contract as `world_init_collision_event_ring`.
  */
 Bool world_init_contact_force_event_ring(struct WorldHandle *world, uint32_t capacity);
 
@@ -785,6 +822,13 @@ void world_clear_event_rings(struct WorldHandle *world);
  * `callback` is a C function pointer (zero = unregister).
  * `user_data` is passed through unchanged to each invocation.
  * Returns an opaque handle for later unregistration.
+ *
+ * # Safety
+ *
+ * Init-time only: must be called before `world_step` runs on any thread and
+ * with no concurrent event-ring/callback FFI calls on the same world.  The
+ * producer cache is an `UnsafeCell`; concurrent registration while the
+ * physics thread dispatches events is undefined behavior.
  */
 EventCallbackHandle world_register_collision_callback(struct WorldHandle *world,
                                                       uintptr_t callback,
@@ -792,6 +836,10 @@ EventCallbackHandle world_register_collision_callback(struct WorldHandle *world,
 
 /**
  * Register a contact-force-event callback.
+ *
+ * # Safety
+ *
+ * Same init-time-only contract as `world_register_collision_callback`.
  */
 EventCallbackHandle world_register_contact_force_callback(struct WorldHandle *world,
                                                           uintptr_t callback,
@@ -800,6 +848,10 @@ EventCallbackHandle world_register_contact_force_callback(struct WorldHandle *wo
 /**
  * Unregister a previously registered callback by its handle.
  * Passing 0 or an invalid handle is a no-op.
+ *
+ * # Safety
+ *
+ * Same init-time-only contract as `world_register_collision_callback`.
  */
 void world_unregister_callback(struct WorldHandle *world, EventCallbackHandle handle);
 
@@ -809,6 +861,10 @@ void world_unregister_callback(struct WorldHandle *world, EventCallbackHandle ha
  * - `Poll` (0): legacy Vec queue only (default).
  * - `Callback` (1): registered callbacks only.
  * - `Both` (2): ring buffer + callbacks.
+ *
+ * # Safety
+ *
+ * Same init-time-only contract as `world_init_collision_event_ring`.
  */
 Bool world_set_event_dispatch_mode(struct WorldHandle *world, uint32_t mode);
 
@@ -2131,6 +2187,15 @@ uint32_t world_get_force_registry_typed_count(const struct WorldHandle *world, u
  *
  * Returns the arena pointer as a u64 (suitable for `MemorySegment.ofAddress` in Java).
  * The arena persists for the lifetime of the world.
+ *
+ * At most one arena may exist per world. Calling this again while an arena
+ * is still live fails with `ERR_INVALID_ARGUMENT` and leaves the existing
+ * arena untouched — call `world_destroy_shared_arena` first to recreate one.
+ *
+ * WARNING (Java side): before calling `world_destroy_shared_arena`, the
+ * `MemorySegment` mapping the arena must be released/unmapped; destroying
+ * the arena frees the underlying memory, and any still-mapped Java segment
+ * would become a use-after-free.
  *
  * `max_bodies` — max concurrent bodies to mirror
  * `max_events` — max pending collision/contact events

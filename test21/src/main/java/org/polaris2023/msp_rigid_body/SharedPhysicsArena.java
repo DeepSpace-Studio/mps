@@ -16,7 +16,7 @@ import java.nio.DoubleBuffer;
  * // 1. Init
  * long world = RigidBodyNative.worldCreate(0, -9.81, 0);
  * long[] addrSize = new long[2];
- * RigidBodyNative.worldCreateSharedArena(world, 1024, 0, 4096, 4096, addrSize);
+ * RigidBodyNative.worldCreateSharedArena(world, 1024, 2048, 4096, 4096, addrSize);
  * SharedPhysicsArena arena = SharedPhysicsArena.fromDirectBuffer(
  *     RigidBodyNative.worldGetArenaDirectByteBuffer(world));
  *
@@ -66,8 +66,12 @@ public final class SharedPhysicsArena {
     static final int OFF_EVENT_COUNT = 40;
     static final int OFF_CMD_COUNT = 44;
     static final int OFF_BODY_STRIDE = 48;
-    static final int OFF_CMD_STRIDE = 52;
-    static final int OFF_EVENT_STRIDE = 56;
+    static final int OFF_COLLIDER_STRIDE = 52;
+    static final int OFF_CMD_STRIDE = 56;
+    static final int OFF_EVENT_STRIDE = 60;
+    // Region offsets (u64, written by Rust — read these, never recompute)
+    static final int OFF_CMD_RING_OFFSET = 96;
+    static final int OFF_EVENT_RING_OFFSET = 104;
 
     // Command types (must match CommandType in shared_arena.rs)
     static final int CMD_ADD_FORCE = 0;
@@ -110,9 +114,12 @@ public final class SharedPhysicsArena {
 
         this.bodySlotsStartBytes = HEADER_SIZE;
         this.bodySlotsStart = bodySlotsStartBytes / 8;
-        this.cmdRingStartBytes = bodySlotsStartBytes + maxBodies * BODY_SLOT_STRIDE;
+        // Region offsets come from the header (written by Rust); the arena
+        // layout contains collider slots / handle map / force report regions
+        // between body slots and the rings, so they cannot be recomputed here.
+        this.cmdRingStartBytes = (int) buf.getLong(OFF_CMD_RING_OFFSET);
         this.cmdRingStart = cmdRingStartBytes / 8;
-        this.eventRingStartBytes = cmdRingStartBytes + maxCommands * CMD_SLOT_STRIDE;
+        this.eventRingStartBytes = (int) buf.getLong(OFF_EVENT_RING_OFFSET);
         this.eventRingStart = eventRingStartBytes / 8;
     }
 
@@ -284,9 +291,9 @@ public final class SharedPhysicsArena {
      * and Rust is the sole consumer.</p>
      */
     private int allocateCommandSlot() {
-        // Read write pointer from header (u32 at offset 44)
+        // Read write pointer from header (u32 at offset 44); Rust resets it
+        // to 0 after draining, so within one frame slots never wrap.
         int write = readInt(OFF_CMD_COUNT);
-        // Simple bump allocator — ring wraps in drain_commands
         buf.putInt(OFF_CMD_COUNT, write + 1);
         return write;
     }

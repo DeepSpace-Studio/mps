@@ -11,4 +11,3 @@ rapier3d = { workspace = true }
 
 [features]
 default = []
-formula-error-abi = []

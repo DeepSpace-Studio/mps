@@ -25,7 +25,7 @@ crates/
   mps-ffm/        Java FFM metadata
   mps-test/       332 integration tests
 
-docs/             documentation site (dark-theme, dual-language zh/en)
+docs/             documentation site (dark-theme, dual-language zh/en) — *moved to crates/mps-web/*
 ```
 
 ## Formula Library (mps-formula)
@@ -176,7 +176,7 @@ Java 25 FFM smoke test: passed
 
 ## Documentation
 
-Online documentation at `docs/index.html` — dark-theme dual-language (zh/en) site covering all modules, API reference, integration guides, and performance data.
+Online documentation at `crates/mps-web/` — Rust SSR site built with Topcoat framework, serving docs at `https://Polari-Stars-MC.github.io/rigid-body/`.
 
 ## Current Gaps
 

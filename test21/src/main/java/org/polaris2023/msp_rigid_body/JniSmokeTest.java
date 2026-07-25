@@ -506,7 +506,7 @@ public final class JniSmokeTest {
         try {
             // 1. Create arena
             long[] addrSize = new long[2];
-            if (!RigidBodyNative.worldCreateSharedArena(world, 16, 0, 256, 256, addrSize)) {
+            if (!RigidBodyNative.worldCreateSharedArena(world, 16, 16, 256, 256, addrSize)) {
                 throw new AssertionError("worldCreateSharedArena failed");
             }
             if (addrSize[0] == 0 || addrSize[1] == 0) {

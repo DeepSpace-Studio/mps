@@ -1,7 +1,7 @@
 mod helper;
 
 use mps_ffm as abi;
-use crate::helper::{jbytearray_to_array, jdoublearray_to_array};
+use crate::helper::jbytearray_to_array;
 #[cfg(feature = "anvilkit-bridge")]
 use mps_core::rapier::anvilkit as ak;
 use mps_core::rapier::ffi::{
@@ -14,14 +14,12 @@ use mps_core::rapier::ffi::{
     RigidBodyBuilderHandle as RBH, RigidBodyHandleRaw as RRaw, ScalarKalman, ShapeCastHit,
     ShapeCastOptionsDesc, ShapeDesc, Sphere, SphericalShell, Ssv, Vec3, VoxelColliderOptions,
     WorldHandle as WH,
-    AirDragLaw, CoulombFrictionLaw, CustomPhysicsReport, ExternalForceLaw, NewtonGravityLaw,
 };
 #[cfg(feature = "anvilkit-bridge")]
 use mps_core::rapier::ffi::{
     AeroForceReport, AeroSurface, AnvilKitAppHandle as AKH, FluidForceReport, FluidVolume,
     TrajectoryEnvironment, TrajectoryForceReport,
 };
-use mps_core::rapier::ffi::{AeroForceReport, AeroSurface, FluidForceReport, FluidVolume, TrajectoryForceReport};
 use mps_core::rapier::{
     bounds as bo, collider as col, compat as com, controller as cc,
     crbtree as crt, dop, error as er, events as ev, joints as jo,
@@ -201,12 +199,18 @@ macro_rules! jni {
     (@default bool_array) => { std::ptr::null_mut() };
     ($ret:ident $method:ident ( $($kind:ident $arg:ident),* ) $body:block) => {
         #[unsafe(export_name = concat!(
-            "Java_org_polaris2023_mps_rapier_RapierNative_",
+            "Java_org_polaris2023_msp_1rigid_1body_RigidBodyNative_",
             stringify!($method)
         ))]
         #[allow(non_snake_case)]
         pub extern "system" fn $method(_env: JNIEnv, _class: jclass, $($arg: jni!(@ty $kind)),*) -> jni!(@ty $ret) {
-            catch_unwind(AssertUnwindSafe(|| $body)).unwrap_or(jni!(@default $ret))
+            match catch_unwind(AssertUnwindSafe(|| $body)) {
+                Ok(value) => value,
+                Err(_) => {
+                    er::set_error(er::ERR_INTERNAL, "internal panic");
+                    jni!(@default $ret)
+                }
+            }
         }
     };
 }
@@ -234,12 +238,18 @@ macro_rules! jni_e_c {
     (@default bool_array) => { std::ptr::null_mut() };
     ($ret:ident $method:ident ( $($kind:ident $arg:ident),* ) $body:block) => {
         #[unsafe(export_name = concat!(
-            "Java_org_polaris2023_mps_rapier_RapierNative_",
+            "Java_org_polaris2023_msp_1rigid_1body_RigidBodyNative_",
             stringify!($method)
         ))]
         #[allow(non_snake_case)]
         pub extern "system" fn $method( $($arg: jni_e_c!(@ty $kind)),*) -> jni_e_c!(@ty $ret) {
-            catch_unwind(AssertUnwindSafe(|| $body)).unwrap_or(jni_e_c!(@default $ret))
+            match catch_unwind(AssertUnwindSafe(|| $body)) {
+                Ok(value) => value,
+                Err(_) => {
+                    er::set_error(er::ERR_INTERNAL, "internal panic");
+                    jni_e_c!(@default $ret)
+                }
+            }
         }
     };
 }
@@ -250,7 +260,7 @@ jni!(boolean abiSupportsJni() { abi::abi_supports_jni().0 as jbyte });
 jni!(int abiLastErrorCode() { er::last_error_code() as jint });
 jni!(void abiClearLastError() { er::last_error_clear(); });
 
-#[unsafe(export_name = "Java_org_polaris2023_mps_rapier_RapierNative_abiLastErrorMessage")]
+#[unsafe(export_name = "Java_org_polaris2023_msp_1rigid_1body_RigidBodyNative_abiLastErrorMessage")]
 #[allow(non_snake_case)]
 pub extern "system" fn abiLastErrorMessage(env: JNIEnv, _class: jclass) -> jstring {
     catch_unwind(AssertUnwindSafe(|| {
@@ -868,6 +878,10 @@ jni!(boolean bridgeQuatToSlot(double i, double j, double k, double w, long slot)
 });
 
 jni!(int bridgeWriteF64Slice(long values, int value_count, long slot, int capacity) {
+    if value_count < 0 {
+        er::set_error(er::ERR_INVALID_ARGUMENT, "invalid value count");
+        return 0;
+    }
     let v = unsafe { std::slice::from_raw_parts(p::<f64>(values), value_count as usize) };
     br::write_f64_slice(slot, v, capacity) as jint
 });
@@ -891,7 +905,7 @@ jni!(long worldGetSharedArenaSize(long world) { wo::world_get_shared_arena_size(
 /// This uses `NewDirectByteBuffer` — a standard JNI API since Java 1.4.
 /// The returned ByteBuffer wraps the native arena memory directly, enabling
 /// zero-JNI reads/writes from pure `java.nio.ByteBuffer` / `java.nio.DoubleBuffer`.
-#[unsafe(export_name = "Java_org_polaris2023_mps_rapier_RapierNative_worldGetArenaDirectByteBuffer")]
+#[unsafe(export_name = "Java_org_polaris2023_msp_1rigid_1body_RigidBodyNative_worldGetArenaDirectByteBuffer")]
 #[allow(non_snake_case)]
 pub extern "system" fn worldGetArenaDirectByteBuffer(env: JNIEnv, _class: jclass, world: jlong) -> ljni::sys::jobject {
     catch_unwind(AssertUnwindSafe(|| {

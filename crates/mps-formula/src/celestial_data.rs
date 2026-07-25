@@ -1,4 +1,4 @@
-﻿//! Precision celestial body parameters.
+//! Precision celestial body parameters.
 //!
 //! Data sources:
 //! - JPL DE441 planetary ephemerides (2021)
@@ -394,6 +394,24 @@ pub enum CelestialBodyId {
     Neptune = 9,
 }
 
+/// Convert a raw `u32` body ID to a `CelestialBodyId`, returning `None` for
+/// out-of-range values.  Used by FFI entry points instead of `transmute`.
+pub fn celestial_body_id_from_u32(value: u32) -> Option<CelestialBodyId> {
+    match value {
+        0 => Some(CelestialBodyId::Sun),
+        1 => Some(CelestialBodyId::Mercury),
+        2 => Some(CelestialBodyId::Venus),
+        3 => Some(CelestialBodyId::Earth),
+        4 => Some(CelestialBodyId::Moon),
+        5 => Some(CelestialBodyId::Mars),
+        6 => Some(CelestialBodyId::Jupiter),
+        7 => Some(CelestialBodyId::Saturn),
+        8 => Some(CelestialBodyId::Uranus),
+        9 => Some(CelestialBodyId::Neptune),
+        _ => None,
+    }
+}
+
 /// Get a built-in celestial body by ID.
 pub fn get_celestial_body(id: CelestialBodyId) -> &'static CelestialBody {
     match id {
@@ -647,9 +665,9 @@ pub extern "C" fn celestial_get_sh_coeffs(
     s_coeffs_out: *mut f64,
     capacity: u32,
 ) -> u32 {
-    let id = match body_id {
-        0..=9 => unsafe { std::mem::transmute::<u32, CelestialBodyId>(body_id) },
-        _ => return 0,
+    let id = match celestial_body_id_from_u32(body_id) {
+        Some(id) => id,
+        None => return 0,
     };
     let body = get_celestial_body(id);
     let count = capacity.min(body.c_coeffs.len() as u32);
@@ -667,9 +685,9 @@ pub extern "C" fn celestial_get_sh_coeffs(
 /// Return the number of spherical-harmonic coefficients for a given body.
 #[unsafe(no_mangle)]
 pub extern "C" fn celestial_get_sh_coeff_count(body_id: u32) -> u32 {
-    let id = match body_id {
-        0..=9 => unsafe { std::mem::transmute::<u32, CelestialBodyId>(body_id) },
-        _ => return 0,
+    let id = match celestial_body_id_from_u32(body_id) {
+        Some(id) => id,
+        None => return 0,
     };
     get_celestial_body(id).c_coeffs.len() as u32
 }

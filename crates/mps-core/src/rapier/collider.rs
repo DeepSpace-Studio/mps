@@ -1,4 +1,4 @@
-﻿use rapier3d::math::{Pose, Rotation, Vector};
+use rapier3d::math::{Pose, Rotation, Vector};
 use rapier3d::prelude::{Array2, Collider, ColliderBuilder, SharedShape, TypedShape};
 use smallvec::SmallVec;
 use std::slice;
@@ -782,7 +782,11 @@ pub extern "C" fn collider_get_shape_count(
         return 0;
     };
 
-    match world.inner.colliders.get(unpack_collider_handle(handle)).unwrap().shape().as_typed_shape() {
+    // Invalid handle: return 0 instead of panicking across the FFI boundary.
+    let Some(collider) = world.inner.colliders.get(unpack_collider_handle(handle)) else {
+        return 0;
+    };
+    match collider.shape().as_typed_shape() {
         TypedShape::Compound(compound) => compound.shapes().len(),
         _ => 1,
     }

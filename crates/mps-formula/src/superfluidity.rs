@@ -1,4 +1,4 @@
-﻿//! Superfluidity and quantum vortex dynamics:
+//! Superfluidity and quantum vortex dynamics:
 //! - Vortex filament model (Biot–Savart law for velocity induction)
 //! - Quantised circulation (h/m quanta)
 //! - Gross–Pitaevskii equation (simplified: order parameter evolution, energy densities)
@@ -14,9 +14,9 @@ use crate::error::{
 use crate::ffi::{
     BiotSavartVelocity, Bool, GpEnergyDensity, GpGridPoint, GpOrderParameter,
     GpTimeEvolutionParams, QuantisedCirculation, Vec3, VortexReconnectionReport, VortexRing,
-    VortexSegment, VortexTangleStats, finite_non_negative, finite_positive, vec3_finite,
+    VortexSegment, VortexTangleStats, vec3_finite,
 };
-use crate::math::KahanSum;
+use crate::math::{KahanSum, finite_non_negative, finite_positive};
 
 const EPSILON: f64 = 1.0e-14;
 const FOUR_PI: f64 = 12.566_370_614_359_172;

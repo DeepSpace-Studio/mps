@@ -3,19 +3,15 @@ name = "mps-jni"
 version.workspace = true
 edition.workspace = true
 
+[lib]
+name = "mps_rigid_body"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+anvilkit-bridge = ["mps-core/anvilkit-bridge"]
+
 [dependencies]
 mps-formula = { path = "../mps-formula" }
 ljni = { workspace = true }
 mps-core = { path = "../mps-core" }
 mps-ffm = { path = "../mps-ffm" }
-
-[profile.dev]
-panic = "abort"
-
-[profile.release]
-panic = "abort"
-lto = "thin"
-codegen-units = 1
-opt-level = 3
-strip = true
-debug = 0

@@ -1,5 +1,5 @@
 use crate::rapier::error::{
-    ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, clear_error, set_error,
+    ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, clear_error, ffi_guard, set_error,
 };
 use crate::rapier::ffi::{
     Bool, MolecularForceLaw, MolecularPairReport, MolecularParticle, RigidBodyHandleRaw, Vec3,
@@ -12,10 +12,12 @@ pub extern "C" fn molecular_lennard_jones_potential(
     epsilon: f64,
     sigma: f64,
 ) -> f64 {
-    match mps_formula::molecular::lennard_jones_potential(distance, epsilon, sigma) {
-        Some(v) => { clear_error(); v }
-        None => { set_error(ERR_INVALID_ARGUMENT, "invalid Lennard-Jones potential parameters"); f64::NAN }
-    }
+    ffi_guard(0.0, || {
+        match mps_formula::molecular::lennard_jones_potential(distance, epsilon, sigma) {
+            Some(v) => { clear_error(); v }
+            None => { set_error(ERR_INVALID_ARGUMENT, "invalid Lennard-Jones potential parameters"); f64::NAN }
+        }
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -26,18 +28,20 @@ pub extern "C" fn molecular_lennard_jones_force(
     softening: f64,
     out_force: *mut Vec3,
 ) -> Bool {
-    if !vec3_finite(displacement) {
-        set_error(ERR_INVALID_ARGUMENT, "invalid Lennard-Jones force parameters");
-        return Bool::FALSE;
-    }
-    let Some(out_force) = (unsafe { out_force.as_mut() }) else {
-        set_error(ERR_NULL_POINTER, "Lennard-Jones force output is null");
-        return Bool::FALSE;
-    };
-    match mps_formula::molecular::lennard_jones_force(displacement, epsilon, sigma, softening) {
-        Some(f) => { *out_force = f; clear_error(); Bool::TRUE }
-        None => { set_error(ERR_INVALID_ARGUMENT, "invalid Lennard-Jones force parameters"); Bool::FALSE }
-    }
+    ffi_guard(Bool::FALSE, || {
+        if !vec3_finite(displacement) {
+            set_error(ERR_INVALID_ARGUMENT, "invalid Lennard-Jones force parameters");
+            return Bool::FALSE;
+        }
+        let Some(out_force) = (unsafe { out_force.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "Lennard-Jones force output is null");
+            return Bool::FALSE;
+        };
+        match mps_formula::molecular::lennard_jones_force(displacement, epsilon, sigma, softening) {
+            Some(f) => { *out_force = f; clear_error(); Bool::TRUE }
+            None => { set_error(ERR_INVALID_ARGUMENT, "invalid Lennard-Jones force parameters"); Bool::FALSE }
+        }
+    })
 }
 
 #[unsafe(no_mangle)]

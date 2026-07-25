@@ -1,10 +1,11 @@
-﻿use anvilkit::core::math::Transform;
+use anvilkit::core::math::Transform;
 use anvilkit::ecs::physics as ak_physics;
 use anvilkit::ecs::prelude::*;
 use hashbrown::HashMap;
 use rapier3d::prelude::{ColliderBuilder, RigidBodyBuilder, RigidBodyType};
 
 use crate::rapier::aerodynamics;
+use crate::rapier::error::ffi_guard;
 use crate::rapier::ffi::{
     AeroForceReport, AeroSurface, Bool, ColliderHandleRaw, FluidForceReport, FluidVolume,
     HertzContactReport, ImpulseJointHandleRaw, MaterialProperties, Quat, RigidBodyHandleRaw,
@@ -307,27 +308,33 @@ impl AnvilKitAppState {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn anvilkit_app_create() -> *mut crate::rapier::ffi::AnvilKitAppHandle {
-    Box::into_raw(Box::new(crate::rapier::ffi::AnvilKitAppHandle {
-        inner: AnvilKitAppState::new(),
-    }))
+    ffi_guard(std::ptr::null_mut(), || {
+        Box::into_raw(Box::new(crate::rapier::ffi::AnvilKitAppHandle {
+            inner: AnvilKitAppState::new(),
+        }))
+    })
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn anvilkit_app_destroy(app: *mut crate::rapier::ffi::AnvilKitAppHandle) {
-    if app.is_null() {
-        return;
-    }
-    unsafe {
-        drop(Box::from_raw(app));
-    }
+    ffi_guard((), || {
+        if app.is_null() {
+            return;
+        }
+        unsafe {
+            drop(Box::from_raw(app));
+        }
+    })
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn anvilkit_app_update(app: *mut crate::rapier::ffi::AnvilKitAppHandle) {
-    let Some(app) = (unsafe { app.as_mut() }) else {
-        return;
-    };
-    app.inner.app.update();
+    ffi_guard((), || {
+        let Some(app) = (unsafe { app.as_mut() }) else {
+            return;
+        };
+        app.inner.app.update();
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -337,10 +344,12 @@ pub extern "C" fn anvilkit_app_spawn_body(
     rotation: Quat,
     status: u32,
 ) -> u64 {
-    let Some(app) = (unsafe { app.as_mut() }) else {
-        return 0;
-    };
-    app.inner.spawn_body(translation, rotation, status)
+    ffi_guard(0, || {
+        let Some(app) = (unsafe { app.as_mut() }) else {
+            return 0;
+        };
+        app.inner.spawn_body(translation, rotation, status)
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -351,11 +360,13 @@ pub extern "C" fn anvilkit_app_spawn_body_with_collider(
     status: u32,
     shape: ShapeDesc,
 ) -> u64 {
-    let Some(app) = (unsafe { app.as_mut() }) else {
-        return 0;
-    };
-    app.inner
-        .spawn_body_with_collider(translation, rotation, status, shape)
+    ffi_guard(0, || {
+        let Some(app) = (unsafe { app.as_mut() }) else {
+            return 0;
+        };
+        app.inner
+            .spawn_body_with_collider(translation, rotation, status, shape)
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -365,10 +376,12 @@ pub extern "C" fn anvilkit_app_set_transform(
     translation: Vec3,
     rotation: Quat,
 ) -> Bool {
-    let Some(app) = (unsafe { app.as_mut() }) else {
-        return Bool::FALSE;
-    };
-    app.inner.set_transform(entity_bits, translation, rotation)
+    ffi_guard(Bool::FALSE, || {
+        let Some(app) = (unsafe { app.as_mut() }) else {
+            return Bool::FALSE;
+        };
+        app.inner.set_transform(entity_bits, translation, rotation)
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -377,10 +390,12 @@ pub extern "C" fn anvilkit_app_set_material(
     entity_bits: u64,
     material: MaterialProperties,
 ) -> Bool {
-    let Some(app) = (unsafe { app.as_mut() }) else {
-        return Bool::FALSE;
-    };
-    app.inner.set_material(entity_bits, material)
+    ffi_guard(Bool::FALSE, || {
+        let Some(app) = (unsafe { app.as_mut() }) else {
+            return Bool::FALSE;
+        };
+        app.inner.set_material(entity_bits, material)
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -388,13 +403,15 @@ pub extern "C" fn anvilkit_app_sync_to_world(
     app: *mut crate::rapier::ffi::AnvilKitAppHandle,
     world: *mut WorldHandle,
 ) -> u32 {
-    let Some(app) = (unsafe { app.as_mut() }) else {
-        return 0;
-    };
-    let Some(world) = (unsafe { world.as_mut() }) else {
-        return 0;
-    };
-    app.inner.sync_to_world(world)
+    ffi_guard(0, || {
+        let Some(app) = (unsafe { app.as_mut() }) else {
+            return 0;
+        };
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            return 0;
+        };
+        app.inner.sync_to_world(world)
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -402,13 +419,15 @@ pub extern "C" fn anvilkit_app_entity_to_body(
     app: *const crate::rapier::ffi::AnvilKitAppHandle,
     entity_bits: u64,
 ) -> RigidBodyHandleRaw {
-    let Some(app) = (unsafe { app.as_ref() }) else {
-        return 0;
-    };
-    let Ok(entity) = Entity::try_from_bits(entity_bits) else {
-        return 0;
-    };
-    app.inner.entity_to_body.get(&entity).copied().unwrap_or(0)
+    ffi_guard(0, || {
+        let Some(app) = (unsafe { app.as_ref() }) else {
+            return 0;
+        };
+        let Ok(entity) = Entity::try_from_bits(entity_bits) else {
+            return 0;
+        };
+        app.inner.entity_to_body.get(&entity).copied().unwrap_or(0)
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -416,17 +435,19 @@ pub extern "C" fn anvilkit_app_entity_to_collider(
     app: *const crate::rapier::ffi::AnvilKitAppHandle,
     entity_bits: u64,
 ) -> ColliderHandleRaw {
-    let Some(app) = (unsafe { app.as_ref() }) else {
-        return 0;
-    };
-    let Ok(entity) = Entity::try_from_bits(entity_bits) else {
-        return 0;
-    };
-    app.inner
-        .entity_to_collider
-        .get(&entity)
-        .copied()
-        .unwrap_or(0)
+    ffi_guard(0, || {
+        let Some(app) = (unsafe { app.as_ref() }) else {
+            return 0;
+        };
+        let Ok(entity) = Entity::try_from_bits(entity_bits) else {
+            return 0;
+        };
+        app.inner
+            .entity_to_collider
+            .get(&entity)
+            .copied()
+            .unwrap_or(0)
+    })
 }
 
 #[unsafe(no_mangle)]

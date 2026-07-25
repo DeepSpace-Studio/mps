@@ -1,7 +1,8 @@
-﻿use rapier3d::math::{Pose, Rotation, Vector};
+use rapier3d::math::{Pose, Rotation, Vector};
 use rapier3d::prelude::{ColliderBuilder, SharedShape};
 use smallvec::SmallVec;
 
+use crate::rapier::error::ffi_guard;
 use crate::rapier::ffi::{
     Capsule, ColliderBuilderHandle, ColliderHandleRaw, Cylinder, Ellipsoid, MAX_OUTPUT_CAPACITY,
     Prism, QueryFilterDesc, SphericalShell, Ssv, WorldHandle, isometry_from_parts,
@@ -231,38 +232,48 @@ fn intersect_bound(
 
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_capsule(capsule: Capsule) -> *mut ColliderBuilderHandle {
-    builder_from_shape(capsule_shape(capsule))
+    ffi_guard(std::ptr::null_mut(), || {
+        builder_from_shape(capsule_shape(capsule))
+    })
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_ssv(ssv: Ssv) -> *mut ColliderBuilderHandle {
-    builder_from_shape(ssv_shape(ssv))
+    ffi_guard(std::ptr::null_mut(), || builder_from_shape(ssv_shape(ssv)))
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_ellipsoid(
     ellipsoid: Ellipsoid,
 ) -> *mut ColliderBuilderHandle {
-    builder_from_shape(ellipsoid_shape(ellipsoid))
+    ffi_guard(std::ptr::null_mut(), || {
+        builder_from_shape(ellipsoid_shape(ellipsoid))
+    })
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_prism(prism: Prism) -> *mut ColliderBuilderHandle {
-    builder_from_shape(prism_shape(prism))
+    ffi_guard(std::ptr::null_mut(), || {
+        builder_from_shape(prism_shape(prism))
+    })
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_cylinder(
     cylinder: Cylinder,
 ) -> *mut ColliderBuilderHandle {
-    builder_from_shape(cylinder_shape(cylinder))
+    ffi_guard(std::ptr::null_mut(), || {
+        builder_from_shape(cylinder_shape(cylinder))
+    })
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_spherical_shell(
     shell: SphericalShell,
 ) -> *mut ColliderBuilderHandle {
-    builder_from_shape(spherical_shell_shape(shell))
+    ffi_guard(std::ptr::null_mut(), || {
+        builder_from_shape(spherical_shell_shape(shell))
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -271,7 +282,9 @@ pub extern "C" fn query_intersect_capsule_count(
     capsule: Capsule,
     filter: QueryFilterDesc,
 ) -> u32 {
-    intersect_bound_count(world, capsule_shape(capsule), filter)
+    ffi_guard(0, || {
+        intersect_bound_count(world, capsule_shape(capsule), filter)
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -279,7 +292,9 @@ pub extern "C" fn query_intersect_capsule_count_all(
     world: *const WorldHandle,
     capsule: Capsule,
 ) -> u32 {
-    query_intersect_capsule_count(world, capsule, QueryFilterDesc::default())
+    ffi_guard(0, || {
+        query_intersect_capsule_count(world, capsule, QueryFilterDesc::default())
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -290,7 +305,9 @@ pub extern "C" fn query_intersect_capsule(
     out_handles: *mut ColliderHandleRaw,
     capacity: u32,
 ) -> u32 {
-    intersect_bound(world, capsule_shape(capsule), filter, out_handles, capacity)
+    ffi_guard(0, || {
+        intersect_bound(world, capsule_shape(capsule), filter, out_handles, capacity)
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -300,13 +317,15 @@ pub extern "C" fn query_intersect_capsule_all(
     out_handles: *mut ColliderHandleRaw,
     capacity: u32,
 ) -> u32 {
-    query_intersect_capsule(
-        world,
-        capsule,
-        QueryFilterDesc::default(),
-        out_handles,
-        capacity,
-    )
+    ffi_guard(0, || {
+        query_intersect_capsule(
+            world,
+            capsule,
+            QueryFilterDesc::default(),
+            out_handles,
+            capacity,
+        )
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -315,12 +334,16 @@ pub extern "C" fn query_intersect_ssv_count(
     ssv: Ssv,
     filter: QueryFilterDesc,
 ) -> u32 {
-    intersect_bound_count(world, ssv_shape(ssv), filter)
+    ffi_guard(0, || {
+        intersect_bound_count(world, ssv_shape(ssv), filter)
+    })
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_ssv_count_all(world: *const WorldHandle, ssv: Ssv) -> u32 {
-    query_intersect_ssv_count(world, ssv, QueryFilterDesc::default())
+    ffi_guard(0, || {
+        query_intersect_ssv_count(world, ssv, QueryFilterDesc::default())
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -331,7 +354,9 @@ pub extern "C" fn query_intersect_ssv(
     out_handles: *mut ColliderHandleRaw,
     capacity: u32,
 ) -> u32 {
-    intersect_bound(world, ssv_shape(ssv), filter, out_handles, capacity)
+    ffi_guard(0, || {
+        intersect_bound(world, ssv_shape(ssv), filter, out_handles, capacity)
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -341,13 +366,15 @@ pub extern "C" fn query_intersect_ssv_all(
     out_handles: *mut ColliderHandleRaw,
     capacity: u32,
 ) -> u32 {
-    query_intersect_ssv(
-        world,
-        ssv,
-        QueryFilterDesc::default(),
-        out_handles,
-        capacity,
-    )
+    ffi_guard(0, || {
+        query_intersect_ssv(
+            world,
+            ssv,
+            QueryFilterDesc::default(),
+            out_handles,
+            capacity,
+        )
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -356,7 +383,9 @@ pub extern "C" fn query_intersect_ellipsoid_count(
     ellipsoid: Ellipsoid,
     filter: QueryFilterDesc,
 ) -> u32 {
-    intersect_bound_count(world, ellipsoid_shape(ellipsoid), filter)
+    ffi_guard(0, || {
+        intersect_bound_count(world, ellipsoid_shape(ellipsoid), filter)
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -364,7 +393,9 @@ pub extern "C" fn query_intersect_ellipsoid_count_all(
     world: *const WorldHandle,
     ellipsoid: Ellipsoid,
 ) -> u32 {
-    query_intersect_ellipsoid_count(world, ellipsoid, QueryFilterDesc::default())
+    ffi_guard(0, || {
+        query_intersect_ellipsoid_count(world, ellipsoid, QueryFilterDesc::default())
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -375,13 +406,15 @@ pub extern "C" fn query_intersect_ellipsoid(
     out_handles: *mut ColliderHandleRaw,
     capacity: u32,
 ) -> u32 {
-    intersect_bound(
-        world,
-        ellipsoid_shape(ellipsoid),
-        filter,
-        out_handles,
-        capacity,
-    )
+    ffi_guard(0, || {
+        intersect_bound(
+            world,
+            ellipsoid_shape(ellipsoid),
+            filter,
+            out_handles,
+            capacity,
+        )
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -391,13 +424,15 @@ pub extern "C" fn query_intersect_ellipsoid_all(
     out_handles: *mut ColliderHandleRaw,
     capacity: u32,
 ) -> u32 {
-    query_intersect_ellipsoid(
-        world,
-        ellipsoid,
-        QueryFilterDesc::default(),
-        out_handles,
-        capacity,
-    )
+    ffi_guard(0, || {
+        query_intersect_ellipsoid(
+            world,
+            ellipsoid,
+            QueryFilterDesc::default(),
+            out_handles,
+            capacity,
+        )
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -406,12 +441,16 @@ pub extern "C" fn query_intersect_prism_count(
     prism: Prism,
     filter: QueryFilterDesc,
 ) -> u32 {
-    intersect_bound_count(world, prism_shape(prism), filter)
+    ffi_guard(0, || {
+        intersect_bound_count(world, prism_shape(prism), filter)
+    })
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_prism_count_all(world: *const WorldHandle, prism: Prism) -> u32 {
-    query_intersect_prism_count(world, prism, QueryFilterDesc::default())
+    ffi_guard(0, || {
+        query_intersect_prism_count(world, prism, QueryFilterDesc::default())
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -422,7 +461,9 @@ pub extern "C" fn query_intersect_prism(
     out_handles: *mut ColliderHandleRaw,
     capacity: u32,
 ) -> u32 {
-    intersect_bound(world, prism_shape(prism), filter, out_handles, capacity)
+    ffi_guard(0, || {
+        intersect_bound(world, prism_shape(prism), filter, out_handles, capacity)
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -432,13 +473,15 @@ pub extern "C" fn query_intersect_prism_all(
     out_handles: *mut ColliderHandleRaw,
     capacity: u32,
 ) -> u32 {
-    query_intersect_prism(
-        world,
-        prism,
-        QueryFilterDesc::default(),
-        out_handles,
-        capacity,
-    )
+    ffi_guard(0, || {
+        query_intersect_prism(
+            world,
+            prism,
+            QueryFilterDesc::default(),
+            out_handles,
+            capacity,
+        )
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -447,7 +490,9 @@ pub extern "C" fn query_intersect_cylinder_count(
     cylinder: Cylinder,
     filter: QueryFilterDesc,
 ) -> u32 {
-    intersect_bound_count(world, cylinder_shape(cylinder), filter)
+    ffi_guard(0, || {
+        intersect_bound_count(world, cylinder_shape(cylinder), filter)
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -455,7 +500,9 @@ pub extern "C" fn query_intersect_cylinder_count_all(
     world: *const WorldHandle,
     cylinder: Cylinder,
 ) -> u32 {
-    query_intersect_cylinder_count(world, cylinder, QueryFilterDesc::default())
+    ffi_guard(0, || {
+        query_intersect_cylinder_count(world, cylinder, QueryFilterDesc::default())
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -466,13 +513,15 @@ pub extern "C" fn query_intersect_cylinder(
     out_handles: *mut ColliderHandleRaw,
     capacity: u32,
 ) -> u32 {
-    intersect_bound(
-        world,
-        cylinder_shape(cylinder),
-        filter,
-        out_handles,
-        capacity,
-    )
+    ffi_guard(0, || {
+        intersect_bound(
+            world,
+            cylinder_shape(cylinder),
+            filter,
+            out_handles,
+            capacity,
+        )
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -482,13 +531,15 @@ pub extern "C" fn query_intersect_cylinder_all(
     out_handles: *mut ColliderHandleRaw,
     capacity: u32,
 ) -> u32 {
-    query_intersect_cylinder(
-        world,
-        cylinder,
-        QueryFilterDesc::default(),
-        out_handles,
-        capacity,
-    )
+    ffi_guard(0, || {
+        query_intersect_cylinder(
+            world,
+            cylinder,
+            QueryFilterDesc::default(),
+            out_handles,
+            capacity,
+        )
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -497,7 +548,9 @@ pub extern "C" fn query_intersect_spherical_shell_count(
     shell: SphericalShell,
     filter: QueryFilterDesc,
 ) -> u32 {
-    intersect_bound_count(world, spherical_shell_shape(shell), filter)
+    ffi_guard(0, || {
+        intersect_bound_count(world, spherical_shell_shape(shell), filter)
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -505,7 +558,9 @@ pub extern "C" fn query_intersect_spherical_shell_count_all(
     world: *const WorldHandle,
     shell: SphericalShell,
 ) -> u32 {
-    query_intersect_spherical_shell_count(world, shell, QueryFilterDesc::default())
+    ffi_guard(0, || {
+        query_intersect_spherical_shell_count(world, shell, QueryFilterDesc::default())
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -516,13 +571,15 @@ pub extern "C" fn query_intersect_spherical_shell(
     out_handles: *mut ColliderHandleRaw,
     capacity: u32,
 ) -> u32 {
-    intersect_bound(
-        world,
-        spherical_shell_shape(shell),
-        filter,
-        out_handles,
-        capacity,
-    )
+    ffi_guard(0, || {
+        intersect_bound(
+            world,
+            spherical_shell_shape(shell),
+            filter,
+            out_handles,
+            capacity,
+        )
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -532,13 +589,13 @@ pub extern "C" fn query_intersect_spherical_shell_all(
     out_handles: *mut ColliderHandleRaw,
     capacity: u32,
 ) -> u32 {
-    query_intersect_spherical_shell(
-        world,
-        shell,
-        QueryFilterDesc::default(),
-        out_handles,
-        capacity,
-    )
+    ffi_guard(0, || {
+        query_intersect_spherical_shell(
+            world,
+            shell,
+            QueryFilterDesc::default(),
+            out_handles,
+            capacity,
+        )
+    })
 }
-
-

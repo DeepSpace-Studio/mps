@@ -1,10 +1,13 @@
-﻿use std::slice;
+use std::slice;
 
 use rayon::prelude::*;
 
 use rapier3d::math::{Pose, Rotation, Vector};
 use rapier3d::prelude::{ColliderBuilder, SharedShape};
 
+use crate::rapier::error::{
+    ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, ffi_guard, set_error,
+};
 use crate::rapier::ffi::{
     AabbDesc, Bool, ColliderBuilderHandle, ColliderHandleRaw, Obb, QueryFilterDesc,
     RigidBodyHandleRaw, Vec3, VoxelBuildStats, VoxelColliderMode, VoxelColliderOptions,
@@ -468,7 +471,9 @@ pub fn build_voxel_collider(
     }
 
     match choose_mode(solid_count, options) {
-        VoxelColliderMode::Auto => unreachable!(),
+        // choose_mode never returns Auto; fall back to GreedyCuboids (its
+        // default resolution) instead of panicking if that ever changes.
+        VoxelColliderMode::Auto => build_greedy_cuboids(grid),
         VoxelColliderMode::Cuboids => build_cuboids(grid, solid_count),
         VoxelColliderMode::GreedyCuboids => build_greedy_cuboids(grid),
         VoxelColliderMode::SurfaceMesh => build_surface_mesh(grid, solid_count),
@@ -507,7 +512,11 @@ fn compute_voxel_build_stats(
     };
 
     match mode {
-        VoxelColliderMode::Auto => unreachable!(),
+        // choose_mode never returns Auto; estimate as GreedyCuboids (its
+        // default resolution) instead of panicking if that ever changes.
+        VoxelColliderMode::Auto => {
+            stats.estimated_parts = count_greedy_cuboids(grid).map(usize_to_u32).unwrap_or(0);
+        }
         VoxelColliderMode::Cuboids => {
             stats.estimated_parts = usize_to_u32(solid_count);
         }
@@ -548,17 +557,35 @@ fn build_aabb_voxel_grid(aabb: AabbDesc, voxel_size_x: f64, voxel_size_y: f64, v
         || aabb.mins.y >= aabb.maxs.y
         || aabb.mins.z >= aabb.maxs.z
     {
+        set_error(ERR_INVALID_ARGUMENT, "invalid aabb or voxel size");
         return None;
     }
 
-    let size_x = ceil_to_usize((aabb.maxs.x - aabb.mins.x) / voxel_size_x)?;
-    let size_y = ceil_to_usize((aabb.maxs.y - aabb.mins.y) / voxel_size_y)?;
-    let size_z = ceil_to_usize((aabb.maxs.z - aabb.mins.z) / voxel_size_z)?;
+    let Some(size_x) = ceil_to_usize((aabb.maxs.x - aabb.mins.x) / voxel_size_x) else {
+        set_error(ERR_CAPACITY, "voxel grid size overflow");
+        return None;
+    };
+    let Some(size_y) = ceil_to_usize((aabb.maxs.y - aabb.mins.y) / voxel_size_y) else {
+        set_error(ERR_CAPACITY, "voxel grid size overflow");
+        return None;
+    };
+    let Some(size_z) = ceil_to_usize((aabb.maxs.z - aabb.mins.z) / voxel_size_z) else {
+        set_error(ERR_CAPACITY, "voxel grid size overflow");
+        return None;
+    };
     if size_x == 0 || size_y == 0 || size_z == 0 {
+        set_error(ERR_INVALID_ARGUMENT, "voxel grid dimension is zero");
         return None;
     }
-    let len = size_x.checked_mul(size_y)?.checked_mul(size_z)?;
+    let Some(len) = size_x
+        .checked_mul(size_y)
+        .and_then(|xy| xy.checked_mul(size_z))
+    else {
+        set_error(ERR_CAPACITY, "voxel grid size overflow");
+        return None;
+    };
     if len > MAX_VOXEL_CELLS {
+        set_error(ERR_CAPACITY, "voxel grid too large");
         return None;
     }
 
@@ -582,6 +609,7 @@ fn obb_world_aabb(obb: Obb, rotation: Rotation) -> Option<AabbDesc> {
         || obb.half_extents.y <= 0.0
         || obb.half_extents.z <= 0.0
     {
+        set_error(ERR_INVALID_ARGUMENT, "invalid obb");
         return None;
     }
 
@@ -620,6 +648,7 @@ fn obb_world_aabb(obb: Obb, rotation: Rotation) -> Option<AabbDesc> {
 
 fn build_obb_voxel_grid(obb: Obb, voxel_size_x: f64, voxel_size_y: f64, voxel_size_z: f64) -> Option<OwnedVoxelGrid> {
     if !voxel_size_x.is_finite() || voxel_size_x <= 0.0 || !voxel_size_y.is_finite() || voxel_size_y <= 0.0 || !voxel_size_z.is_finite() || voxel_size_z <= 0.0 {
+        set_error(ERR_INVALID_ARGUMENT, "invalid voxel size");
         return None;
     }
     let rotation = quat_to_rapier(obb.rotation);
@@ -657,6 +686,7 @@ fn builder_from_owned_grid(
 ) -> *mut ColliderBuilderHandle {
     let grid_ref = grid.as_grid();
     let Some(builder) = build_voxel_collider(&grid_ref, options) else {
+        set_error(ERR_CAPACITY, "voxel collider build failed");
         return std::ptr::null_mut();
     };
 

@@ -91,6 +91,7 @@ pub fn principal_stresses(
     sx: f64, sy: f64, sz: f64,
     txy: f64, tyz: f64, tzx: f64,
 ) -> Option<(f64, f64, f64)> {
+    if !finite_6(&[sx, sy, sz, txy, tyz, tzx]) { return None; }
     // Stress invariants
     let i1 = sx + sy + sz;
     let i2 = sx*sy + sy*sz + sz*sx - txy*txy - tyz*tyz - tzx*tzx;
@@ -99,14 +100,25 @@ pub fn principal_stresses(
     let p = i1*i1/3.0 - i2;
     let q = 2.0*i1*i1*i1/27.0 - i1*i2/3.0 + i3;
     if p < 0.0 { return None; } // should not happen for real stress tensors
+    // Hydrostatic (spherical) stress state: p ≈ 0 means the deviatoric part
+    // vanishes, so every direction is principal and all principal stresses
+    // equal the mean stress I₁/3.  The relative threshold avoids 0/0 in
+    // q/(2·r³) below (which would otherwise produce NaN hidden by clamp).
+    let scale = (i1 * i1 / 3.0).abs().max(i2.abs());
+    if p <= scale * f64::EPSILON {
+        let m = i1 / 3.0;
+        return Some((m, m, m));
+    }
+    // Trigonometric solution: σ' = 2r·cos(φ - 2πk/3) with r = √(p/3) and
+    // 3φ = acos(q / (2r³)) — the angle must be divided by 3.
     let r = (p/3.0).sqrt();
-    let phi = (q / (2.0 * p * r)).clamp(-1.0, 1.0).acos();
+    let phi = (q / (2.0 * r * r * r)).clamp(-1.0, 1.0).acos() / 3.0;
     let s1 = i1/3.0 + 2.0*r * phi.cos();
     let s2 = i1/3.0 + 2.0*r * (phi - 2.0*PI/3.0).cos();
     let s3 = i1/3.0 + 2.0*r * (phi + 2.0*PI/3.0).cos();
-    // Sort descending
+    // Sort descending (all values finite at this point)
     let mut v = [s1, s2, s3];
-    v.sort_by(|a, b| b.partial_cmp(a).unwrap());
+    v.sort_by(|a, b| b.total_cmp(a));
     Some((v[0], v[1], v[2]))
 }
 

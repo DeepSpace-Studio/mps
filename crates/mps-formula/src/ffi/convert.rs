@@ -14,14 +14,6 @@ pub fn vec3_from_rapier(value: Vector) -> Vec3 {
     Vec3 { x: value.x, y: value.y, z: value.z }
 }
 
-pub fn finite_non_negative(value: f64) -> bool {
-    value.is_finite() && value >= 0.0
-}
-
-pub fn finite_positive(value: f64) -> bool {
-    value.is_finite() && value > 0.0
-}
-
 pub fn clamp01(value: f64) -> f64 {
     value.clamp(0.0, 1.0)
 }

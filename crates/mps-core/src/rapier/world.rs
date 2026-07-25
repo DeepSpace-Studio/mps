@@ -1,4 +1,4 @@
-﻿use rapier3d::prelude::{
+use rapier3d::prelude::{
     ActiveHooks, BroadPhaseBvh, CCDSolver, ColliderSet, ImpulseJointSet, IntegrationParameters,
     IslandManager, MultibodyJointSet, NarrowPhase, PhysicsPipeline, RigidBodySet, Vector,
 };
@@ -706,6 +706,27 @@ pub extern "C" fn world_update_body_velocities(
 // Convenience: register celestial gravity as a ForceLaw
 // ---------------------------------------------------------------------------
 
+/// Convert a u32 tag to `CelestialBodyId`.  Returns `None` for out-of-range
+/// values instead of relying on a range guard plus `transmute`.
+fn celestial_body_id_from_u32(
+    body_id: u32,
+) -> Option<crate::rapier::celestial_data::CelestialBodyId> {
+    use crate::rapier::celestial_data::CelestialBodyId;
+    match body_id {
+        0 => Some(CelestialBodyId::Sun),
+        1 => Some(CelestialBodyId::Mercury),
+        2 => Some(CelestialBodyId::Venus),
+        3 => Some(CelestialBodyId::Earth),
+        4 => Some(CelestialBodyId::Moon),
+        5 => Some(CelestialBodyId::Mars),
+        6 => Some(CelestialBodyId::Jupiter),
+        7 => Some(CelestialBodyId::Saturn),
+        8 => Some(CelestialBodyId::Uranus),
+        9 => Some(CelestialBodyId::Neptune),
+        _ => None,
+    }
+}
+
 /// Register celestial body gravity as a ForceLaw in the world's registry.
 ///
 /// `body_id` maps to `CelestialBodyId` (0=Sun, 3=Earth, 4=Moon, 5=Mars, etc.).
@@ -721,14 +742,9 @@ pub extern "C" fn world_register_celestial_gravity(
         set_error(ERR_NULL_POINTER, "world is null");
         return 0;
     };
-    let id = match body_id {
-        0..=9 => unsafe {
-            std::mem::transmute::<u32, crate::rapier::celestial_data::CelestialBodyId>(body_id)
-        },
-        _ => {
-            set_error(ERR_INVALID_ARGUMENT, "invalid celestial body ID");
-            return 0;
-        }
+    let Some(id) = celestial_body_id_from_u32(body_id) else {
+        set_error(ERR_INVALID_ARGUMENT, "invalid celestial body ID");
+        return 0;
     };
     let body = crate::rapier::celestial_data::get_celestial_body(id);
     let law = crate::rapier::interaction::CelestialGravityForceLaw {
@@ -828,6 +844,15 @@ fn force_law_type_from_u32(tag: u32) -> Option<ForceLawType> {
 /// Returns the arena pointer as a u64 (suitable for `MemorySegment.ofAddress` in Java).
 /// The arena persists for the lifetime of the world.
 ///
+/// At most one arena may exist per world. Calling this again while an arena
+/// is still live fails with `ERR_INVALID_ARGUMENT` and leaves the existing
+/// arena untouched — call `world_destroy_shared_arena` first to recreate one.
+///
+/// WARNING (Java side): before calling `world_destroy_shared_arena`, the
+/// `MemorySegment` mapping the arena must be released/unmapped; destroying
+/// the arena frees the underlying memory, and any still-mapped Java segment
+/// would become a use-after-free.
+///
 /// `max_bodies` — max concurrent bodies to mirror
 /// `max_events` — max pending collision/contact events
 /// `max_commands` — max pending commands (force/set pose etc.)
@@ -847,14 +872,24 @@ pub extern "C" fn world_create_shared_arena(
         set_error(ERR_NULL_POINTER, "world is null");
         return Bool::FALSE;
     };
-    if max_bodies == 0 || max_events == 0 || max_commands == 0 {
+    if world.inner.shared_arena.is_some() {
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "shared arena already exists; destroy it before recreating",
+        );
+        return Bool::FALSE;
+    }
+    if max_bodies == 0 || max_colliders == 0 || max_events == 0 || max_commands == 0 {
         set_error(ERR_INVALID_ARGUMENT, "arena capacities must be >0");
         return Bool::FALSE;
     }
 
-    let arena = crate::rapier::shared_arena::SharedPhysicsArena::new(
+    let Some(arena) = crate::rapier::shared_arena::SharedPhysicsArena::new(
         max_bodies, max_colliders, max_events, max_commands,
-    );
+    ) else {
+        set_error(ERR_CAPACITY, "arena capacities exceed limits");
+        return Bool::FALSE;
+    };
     let addr = arena.address();
     let sz = arena.size() as u64;
 

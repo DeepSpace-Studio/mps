@@ -1,15 +1,16 @@
-﻿use parking_lot::{Mutex, RwLock};
+use parking_lot::{Mutex, RwLock};
 use rapier3d::geometry::{CollisionEvent, CollisionEventFlags, ContactPair, SolverFlags};
 use rapier3d::prelude::{
     ColliderSet, ContactForceEvent, EventHandler, PhysicsHooks, Real, RigidBodySet, Vector,
 };
 use std::cell::UnsafeCell;
 use std::mem;
-use std::sync::atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 use smallvec::SmallVec;
 
 use crate::rapier::error::{
-    ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, ERR_UNSUPPORTED, clear_error, set_error,
+    ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, ERR_UNSUPPORTED, clear_error, ffi_guard,
+    set_error,
 };
 use crate::rapier::ffi::{
     AirDragLaw, Bool, CollisionEventRecord, ContactForceEventRecord, CoulombFrictionLaw,
@@ -39,9 +40,14 @@ pub(crate) struct CollectingEventHandler {
 }
 
 // SAFETY: CollectingEventHandler is Send + Sync because producer_cache uses
-// atomics and UnsafeCell with single-producer discipline (only the physics
-// thread writes during pipeline.step; Java drains via explicit FFI calls
-// reading atomics from the ring buffers).
+// atomics (plus a Mutex for the typed callback slots) and UnsafeCell with
+// single-producer discipline (only the physics thread writes during
+// pipeline.step; Java drains via explicit FFI calls reading atomics from the
+// ring buffers).  Registration and ring (re-)initialization take
+// `&mut *producer_cache.get()` and are therefore **init-time only**: calling
+// them concurrently with `world_step` or with each other is undefined
+// behavior — see the `# Safety` docs on the `world_init_*_event_ring` and
+// `world_register_*_callback` FFI functions.
 unsafe impl Send for CollectingEventHandler {}
 unsafe impl Sync for CollectingEventHandler {}
 
@@ -162,7 +168,9 @@ impl CollisionEventRing {
         // finished writing to (Release/Acquire ordering guarantees visibility).
         let buf = unsafe { &*self.buf.get() };
         for i in 0..count {
-            out[i as usize] = buf[((r + i) % cap) as usize];
+            // u64 arithmetic: `r + i` can exceed u32::MAX on long runs and
+            // would panic on overflow in debug builds.
+            out[i as usize] = buf[((r as u64 + i as u64) % cap as u64) as usize];
         }
         self.read.store(r.wrapping_add(count), Ordering::Release);
         count
@@ -252,7 +260,9 @@ impl ContactForceEventRing {
         let count = avail.min(out.len() as u32);
         let buf = unsafe { &*self.buf.get() };
         for i in 0..count {
-            out[i as usize] = buf[((r + i) % cap) as usize];
+            // u64 arithmetic: `r + i` can exceed u32::MAX on long runs and
+            // would panic on overflow in debug builds.
+            out[i as usize] = buf[((r as u64 + i as u64) % cap as u64) as usize];
         }
         self.read.store(r.wrapping_add(count), Ordering::Release);
         count
@@ -296,20 +306,75 @@ use crate::rapier::ffi::{
     CollisionEventCallback, ContactForceEventCallback, EventCallbackHandle, EventRingBufferStats,
 };
 
-/// Registered callbacks + ring buffer pair for a single event type.
-#[derive(Default)]
-struct CallbackSlot {
-    cb: std::sync::atomic::AtomicUsize, // function pointer (0 → unset), atomic for lock-free read in hot path
+/// Typed collision-event callback function (non-null form of
+/// `CollisionEventCallback`).
+type CollisionEventFn = unsafe extern "C" fn(
+    world: *const std::ffi::c_void,
+    event: *const CollisionEventRecord,
+    user_data: *mut std::ffi::c_void,
+);
+
+/// Typed contact-force-event callback function.
+type ContactForceEventFn = unsafe extern "C" fn(
+    world: *const std::ffi::c_void,
+    event: *const ContactForceEventRecord,
+    user_data: *mut std::ffi::c_void,
+);
+
+/// Convert a raw FFI `usize` into a typed collision callback.
+/// Zero means "unset"; any other value must be a valid function pointer with
+/// the exact `CollisionEventFn` signature, supplied by the native caller.
+/// The raw-to-typed conversion happens exactly once, here, at registration.
+fn collision_callback_from_raw(raw: usize) -> CollisionEventCallback {
+    if raw == 0 {
+        None
+    } else {
+        // SAFETY: FFI contract — the caller passed a function pointer of this
+        // exact signature.  We cannot validate it beyond the non-zero check.
+        Some(unsafe { mem::transmute::<usize, CollisionEventFn>(raw) })
+    }
+}
+
+/// Convert a raw FFI `usize` into a typed contact-force callback.
+/// See `collision_callback_from_raw`.
+fn contact_force_callback_from_raw(raw: usize) -> ContactForceEventCallback {
+    if raw == 0 {
+        None
+    } else {
+        // SAFETY: FFI contract — the caller passed a function pointer of this
+        // exact signature.  We cannot validate it beyond the non-zero check.
+        Some(unsafe { mem::transmute::<usize, ContactForceEventFn>(raw) })
+    }
+}
+
+/// Registered callback + ring buffer pair for a single event type.
+struct CallbackSlot<F> {
+    /// Typed callback (None → unset).  Stored as the typed `Option<fn>` so the
+    /// dispatch hot path never re-transmutes a raw integer.
+    cb: Mutex<Option<F>>,
     user_data: std::sync::atomic::AtomicUsize, // opaque pointer, atomic
     handle: std::sync::atomic::AtomicU64, // monotonically increasing handle
+}
+
+impl<F> Default for CallbackSlot<F> {
+    fn default() -> Self {
+        Self {
+            cb: Mutex::new(None),
+            user_data: std::sync::atomic::AtomicUsize::new(0),
+            handle: std::sync::atomic::AtomicU64::new(0),
+        }
+    }
 }
 
 #[derive(Default)]
 struct ProducerCache {
     collisions: Option<CollisionEventRing>,
     contact_forces: Option<ContactForceEventRing>,
-    collision_cb: CallbackSlot,
-    contact_force_cb: CallbackSlot,
+    collision_cb: CallbackSlot<CollisionEventFn>,
+    contact_force_cb: CallbackSlot<ContactForceEventFn>,
+    /// Raw `*const WorldHandle` of the owning world, captured at callback
+    /// registration so dispatch passes the real world pointer (not null).
+    world_ptr: AtomicUsize,
     dispatch_mode: std::sync::atomic::AtomicU32, // atomic: 0=Poll, 1=Callback, 2=Both
     next_handle: std::sync::atomic::AtomicU64,
 }
@@ -324,22 +389,22 @@ impl ProducerCache {
     }
 
     fn dispatch_collision(&self, record: CollisionEventRecord) {
-        let cb = self.collision_cb.cb.load(Ordering::Acquire);
         let mode = self.dispatch_mode();
         match mode {
             EventDispatchMode::Poll => {} // legacy Vec handles this
             EventDispatchMode::Callback | EventDispatchMode::Both => {
-                if cb != 0 {
-                    let cb: CollisionEventCallback =
-                        unsafe { std::mem::transmute(cb) };
-                    if let Some(f) = cb {
-                        unsafe {
-                            f(
-                                std::ptr::null(),
-                                &record as *const _,
-                                self.collision_cb.user_data.load(Ordering::Acquire) as *mut std::ffi::c_void,
-                            );
-                        }
+                let cb = *self.collision_cb.cb.lock();
+                if let Some(f) = cb {
+                    let world = self.world_ptr.load(Ordering::Acquire) as *const std::ffi::c_void;
+                    // SAFETY: `f` was registered as a valid `CollisionEventFn`;
+                    // `world` is the owning world's handle captured at
+                    // registration; `record` outlives the call.
+                    unsafe {
+                        f(
+                            world,
+                            &record as *const _,
+                            self.collision_cb.user_data.load(Ordering::Acquire) as *mut std::ffi::c_void,
+                        );
                     }
                 }
             }
@@ -352,22 +417,22 @@ impl ProducerCache {
     }
 
     fn dispatch_contact_force(&self, record: ContactForceEventRecord) {
-        let cb = self.contact_force_cb.cb.load(Ordering::Acquire);
         let mode = self.dispatch_mode();
         match mode {
             EventDispatchMode::Poll => {}
             EventDispatchMode::Callback | EventDispatchMode::Both => {
-                if cb != 0 {
-                    let cb: ContactForceEventCallback =
-                        unsafe { std::mem::transmute(cb) };
-                    if let Some(f) = cb {
-                        unsafe {
-                            f(
-                                std::ptr::null(),
-                                &record as *const _,
-                                self.contact_force_cb.user_data.load(Ordering::Acquire) as *mut std::ffi::c_void,
-                            );
-                        }
+                let cb = *self.contact_force_cb.cb.lock();
+                if let Some(f) = cb {
+                    let world = self.world_ptr.load(Ordering::Acquire) as *const std::ffi::c_void;
+                    // SAFETY: `f` was registered as a valid `ContactForceEventFn`;
+                    // `world` is the owning world's handle captured at
+                    // registration; `record` outlives the call.
+                    unsafe {
+                        f(
+                            world,
+                            &record as *const _,
+                            self.contact_force_cb.user_data.load(Ordering::Acquire) as *mut std::ffi::c_void,
+                        );
                     }
                 }
             }
@@ -761,19 +826,21 @@ pub extern "C" fn world_set_coulomb_friction_law(
     world: *mut WorldHandle,
     law: CoulombFrictionLaw,
 ) -> Bool {
-    let Some(world) = (unsafe { world.as_mut() }) else {
-        set_error(ERR_NULL_POINTER, "world is null");
-        return Bool::FALSE;
-    };
-    if !coulomb_law_valid(law) {
-        set_error(ERR_INVALID_ARGUMENT, "invalid Coulomb friction law");
-        return Bool::FALSE;
-    }
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !coulomb_law_valid(law) {
+            set_error(ERR_INVALID_ARGUMENT, "invalid Coulomb friction law");
+            return Bool::FALSE;
+        }
 
-    world.inner.events.custom_physics.write().coulomb_friction =
-        if law.enabled.0 != 0 { Some(law) } else { None };
-    clear_error();
-    Bool::TRUE
+        world.inner.events.custom_physics.write().coulomb_friction =
+            if law.enabled.0 != 0 { Some(law) } else { None };
+        clear_error();
+        Bool::TRUE
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -1223,6 +1290,13 @@ pub extern "C" fn world_clear_intersection_pair_filter_callback(world: *mut Worl
 /// Allocate a collision-event ring buffer of `capacity` records.
 /// Events will be written here during `world_step` instead of (or in addition to)
 /// the legacy Vec queue.  Java drains the ring buffer at its own pace.
+///
+/// # Safety
+///
+/// Init-time only: must be called before `world_step` runs on any thread and
+/// with no concurrent event-ring FFI calls on the same world.  Re-initializing
+/// the ring while the physics thread produces events is undefined behavior
+/// (the producer cache is an `UnsafeCell`).
 #[unsafe(no_mangle)]
 pub extern "C" fn world_init_collision_event_ring(
     world: *mut WorldHandle,
@@ -1245,6 +1319,10 @@ pub extern "C" fn world_init_collision_event_ring(
 }
 
 /// Allocate a contact-force-event ring buffer.
+///
+/// # Safety
+///
+/// Same init-time-only contract as `world_init_collision_event_ring`.
 #[unsafe(no_mangle)]
 pub extern "C" fn world_init_contact_force_event_ring(
     world: *mut WorldHandle,
@@ -1415,6 +1493,13 @@ pub extern "C" fn world_clear_event_rings(world: *mut WorldHandle) {
 /// `callback` is a C function pointer (zero = unregister).
 /// `user_data` is passed through unchanged to each invocation.
 /// Returns an opaque handle for later unregistration.
+///
+/// # Safety
+///
+/// Init-time only: must be called before `world_step` runs on any thread and
+/// with no concurrent event-ring/callback FFI calls on the same world.  The
+/// producer cache is an `UnsafeCell`; concurrent registration while the
+/// physics thread dispatches events is undefined behavior.
 #[unsafe(no_mangle)]
 pub extern "C" fn world_register_collision_callback(
     world: *mut WorldHandle,
@@ -1429,14 +1514,21 @@ pub extern "C" fn world_register_collision_callback(
     let pc = unsafe { &mut *world.inner.events.producer_cache.get() };
     let new_handle = pc.next_handle.load(Ordering::Relaxed).wrapping_add(1);
     pc.next_handle.store(new_handle, Ordering::Release);
-    pc.collision_cb.cb.store(callback, Ordering::Release);
+    *pc.collision_cb.cb.lock() = collision_callback_from_raw(callback);
     pc.collision_cb.user_data.store(user_data, Ordering::Release);
     pc.collision_cb.handle.store(new_handle, Ordering::Release);
+    // Capture the real world pointer so dispatch passes it to the callback.
+    pc.world_ptr
+        .store(world as *const WorldHandle as usize, Ordering::Release);
     clear_error();
     new_handle
 }
 
 /// Register a contact-force-event callback.
+///
+/// # Safety
+///
+/// Same init-time-only contract as `world_register_collision_callback`.
 #[unsafe(no_mangle)]
 pub extern "C" fn world_register_contact_force_callback(
     world: *mut WorldHandle,
@@ -1450,15 +1542,21 @@ pub extern "C" fn world_register_contact_force_callback(
     let pc = unsafe { &mut *world.inner.events.producer_cache.get() };
     let new_handle = pc.next_handle.load(Ordering::Relaxed).wrapping_add(1);
     pc.next_handle.store(new_handle, Ordering::Release);
-    pc.contact_force_cb.cb.store(callback, Ordering::Release);
+    *pc.contact_force_cb.cb.lock() = contact_force_callback_from_raw(callback);
     pc.contact_force_cb.user_data.store(user_data, Ordering::Release);
     pc.contact_force_cb.handle.store(new_handle, Ordering::Release);
+    pc.world_ptr
+        .store(world as *const WorldHandle as usize, Ordering::Release);
     clear_error();
     new_handle
 }
 
 /// Unregister a previously registered callback by its handle.
 /// Passing 0 or an invalid handle is a no-op.
+///
+/// # Safety
+///
+/// Same init-time-only contract as `world_register_collision_callback`.
 #[unsafe(no_mangle)]
 pub extern "C" fn world_unregister_callback(
     world: *mut WorldHandle,
@@ -1472,12 +1570,12 @@ pub extern "C" fn world_unregister_callback(
     }
     let pc = unsafe { &mut *world.inner.events.producer_cache.get() };
     if pc.collision_cb.handle.load(Ordering::Relaxed) == handle {
-        pc.collision_cb.cb.store(0, Ordering::Release);
+        *pc.collision_cb.cb.lock() = None;
         pc.collision_cb.user_data.store(0, Ordering::Release);
         pc.collision_cb.handle.store(0, Ordering::Release);
     }
     if pc.contact_force_cb.handle.load(Ordering::Relaxed) == handle {
-        pc.contact_force_cb.cb.store(0, Ordering::Release);
+        *pc.contact_force_cb.cb.lock() = None;
         pc.contact_force_cb.user_data.store(0, Ordering::Release);
         pc.contact_force_cb.handle.store(0, Ordering::Release);
     }
@@ -1489,6 +1587,10 @@ pub extern "C" fn world_unregister_callback(
 /// - `Poll` (0): legacy Vec queue only (default).
 /// - `Callback` (1): registered callbacks only.
 /// - `Both` (2): ring buffer + callbacks.
+///
+/// # Safety
+///
+/// Same init-time-only contract as `world_init_collision_event_ring`.
 #[unsafe(no_mangle)]
 pub extern "C" fn world_set_event_dispatch_mode(
     world: *mut WorldHandle,

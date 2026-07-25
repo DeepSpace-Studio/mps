@@ -1,5 +1,6 @@
-﻿use std::collections::BTreeMap;
+use std::collections::BTreeMap;
 
+use crate::rapier::error::ffi_guard;
 use crate::rapier::ffi::{
     AabbDesc, Bool, CRbTreeHandle, MAX_OUTPUT_CAPACITY, MAX_TREE_ENTRIES, Vec3,
 };
@@ -87,36 +88,44 @@ impl CRbTreeIndex {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn crb_tree_create() -> *mut CRbTreeHandle {
-    Box::into_raw(Box::new(CRbTreeHandle {
-        inner: CRbTreeIndex::new(),
-    }))
+    ffi_guard(std::ptr::null_mut(), || {
+        Box::into_raw(Box::new(CRbTreeHandle {
+            inner: CRbTreeIndex::new(),
+        }))
+    })
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn crb_tree_destroy(tree: *mut CRbTreeHandle) {
-    if tree.is_null() {
-        return;
-    }
+    ffi_guard((), || {
+        if tree.is_null() {
+            return;
+        }
 
-    unsafe {
-        drop(Box::from_raw(tree));
-    }
+        unsafe {
+            drop(Box::from_raw(tree));
+        }
+    })
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn crb_tree_clear(tree: *mut CRbTreeHandle) {
-    let Some(tree) = (unsafe { tree.as_mut() }) else {
-        return;
-    };
-    tree.inner.entries.clear();
+    ffi_guard((), || {
+        let Some(tree) = (unsafe { tree.as_mut() }) else {
+            return;
+        };
+        tree.inner.entries.clear();
+    })
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn crb_tree_len(tree: *const CRbTreeHandle) -> u32 {
-    let Some(tree) = (unsafe { tree.as_ref() }) else {
-        return 0;
-    };
-    tree.inner.entries.len().min(u32::MAX as usize) as u32
+    ffi_guard(0, || {
+        let Some(tree) = (unsafe { tree.as_ref() }) else {
+            return 0;
+        };
+        tree.inner.entries.len().min(u32::MAX as usize) as u32
+    })
 }
 
 #[unsafe(no_mangle)]

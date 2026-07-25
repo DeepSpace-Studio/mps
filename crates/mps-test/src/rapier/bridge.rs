@@ -1,4 +1,4 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use mps_core::rapier::bridge::*;
     use mps_core::rapier::ffi::*;
@@ -26,8 +26,9 @@ mod tests {
 
     #[test]
     fn direct_buffer_slice_null_returns_none() {
-        assert!(direct_double_buffer_as_slice(0, 10).is_none());
-        assert!(direct_byte_buffer_as_slice(0, 10).is_none());
+        // SAFETY: address 0 is rejected before any pointer is constructed.
+        assert!(unsafe { direct_double_buffer_as_slice(0, 10) }.is_none());
+        assert!(unsafe { direct_byte_buffer_as_slice(0, 10) }.is_none());
     }
 
     #[test]

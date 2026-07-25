@@ -1,4 +1,4 @@
-﻿//! Zero-copy memory bridge between Rust and Java.
+//! Zero-copy memory bridge between Rust and Java.
 //!
 //! ## Bottlenecks eliminated
 //!
@@ -46,7 +46,16 @@ use std::slice;
 /// long ptr = ((sun.nio.ch.DirectBuffer) buf).address();
 /// RigidBodyNative.worldBodySnapshot(world, handlesPtr, ptr, N);
 /// ```
-pub fn direct_double_buffer_as_slice(
+///
+/// # Safety
+///
+/// `address` must be the base address of a live, pinned Java DirectByteBuffer
+/// (direct buffers are never relocated by the GC) with at least
+/// `capacity_elements * size_of::<f64>()` readable and writable bytes. The
+/// buffer must outlive the returned slice, and no other live reference may
+/// alias the same region for the slice's lifetime (the caller must guarantee
+/// Java is not concurrently reading/writing it through another channel).
+pub unsafe fn direct_double_buffer_as_slice(
     address: i64,
     capacity_elements: i32,
 ) -> Option<&'static mut [f64]> {
@@ -54,13 +63,20 @@ pub fn direct_double_buffer_as_slice(
         return None;
     }
     let len = capacity_elements as usize;
-    // SAFETY: caller guarantees the buffer is pinned (Java DirectByteBuffer
-    // is never relocated by GC).
+    // SAFETY: upheld by the caller (see the # Safety contract above).
     Some(unsafe { slice::from_raw_parts_mut(address as *mut f64, len) })
 }
 
 /// Read a slice of `u8` from a Java DirectByteBuffer without copying.
-pub fn direct_byte_buffer_as_slice(
+///
+/// # Safety
+///
+/// `address` must be the base address of a live, pinned Java DirectByteBuffer
+/// with at least `capacity_bytes` readable bytes. The buffer must outlive the
+/// returned slice, and no `&mut` alias of the same region may exist while the
+/// slice is live (the caller must guarantee Java does not mutate the buffer
+/// concurrently).
+pub unsafe fn direct_byte_buffer_as_slice(
     address: i64,
     capacity_bytes: i32,
 ) -> Option<&'static [u8]> {
@@ -68,11 +84,19 @@ pub fn direct_byte_buffer_as_slice(
         return None;
     }
     let len = capacity_bytes as usize;
+    // SAFETY: upheld by the caller (see the # Safety contract above).
     Some(unsafe { slice::from_raw_parts(address as *const u8, len) })
 }
 
 /// Read a mutable slice of `u8` from a Java DirectByteBuffer.
-pub fn direct_byte_buffer_as_slice_mut(
+///
+/// # Safety
+///
+/// `address` must be the base address of a live, pinned Java DirectByteBuffer
+/// with at least `capacity_bytes` readable and writable bytes. The buffer
+/// must outlive the returned slice, and no other live reference may alias the
+/// same region for the slice's lifetime.
+pub unsafe fn direct_byte_buffer_as_slice_mut(
     address: i64,
     capacity_bytes: i32,
 ) -> Option<&'static mut [u8]> {
@@ -80,6 +104,7 @@ pub fn direct_byte_buffer_as_slice_mut(
         return None;
     }
     let len = capacity_bytes as usize;
+    // SAFETY: upheld by the caller (see the # Safety contract above).
     Some(unsafe { slice::from_raw_parts_mut(address as *mut u8, len) })
 }
 
@@ -172,7 +197,10 @@ pub fn bulk_body_snapshot_to_direct_buffer(
     out_address: i64,
     capacity_bodies: i32,
 ) -> i32 {
-    let Some(out) = direct_double_buffer_as_slice(out_address, capacity_bodies * 13) else {
+    // SAFETY: `out_address` comes from a Java DirectByteBuffer that the Java
+    // caller keeps alive and exclusively hands to native for this call.
+    let Some(out) = (unsafe { direct_double_buffer_as_slice(out_address, capacity_bodies * 13) })
+    else {
         return 0;
     };
 
@@ -247,6 +275,11 @@ pub fn get_byte_array_critical(
 // Minecraft-specific: chunk voxel data pipeline
 // ---------------------------------------------------------------------------
 
+/// Upper bound on voxels accepted from a single DirectByteBuffer, in the
+/// style of collider.rs's `MAX_HEIGHTMAP_CELLS`.  2^24 cells comfortably
+/// covers any real chunk/region grid (a full Minecraft chunk is ~98k).
+const MAX_VOXEL_CELLS: usize = 16_777_216;
+
 /// Copy Minecraft chunk voxel data from a DirectByteBuffer into a collider
 /// builder, zero-copy.
 pub fn voxel_collider_from_direct_buffer(
@@ -267,7 +300,21 @@ pub fn voxel_collider_from_direct_buffer(
     mesh_voxel_limit: i32,
 ) -> i64 {
     catch_unwind(AssertUnwindSafe(|| {
-        let Some(voxels) = direct_byte_buffer_as_slice(voxel_address, size_x * size_y * size_z) else {
+        // Validate dimensions before multiplying: `size_x * size_y * size_z`
+        // in i32 can wrap and produce a bogus (even negative-looking) slice
+        // length.
+        if size_x <= 0 || size_y <= 0 || size_z <= 0 {
+            return 0i64;
+        }
+        let voxel_count = (size_x as usize)
+            .checked_mul(size_y as usize)
+            .and_then(|n| n.checked_mul(size_z as usize));
+        let Some(voxel_count) = voxel_count.filter(|&n| n <= MAX_VOXEL_CELLS) else {
+            return 0i64;
+        };
+        // SAFETY: `voxel_address` comes from a Java DirectByteBuffer that the
+        // Java caller keeps alive and unmodified for the duration of this call.
+        let Some(voxels) = (unsafe { direct_byte_buffer_as_slice(voxel_address, voxel_count as i32) }) else {
             return 0i64;
         };
 

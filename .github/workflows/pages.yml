@@ -1,0 +1,98 @@
+name: Deploy MPS Web to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/mps-web/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build and export static site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-mps-web-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-mps-web-
+
+      - name: Build mps-web
+        run: cargo build -p mps-web --release
+
+      - name: Start server and export static pages
+        run: |
+          # Start the server in background
+          ./target/release/mps-web &
+          SERVER_PID=$!
+          sleep 3
+
+          # Create output directory
+          mkdir -p _site
+
+          # Export all pages
+          PAGES=(
+            "/"
+            "/quickstart"
+            "/architecture"
+            "/gravity"
+            "/integrators"
+            "/formula"
+            "/voxel"
+            "/events"
+            "/arena"
+            "/jni"
+            "/ffm"
+            "/api"
+          )
+
+          for page in "${PAGES[@]}"; do
+            echo "Exporting $page ..."
+            if [ "$page" = "/" ]; then
+              outfile="_site/index.html"
+            else
+              mkdir -p "_site${page}"
+              outfile="_site${page}/index.html"
+            fi
+            curl -sf -o "$outfile" "http://127.0.0.1:8080${page}"
+          done
+
+          # Kill the server
+          kill $SERVER_PID 2>/dev/null || true
+          wait $SERVER_PID 2>/dev/null || true
+
+          echo "Static export complete."
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
