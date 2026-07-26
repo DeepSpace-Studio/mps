@@ -101,21 +101,11 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      - name: Inject base URL for GitHub Pages subpath
-        run: |
-          BASE_URL="${{ steps.configure-pages.outputs.base_url }}"
-          echo "Base URL: $BASE_URL"
-          # Inject <base href="..."> so absolute paths like /quickstart
-          # resolve correctly under the subpath (e.g. /rigid-body/quickstart)
-          find _site -name '*.html' -exec \
-            sed -i "s|<head>|<head><base href=\"$BASE_URL\">|" {} +
-          echo "Base URL injected."
-
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: _site
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

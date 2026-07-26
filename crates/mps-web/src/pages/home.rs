@@ -19,8 +19,8 @@ pub async fn home() -> topcoat::Result {
                 <strong style="color:#e0e0e0;">"332 项测试"</strong> "、" <strong style="color:#e0e0e0;">"5 种引力模型"</strong> "、" <strong style="color:#e0e0e0;">"3 种辛积分器"</strong> "、" <strong style="color:#e0e0e0;">"共享内存零拷贝 Arena"</strong> "、" <strong style="color:#e0e0e0;">"28 个公式模块"</strong> " 和 " <strong style="color:#e0e0e0;">"10 个太阳系天体"</strong> "。"
             </p>
             <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
-                <a href="/quickstart" style="background:#4a9eff; color:#fff; padding:12px 24px; border-radius:6px; text-decoration:none; font-weight:500;">"快速入门"</a>
-                <a href="/api" style="border:1px solid #4a9eff; color:#4a9eff; padding:12px 24px; border-radius:6px; text-decoration:none; font-weight:500;">"API 参考"</a>
+                <a href="./quickstart" style="background:#4a9eff; color:#fff; padding:12px 24px; border-radius:6px; text-decoration:none; font-weight:500;">"快速入门"</a>
+                <a href="./api" style="border:1px solid #4a9eff; color:#4a9eff; padding:12px 24px; border-radius:6px; text-decoration:none; font-weight:500;">"API 参考"</a>
             </div>
         </div>
 
@@ -50,31 +50,31 @@ pub async fn home() -> topcoat::Result {
             <h2 style="font-size:24px; font-weight:300; color:#fff; margin:0 0 24px;">"模块目录"</h2>
 
             <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:16px;">
-                <a href="/architecture" style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px; text-decoration:none; color:#ccc; display:flex; flex-direction:column; gap:8px;">
+                <a href="./architecture" style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px; text-decoration:none; color:#ccc; display:flex; flex-direction:column; gap:8px;">
                     <span style="font-family:monospace; font-size:12px; color:#4a9eff;">"01"</span>
                     <strong style="font-size:16px; color:#fff;">"核心引擎"</strong>
                     <small style="font-size:13px; color:#888; line-height:1.5;">"World、刚体、碰撞体、关节、查询、控制器"</small>
                     <em style="font-style:normal; font-size:18px; color:#4a9eff; text-align:right; margin-top:auto;">"↗"</em>
                 </a>
-                <a href="/gravity" style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px; text-decoration:none; color:#ccc; display:flex; flex-direction:column; gap:8px;">
+                <a href="./gravity" style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px; text-decoration:none; color:#ccc; display:flex; flex-direction:column; gap:8px;">
                     <span style="font-family:monospace; font-size:12px; color:#4a9eff;">"02"</span>
                     <strong style="font-size:16px; color:#fff;">"物理系统"</strong>
                     <small style="font-size:13px; color:#888; line-height:1.5;">"引力、地形、力注册表、事件系统、空气动力学、流体"</small>
                     <em style="font-style:normal; font-size:18px; color:#4a9eff; text-align:right; margin-top:auto;">"↗"</em>
                 </a>
-                <a href="/formula" style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px; text-decoration:none; color:#ccc; display:flex; flex-direction:column; gap:8px;">
+                <a href="./formula" style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px; text-decoration:none; color:#ccc; display:flex; flex-direction:column; gap:8px;">
                     <span style="font-family:monospace; font-size:12px; color:#4a9eff;">"03"</span>
                     <strong style="font-size:16px; color:#fff;">"领域公式"</strong>
                     <small style="font-size:13px; color:#888; line-height:1.5;">"28 模块 — 航天、天体物理、核物理、相对论、量子等"</small>
                     <em style="font-style:normal; font-size:18px; color:#4a9eff; text-align:right; margin-top:auto;">"↗"</em>
                 </a>
-                <a href="/arena" style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px; text-decoration:none; color:#ccc; display:flex; flex-direction:column; gap:8px;">
+                <a href="./arena" style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px; text-decoration:none; color:#ccc; display:flex; flex-direction:column; gap:8px;">
                     <span style="font-family:monospace; font-size:12px; color:#4a9eff;">"04"</span>
                     <strong style="font-size:16px; color:#fff;">"集成方案"</strong>
                     <small style="font-size:13px; color:#888; line-height:1.5;">"Arena 共享内存、JNI/FFM 绑定、Java 生态"</small>
                     <em style="font-style:normal; font-size:18px; color:#4a9eff; text-align:right; margin-top:auto;">"↗"</em>
                 </a>
-                <a href="/api" style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px; text-decoration:none; color:#ccc; display:flex; flex-direction:column; gap:8px;">
+                <a href="./api" style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px; text-decoration:none; color:#ccc; display:flex; flex-direction:column; gap:8px;">
                     <span style="font-family:monospace; font-size:12px; color:#4a9eff;">"05"</span>
                     <strong style="font-size:16px; color:#fff;">"参考资料"</strong>
                     <small style="font-size:13px; color:#888; line-height:1.5;">"完整 API 表、精度与性能、优化指南"</small>

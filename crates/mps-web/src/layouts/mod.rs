@@ -52,17 +52,17 @@ html[data-lang="en"] [data-lang="zh"] { display: none; }
             </head>
             <body>
                 <header style="background:#1a1a2e; border-bottom:1px solid #333; padding:10px 20px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap;">
-                    <a href="/" style="display:flex; align-items:center; gap:12px; color:#fff; text-decoration:none; font-size:18px; font-weight:600;">
+                    <a href="./" style="display:flex; align-items:center; gap:12px; color:#fff; text-decoration:none; font-size:18px; font-weight:600;">
                         <span style="background:#4a9eff; color:#1a1a2e; padding:4px 10px; border-radius:4px; font-weight:700; letter-spacing:1px;">"MPS"</span>
                         <span style="color:#999; font-weight:400; font-size:14px;">"PHYSICS / 0.1.4"</span>
                     </a>
                     <nav style="display:flex; gap:2px; flex-wrap:wrap;">
-                        <a href="/" style="color:#bbb; padding:8px 14px; font-size:13px; border-radius:4px; text-decoration:none;"><span data-lang="zh">"首页"</span><span data-lang="en">"HOME"</span></a>
-                        <a href="/quickstart" style="color:#bbb; padding:8px 14px; font-size:13px; border-radius:4px; text-decoration:none;"><span data-lang="zh">"快速入门"</span><span data-lang="en">"QUICKSTART"</span></a>
-                        <a href="/architecture" style="color:#bbb; padding:8px 14px; font-size:13px; border-radius:4px; text-decoration:none;"><span data-lang="zh">"架构"</span><span data-lang="en">"ARCHITECTURE"</span></a>
-                        <a href="/gravity" style="color:#bbb; padding:8px 14px; font-size:13px; border-radius:4px; text-decoration:none;"><span data-lang="zh">"引力模型"</span><span data-lang="en">"GRAVITY"</span></a>
-                        <a href="/formula" style="color:#bbb; padding:8px 14px; font-size:13px; border-radius:4px; text-decoration:none;"><span data-lang="zh">"公式模块"</span><span data-lang="en">"FORMULA"</span></a>
-                        <a href="/api" style="color:#bbb; padding:8px 14px; font-size:13px; border-radius:4px; text-decoration:none;"><span data-lang="zh">"API"</span><span data-lang="en">"API"</span></a>
+                        <a href="./" style="color:#bbb; padding:8px 14px; font-size:13px; border-radius:4px; text-decoration:none;"><span data-lang="zh">"首页"</span><span data-lang="en">"HOME"</span></a>
+                        <a href="./quickstart" style="color:#bbb; padding:8px 14px; font-size:13px; border-radius:4px; text-decoration:none;"><span data-lang="zh">"快速入门"</span><span data-lang="en">"QUICKSTART"</span></a>
+                        <a href="./architecture" style="color:#bbb; padding:8px 14px; font-size:13px; border-radius:4px; text-decoration:none;"><span data-lang="zh">"架构"</span><span data-lang="en">"ARCHITECTURE"</span></a>
+                        <a href="./gravity" style="color:#bbb; padding:8px 14px; font-size:13px; border-radius:4px; text-decoration:none;"><span data-lang="zh">"引力模型"</span><span data-lang="en">"GRAVITY"</span></a>
+                        <a href="./formula" style="color:#bbb; padding:8px 14px; font-size:13px; border-radius:4px; text-decoration:none;"><span data-lang="zh">"公式模块"</span><span data-lang="en">"FORMULA"</span></a>
+                        <a href="./api" style="color:#bbb; padding:8px 14px; font-size:13px; border-radius:4px; text-decoration:none;"><span data-lang="zh">"API"</span><span data-lang="en">"API"</span></a>
                     </nav>
                     <div>
                         <select onchange="var lang=this.value;document.documentElement.lang=lang==='zh'?'zh-CN':'en';document.documentElement.dataset.lang=lang;localStorage.setItem('mps-lang',lang);document.querySelectorAll('[data-lang]').forEach(function(el){el.hidden=el.dataset.lang!==lang;});" style="background:#333; color:#ddd; border:1px solid #555; padding:4px 8px; border-radius:4px; font-size:12px;">
