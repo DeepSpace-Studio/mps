@@ -37,10 +37,23 @@ jobs:
 
       - name: Start server and export static pages
         run: |
-          # Start the server in background
-          ./target/release/mps-web &
+          # Start the server in background on port 8080
+          PORT=8080 ./target/release/mps-web &
           SERVER_PID=$!
-          sleep 3
+
+          # Wait for the server to be ready (retry up to 10 times)
+          for i in $(seq 1 10); do
+            if curl -sf -o /dev/null "http://127.0.0.1:8080/" 2>/dev/null; then
+              echo "Server ready after ${i}s"
+              break
+            fi
+            if [ "$i" = "10" ]; then
+              echo "Server failed to start"
+              kill $SERVER_PID 2>/dev/null || true
+              exit 1
+            fi
+            sleep 1
+          done
 
           # Create output directory
           mkdir -p _site
@@ -69,7 +82,11 @@ jobs:
               mkdir -p "_site${page}"
               outfile="_site${page}/index.html"
             fi
-            curl -sf -o "$outfile" "http://127.0.0.1:8080${page}"
+            if ! curl -sf -o "$outfile" "http://127.0.0.1:8080${page}"; then
+              echo "ERROR: Failed to export $page"
+              kill $SERVER_PID 2>/dev/null || true
+              exit 1
+            fi
           done
 
           # Kill the server
