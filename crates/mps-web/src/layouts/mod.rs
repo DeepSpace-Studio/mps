@@ -50,12 +50,25 @@ html[data-lang="en"] [data-lang="zh"] { display: none; }
 })();
 "#;
 
+    // Base path for deployments under a sub-path (e.g. GitHub Pages project
+    // sites). Set MPS_BASE_PATH="/rigid-body/" when exporting so relative
+    // links like ./quickstart resolve under the sub-path instead of the
+    // domain root. Empty/unset means no <base> tag (local dev at /).
+    let base_path = std::env::var("MPS_BASE_PATH").unwrap_or_default();
+    let base_path = base_path.trim().trim_matches('/');
+    let base_tag = if base_path.is_empty() {
+        String::new()
+    } else {
+        format!("<base href=\"/{base_path}/\">")
+    };
+
     topcoat::view::view! {
         <!DOCTYPE html>
         <html lang="zh-CN">
             <head>
                 <meta charset="utf-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                (topcoat::view::Unescaped::new_unchecked(base_tag))
                 <title>"MPS Motion Physics System"</title>
                 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
                 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>

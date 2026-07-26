@@ -38,7 +38,15 @@ jobs:
       - name: Build mps-web
         run: cargo build -p mps-web --release
 
+      - name: Setup Pages
+        id: configure-pages
+        uses: actions/configure-pages@v5
+
       - name: Start server and export static pages
+        env:
+          # Serve pages with <base href="/<repo>/"> so relative links like
+          # ./quickstart resolve under the GitHub Pages sub-path.
+          MPS_BASE_PATH: ${{ steps.configure-pages.outputs.base_path }}/
         run: |
           # Start the server in background on port 8080
           PORT=8080 ./target/release/mps-web &
@@ -97,20 +105,6 @@ jobs:
           wait $SERVER_PID 2>/dev/null || true
 
           echo "Static export complete."
-
-      - name: Setup Pages
-        id: configure-pages
-        uses: actions/configure-pages@v5
-
-      - name: Inject base URL for GitHub Pages subpath
-        run: |
-          BASE_URL="${{ steps.configure-pages.outputs.base_url }}"
-          echo "Base URL: $BASE_URL"
-          # Inject <base href="..."> so relative paths like ./quickstart
-          # resolve correctly under the subpath (e.g. /rigid-body/quickstart)
-          find _site -name '*.html' -exec \
-            sed -i "s|<head>|<head><base href=\"$BASE_URL\">|" {} +
-          echo "Base URL injected."
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4
