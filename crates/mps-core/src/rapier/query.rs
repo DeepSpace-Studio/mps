@@ -2,7 +2,9 @@ use rapier3d::geometry::{Aabb, Ray};
 use rapier3d::parry::shape::FeatureId;
 use rapier3d::prelude::SharedShape;
 
-use crate::rapier::error::{ERR_CAPACITY, ERR_NULL_POINTER, clear_error, ffi_guard, set_error};
+use crate::rapier::error::{
+    ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, ffi_guard, set_error,
+};
 use crate::rapier::ffi::{
     AabbDesc, Bool, ColliderHandleRaw, MAX_OUTPUT_CAPACITY, Obb, PointProjection, QueryFilterDesc,
     RayHit, ShapeCastHit, ShapeCastOptionsDesc, ShapeDesc, Sphere, Vec3, WorldHandle,
@@ -66,6 +68,9 @@ fn identity_rotation() -> crate::rapier::ffi::Quat {
     }
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_cast_ray(
     world: *const WorldHandle,
@@ -77,10 +82,12 @@ pub extern "C" fn query_cast_ray(
 ) -> RayHit {
     ffi_guard(Default::default(), || {
         let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
             return RayHit::default();
         };
         if !vec3_finite(origin) || !vec3_finite(direction) || !max_toi.is_finite() || max_toi < 0.0
         {
+            set_error(ERR_INVALID_ARGUMENT, "invalid ray parameters");
             return RayHit::default();
         }
 
@@ -92,6 +99,7 @@ pub extern "C" fn query_cast_ray(
         );
         let ray = Ray::new(vec3_to_rapier(origin), vec3_to_rapier(direction));
 
+        clear_error();
         query
             .cast_ray_and_get_normal(&ray, max_toi, solid.0 != 0)
             .map(|(handle, hit)| RayHit {
@@ -104,6 +112,10 @@ pub extern "C" fn query_cast_ray(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle; `out_hit` may be null or must point
+/// to writable space for one `RayHit`.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_cast_ray_out(
     world: *const WorldHandle,
@@ -123,6 +135,10 @@ pub extern "C" fn query_cast_ray_out(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle; `rays` must point to `ray_count * 6`
+/// `f64` values and `out_hits` to writable space for `capacity` `RayHit`s.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_cast_rays(
     world: *const WorldHandle,
@@ -181,6 +197,10 @@ pub extern "C" fn query_cast_rays(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle; `out_collider` may be null or must
+/// point to writable space for one collider handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_project_point(
     world: *const WorldHandle,
@@ -192,9 +212,11 @@ pub extern "C" fn query_project_point(
 ) -> PointProjection {
     ffi_guard(Default::default(), || {
         let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
             return PointProjection::default();
         };
         if !vec3_finite(point) || !max_dist.is_finite() || max_dist < 0.0 {
+            set_error(ERR_INVALID_ARGUMENT, "invalid point projection parameters");
             return PointProjection::default();
         }
 
@@ -208,6 +230,7 @@ pub extern "C" fn query_project_point(
         let Some((handle, projection)) =
             query.project_point(vec3_to_rapier(point), max_dist, solid.0 != 0)
         else {
+            clear_error();
             return PointProjection::default();
         };
 
@@ -215,6 +238,7 @@ pub extern "C" fn query_project_point(
             *out_collider = pack_collider_handle(handle);
         }
 
+        clear_error();
         PointProjection {
             point: vec3_from_rapier(projection.point),
             is_inside: projection.is_inside.into(),
@@ -222,6 +246,10 @@ pub extern "C" fn query_project_point(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle; `out_collider` and `out_projection`
+/// may be null or must point to writable space for one value each.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_project_point_out(
     world: *const WorldHandle,
@@ -246,6 +274,9 @@ pub extern "C" fn query_project_point_out(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_point_count(
     world: *const WorldHandle,
@@ -254,9 +285,11 @@ pub extern "C" fn query_intersect_point_count(
 ) -> u32 {
     ffi_guard(0, || {
         let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
         if !vec3_finite(point) {
+            set_error(ERR_INVALID_ARGUMENT, "invalid query point");
             return 0;
         }
 
@@ -267,10 +300,14 @@ pub extern "C" fn query_intersect_point_count(
             query_filter_from_desc(filter),
         );
 
+        clear_error();
         query.intersect_point(vec3_to_rapier(point)).count() as u32
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_aabb_count(
     world: *const WorldHandle,
@@ -279,9 +316,11 @@ pub extern "C" fn query_intersect_aabb_count(
 ) -> u32 {
     ffi_guard(0, || {
         let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
         if !aabb_valid(aabb) {
+            set_error(ERR_INVALID_ARGUMENT, "invalid AABB parameters");
             return 0;
         }
 
@@ -292,12 +331,17 @@ pub extern "C" fn query_intersect_aabb_count(
             query_filter_from_desc(filter),
         );
 
+        clear_error();
         query
             .intersect_aabb_conservative(aabb_to_rapier(aabb))
             .count() as u32
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle and `out_handles` must point to
+/// writable space for at least `capacity` collider handles.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_aabb(
     world: *const WorldHandle,
@@ -308,13 +352,19 @@ pub extern "C" fn query_intersect_aabb(
 ) -> u32 {
     ffi_guard(0, || {
         let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
-        if out_handles.is_null()
-            || capacity == 0
-            || capacity > MAX_OUTPUT_CAPACITY
-            || !aabb_valid(aabb)
-        {
+        if out_handles.is_null() {
+            set_error(ERR_NULL_POINTER, "output handle buffer is null");
+            return 0;
+        }
+        if capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
+            set_error(ERR_CAPACITY, "invalid output capacity");
+            return 0;
+        }
+        if !aabb_valid(aabb) {
+            set_error(ERR_INVALID_ARGUMENT, "invalid AABB parameters");
             return 0;
         }
 
@@ -335,10 +385,14 @@ pub extern "C" fn query_intersect_aabb(
             written += 1;
         }
 
+        clear_error();
         written as u32
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_aabb_count_all(world: *const WorldHandle, aabb: AabbDesc) -> u32 {
     ffi_guard(0, || {
@@ -346,6 +400,10 @@ pub extern "C" fn query_intersect_aabb_count_all(world: *const WorldHandle, aabb
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle; `aabbs` must point to `query_count`
+/// `AabbDesc` values and `out_counts` to writable space for `capacity` `u32`s.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_aabb_counts(
     world: *const WorldHandle,
@@ -380,6 +438,9 @@ pub extern "C" fn query_intersect_aabb_counts(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_obb_count(
     world: *const WorldHandle,
@@ -388,9 +449,11 @@ pub extern "C" fn query_intersect_obb_count(
 ) -> u32 {
     ffi_guard(0, || {
         let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
         let Some(shape) = obb_shape(obb) else {
+            set_error(ERR_INVALID_ARGUMENT, "invalid OBB parameters");
             return 0;
         };
 
@@ -401,6 +464,7 @@ pub extern "C" fn query_intersect_obb_count(
             query_filter_from_desc(filter),
         );
 
+        clear_error();
         query
             .intersect_shape(
                 crate::rapier::ffi::isometry_from_parts(obb.center, obb.rotation),
@@ -410,11 +474,20 @@ pub extern "C" fn query_intersect_obb_count(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_obb_count_all(world: *const WorldHandle, obb: Obb) -> u32 {
-    ffi_guard(0, || query_intersect_obb_count(world, obb, QueryFilterDesc::default()))
+    ffi_guard(0, || {
+        query_intersect_obb_count(world, obb, QueryFilterDesc::default())
+    })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle; `obbs` must point to `query_count`
+/// `Obb` values and `out_counts` to writable space for `capacity` `u32`s.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_obb_counts(
     world: *const WorldHandle,
@@ -449,6 +522,10 @@ pub extern "C" fn query_intersect_obb_counts(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle and `out_handles` must point to
+/// writable space for at least `capacity` collider handles.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_obb(
     world: *const WorldHandle,
@@ -459,12 +536,19 @@ pub extern "C" fn query_intersect_obb(
 ) -> u32 {
     ffi_guard(0, || {
         let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
-        if out_handles.is_null() || capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
+        if out_handles.is_null() {
+            set_error(ERR_NULL_POINTER, "output handle buffer is null");
+            return 0;
+        }
+        if capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
+            set_error(ERR_CAPACITY, "invalid output capacity");
             return 0;
         }
         let Some(shape) = obb_shape(obb) else {
+            set_error(ERR_INVALID_ARGUMENT, "invalid OBB parameters");
             return 0;
         };
 
@@ -488,10 +572,15 @@ pub extern "C" fn query_intersect_obb(
             written += 1;
         }
 
+        clear_error();
         written as u32
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle and `out_handles` must point to
+/// writable space for at least `capacity` collider handles.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_obb_all(
     world: *const WorldHandle,
@@ -510,6 +599,9 @@ pub extern "C" fn query_intersect_obb_all(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_sphere_count(
     world: *const WorldHandle,
@@ -518,9 +610,11 @@ pub extern "C" fn query_intersect_sphere_count(
 ) -> u32 {
     ffi_guard(0, || {
         let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
         let Some(shape) = sphere_shape(sphere) else {
+            set_error(ERR_INVALID_ARGUMENT, "invalid sphere parameters");
             return 0;
         };
 
@@ -531,6 +625,7 @@ pub extern "C" fn query_intersect_sphere_count(
             query_filter_from_desc(filter),
         );
 
+        clear_error();
         query
             .intersect_shape(
                 crate::rapier::ffi::isometry_from_parts(sphere.center, identity_rotation()),
@@ -540,6 +635,9 @@ pub extern "C" fn query_intersect_sphere_count(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_sphere_count_all(
     world: *const WorldHandle,
@@ -550,6 +648,10 @@ pub extern "C" fn query_intersect_sphere_count_all(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle; `spheres` must point to `query_count`
+/// `Sphere` values and `out_counts` to writable space for `capacity` `u32`s.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_sphere_counts(
     world: *const WorldHandle,
@@ -584,6 +686,10 @@ pub extern "C" fn query_intersect_sphere_counts(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle and `out_handles` must point to
+/// writable space for at least `capacity` collider handles.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_sphere(
     world: *const WorldHandle,
@@ -594,12 +700,19 @@ pub extern "C" fn query_intersect_sphere(
 ) -> u32 {
     ffi_guard(0, || {
         let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
-        if out_handles.is_null() || capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
+        if out_handles.is_null() {
+            set_error(ERR_NULL_POINTER, "output handle buffer is null");
+            return 0;
+        }
+        if capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
+            set_error(ERR_CAPACITY, "invalid output capacity");
             return 0;
         }
         let Some(shape) = sphere_shape(sphere) else {
+            set_error(ERR_INVALID_ARGUMENT, "invalid sphere parameters");
             return 0;
         };
 
@@ -623,10 +736,15 @@ pub extern "C" fn query_intersect_sphere(
             written += 1;
         }
 
+        clear_error();
         written as u32
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle and `out_handles` must point to
+/// writable space for at least `capacity` collider handles.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_sphere_all(
     world: *const WorldHandle,
@@ -645,6 +763,9 @@ pub extern "C" fn query_intersect_sphere_all(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_aabb_rigid_body_count_all(
     world: *const WorldHandle,
@@ -659,6 +780,10 @@ pub extern "C" fn query_intersect_aabb_rigid_body_count_all(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle and `out_handles` must point to
+/// writable space for at least `capacity` rigid body handles.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_aabb_rigid_bodies_all(
     world: *const WorldHandle,
@@ -677,6 +802,9 @@ pub extern "C" fn query_intersect_aabb_rigid_bodies_all(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_cast_shape(
     world: *const WorldHandle,
@@ -689,6 +817,7 @@ pub extern "C" fn query_cast_shape(
 ) -> ShapeCastHit {
     ffi_guard(Default::default(), || {
         let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
             return ShapeCastHit::default();
         };
         if !shape_desc_valid(shape_desc)
@@ -700,6 +829,7 @@ pub extern "C" fn query_cast_shape(
             || options.max_time_of_impact < 0.0
             || options.target_distance < 0.0
         {
+            set_error(ERR_INVALID_ARGUMENT, "invalid shape cast parameters");
             return ShapeCastHit::default();
         }
 
@@ -711,6 +841,7 @@ pub extern "C" fn query_cast_shape(
         );
         let shape = shape_from_desc(shape_desc);
 
+        clear_error();
         query
             .cast_shape(
                 &crate::rapier::ffi::isometry_from_parts(translation, rotation),
@@ -731,6 +862,10 @@ pub extern "C" fn query_cast_shape(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle; `out_hit` may be null or must point
+/// to writable space for one `ShapeCastHit`.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_cast_shape_out(
     world: *const WorldHandle,

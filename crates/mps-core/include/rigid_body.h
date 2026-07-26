@@ -10,6 +10,20 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#define ERR_OK 0
+
+#define ERR_NULL_POINTER 1
+
+#define ERR_INVALID_ARGUMENT 2
+
+#define ERR_NOT_FOUND 3
+
+#define ERR_CAPACITY 4
+
+#define ERR_UNSUPPORTED 5
+
+#define ERR_INTERNAL 6
+
 /**
  * Gravitational constant (N·m²/kg²).
  */
@@ -105,6 +119,15 @@ typedef struct LunarMascon {
 extern "C" {
 #endif // __cplusplus
 
+/**
+ * Apply aerodynamic forces from a set of surfaces to a rigid body.
+ *
+ * # Safety
+ *
+ * `world` must be a valid, live world pointer; `surfaces` must point to at
+ * least `surface_count` readable `AeroSurface`s; `out_report`, when
+ * non-null, must be valid for a single `AeroForceReport` write.
+ */
 Bool aero_apply_surfaces(struct WorldHandle *world,
                          RigidBodyHandleRaw body_handle,
                          Vec3 wind_velocity,
@@ -114,6 +137,15 @@ Bool aero_apply_surfaces(struct WorldHandle *world,
                          Bool wake_up,
                          AeroForceReport *out_report);
 
+/**
+ * Apply aerodynamic forces derived from a voxel grid to a rigid body.
+ *
+ * # Safety
+ *
+ * `world` must be a valid, live world pointer; `voxels` must point to at
+ * least size_x×size_y×size_z readable bytes; `out_report`, when non-null,
+ * must be valid for a single `AeroForceReport` write.
+ */
 Bool aero_apply_voxel_grid(struct WorldHandle *world,
                            RigidBodyHandleRaw body_handle,
                            Vec3 wind_velocity,
@@ -129,6 +161,13 @@ Bool aero_apply_voxel_grid(struct WorldHandle *world,
                            Bool wake_up,
                            AeroForceReport *out_report);
 
+/**
+ * Flag-returning variant of `aero_apply_voxel_grid`.
+ *
+ * # Safety
+ *
+ * Same pointer contract as `aero_apply_voxel_grid`.
+ */
 uint8_t aero_apply_voxel_grid_flag(struct WorldHandle *world,
                                    RigidBodyHandleRaw body_handle,
                                    Vec3 wind_velocity,
@@ -144,6 +183,13 @@ uint8_t aero_apply_voxel_grid_flag(struct WorldHandle *world,
                                    Bool wake_up,
                                    AeroForceReport *out_report);
 
+/**
+ * Flag-returning variant of `aero_apply_surfaces`.
+ *
+ * # Safety
+ *
+ * Same pointer contract as `aero_apply_surfaces`.
+ */
 uint8_t aero_apply_surfaces_flag(struct WorldHandle *world,
                                  RigidBodyHandleRaw body_handle,
                                  Vec3 wind_velocity,
@@ -153,6 +199,14 @@ uint8_t aero_apply_surfaces_flag(struct WorldHandle *world,
                                  Bool wake_up,
                                  AeroForceReport *out_report);
 
+/**
+ * Estimate the aerodynamic force of a single surface without a world.
+ *
+ * # Safety
+ *
+ * `out_report`, when non-null, must be valid for a single `AeroForceReport`
+ * write.
+ */
 Bool aero_estimate_surface_force(Vec3 body_linvel,
                                  Vec3 body_angvel,
                                  Vec3 body_center,
@@ -163,38 +217,92 @@ Bool aero_estimate_surface_force(Vec3 body_linvel,
 
 struct AnvilKitAppHandle *anvilkit_app_create(void);
 
+/**
+ * # Safety
+ *
+ * `app` must be null or a handle returned by `anvilkit_app_create` that has
+ * not been destroyed yet; ownership transfers back to Rust and the handle is
+ * invalid after this call.
+ */
 void anvilkit_app_destroy(struct AnvilKitAppHandle *app);
 
+/**
+ * # Safety
+ *
+ * `app` must be null or a valid handle returned by `anvilkit_app_create`.
+ */
 void anvilkit_app_update(struct AnvilKitAppHandle *app);
 
+/**
+ * # Safety
+ *
+ * `app` must be null or a valid handle returned by `anvilkit_app_create`.
+ */
 uint64_t anvilkit_app_spawn_body(struct AnvilKitAppHandle *app,
                                  Vec3 translation,
                                  Quat rotation,
                                  uint32_t status);
 
+/**
+ * # Safety
+ *
+ * `app` must be null or a valid handle returned by `anvilkit_app_create`.
+ */
 uint64_t anvilkit_app_spawn_body_with_collider(struct AnvilKitAppHandle *app,
                                                Vec3 translation,
                                                Quat rotation,
                                                uint32_t status,
                                                ShapeDesc shape);
 
+/**
+ * # Safety
+ *
+ * `app` must be null or a valid handle returned by `anvilkit_app_create`.
+ */
 Bool anvilkit_app_set_transform(struct AnvilKitAppHandle *app,
                                 uint64_t entity_bits,
                                 Vec3 translation,
                                 Quat rotation);
 
+/**
+ * # Safety
+ *
+ * `app` must be null or a valid handle returned by `anvilkit_app_create`.
+ */
 Bool anvilkit_app_set_material(struct AnvilKitAppHandle *app,
                                uint64_t entity_bits,
                                MaterialProperties material);
 
+/**
+ * # Safety
+ *
+ * `app` and `world` must be null or valid handles returned by
+ * `anvilkit_app_create` / the world-creation ABI.
+ */
 uint32_t anvilkit_app_sync_to_world(struct AnvilKitAppHandle *app, struct WorldHandle *world);
 
+/**
+ * # Safety
+ *
+ * `app` must be null or a valid handle returned by `anvilkit_app_create`.
+ */
 RigidBodyHandleRaw anvilkit_app_entity_to_body(const struct AnvilKitAppHandle *app,
                                                uint64_t entity_bits);
 
+/**
+ * # Safety
+ *
+ * `app` must be null or a valid handle returned by `anvilkit_app_create`.
+ */
 ColliderHandleRaw anvilkit_app_entity_to_collider(const struct AnvilKitAppHandle *app,
                                                   uint64_t entity_bits);
 
+/**
+ * # Safety
+ *
+ * `app` and `world` must be null or valid handles returned by
+ * `anvilkit_app_create` / the world-creation ABI.
+ */
 uint64_t anvilkit_app_create_constraint(struct AnvilKitAppHandle *app,
                                         struct WorldHandle *world,
                                         uint64_t entity1_bits,
@@ -205,14 +313,32 @@ uint64_t anvilkit_app_create_constraint(struct AnvilKitAppHandle *app,
                                         double c,
                                         Bool wake_up);
 
+/**
+ * # Safety
+ *
+ * `app` must be null or a valid handle returned by `anvilkit_app_create`.
+ */
 ImpulseJointHandleRaw anvilkit_app_constraint_to_joint(const struct AnvilKitAppHandle *app,
                                                        uint64_t constraint_id);
 
+/**
+ * # Safety
+ *
+ * `app` and `world` must be null or valid handles returned by
+ * `anvilkit_app_create` / the world-creation ABI.
+ */
 Bool anvilkit_app_remove_constraint(struct AnvilKitAppHandle *app,
                                     struct WorldHandle *world,
                                     uint64_t constraint_id,
                                     Bool wake_up);
 
+/**
+ * # Safety
+ *
+ * `app` and `world` must be null or valid handles. `surfaces` must point to
+ * `surface_count` readable `AeroSurface` entries, and `out_report` must be
+ * null or point to a valid, writable `AeroForceReport`.
+ */
 Bool anvilkit_app_apply_aero_surfaces(struct AnvilKitAppHandle *app,
                                       struct WorldHandle *world,
                                       uint64_t entity_bits,
@@ -223,6 +349,13 @@ Bool anvilkit_app_apply_aero_surfaces(struct AnvilKitAppHandle *app,
                                       Bool wake_up,
                                       AeroForceReport *out_report);
 
+/**
+ * # Safety
+ *
+ * `app` and `world` must be null or valid handles. `voxels` must point to at
+ * least `size_x * size_y * size_z` readable bytes, and `out_report` must be
+ * null or point to a valid, writable `AeroForceReport`.
+ */
 Bool anvilkit_app_apply_aero_voxel_grid(struct AnvilKitAppHandle *app,
                                         struct WorldHandle *world,
                                         uint64_t entity_bits,
@@ -239,6 +372,12 @@ Bool anvilkit_app_apply_aero_voxel_grid(struct AnvilKitAppHandle *app,
                                         Bool wake_up,
                                         AeroForceReport *out_report);
 
+/**
+ * # Safety
+ *
+ * `app` and `world` must be null or valid handles. `out_report` must be null
+ * or point to a valid, writable `FluidForceReport`.
+ */
 Bool anvilkit_app_apply_fluid_aabb_forces(struct AnvilKitAppHandle *app,
                                           struct WorldHandle *world,
                                           uint64_t entity_bits,
@@ -248,6 +387,12 @@ Bool anvilkit_app_apply_fluid_aabb_forces(struct AnvilKitAppHandle *app,
                                           Bool wake_up,
                                           FluidForceReport *out_report);
 
+/**
+ * # Safety
+ *
+ * `app` and `world` must be null or valid handles. `out_report` must be null
+ * or point to a valid, writable `TrajectoryForceReport`.
+ */
 Bool anvilkit_app_apply_trajectory_forces(struct AnvilKitAppHandle *app,
                                           struct WorldHandle *world,
                                           uint64_t entity_bits,
@@ -255,6 +400,11 @@ Bool anvilkit_app_apply_trajectory_forces(struct AnvilKitAppHandle *app,
                                           Bool wake_up,
                                           TrajectoryForceReport *out_report);
 
+/**
+ * # Safety
+ *
+ * `out_report` must be null or point to a valid, writable `StressStrainReport`.
+ */
 Bool material_stress_strain_linear(MaterialProperties material,
                                    double strain,
                                    double delta_temperature,
@@ -262,6 +412,11 @@ Bool material_stress_strain_linear(MaterialProperties material,
 
 double material_elastic_collision_relative_speed(double relative_normal_speed, double restitution);
 
+/**
+ * # Safety
+ *
+ * `out_report` must be null or point to a valid, writable `HertzContactReport`.
+ */
 Bool material_hertz_contact_force(MaterialProperties material1,
                                   MaterialProperties material2,
                                   double radius1,
@@ -271,116 +426,284 @@ Bool material_hertz_contact_force(MaterialProperties material1,
                                   double damping,
                                   HertzContactReport *out_report);
 
+/**
+ * # Safety
+ *
+ * The returned builder is owned by the caller and must be consumed by
+ * `collider_builder_build` or freed with `collider_builder_destroy`.
+ */
 struct ColliderBuilderHandle *collider_builder_create_capsule(Capsule capsule);
 
+/**
+ * # Safety
+ *
+ * The returned builder is owned by the caller and must be consumed by
+ * `collider_builder_build` or freed with `collider_builder_destroy`.
+ */
 struct ColliderBuilderHandle *collider_builder_create_ssv(Ssv ssv);
 
+/**
+ * # Safety
+ *
+ * The returned builder is owned by the caller and must be consumed by
+ * `collider_builder_build` or freed with `collider_builder_destroy`.
+ */
 struct ColliderBuilderHandle *collider_builder_create_ellipsoid(Ellipsoid ellipsoid);
 
+/**
+ * # Safety
+ *
+ * The returned builder is owned by the caller and must be consumed by
+ * `collider_builder_build` or freed with `collider_builder_destroy`.
+ */
 struct ColliderBuilderHandle *collider_builder_create_prism(Prism prism);
 
+/**
+ * # Safety
+ *
+ * The returned builder is owned by the caller and must be consumed by
+ * `collider_builder_build` or freed with `collider_builder_destroy`.
+ */
 struct ColliderBuilderHandle *collider_builder_create_cylinder(Cylinder cylinder);
 
+/**
+ * # Safety
+ *
+ * The returned builder is owned by the caller and must be consumed by
+ * `collider_builder_build` or freed with `collider_builder_destroy`.
+ */
 struct ColliderBuilderHandle *collider_builder_create_spherical_shell(SphericalShell shell);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle.
+ */
 uint32_t query_intersect_capsule_count(const struct WorldHandle *world,
                                        Capsule capsule,
                                        QueryFilterDesc filter);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle.
+ */
 uint32_t query_intersect_capsule_count_all(const struct WorldHandle *world, Capsule capsule);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle and `out_handles` must point to
+ * writable space for at least `capacity` collider handles.
+ */
 uint32_t query_intersect_capsule(const struct WorldHandle *world,
                                  Capsule capsule,
                                  QueryFilterDesc filter,
                                  ColliderHandleRaw *out_handles,
                                  uint32_t capacity);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle and `out_handles` must point to
+ * writable space for at least `capacity` collider handles.
+ */
 uint32_t query_intersect_capsule_all(const struct WorldHandle *world,
                                      Capsule capsule,
                                      ColliderHandleRaw *out_handles,
                                      uint32_t capacity);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle.
+ */
 uint32_t query_intersect_ssv_count(const struct WorldHandle *world,
                                    Ssv ssv,
                                    QueryFilterDesc filter);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle.
+ */
 uint32_t query_intersect_ssv_count_all(const struct WorldHandle *world, Ssv ssv);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle and `out_handles` must point to
+ * writable space for at least `capacity` collider handles.
+ */
 uint32_t query_intersect_ssv(const struct WorldHandle *world,
                              Ssv ssv,
                              QueryFilterDesc filter,
                              ColliderHandleRaw *out_handles,
                              uint32_t capacity);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle and `out_handles` must point to
+ * writable space for at least `capacity` collider handles.
+ */
 uint32_t query_intersect_ssv_all(const struct WorldHandle *world,
                                  Ssv ssv,
                                  ColliderHandleRaw *out_handles,
                                  uint32_t capacity);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle.
+ */
 uint32_t query_intersect_ellipsoid_count(const struct WorldHandle *world,
                                          Ellipsoid ellipsoid,
                                          QueryFilterDesc filter);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle.
+ */
 uint32_t query_intersect_ellipsoid_count_all(const struct WorldHandle *world, Ellipsoid ellipsoid);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle and `out_handles` must point to
+ * writable space for at least `capacity` collider handles.
+ */
 uint32_t query_intersect_ellipsoid(const struct WorldHandle *world,
                                    Ellipsoid ellipsoid,
                                    QueryFilterDesc filter,
                                    ColliderHandleRaw *out_handles,
                                    uint32_t capacity);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle and `out_handles` must point to
+ * writable space for at least `capacity` collider handles.
+ */
 uint32_t query_intersect_ellipsoid_all(const struct WorldHandle *world,
                                        Ellipsoid ellipsoid,
                                        ColliderHandleRaw *out_handles,
                                        uint32_t capacity);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle.
+ */
 uint32_t query_intersect_prism_count(const struct WorldHandle *world,
                                      Prism prism,
                                      QueryFilterDesc filter);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle.
+ */
 uint32_t query_intersect_prism_count_all(const struct WorldHandle *world, Prism prism);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle and `out_handles` must point to
+ * writable space for at least `capacity` collider handles.
+ */
 uint32_t query_intersect_prism(const struct WorldHandle *world,
                                Prism prism,
                                QueryFilterDesc filter,
                                ColliderHandleRaw *out_handles,
                                uint32_t capacity);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle and `out_handles` must point to
+ * writable space for at least `capacity` collider handles.
+ */
 uint32_t query_intersect_prism_all(const struct WorldHandle *world,
                                    Prism prism,
                                    ColliderHandleRaw *out_handles,
                                    uint32_t capacity);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle.
+ */
 uint32_t query_intersect_cylinder_count(const struct WorldHandle *world,
                                         Cylinder cylinder,
                                         QueryFilterDesc filter);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle.
+ */
 uint32_t query_intersect_cylinder_count_all(const struct WorldHandle *world, Cylinder cylinder);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle and `out_handles` must point to
+ * writable space for at least `capacity` collider handles.
+ */
 uint32_t query_intersect_cylinder(const struct WorldHandle *world,
                                   Cylinder cylinder,
                                   QueryFilterDesc filter,
                                   ColliderHandleRaw *out_handles,
                                   uint32_t capacity);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle and `out_handles` must point to
+ * writable space for at least `capacity` collider handles.
+ */
 uint32_t query_intersect_cylinder_all(const struct WorldHandle *world,
                                       Cylinder cylinder,
                                       ColliderHandleRaw *out_handles,
                                       uint32_t capacity);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle.
+ */
 uint32_t query_intersect_spherical_shell_count(const struct WorldHandle *world,
                                                SphericalShell shell,
                                                QueryFilterDesc filter);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle.
+ */
 uint32_t query_intersect_spherical_shell_count_all(const struct WorldHandle *world,
                                                    SphericalShell shell);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle and `out_handles` must point to
+ * writable space for at least `capacity` collider handles.
+ */
 uint32_t query_intersect_spherical_shell(const struct WorldHandle *world,
                                          SphericalShell shell,
                                          QueryFilterDesc filter,
                                          ColliderHandleRaw *out_handles,
                                          uint32_t capacity);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle and `out_handles` must point to
+ * writable space for at least `capacity` collider handles.
+ */
 uint32_t query_intersect_spherical_shell_all(const struct WorldHandle *world,
                                              SphericalShell shell,
                                              ColliderHandleRaw *out_handles,
@@ -396,14 +719,29 @@ struct ColliderBuilderHandle *collider_builder_create_obb(Obb obb);
 
 struct ColliderBuilderHandle *collider_builder_create_sphere(Sphere sphere);
 
+/**
+ * # Safety
+ *
+ * `data` must point to at least `data_x * data_y` readable `f64` height values.
+ */
 struct ColliderBuilderHandle *collider_builder_create_heightmap(const double *data,
                                                                 uint32_t data_x,
                                                                 uint32_t data_y,
                                                                 Vec3 scale);
 
+/**
+ * # Safety
+ *
+ * `points_xyz` must point to at least `point_count * 3` readable `f64` values.
+ */
 struct ColliderBuilderHandle *collider_builder_create_convex_hull(const double *points_xyz,
                                                                   uint32_t point_count);
 
+/**
+ * # Safety
+ *
+ * `points_xyz` must point to at least `point_count * 3` readable `f64` values.
+ */
 struct ColliderBuilderHandle *collider_builder_create_point_cloud_bounds(const double *points_xyz,
                                                                          uint32_t point_count);
 
@@ -414,164 +752,446 @@ struct ColliderBuilderHandle *collider_builder_create_skewed_obb(Vec3 center,
                                                                  Vec3 axis_y,
                                                                  Vec3 axis_z);
 
+/**
+ * # Safety
+ *
+ * `points_xyz` must point to at least `point_count * 3` readable `f64` values.
+ */
 struct ColliderBuilderHandle *collider_builder_create_discrete_obb(const double *points_xyz,
                                                                    uint32_t point_count,
                                                                    uint32_t axis);
 
+/**
+ * # Safety
+ *
+ * `points_xyz` must point to at least `point_count * 3` readable `f64` values.
+ */
 struct ColliderBuilderHandle *collider_builder_create_fused_collapsing_bounds(const double *points_xyz,
                                                                               uint32_t point_count,
                                                                               double padding);
 
+/**
+ * # Safety
+ *
+ * `vertices_xyz` must point to at least `vertex_count * 3` readable `f64`
+ * values and `edges` to at least `edge_count * 2` readable `u32` indices.
+ */
 struct ColliderBuilderHandle *collider_builder_create_edge_bvh(const double *vertices_xyz,
                                                                uint32_t vertex_count,
                                                                const uint32_t *edges,
                                                                uint32_t edge_count,
                                                                double radius);
 
+/**
+ * # Safety
+ *
+ * `spheres_xyzw` must point to at least `sphere_count * 4` readable `f64`
+ * values (center xyz + radius per sphere).
+ */
 struct ColliderBuilderHandle *collider_builder_create_medial_spheres(const double *spheres_xyzw,
                                                                      uint32_t sphere_count);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a pointer returned by a `collider_builder_create_*`
+ * function. It is consumed by this call and must not be used afterwards.
+ */
 Collider *collider_builder_build(struct ColliderBuilderHandle *builder);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a pointer returned by a `collider_builder_create_*`
+ * function that has not been consumed by `collider_builder_build`.
+ */
 void collider_builder_destroy(struct ColliderBuilderHandle *builder);
 
+/**
+ * # Safety
+ *
+ * `collider` must be a pointer returned by `collider_builder_build` or
+ * `world_copy_collider` that has not already been destroyed.
+ */
 void collider_destroy_raw(Collider *collider);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a valid pointer returned by a `collider_builder_create_*`
+ * function and not yet consumed or destroyed.
+ */
 void collider_builder_set_translation(struct ColliderBuilderHandle *builder, Vec3 translation);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a valid pointer returned by a `collider_builder_create_*`
+ * function and not yet consumed or destroyed.
+ */
 void collider_builder_set_rotation(struct ColliderBuilderHandle *builder, Vec3 rotation_axis_angle);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a valid pointer returned by a `collider_builder_create_*`
+ * function and not yet consumed or destroyed.
+ */
 void collider_builder_set_pose(struct ColliderBuilderHandle *builder,
                                Vec3 translation,
                                Quat rotation);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a valid pointer returned by a `collider_builder_create_*`
+ * function and not yet consumed or destroyed.
+ */
 void collider_builder_set_sensor(struct ColliderBuilderHandle *builder, Bool sensor);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a valid pointer returned by a `collider_builder_create_*`
+ * function and not yet consumed or destroyed.
+ */
 void collider_builder_set_friction(struct ColliderBuilderHandle *builder, double friction);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a valid pointer returned by a `collider_builder_create_*`
+ * function and not yet consumed or destroyed.
+ */
 void collider_builder_set_restitution(struct ColliderBuilderHandle *builder, double restitution);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a valid pointer returned by a `collider_builder_create_*`
+ * function and not yet consumed or destroyed.
+ */
 void collider_builder_set_density(struct ColliderBuilderHandle *builder, double density);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a valid pointer returned by a `collider_builder_create_*`
+ * function and not yet consumed or destroyed.
+ */
 void collider_builder_set_collision_groups(struct ColliderBuilderHandle *builder,
                                            InteractionGroupsDesc groups);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a valid pointer returned by a `collider_builder_create_*`
+ * function and not yet consumed or destroyed.
+ */
 void collider_builder_set_solver_groups(struct ColliderBuilderHandle *builder,
                                         InteractionGroupsDesc groups);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a valid pointer returned by a `collider_builder_create_*`
+ * function and not yet consumed or destroyed.
+ */
 void collider_builder_set_active_events(struct ColliderBuilderHandle *builder,
                                         uint32_t active_events_bits);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a valid pointer returned by a `collider_builder_create_*`
+ * function and not yet consumed or destroyed.
+ */
 void collider_builder_set_active_hooks(struct ColliderBuilderHandle *builder,
                                        uint32_t active_hooks_bits);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a valid pointer returned by a `collider_builder_create_*`
+ * function and not yet consumed or destroyed.
+ */
 void collider_builder_set_contact_force_event_threshold(struct ColliderBuilderHandle *builder,
                                                         double threshold);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create`. `memory_handle`
+ * must be a pointer returned by `collider_builder_build` or
+ * `world_copy_collider`; it is consumed by this call.
+ */
 ColliderHandleRaw world_insert_collider(struct WorldHandle *world, Collider *memory_handle);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create`. `memory_handle`
+ * must be a pointer returned by `collider_builder_build` or
+ * `world_copy_collider`; it is consumed by this call.
+ */
 ColliderHandleRaw world_insert_collider_with_parent(struct WorldHandle *world,
                                                     Collider *memory_handle,
                                                     RigidBodyHandleRaw parent);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 Bool world_remove_collider(struct WorldHandle *world, ColliderHandleRaw handle, Bool wake_up);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 Collider *world_copy_collider(struct WorldHandle *world, ColliderHandleRaw handle);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 uint8_t world_remove_collider_flag(struct WorldHandle *world,
                                    ColliderHandleRaw handle,
                                    Bool wake_up);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 Vec3 collider_get_translation(const struct WorldHandle *world, ColliderHandleRaw handle);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 uintptr_t collider_get_shape_count(const struct WorldHandle *world, ColliderHandleRaw handle);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create`; `out_translation`
+ * must point to a writable `Vec3`.
+ */
 void collider_get_translation_out(const struct WorldHandle *world,
                                   ColliderHandleRaw handle,
                                   Vec3 *out_translation);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 Quat collider_get_rotation(const struct WorldHandle *world, ColliderHandleRaw handle);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create`; `out_rotation`
+ * must point to a writable `Quat`.
+ */
 void collider_get_rotation_out(const struct WorldHandle *world,
                                ColliderHandleRaw handle,
                                Quat *out_rotation);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 Bool collider_set_pose(struct WorldHandle *world,
                        ColliderHandleRaw handle,
                        Vec3 translation,
                        Quat rotation);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 Bool collider_set_translation(struct WorldHandle *world,
                               ColliderHandleRaw handle,
                               Vec3 translation);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 Bool collider_set_rotation(struct WorldHandle *world, ColliderHandleRaw handle, Quat rotation);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 uint8_t collider_set_pose_flag(struct WorldHandle *world,
                                ColliderHandleRaw handle,
                                Vec3 translation,
                                Quat rotation);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 Bool collider_set_sensor(struct WorldHandle *world, ColliderHandleRaw handle, Bool sensor);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 uint8_t collider_set_sensor_flag(struct WorldHandle *world, ColliderHandleRaw handle, Bool sensor);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 Bool collider_set_friction(struct WorldHandle *world, ColliderHandleRaw handle, double friction);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 uint8_t collider_set_friction_flag(struct WorldHandle *world,
                                    ColliderHandleRaw handle,
                                    double friction);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 Bool collider_set_restitution(struct WorldHandle *world,
                               ColliderHandleRaw handle,
                               double restitution);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 uint8_t collider_set_restitution_flag(struct WorldHandle *world,
                                       ColliderHandleRaw handle,
                                       double restitution);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 Bool collider_set_collision_groups(struct WorldHandle *world,
                                    ColliderHandleRaw handle,
                                    InteractionGroupsDesc groups);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 uint8_t collider_set_collision_groups_flag(struct WorldHandle *world,
                                            ColliderHandleRaw handle,
                                            InteractionGroupsDesc groups);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 Bool collider_set_solver_groups(struct WorldHandle *world,
                                 ColliderHandleRaw handle,
                                 InteractionGroupsDesc groups);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 uint8_t collider_set_solver_groups_flag(struct WorldHandle *world,
                                         ColliderHandleRaw handle,
                                         InteractionGroupsDesc groups);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 Bool collider_set_active_events(struct WorldHandle *world,
                                 ColliderHandleRaw handle,
                                 uint32_t active_events_bits);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 uint8_t collider_set_active_events_flag(struct WorldHandle *world,
                                         ColliderHandleRaw handle,
                                         uint32_t active_events_bits);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 Bool collider_set_active_hooks(struct WorldHandle *world,
                                ColliderHandleRaw handle,
                                uint32_t active_hooks_bits);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 uint8_t collider_set_active_hooks_flag(struct WorldHandle *world,
                                        ColliderHandleRaw handle,
                                        uint32_t active_hooks_bits);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 Bool collider_set_contact_force_event_threshold(struct WorldHandle *world,
                                                 ColliderHandleRaw handle,
                                                 double threshold);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 uint8_t collider_set_contact_force_event_threshold_flag(struct WorldHandle *world,
                                                         ColliderHandleRaw handle,
                                                         double threshold);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 double collider_get_density(const struct WorldHandle *world, ColliderHandleRaw handle);
 
+/**
+ * Insert a dynamic rigid body built from a list of cuboids.
+ *
+ * # Safety
+ *
+ * `world` must be a valid, live world pointer; `cuboids` must point to at
+ * least 6×cuboid_count readable f64s (center xyz + half-extents xyz per
+ * cuboid).
+ */
 RigidBodyHandleRaw world_insert_dynamic_cuboids(struct WorldHandle *world,
                                                 Vec3 translation,
                                                 Quat rotation,
@@ -584,6 +1204,15 @@ RigidBodyHandleRaw world_insert_dynamic_cuboids(struct WorldHandle *world,
                                                 InteractionGroupsDesc collision_groups,
                                                 InteractionGroupsDesc solver_groups);
 
+/**
+ * Insert a fixed rigid body with a trimesh collider.
+ *
+ * # Safety
+ *
+ * `world` must be a valid, live world pointer; `vertices_xyz` must point to
+ * at least `vertex_xyz_len` readable f64s and `indices` to at least
+ * `index_len` readable u32s.
+ */
 RigidBodyHandleRaw world_insert_static_trimesh(struct WorldHandle *world,
                                                const double *vertices_xyz,
                                                uint32_t vertex_xyz_len,
@@ -592,10 +1221,25 @@ RigidBodyHandleRaw world_insert_static_trimesh(struct WorldHandle *world,
                                                double friction,
                                                double restitution);
 
+/**
+ * Count the rigid bodies intersecting an AABB.
+ *
+ * # Safety
+ *
+ * `world` must be a valid, live world pointer.
+ */
 uint32_t query_intersect_aabb_rigid_body_count(const struct WorldHandle *world,
                                                AabbDesc aabb,
                                                QueryFilterDesc filter);
 
+/**
+ * Collect the rigid body handles intersecting an AABB.
+ *
+ * # Safety
+ *
+ * `world` must be a valid, live world pointer; `out_handles` must be valid
+ * for `capacity` `RigidBodyHandleRaw` writes.
+ */
 uint32_t query_intersect_aabb_rigid_bodies(const struct WorldHandle *world,
                                            AabbDesc aabb,
                                            QueryFilterDesc filter,
@@ -604,32 +1248,87 @@ uint32_t query_intersect_aabb_rigid_bodies(const struct WorldHandle *world,
 
 struct CharacterControllerHandle *character_controller_create(void);
 
+/**
+ * # Safety
+ *
+ * `controller` must be a pointer returned by `character_controller_create` (or null,
+ * which is a no-op). Ownership is transferred to Rust and the pointer must not be
+ * used after this call.
+ */
 void character_controller_destroy(struct CharacterControllerHandle *controller);
 
+/**
+ * # Safety
+ *
+ * `controller` must be a valid pointer returned by `character_controller_create`
+ * and must remain alive for the duration of the call.
+ */
 void character_controller_set_up(struct CharacterControllerHandle *controller, Vec3 up);
 
+/**
+ * # Safety
+ *
+ * `controller` must be a valid pointer returned by `character_controller_create`
+ * and must remain alive for the duration of the call.
+ */
 void character_controller_set_offset_absolute(struct CharacterControllerHandle *controller,
                                               double offset);
 
+/**
+ * # Safety
+ *
+ * `controller` must be a valid pointer returned by `character_controller_create`
+ * and must remain alive for the duration of the call.
+ */
 void character_controller_set_offset_relative(struct CharacterControllerHandle *controller,
                                               double offset);
 
+/**
+ * # Safety
+ *
+ * `controller` must be a valid pointer returned by `character_controller_create`
+ * and must remain alive for the duration of the call.
+ */
 void character_controller_set_slide(struct CharacterControllerHandle *controller, Bool slide);
 
+/**
+ * # Safety
+ *
+ * `controller` must be a valid pointer returned by `character_controller_create`
+ * and must remain alive for the duration of the call.
+ */
 void character_controller_set_autostep(struct CharacterControllerHandle *controller,
                                        Bool enabled,
                                        double max_height,
                                        double min_width,
                                        Bool include_dynamic_bodies);
 
+/**
+ * # Safety
+ *
+ * `controller` must be a valid pointer returned by `character_controller_create`
+ * and must remain alive for the duration of the call.
+ */
 void character_controller_set_snap_to_ground(struct CharacterControllerHandle *controller,
                                              Bool enabled,
                                              double distance);
 
+/**
+ * # Safety
+ *
+ * `controller` must be a valid pointer returned by `character_controller_create`
+ * and must remain alive for the duration of the call.
+ */
 void character_controller_set_slope_angles(struct CharacterControllerHandle *controller,
                                            double max_climb_angle,
                                            double min_slide_angle);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world pointer and `controller` a valid pointer returned by
+ * `character_controller_create`; both must remain alive for the duration of the call.
+ */
 EffectiveCharacterMovement character_controller_move_shape(const struct WorldHandle *world,
                                                            struct CharacterControllerHandle *controller,
                                                            double dt,
@@ -638,119 +1337,479 @@ EffectiveCharacterMovement character_controller_move_shape(const struct WorldHan
                                                            Quat rotation,
                                                            Vec3 desired_translation);
 
+/**
+ * # Safety
+ *
+ * `controller` must be a valid pointer returned by `character_controller_create`
+ * and must remain alive for the duration of the call.
+ */
 uint32_t character_controller_collision_count(const struct CharacterControllerHandle *controller);
 
+/**
+ * # Safety
+ *
+ * `controller` must be a valid pointer returned by `character_controller_create`
+ * and must remain alive for the duration of the call.
+ */
 FfiCharacterCollision character_controller_get_collision(const struct CharacterControllerHandle *controller,
                                                          uint32_t index);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world pointer and `controller` a valid pointer returned by
+ * `character_controller_create`; both must remain alive for the duration of the call.
+ */
 Bool character_controller_solve_impulses(struct WorldHandle *world,
                                          struct CharacterControllerHandle *controller,
                                          double dt,
                                          ShapeDesc shape_desc,
                                          double character_mass);
 
+/**
+ * Create an empty red-black-tree AABB index.
+ *
+ * # Safety
+ *
+ * The returned pointer is owned by the caller and must be freed exactly once
+ * with `crb_tree_destroy`.
+ */
 struct CRbTreeHandle *crb_tree_create(void);
 
+/**
+ * Destroy an index created by `crb_tree_create`.
+ *
+ * # Safety
+ *
+ * `tree` must be null or a pointer returned by `crb_tree_create`; it must not
+ * be used again after this call.
+ */
 void crb_tree_destroy(struct CRbTreeHandle *tree);
 
+/**
+ * Remove every entry from the tree.
+ *
+ * # Safety
+ *
+ * `tree` must be a valid pointer returned by `crb_tree_create`.
+ */
 void crb_tree_clear(struct CRbTreeHandle *tree);
 
+/**
+ * Return the number of entries stored in the tree.
+ *
+ * # Safety
+ *
+ * `tree` must be a valid pointer returned by `crb_tree_create`.
+ */
 uint32_t crb_tree_len(const struct CRbTreeHandle *tree);
 
+/**
+ * Insert or overwrite the bounds of `id` in the tree.
+ *
+ * # Safety
+ *
+ * `tree` must be a valid pointer returned by `crb_tree_create`.
+ */
 Bool crb_tree_insert(struct CRbTreeHandle *tree, uint64_t id, AabbDesc aabb);
 
+/**
+ * Flag-returning variant of `crb_tree_insert`.
+ *
+ * # Safety
+ *
+ * `tree` must be a valid pointer returned by `crb_tree_create`.
+ */
 uint8_t crb_tree_insert_flag(struct CRbTreeHandle *tree, uint64_t id, AabbDesc aabb);
 
+/**
+ * Update the bounds of an existing `id` in the tree.
+ *
+ * # Safety
+ *
+ * `tree` must be a valid pointer returned by `crb_tree_create`.
+ */
 Bool crb_tree_update(struct CRbTreeHandle *tree, uint64_t id, AabbDesc aabb);
 
+/**
+ * Remove `id` from the tree.
+ *
+ * # Safety
+ *
+ * `tree` must be a valid pointer returned by `crb_tree_create`.
+ */
 Bool crb_tree_remove(struct CRbTreeHandle *tree, uint64_t id);
 
+/**
+ * Count the entries whose bounds intersect `aabb`.
+ *
+ * # Safety
+ *
+ * `tree` must be a valid pointer returned by `crb_tree_create`.
+ */
 uint32_t crb_tree_query_aabb_count(const struct CRbTreeHandle *tree, AabbDesc aabb);
 
+/**
+ * Write the ids of entries whose bounds intersect `aabb` into `out_ids`.
+ *
+ * # Safety
+ *
+ * `tree` must be a valid pointer returned by `crb_tree_create`, and `out_ids`
+ * must point to a writable buffer of at least `capacity` `u64` elements.
+ */
 uint32_t crb_tree_query_aabb(const struct CRbTreeHandle *tree,
                              AabbDesc aabb,
                              uint64_t *out_ids,
                              uint32_t capacity);
 
+/**
+ * Create a k-DOP collider builder from a point cloud.
+ *
+ * # Safety
+ *
+ * `points_xyz` must point to at least 3×point_count readable f64s. The
+ * returned builder handle is owned by the caller and must be released
+ * through the collider-builder destroy function.
+ */
 struct ColliderBuilderHandle *collider_builder_create_kdop(const double *points_xyz,
                                                            uint32_t point_count,
                                                            uint32_t preset);
 
+/**
+ * Create a fixed-directions-hull (FDH) collider builder from a point cloud.
+ *
+ * # Safety
+ *
+ * `points_xyz` must point to at least 3×point_count readable f64s and
+ * `directions_xyz` to at least 3×direction_count readable f64s. The returned
+ * builder handle is owned by the caller and must be released through the
+ * collider-builder destroy function.
+ */
 struct ColliderBuilderHandle *collider_builder_create_fdh(const double *points_xyz,
                                                           uint32_t point_count,
                                                           const double *directions_xyz,
                                                           uint32_t direction_count);
 
+/**
+ * Current thread's last error code (`ERR_OK` when no error).
+ */
 uint32_t last_error_code(void);
 
+/**
+ * Current thread's last error message ("ok" when no error).
+ *
+ * The returned pointer is borrowed from a thread-local slot owned by Rust;
+ * it is invalidated by the next error-reporting call on the same thread and
+ * must not be freed or stored.
+ */
 const char *last_error_message(void);
 
+/**
+ * Reset the current thread's error slot to `ERR_OK` / "ok".
+ */
 void last_error_clear(void);
 
+/**
+ * Static name of an error code ("ERR_OK", "ERR_NULL_POINTER", ...).
+ *
+ * Unknown codes yield "ERR_UNKNOWN". The returned pointer refers to a
+ * string with `'static` lifetime owned by Rust; it must not be freed.
+ */
+const char *error_code_name(uint32_t code);
+
+/**
+ * Set (or disable) the Coulomb friction law on a world.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer fails with `ERR_NULL_POINTER`.
+ */
 Bool world_set_coulomb_friction_law(struct WorldHandle *world, CoulombFrictionLaw law);
 
+/**
+ * `u8`-returning variant of `world_set_coulomb_friction_law`.
+ *
+ * # Safety
+ *
+ * Same contract as `world_set_coulomb_friction_law`.
+ */
 uint8_t world_set_coulomb_friction_law_flag(struct WorldHandle *world, CoulombFrictionLaw law);
 
+/**
+ * Clear the Coulomb friction law on a world.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer is a no-op.
+ */
 void world_clear_coulomb_friction_law(struct WorldHandle *world);
 
+/**
+ * Read the current Coulomb friction law into `out_law`.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`;
+ * `out_law` must point to writable memory for one `CoulombFrictionLaw`.
+ * Null pointers fail with `ERR_NULL_POINTER`.
+ */
 Bool world_get_coulomb_friction_law(const struct WorldHandle *world, CoulombFrictionLaw *out_law);
 
+/**
+ * Set (or disable) the air drag law on a world.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer fails with `ERR_NULL_POINTER`.
+ */
 Bool world_set_air_drag_law(struct WorldHandle *world, AirDragLaw law);
 
+/**
+ * `u8`-returning variant of `world_set_air_drag_law`.
+ *
+ * # Safety
+ *
+ * Same contract as `world_set_air_drag_law`.
+ */
 uint8_t world_set_air_drag_law_flag(struct WorldHandle *world, AirDragLaw law);
 
+/**
+ * Clear the air drag law on a world.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer is a no-op.
+ */
 void world_clear_air_drag_law(struct WorldHandle *world);
 
+/**
+ * Read the current air drag law into `out_law`.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`;
+ * `out_law` must point to writable memory for one `AirDragLaw`. Null
+ * pointers fail with `ERR_NULL_POINTER`.
+ */
 Bool world_get_air_drag_law(const struct WorldHandle *world, AirDragLaw *out_law);
 
+/**
+ * Set (or disable) the external force law on a world.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer fails with `ERR_NULL_POINTER`.
+ */
 Bool world_set_external_force_law(struct WorldHandle *world, ExternalForceLaw law);
 
+/**
+ * `u8`-returning variant of `world_set_external_force_law`.
+ *
+ * # Safety
+ *
+ * Same contract as `world_set_external_force_law`.
+ */
 uint8_t world_set_external_force_law_flag(struct WorldHandle *world, ExternalForceLaw law);
 
+/**
+ * Clear the external force law on a world.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer is a no-op.
+ */
 void world_clear_external_force_law(struct WorldHandle *world);
 
+/**
+ * Read the current external force law into `out_law`.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`;
+ * `out_law` must point to writable memory for one `ExternalForceLaw`. Null
+ * pointers fail with `ERR_NULL_POINTER`.
+ */
 Bool world_get_external_force_law(const struct WorldHandle *world, ExternalForceLaw *out_law);
 
+/**
+ * Set (or disable) the Newton gravity law on a world.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer fails with `ERR_NULL_POINTER`.
+ */
 Bool world_set_newton_gravity_law(struct WorldHandle *world, NewtonGravityLaw law);
 
+/**
+ * `u8`-returning variant of `world_set_newton_gravity_law`.
+ *
+ * # Safety
+ *
+ * Same contract as `world_set_newton_gravity_law`.
+ */
 uint8_t world_set_newton_gravity_law_flag(struct WorldHandle *world, NewtonGravityLaw law);
 
+/**
+ * Clear the Newton gravity law on a world.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer is a no-op.
+ */
 void world_clear_newton_gravity_law(struct WorldHandle *world);
 
+/**
+ * Read the current Newton gravity law into `out_law`.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`;
+ * `out_law` must point to writable memory for one `NewtonGravityLaw`. Null
+ * pointers fail with `ERR_NULL_POINTER`.
+ */
 Bool world_get_newton_gravity_law(const struct WorldHandle *world, NewtonGravityLaw *out_law);
 
+/**
+ * Read the last custom-physics report into `out_report`.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`;
+ * `out_report` must point to writable memory for one `CustomPhysicsReport`.
+ * Null pointers fail with `ERR_NULL_POINTER`.
+ */
 Bool world_get_custom_physics_report(const struct WorldHandle *world,
                                      CustomPhysicsReport *out_report);
 
+/**
+ * Clear the legacy event queues of a world.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer is a no-op.
+ */
 void world_clear_events(struct WorldHandle *world);
 
+/**
+ * Number of queued collision events (legacy Vec queue).
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer returns 0.
+ */
 uint32_t world_collision_event_count(const struct WorldHandle *world);
 
+/**
+ * Read one queued collision event by index (legacy Vec queue).
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer or out-of-range index returns a zeroed record.
+ */
 CollisionEventRecord world_get_collision_event(const struct WorldHandle *world, uint32_t index);
 
+/**
+ * Copy up to `capacity` queued collision events into `out_events`.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`;
+ * `out_events` must point to writable memory for `capacity`
+ * `CollisionEventRecord` elements (`0 < capacity <= MAX_OUTPUT_CAPACITY`).
+ */
 uint32_t world_get_collision_events(const struct WorldHandle *world,
                                     CollisionEventRecord *out_events,
                                     uint32_t capacity);
 
+/**
+ * Number of queued contact-force events (legacy Vec queue).
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer returns 0.
+ */
 uint32_t world_contact_force_event_count(const struct WorldHandle *world);
 
+/**
+ * Read one queued contact-force event by index (legacy Vec queue).
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer or out-of-range index returns a zeroed record.
+ */
 ContactForceEventRecord world_get_contact_force_event(const struct WorldHandle *world,
                                                       uint32_t index);
 
+/**
+ * Copy up to `capacity` queued contact-force events into `out_events`.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`;
+ * `out_events` must point to writable memory for `capacity`
+ * `ContactForceEventRecord` elements (`0 < capacity <= MAX_OUTPUT_CAPACITY`).
+ */
 uint32_t world_get_contact_force_events(const struct WorldHandle *world,
                                         ContactForceEventRecord *out_events,
                                         uint32_t capacity);
 
+/**
+ * Disabled external contact-pair filter callback (always reports
+ * `ERR_UNSUPPORTED` and reinstalls the default hooks).
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer fails with `ERR_NULL_POINTER`.
+ */
 void world_set_contact_pair_filter_callback(struct WorldHandle *world,
                                             uintptr_t _callback,
                                             uintptr_t _user_data);
 
+/**
+ * Disabled external intersection-pair filter callback (always reports
+ * `ERR_UNSUPPORTED` and reinstalls the default hooks).
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer fails with `ERR_NULL_POINTER`.
+ */
 void world_set_intersection_pair_filter_callback(struct WorldHandle *world,
                                                  uintptr_t _callback,
                                                  uintptr_t _user_data);
 
+/**
+ * Reinstall the default contact-pair filter hooks.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer is a no-op.
+ */
 void world_clear_contact_pair_filter_callback(struct WorldHandle *world);
 
+/**
+ * Reinstall the default intersection-pair filter hooks.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer is a no-op.
+ */
 void world_clear_intersection_pair_filter_callback(struct WorldHandle *world);
 
 /**
@@ -760,6 +1819,7 @@ void world_clear_intersection_pair_filter_callback(struct WorldHandle *world);
  *
  * # Safety
  *
+ * `world` must be a valid world pointer returned by `world_create`.
  * Init-time only: must be called before `world_step` runs on any thread and
  * with no concurrent event-ring FFI calls on the same world.  Re-initializing
  * the ring while the physics thread produces events is undefined behavior
@@ -780,6 +1840,14 @@ Bool world_init_contact_force_event_ring(struct WorldHandle *world, uint32_t cap
  * Drain the collision-event ring buffer into `out_events`.
  * Returns the number of events drained.  This is the **only** FFI call needed
  * per frame after init — no more count-then-allocate-then-read cycles.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`;
+ * `out_events` must point to writable memory for `capacity`
+ * `CollisionEventRecord` elements (`0 < capacity <= MAX_OUTPUT_CAPACITY`).
+ * May run concurrently with `world_step` (SPSC drain), but only from a
+ * single consumer thread.
  */
 uint32_t world_drain_collision_event_ring(const struct WorldHandle *world,
                                           CollisionEventRecord *out_events,
@@ -787,6 +1855,11 @@ uint32_t world_drain_collision_event_ring(const struct WorldHandle *world,
 
 /**
  * Drain the contact-force-event ring buffer.
+ *
+ * # Safety
+ *
+ * Same contract as `world_drain_collision_event_ring`, with
+ * `ContactForceEventRecord` output elements.
  */
 uint32_t world_drain_contact_force_event_ring(const struct WorldHandle *world,
                                               ContactForceEventRecord *out_events,
@@ -794,25 +1867,53 @@ uint32_t world_drain_contact_force_event_ring(const struct WorldHandle *world,
 
 /**
  * Get the current number of events in the collision ring buffer (cheap, no lock).
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer returns 0.
  */
 uint32_t world_collision_event_ring_len(const struct WorldHandle *world);
 
 /**
  * Get the current number of events in the contact-force ring buffer.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer returns 0.
  */
 uint32_t world_contact_force_event_ring_len(const struct WorldHandle *world);
 
 /**
  * Get ring buffer statistics (capacity, occupancy, drops, wraps).
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`;
+ * `out_stats` must point to writable memory for one `EventRingBufferStats`.
+ * Null pointers fail with `ERR_NULL_POINTER`.
  */
 Bool world_collision_event_ring_stats(const struct WorldHandle *world,
                                       EventRingBufferStats *out_stats);
 
+/**
+ * Get contact-force ring buffer statistics.
+ *
+ * # Safety
+ *
+ * Same contract as `world_collision_event_ring_stats`.
+ */
 Bool world_contact_force_event_ring_stats(const struct WorldHandle *world,
                                           EventRingBufferStats *out_stats);
 
 /**
  * Clear both ring buffers and reset drop counters.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer is a no-op.
  */
 void world_clear_event_rings(struct WorldHandle *world);
 
@@ -825,6 +1926,9 @@ void world_clear_event_rings(struct WorldHandle *world);
  *
  * # Safety
  *
+ * `world` must be a valid world pointer returned by `world_create`.
+ * `callback` must be `0` ("unset") or the address of a function with the
+ * exact `CollisionEventFn` signature that stays valid while registered.
  * Init-time only: must be called before `world_step` runs on any thread and
  * with no concurrent event-ring/callback FFI calls on the same world.  The
  * producer cache is an `UnsafeCell`; concurrent registration while the
@@ -839,7 +1943,9 @@ EventCallbackHandle world_register_collision_callback(struct WorldHandle *world,
  *
  * # Safety
  *
- * Same init-time-only contract as `world_register_collision_callback`.
+ * Same init-time-only contract as `world_register_collision_callback`;
+ * `callback` must be `0` ("unset") or the address of a function with the
+ * exact `ContactForceEventFn` signature that stays valid while registered.
  */
 EventCallbackHandle world_register_contact_force_callback(struct WorldHandle *world,
                                                           uintptr_t callback,
@@ -868,6 +1974,12 @@ void world_unregister_callback(struct WorldHandle *world, EventCallbackHandle ha
  */
 Bool world_set_event_dispatch_mode(struct WorldHandle *world, uint32_t mode);
 
+/**
+ * # Safety
+ *
+ * `out_report` may be null or must point to writable space for one
+ * `FluidForceReport`.
+ */
 Bool fluid_estimate_aabb_forces(FluidVolume fluid,
                                 Vec3 body_center,
                                 Vec3 body_half_extents,
@@ -876,6 +1988,12 @@ Bool fluid_estimate_aabb_forces(FluidVolume fluid,
                                 Vec3 body_angvel,
                                 FluidForceReport *out_report);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle; `out_report` may be null or must
+ * point to writable space for one `FluidForceReport`.
+ */
 Bool fluid_apply_aabb_forces(struct WorldHandle *world,
                              RigidBodyHandleRaw body_handle,
                              FluidVolume fluid,
@@ -884,6 +2002,12 @@ Bool fluid_apply_aabb_forces(struct WorldHandle *world,
                              Bool wake_up,
                              FluidForceReport *out_report);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle; `out_report` may be null or must
+ * point to writable space for one `FluidForceReport`.
+ */
 uint8_t fluid_apply_aabb_forces_flag(struct WorldHandle *world,
                                      RigidBodyHandleRaw body_handle,
                                      FluidVolume fluid,
@@ -892,6 +2016,11 @@ uint8_t fluid_apply_aabb_forces_flag(struct WorldHandle *world,
                                      Bool wake_up,
                                      FluidForceReport *out_report);
 
+/**
+ * # Safety
+ *
+ * `out_report` must point to writable space for one `NavierStokesReport`.
+ */
 Bool fluid_navier_stokes_simplified_step(Vec3 velocity,
                                          Vec3 advection,
                                          Vec3 pressure_gradient,
@@ -904,16 +2033,35 @@ Bool fluid_navier_stokes_simplified_step(Vec3 velocity,
 
 double fluid_sph_poly6_kernel(double distance, double smoothing_radius);
 
+/**
+ * # Safety
+ *
+ * `out_gradient` must point to writable space for one `Vec3`.
+ */
 Bool fluid_sph_spiky_gradient(Vec3 offset, double smoothing_radius, Vec3 *out_gradient);
 
 double fluid_sph_viscosity_laplacian(double distance, double smoothing_radius);
 
+/**
+ * # Safety
+ *
+ * `particles` must point to `particle_count` `SphParticle` values (or be
+ * null when `particle_count` is 0); `out_density` must point to writable
+ * space for one `f64`.
+ */
 Bool fluid_sph_estimate_density(Vec3 position,
                                 const SphParticle *particles,
                                 uint32_t particle_count,
                                 double smoothing_radius,
                                 double *out_density);
 
+/**
+ * # Safety
+ *
+ * `particles` must point to `particle_count` `SphParticle` values (or be
+ * null when `particle_count` is 0); `out_report` must point to writable
+ * space for one `SphForceReport`.
+ */
 Bool fluid_sph_estimate_forces(SphParticle particle,
                                const SphParticle *particles,
                                uint32_t particle_count,
@@ -930,6 +2078,11 @@ double fluid_bernoulli_pressure(double total_pressure,
                                 double gravity,
                                 double elevation);
 
+/**
+ * # Safety
+ *
+ * `out_report` must point to writable space for one `BernoulliReport`.
+ */
 Bool fluid_bernoulli_report(double pressure,
                             double density,
                             double velocity,
@@ -937,39 +2090,81 @@ Bool fluid_bernoulli_report(double pressure,
                             double elevation,
                             BernoulliReport *out_report);
 
+/**
+ * # Safety
+ *
+ * `out_report` must point to writable space for one `StressIntensityReport`.
+ */
 Bool fracture_stress_intensity_factor(double stress,
                                       double crack_length,
                                       double geometry_factor,
                                       double fracture_toughness,
                                       StressIntensityReport *out_report);
 
+/**
+ * # Safety
+ *
+ * `out_report` must point to writable space for one `GriffithReport`.
+ */
 Bool fracture_griffith_criterion(double stress,
                                  double crack_length,
                                  FractureMaterial material,
                                  GriffithReport *out_report);
 
+/**
+ * # Safety
+ *
+ * `cycle_counts` and `cycles_to_failure` must each point to `count` `f64`
+ * values; `out_report` must point to writable space for one
+ * `MinerDamageReport`.
+ */
 Bool fracture_miner_damage(const double *cycle_counts,
                            const double *cycles_to_failure,
                            uint32_t count,
                            MinerDamageReport *out_report);
 
+/**
+ * # Safety
+ *
+ * `out_report` must point to writable space for one `SnCurveReport`.
+ */
 Bool fracture_sn_curve_life(double stress_amplitude,
                             double coefficient,
                             double exponent,
                             double endurance_limit,
                             SnCurveReport *out_report);
 
+/**
+ * # Safety
+ *
+ * `out_report` must point to writable space for one `FractureEnergyReport`.
+ */
 Bool fracture_energy_release(double strain_energy,
                              double new_surface_area,
                              double surface_energy,
                              double kinetic_energy,
                              FractureEnergyReport *out_report);
 
+/**
+ * # Safety
+ *
+ * `out_report` must point to writable space for one `FractureModeReport`.
+ */
 Bool fracture_mode_from_stress(double tensile_stress,
                                double shear_stress,
                                double compressive_stress,
                                FractureModeReport *out_report);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle; `fragments` must point to
+ * `fragment_count` `FractureFragmentDesc` values; `out_body_handles` must
+ * point to writable space for `capacity` body handles; `out_joint_handles`
+ * must point to writable space for `capacity` joint handles when
+ * `connect_fragments` is non-zero; `out_report` may be null or must point
+ * to writable space for one `FractureReplaceReport`.
+ */
 Bool world_replace_body_with_fracture_fragments(struct WorldHandle *world,
                                                 RigidBodyHandleRaw source_body,
                                                 const FractureFragmentDesc *fragments,
@@ -986,42 +2181,103 @@ struct JointBuilderHandle *joint_builder_create(uint32_t joint_type,
                                                 double b,
                                                 double c);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a pointer returned by `joint_builder_create` (or null, which is a
+ * no-op). Ownership is transferred to Rust and the pointer must not be used after
+ * this call.
+ */
 void joint_builder_destroy(struct JointBuilderHandle *builder);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a valid pointer returned by `joint_builder_create` and must
+ * remain alive for the duration of the call.
+ */
 void joint_builder_set_contacts_enabled(struct JointBuilderHandle *builder, Bool enabled);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a valid pointer returned by `joint_builder_create` and must
+ * remain alive for the duration of the call.
+ */
 void joint_builder_set_local_anchor1(struct JointBuilderHandle *builder, Vec3 anchor);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a valid pointer returned by `joint_builder_create` and must
+ * remain alive for the duration of the call.
+ */
 void joint_builder_set_local_anchor2(struct JointBuilderHandle *builder, Vec3 anchor);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a valid pointer returned by `joint_builder_create` and must
+ * remain alive for the duration of the call.
+ */
 void joint_builder_set_limits(struct JointBuilderHandle *builder,
                               uint32_t axis,
                               double min,
                               double max);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a valid pointer returned by `joint_builder_create` and must
+ * remain alive for the duration of the call.
+ */
 void joint_builder_set_motor_velocity(struct JointBuilderHandle *builder,
                                       uint32_t axis,
                                       double target_vel,
                                       double factor);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a valid pointer returned by `joint_builder_create` and must
+ * remain alive for the duration of the call.
+ */
 void joint_builder_set_motor_position(struct JointBuilderHandle *builder,
                                       uint32_t axis,
                                       double target_pos,
                                       double stiffness,
                                       double damping);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world pointer. `builder` must be a pointer returned by
+ * `joint_builder_create`; on success its ownership is consumed by this call and it
+ * must not be used afterwards.
+ */
 ImpulseJointHandleRaw world_insert_impulse_joint(struct WorldHandle *world,
                                                  RigidBodyHandleRaw body1,
                                                  RigidBodyHandleRaw body2,
                                                  struct JointBuilderHandle *builder,
                                                  Bool wake_up);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world pointer and must remain alive for the duration of
+ * the call.
+ */
 Bool world_remove_impulse_joint(struct WorldHandle *world,
                                 ImpulseJointHandleRaw handle,
                                 Bool wake_up);
 
 double molecular_lennard_jones_potential(double distance, double epsilon, double sigma);
 
+/**
+ * # Safety
+ *
+ * `out_force` must be null or point to a valid, writable `Vec3`.
+ */
 Bool molecular_lennard_jones_force(Vec3 displacement,
                                    double epsilon,
                                    double sigma,
@@ -1034,6 +2290,11 @@ double molecular_coulomb_potential(double distance,
                                    double coulomb_constant,
                                    double relative_permittivity);
 
+/**
+ * # Safety
+ *
+ * `out_force` must be null or point to a valid, writable `Vec3`.
+ */
 Bool molecular_coulomb_force(Vec3 displacement,
                              double charge_a,
                              double charge_b,
@@ -1042,11 +2303,22 @@ Bool molecular_coulomb_force(Vec3 displacement,
                              double softening,
                              Vec3 *out_force);
 
+/**
+ * # Safety
+ *
+ * `out_report` must be null or point to a valid, writable `MolecularPairReport`.
+ */
 Bool molecular_pair_interaction(MolecularParticle particle_a,
                                 MolecularParticle particle_b,
                                 MolecularForceLaw law,
                                 MolecularPairReport *out_report);
 
+/**
+ * # Safety
+ *
+ * `world` must be null or a valid world handle. `out_report` must be null or
+ * point to a valid, writable `MolecularPairReport`.
+ */
 Bool molecular_apply_pair_forces(struct WorldHandle *world,
                                  RigidBodyHandleRaw body_a,
                                  RigidBodyHandleRaw body_b,
@@ -1056,6 +2328,11 @@ Bool molecular_apply_pair_forces(struct WorldHandle *world,
                                  Bool wake_up,
                                  MolecularPairReport *out_report);
 
+/**
+ * # Safety
+ *
+ * Same pointer contract as `molecular_apply_pair_forces`.
+ */
 uint8_t molecular_apply_pair_forces_flag(struct WorldHandle *world,
                                          RigidBodyHandleRaw body_a,
                                          RigidBodyHandleRaw body_b,
@@ -1067,23 +2344,60 @@ uint8_t molecular_apply_pair_forces_flag(struct WorldHandle *world,
 
 double molecular_vacuum_coulomb_constant(void);
 
+/**
+ * Return the number of weights the network layout requires.
+ */
 uint32_t neural_bounds_required_weight_count(uint32_t hidden_width, uint32_t hidden_layers);
 
+/**
+ * Create a collider builder whose shape is a neural-network-expanded bounds hull.
+ *
+ * # Safety
+ *
+ * `weights` must point to a readable buffer of `weight_count` `f64` values.
+ * The returned pointer is owned by the caller and must be consumed or freed
+ * through the collider-builder ABI.
+ */
 struct ColliderBuilderHandle *collider_builder_create_neural_bounds(NeuralBoundsDesc desc,
                                                                     const double *weights,
                                                                     uint32_t weight_count);
 
+/**
+ * Count the colliders intersecting a neural-bounds shape.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer, and `weights` must point to a
+ * readable buffer of `weight_count` `f64` values.
+ */
 uint32_t query_intersect_neural_bounds_count(const struct WorldHandle *world,
                                              NeuralBoundsDesc desc,
                                              const double *weights,
                                              uint32_t weight_count,
                                              QueryFilterDesc filter);
 
+/**
+ * Count the colliders intersecting a neural-bounds shape with a default filter.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer, and `weights` must point to a
+ * readable buffer of `weight_count` `f64` values.
+ */
 uint32_t query_intersect_neural_bounds_count_all(const struct WorldHandle *world,
                                                  NeuralBoundsDesc desc,
                                                  const double *weights,
                                                  uint32_t weight_count);
 
+/**
+ * Write the handles of colliders intersecting a neural-bounds shape.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer, `weights` must point to a readable
+ * buffer of `weight_count` `f64` values, and `out_handles` must point to a
+ * writable buffer of at least `capacity` handle elements.
+ */
 uint32_t query_intersect_neural_bounds(const struct WorldHandle *world,
                                        NeuralBoundsDesc desc,
                                        const double *weights,
@@ -1092,6 +2406,16 @@ uint32_t query_intersect_neural_bounds(const struct WorldHandle *world,
                                        ColliderHandleRaw *out_handles,
                                        uint32_t capacity);
 
+/**
+ * Write the handles of colliders intersecting a neural-bounds shape with a
+ * default filter.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer, `weights` must point to a readable
+ * buffer of `weight_count` `f64` values, and `out_handles` must point to a
+ * writable buffer of at least `capacity` handle elements.
+ */
 uint32_t query_intersect_neural_bounds_all(const struct WorldHandle *world,
                                            NeuralBoundsDesc desc,
                                            const double *weights,
@@ -1099,6 +2423,11 @@ uint32_t query_intersect_neural_bounds_all(const struct WorldHandle *world,
                                            ColliderHandleRaw *out_handles,
                                            uint32_t capacity);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle.
+ */
 RayHit query_cast_ray(const struct WorldHandle *world,
                       Vec3 origin,
                       Vec3 direction,
@@ -1106,6 +2435,12 @@ RayHit query_cast_ray(const struct WorldHandle *world,
                       Bool solid,
                       QueryFilterDesc filter);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle; `out_hit` may be null or must point
+ * to writable space for one `RayHit`.
+ */
 ColliderHandleRaw query_cast_ray_out(const struct WorldHandle *world,
                                      Vec3 origin,
                                      Vec3 direction,
@@ -1114,6 +2449,12 @@ ColliderHandleRaw query_cast_ray_out(const struct WorldHandle *world,
                                      QueryFilterDesc filter,
                                      RayHit *out_hit);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle; `rays` must point to `ray_count * 6`
+ * `f64` values and `out_hits` to writable space for `capacity` `RayHit`s.
+ */
 uint32_t query_cast_rays(const struct WorldHandle *world,
                          const double *rays,
                          uint32_t ray_count,
@@ -1123,6 +2464,12 @@ uint32_t query_cast_rays(const struct WorldHandle *world,
                          RayHit *out_hits,
                          uint32_t capacity);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle; `out_collider` may be null or must
+ * point to writable space for one collider handle.
+ */
 PointProjection query_project_point(const struct WorldHandle *world,
                                     Vec3 point,
                                     double max_dist,
@@ -1130,6 +2477,12 @@ PointProjection query_project_point(const struct WorldHandle *world,
                                     QueryFilterDesc filter,
                                     ColliderHandleRaw *out_collider);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle; `out_collider` and `out_projection`
+ * may be null or must point to writable space for one value each.
+ */
 ColliderHandleRaw query_project_point_out(const struct WorldHandle *world,
                                           Vec3 point,
                                           double max_dist,
@@ -1138,22 +2491,49 @@ ColliderHandleRaw query_project_point_out(const struct WorldHandle *world,
                                           ColliderHandleRaw *out_collider,
                                           PointProjection *out_projection);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle.
+ */
 uint32_t query_intersect_point_count(const struct WorldHandle *world,
                                      Vec3 point,
                                      QueryFilterDesc filter);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle.
+ */
 uint32_t query_intersect_aabb_count(const struct WorldHandle *world,
                                     AabbDesc aabb,
                                     QueryFilterDesc filter);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle and `out_handles` must point to
+ * writable space for at least `capacity` collider handles.
+ */
 uint32_t query_intersect_aabb(const struct WorldHandle *world,
                               AabbDesc aabb,
                               QueryFilterDesc filter,
                               ColliderHandleRaw *out_handles,
                               uint32_t capacity);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle.
+ */
 uint32_t query_intersect_aabb_count_all(const struct WorldHandle *world, AabbDesc aabb);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle; `aabbs` must point to `query_count`
+ * `AabbDesc` values and `out_counts` to writable space for `capacity` `u32`s.
+ */
 uint32_t query_intersect_aabb_counts(const struct WorldHandle *world,
                                      const AabbDesc *aabbs,
                                      uint32_t query_count,
@@ -1161,12 +2541,28 @@ uint32_t query_intersect_aabb_counts(const struct WorldHandle *world,
                                      uint32_t *out_counts,
                                      uint32_t capacity);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle.
+ */
 uint32_t query_intersect_obb_count(const struct WorldHandle *world,
                                    Obb obb,
                                    QueryFilterDesc filter);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle.
+ */
 uint32_t query_intersect_obb_count_all(const struct WorldHandle *world, Obb obb);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle; `obbs` must point to `query_count`
+ * `Obb` values and `out_counts` to writable space for `capacity` `u32`s.
+ */
 uint32_t query_intersect_obb_counts(const struct WorldHandle *world,
                                     const Obb *obbs,
                                     uint32_t query_count,
@@ -1174,23 +2570,51 @@ uint32_t query_intersect_obb_counts(const struct WorldHandle *world,
                                     uint32_t *out_counts,
                                     uint32_t capacity);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle and `out_handles` must point to
+ * writable space for at least `capacity` collider handles.
+ */
 uint32_t query_intersect_obb(const struct WorldHandle *world,
                              Obb obb,
                              QueryFilterDesc filter,
                              ColliderHandleRaw *out_handles,
                              uint32_t capacity);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle and `out_handles` must point to
+ * writable space for at least `capacity` collider handles.
+ */
 uint32_t query_intersect_obb_all(const struct WorldHandle *world,
                                  Obb obb,
                                  ColliderHandleRaw *out_handles,
                                  uint32_t capacity);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle.
+ */
 uint32_t query_intersect_sphere_count(const struct WorldHandle *world,
                                       Sphere sphere,
                                       QueryFilterDesc filter);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle.
+ */
 uint32_t query_intersect_sphere_count_all(const struct WorldHandle *world, Sphere sphere);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle; `spheres` must point to `query_count`
+ * `Sphere` values and `out_counts` to writable space for `capacity` `u32`s.
+ */
 uint32_t query_intersect_sphere_counts(const struct WorldHandle *world,
                                        const Sphere *spheres,
                                        uint32_t query_count,
@@ -1198,24 +2622,52 @@ uint32_t query_intersect_sphere_counts(const struct WorldHandle *world,
                                        uint32_t *out_counts,
                                        uint32_t capacity);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle and `out_handles` must point to
+ * writable space for at least `capacity` collider handles.
+ */
 uint32_t query_intersect_sphere(const struct WorldHandle *world,
                                 Sphere sphere,
                                 QueryFilterDesc filter,
                                 ColliderHandleRaw *out_handles,
                                 uint32_t capacity);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle and `out_handles` must point to
+ * writable space for at least `capacity` collider handles.
+ */
 uint32_t query_intersect_sphere_all(const struct WorldHandle *world,
                                     Sphere sphere,
                                     ColliderHandleRaw *out_handles,
                                     uint32_t capacity);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle.
+ */
 uint32_t query_intersect_aabb_rigid_body_count_all(const struct WorldHandle *world, AabbDesc aabb);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle and `out_handles` must point to
+ * writable space for at least `capacity` rigid body handles.
+ */
 uint32_t query_intersect_aabb_rigid_bodies_all(const struct WorldHandle *world,
                                                AabbDesc aabb,
                                                RigidBodyHandleRaw *out_handles,
                                                uint32_t capacity);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle.
+ */
 ShapeCastHit query_cast_shape(const struct WorldHandle *world,
                               ShapeDesc shape_desc,
                               Vec3 translation,
@@ -1224,6 +2676,12 @@ ShapeCastHit query_cast_shape(const struct WorldHandle *world,
                               ShapeCastOptionsDesc options,
                               QueryFilterDesc filter);
 
+/**
+ * # Safety
+ *
+ * `world` must be a valid world handle; `out_hit` may be null or must point
+ * to writable space for one `ShapeCastHit`.
+ */
 ColliderHandleRaw query_cast_shape_out(const struct WorldHandle *world,
                                        ShapeDesc shape_desc,
                                        Vec3 translation,
@@ -1235,237 +2693,626 @@ ColliderHandleRaw query_cast_shape_out(const struct WorldHandle *world,
 
 struct RigidBodyBuilderHandle *rigid_body_builder_create(uint32_t status);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a live pointer returned by `rigid_body_builder_create` (or null); ownership
+ * is taken and the pointer must not be used afterwards.
+ */
 RigidBody *rigid_body_builder_build(struct RigidBodyBuilderHandle *builder);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a pointer returned by `rigid_body_builder_create` (or null, which is a
+ * no-op); ownership is taken and the pointer must not be used afterwards.
+ */
 void rigid_body_builder_destroy(struct RigidBodyBuilderHandle *builder);
 
+/**
+ * # Safety
+ *
+ * `rigid_body` must be a pointer returned by `rigid_body_builder_build` or
+ * `world_copy_rigid_body` (or null, which is a no-op); ownership is taken and the pointer must
+ * not be used afterwards.
+ */
 void rigid_body_destroy_raw(RigidBody *rigid_body);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a live pointer returned by `rigid_body_builder_create`, or null.
+ */
 void rigid_body_builder_set_translation(struct RigidBodyBuilderHandle *builder, Vec3 translation);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a live pointer returned by `rigid_body_builder_create`, or null.
+ */
 void rigid_body_builder_set_rotation(struct RigidBodyBuilderHandle *builder,
                                      Vec3 rotation_axis_angle);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a live pointer returned by `rigid_body_builder_create`, or null.
+ */
 void rigid_body_builder_set_pose(struct RigidBodyBuilderHandle *builder,
                                  Vec3 translation,
                                  Quat rotation);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a live pointer returned by `rigid_body_builder_create`, or null.
+ */
 void rigid_body_builder_set_additional_mass_properties(struct RigidBodyBuilderHandle *builder,
                                                        Vec3 center,
                                                        double mass,
                                                        Vec3 inertia);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a live pointer returned by `rigid_body_builder_create`, or null.
+ */
 void rigid_body_builder_set_linvel(struct RigidBodyBuilderHandle *builder, Vec3 linvel);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a live pointer returned by `rigid_body_builder_create`, or null.
+ */
 void rigid_body_builder_set_angvel(struct RigidBodyBuilderHandle *builder, Vec3 angvel);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a live pointer returned by `rigid_body_builder_create`, or null.
+ */
 void rigid_body_builder_set_gravity_scale(struct RigidBodyBuilderHandle *builder,
                                           double gravity_scale);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a live pointer returned by `rigid_body_builder_create`, or null.
+ */
 void rigid_body_builder_set_linear_damping(struct RigidBodyBuilderHandle *builder,
                                            double linear_damping);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a live pointer returned by `rigid_body_builder_create`, or null.
+ */
 void rigid_body_builder_set_angular_damping(struct RigidBodyBuilderHandle *builder,
                                             double angular_damping);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a live pointer returned by `rigid_body_builder_create`, or null.
+ */
 void rigid_body_builder_set_can_sleep(struct RigidBodyBuilderHandle *builder, Bool can_sleep);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a live pointer returned by `rigid_body_builder_create`, or null.
+ */
 void rigid_body_builder_set_enabled_rotations(struct RigidBodyBuilderHandle *builder,
                                               Bool allow_x,
                                               Bool allow_y,
                                               Bool allow_z);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a live pointer returned by `rigid_body_builder_create`, or null.
+ */
 void rigid_body_builder_set_user_data(struct RigidBodyBuilderHandle *builder,
                                       uint64_t user_data_low,
                                       uint64_t user_data_high);
 
+/**
+ * # Safety
+ *
+ * `builder` must be a live pointer returned by `rigid_body_builder_create`, or null.
+ */
 void rigid_body_builder_set_additional_mass(struct RigidBodyBuilderHandle *builder, double mass);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null. `memory_handle` must be a
+ * pointer returned by `rigid_body_builder_build`; ownership is taken and the pointer must not be
+ * used afterwards.
+ */
 RigidBodyHandleRaw world_insert_rigid_body(struct WorldHandle *world, RigidBody *memory_handle);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 Bool world_remove_rigid_body(struct WorldHandle *world,
                              RigidBodyHandleRaw handle,
                              Bool remove_attached_colliders);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null. The returned pointer is
+ * owned by the caller and must be released with `rigid_body_destroy_raw`.
+ */
 RigidBody *world_copy_rigid_body(struct WorldHandle *world, RigidBodyHandleRaw handle);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 uint8_t world_remove_rigid_body_flag(struct WorldHandle *world,
                                      RigidBodyHandleRaw handle,
                                      Bool remove_attached_colliders);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 uint32_t rigid_body_get_status(const struct WorldHandle *world, RigidBodyHandleRaw handle);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 Bool rigid_body_set_status(struct WorldHandle *world,
                            RigidBodyHandleRaw handle,
                            uint32_t status,
                            Bool wake_up);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 Vec3 rigid_body_get_translation(const struct WorldHandle *world, RigidBodyHandleRaw handle);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null. `out_translation` must be
+ * a valid writable pointer to a `Vec3`, or null.
+ */
 void rigid_body_get_translation_out(const struct WorldHandle *world,
                                     RigidBodyHandleRaw handle,
                                     Vec3 *out_translation);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 Quat rigid_body_get_rotation(const struct WorldHandle *world, RigidBodyHandleRaw handle);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null. `out_rotation` must be a
+ * valid writable pointer to a `Quat`, or null.
+ */
 void rigid_body_get_rotation_out(const struct WorldHandle *world,
                                  RigidBodyHandleRaw handle,
                                  Quat *out_rotation);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 Bool rigid_body_set_pose(struct WorldHandle *world,
                          RigidBodyHandleRaw handle,
                          Vec3 translation,
                          Quat rotation,
                          Bool wake_up);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 Bool rigid_body_set_translation(struct WorldHandle *world,
                                 RigidBodyHandleRaw handle,
                                 Vec3 translation,
                                 Bool wake_up);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 uint8_t rigid_body_set_translation_flag(struct WorldHandle *world,
                                         RigidBodyHandleRaw handle,
                                         Vec3 translation,
                                         Bool wake_up);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 Bool rigid_body_set_rotation(struct WorldHandle *world,
                              RigidBodyHandleRaw handle,
                              Quat rotation,
                              Bool wake_up);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 uint8_t rigid_body_set_rotation_flag(struct WorldHandle *world,
                                      RigidBodyHandleRaw handle,
                                      Quat rotation,
                                      Bool wake_up);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 uint8_t rigid_body_set_pose_flag(struct WorldHandle *world,
                                  RigidBodyHandleRaw handle,
                                  Vec3 translation,
                                  Quat rotation,
                                  Bool wake_up);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 double rigid_body_get_mass(struct WorldHandle *world, RigidBodyHandleRaw handle);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 Vec3 rigid_body_get_force(const struct WorldHandle *world, RigidBodyHandleRaw handle);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 Vec3 rigid_body_get_linvel(const struct WorldHandle *world, RigidBodyHandleRaw handle);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null. `out_linvel` must be a
+ * valid writable pointer to a `Vec3`, or null.
+ */
 void rigid_body_get_linvel_out(const struct WorldHandle *world,
                                RigidBodyHandleRaw handle,
                                Vec3 *out_linvel);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 Bool rigid_body_set_linvel(struct WorldHandle *world,
                            RigidBodyHandleRaw handle,
                            Vec3 linvel,
                            Bool wake_up);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 uint8_t rigid_body_set_linvel_flag(struct WorldHandle *world,
                                    RigidBodyHandleRaw handle,
                                    Vec3 linvel,
                                    Bool wake_up);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 Vec3 rigid_body_get_angvel(const struct WorldHandle *world, RigidBodyHandleRaw handle);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null. `out_angvel` must be a
+ * valid writable pointer to a `Vec3`, or null.
+ */
 void rigid_body_get_angvel_out(const struct WorldHandle *world,
                                RigidBodyHandleRaw handle,
                                Vec3 *out_angvel);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 Bool rigid_body_set_angvel(struct WorldHandle *world,
                            RigidBodyHandleRaw handle,
                            Vec3 angvel,
                            Bool wake_up);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 uint8_t rigid_body_set_angvel_flag(struct WorldHandle *world,
                                    RigidBodyHandleRaw handle,
                                    Vec3 angvel,
                                    Bool wake_up);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 Bool rigid_body_add_force(struct WorldHandle *world,
                           RigidBodyHandleRaw handle,
                           Vec3 force,
                           Bool wake_up);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 Bool rigid_body_add_force_at_point(struct WorldHandle *world,
                                    RigidBodyHandleRaw handle,
                                    Vec3 force,
                                    Vec3 point,
                                    Bool wake_up);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 Bool rigid_body_reset_force(struct WorldHandle *world, RigidBodyHandleRaw handle, Bool wake_up);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 uint8_t rigid_body_add_force_flag(struct WorldHandle *world,
                                   RigidBodyHandleRaw handle,
                                   Vec3 force,
                                   Bool wake_up);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 Bool rigid_body_add_torque(struct WorldHandle *world,
                            RigidBodyHandleRaw handle,
                            Vec3 torque,
                            Bool wake_up);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 Bool rigid_body_reset_torque(struct WorldHandle *world, RigidBodyHandleRaw handle, Bool wake_up);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 uint8_t rigid_body_add_torque_flag(struct WorldHandle *world,
                                    RigidBodyHandleRaw handle,
                                    Vec3 torque,
                                    Bool wake_up);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 Bool rigid_body_apply_impulse(struct WorldHandle *world,
                               RigidBodyHandleRaw handle,
                               Vec3 impulse,
                               Bool wake_up);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 uint8_t rigid_body_apply_impulse_flag(struct WorldHandle *world,
                                       RigidBodyHandleRaw handle,
                                       Vec3 impulse,
                                       Bool wake_up);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 Bool rigid_body_apply_torque_impulse(struct WorldHandle *world,
                                      RigidBodyHandleRaw handle,
                                      Vec3 torque_impulse,
                                      Bool wake_up);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 uint8_t rigid_body_apply_torque_impulse_flag(struct WorldHandle *world,
                                              RigidBodyHandleRaw handle,
                                              Vec3 torque_impulse,
                                              Bool wake_up);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 Bool rigid_body_enable_ccd(struct WorldHandle *world, RigidBodyHandleRaw handle, Bool enabled);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 uint8_t rigid_body_enable_ccd_flag(struct WorldHandle *world,
                                    RigidBodyHandleRaw handle,
                                    Bool enabled);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 Bool rigid_body_sleep(struct WorldHandle *world, RigidBodyHandleRaw handle);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 uint8_t rigid_body_sleep_flag(struct WorldHandle *world, RigidBodyHandleRaw handle);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 Bool rigid_body_wake_up(struct WorldHandle *world, RigidBodyHandleRaw handle, Bool strong);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 uint8_t rigid_body_wake_up_flag(struct WorldHandle *world, RigidBodyHandleRaw handle, Bool strong);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 Bool rigid_body_is_sleeping(const struct WorldHandle *world, RigidBodyHandleRaw handle);
 
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 uint8_t rigid_body_is_sleeping_flag(const struct WorldHandle *world, RigidBodyHandleRaw handle);
 
+/**
+ * Create an empty R-tree index.
+ *
+ * # Safety
+ *
+ * The returned pointer is owned by the caller and must be freed exactly once
+ * with `rtree_destroy`.
+ */
 struct RTreeHandle *rtree_create(void);
 
+/**
+ * Destroy an R-tree index created by `rtree_create`.
+ *
+ * # Safety
+ *
+ * `tree` must be null or a pointer returned by `rtree_create`; it must not be
+ * used again after this call.
+ */
 void rtree_destroy(struct RTreeHandle *tree);
 
+/**
+ * Remove every entry from the tree.
+ *
+ * # Safety
+ *
+ * `tree` must be a valid pointer returned by `rtree_create`.
+ */
 void rtree_clear(struct RTreeHandle *tree);
 
+/**
+ * Return the number of entries stored in the tree.
+ *
+ * # Safety
+ *
+ * `tree` must be a valid pointer returned by `rtree_create`.
+ */
 uint32_t rtree_len(const struct RTreeHandle *tree);
 
+/**
+ * Insert or overwrite the bounds of `id` in the tree.
+ *
+ * # Safety
+ *
+ * `tree` must be a valid pointer returned by `rtree_create`.
+ */
 Bool rtree_insert(struct RTreeHandle *tree, uint64_t id, AabbDesc aabb);
 
+/**
+ * Update the bounds of an existing `id` in the tree.
+ *
+ * # Safety
+ *
+ * `tree` must be a valid pointer returned by `rtree_create`.
+ */
 Bool rtree_update(struct RTreeHandle *tree, uint64_t id, AabbDesc aabb);
 
+/**
+ * Remove `id` from the tree.
+ *
+ * # Safety
+ *
+ * `tree` must be a valid pointer returned by `rtree_create`.
+ */
 Bool rtree_remove(struct RTreeHandle *tree, uint64_t id);
 
+/**
+ * Force an immediate rebuild of the tree structure.
+ *
+ * # Safety
+ *
+ * `tree` must be a valid pointer returned by `rtree_create`.
+ */
 void rtree_rebuild(struct RTreeHandle *tree);
 
+/**
+ * Count the entries whose bounds intersect `aabb`.
+ *
+ * # Safety
+ *
+ * `tree` must be a valid pointer returned by `rtree_create`.
+ */
 uint32_t rtree_query_aabb_count(struct RTreeHandle *tree, AabbDesc aabb);
 
+/**
+ * Write the ids of entries whose bounds intersect `aabb` into `out_ids`.
+ *
+ * # Safety
+ *
+ * `tree` must be a valid pointer returned by `rtree_create`, and `out_ids`
+ * must point to a writable buffer of at least `capacity` `u64` elements.
+ */
 uint32_t rtree_query_aabb(struct RTreeHandle *tree,
                           AabbDesc aabb,
                           uint64_t *out_ids,
@@ -1475,16 +3322,33 @@ double space_kepler_period(double mu, double semi_major_axis);
 
 double space_kepler_semi_major_axis(double mu, double period);
 
+/**
+ * # Safety
+ * `out_state` must be null or point to a valid, writable `StateVector`.
+ */
 Bool space_elements_to_state(OrbitalElements elements, double mu, StateVector *out_state);
 
+/**
+ * # Safety
+ * `out_elements` must be null or point to a valid, writable `OrbitalElements`.
+ */
 Bool space_state_to_elements(StateVector state, double mu, OrbitalElements *out_elements);
 
+/**
+ * # Safety
+ * `out_acceleration` must be null or point to a valid, writable `Vec3`.
+ */
 Bool space_j2_acceleration(Vec3 position,
                            double mu,
                            double equatorial_radius,
                            double j2,
                            Vec3 *out_acceleration);
 
+/**
+ * # Safety
+ * `world` must be a valid pointer to a `WorldHandle` created by this library.
+ * `out_acceleration` must be null or point to a valid, writable `Vec3`.
+ */
 Bool space_apply_j2_force_to_body(struct WorldHandle *world,
                                   RigidBodyHandleRaw body_handle,
                                   double mu,
@@ -1494,6 +3358,11 @@ Bool space_apply_j2_force_to_body(struct WorldHandle *world,
                                   Bool wake_up,
                                   Vec3 *out_acceleration);
 
+/**
+ * # Safety
+ * `world` must be a valid pointer to a `WorldHandle` created by this library.
+ * `out_acceleration` must be null or point to a valid, writable `Vec3`.
+ */
 uint8_t space_apply_j2_force_to_body_flag(struct WorldHandle *world,
                                           RigidBodyHandleRaw body_handle,
                                           double mu,
@@ -1503,20 +3372,37 @@ uint8_t space_apply_j2_force_to_body_flag(struct WorldHandle *world,
                                           Bool wake_up,
                                           Vec3 *out_acceleration);
 
+/**
+ * # Safety
+ * `out_derivative` must be null or point to a valid, writable `QuaternionDerivative`.
+ */
 Bool space_quaternion_derivative(Quat attitude,
                                  Vec3 angular_velocity,
                                  QuaternionDerivative *out_derivative);
 
+/**
+ * # Safety
+ * `out_derivative` must be null or point to a valid, writable `RigidBodyEulerDerivative`.
+ */
 Bool space_rigid_body_euler_derivative(Vec3 inertia_diag,
                                        Vec3 angular_velocity,
                                        Vec3 torque,
                                        RigidBodyEulerDerivative *out_derivative);
 
+/**
+ * # Safety
+ * `out_exchange` must be null or point to a valid, writable `CmgExchange`.
+ */
 Bool space_cmg_exchange(Vec3 gimbal_axis,
                         Vec3 wheel_momentum,
                         double gimbal_rate,
                         CmgExchange *out_exchange);
 
+/**
+ * # Safety
+ * `world` must be a valid pointer to a `WorldHandle` created by this library.
+ * `out_exchange` must be null or point to a valid, writable `CmgExchange`.
+ */
 Bool space_apply_cmg_torque_to_body(struct WorldHandle *world,
                                     RigidBodyHandleRaw body_handle,
                                     Vec3 gimbal_axis,
@@ -1525,6 +3411,11 @@ Bool space_apply_cmg_torque_to_body(struct WorldHandle *world,
                                     Bool wake_up,
                                     CmgExchange *out_exchange);
 
+/**
+ * # Safety
+ * `world` must be a valid pointer to a `WorldHandle` created by this library.
+ * `out_exchange` must be null or point to a valid, writable `CmgExchange`.
+ */
 uint8_t space_apply_cmg_torque_to_body_flag(struct WorldHandle *world,
                                             RigidBodyHandleRaw body_handle,
                                             Vec3 gimbal_axis,
@@ -1533,6 +3424,10 @@ uint8_t space_apply_cmg_torque_to_body_flag(struct WorldHandle *world,
                                             Bool wake_up,
                                             CmgExchange *out_exchange);
 
+/**
+ * # Safety
+ * `out_derivative` must be null or point to a valid, writable `CwDerivative`.
+ */
 Bool space_cw_derivative(CwState state, double mean_motion, CwDerivative *out_derivative);
 
 double space_lambert_time_elliptic(double mu,
@@ -1541,6 +3436,10 @@ double space_lambert_time_elliptic(double mu,
                                    double beta,
                                    uint32_t revolutions);
 
+/**
+ * # Safety
+ * `out_transform` must be null or point to a valid, writable `DhTransform`.
+ */
 Bool space_dh_transform(double theta, double d, double a, double alpha, DhTransform *out_transform);
 
 double space_arm_first_joint_inverse(double wrist_x, double wrist_y);
@@ -1551,12 +3450,20 @@ double space_arm_third_joint_angle(double planar_radius,
                                    double link3,
                                    Bool elbow_up);
 
+/**
+ * # Safety
+ * `out_dynamics` must be null or point to a valid, writable `ManipulatorDynamics`.
+ */
 Bool space_manipulator_dynamics_diag(Vec3 mass_matrix_diag,
                                      Vec3 joint_acceleration,
                                      Vec3 coriolis,
                                      Vec3 gravity,
                                      ManipulatorDynamics *out_dynamics);
 
+/**
+ * # Safety
+ * `out_power` must be null or point to a valid, writable `SolarPanelPower`.
+ */
 Bool space_solar_panel_power(double solar_flux,
                              double area,
                              double efficiency,
@@ -1564,12 +3471,20 @@ Bool space_solar_panel_power(double solar_flux,
                              double degradation,
                              SolarPanelPower *out_power);
 
+/**
+ * # Safety
+ * `out_balance` must be null or point to a valid, writable `ThermalBalance`.
+ */
 Bool space_thermal_balance(double absorbed_power,
                            double internal_power,
                            double emitted_area,
                            double emissivity,
                            ThermalBalance *out_balance);
 
+/**
+ * # Safety
+ * `out_balance` must be null or point to a valid, writable `Co2MassBalance`.
+ */
 Bool space_co2_mass_balance(double current_mass,
                             double generation_rate,
                             double removal_rate,
@@ -1578,6 +3493,10 @@ Bool space_co2_mass_balance(double current_mass,
                             double dt,
                             Co2MassBalance *out_balance);
 
+/**
+ * # Safety
+ * `out_link` must be null or point to a valid, writable `FriisLink`.
+ */
 Bool space_friis_link(double transmit_power,
                       double transmit_gain,
                       double receive_gain,
@@ -1593,6 +3512,10 @@ double space_tsiolkovsky_delta_v(double specific_impulse,
                                  double initial_mass,
                                  double final_mass);
 
+/**
+ * # Safety
+ * `out_transfer` must be null or point to a valid, writable `HohmannTransfer`.
+ */
 Bool space_hohmann_transfer(double mu,
                             double radius1,
                             double radius2,
@@ -1603,6 +3526,10 @@ double space_atmospheric_density_scale_height(double reference_density,
                                               double reference_altitude,
                                               double scale_height);
 
+/**
+ * # Safety
+ * `out_acceleration` must be null or point to a valid, writable `Vec3`.
+ */
 Bool space_atmospheric_drag_acceleration(Vec3 velocity,
                                          Vec3 atmosphere_velocity,
                                          double density,
@@ -1611,6 +3538,11 @@ Bool space_atmospheric_drag_acceleration(Vec3 velocity,
                                          double mass,
                                          Vec3 *out_acceleration);
 
+/**
+ * # Safety
+ * `world` must be a valid pointer to a `WorldHandle` created by this library.
+ * `out_acceleration` must be null or point to a valid, writable `Vec3`.
+ */
 Bool space_apply_atmospheric_drag_to_body(struct WorldHandle *world,
                                           RigidBodyHandleRaw body_handle,
                                           Vec3 atmosphere_velocity,
@@ -1621,6 +3553,11 @@ Bool space_apply_atmospheric_drag_to_body(struct WorldHandle *world,
                                           Bool wake_up,
                                           Vec3 *out_acceleration);
 
+/**
+ * # Safety
+ * `world` must be a valid pointer to a `WorldHandle` created by this library.
+ * `out_acceleration` must be null or point to a valid, writable `Vec3`.
+ */
 uint8_t space_apply_atmospheric_drag_to_body_flag(struct WorldHandle *world,
                                                   RigidBodyHandleRaw body_handle,
                                                   Vec3 atmosphere_velocity,
@@ -1631,12 +3568,20 @@ uint8_t space_apply_atmospheric_drag_to_body_flag(struct WorldHandle *world,
                                                   Bool wake_up,
                                                   Vec3 *out_acceleration);
 
+/**
+ * # Safety
+ * `out_attitude` must be null or point to a valid, writable `Quat`.
+ */
 Bool space_triad_attitude(Vec3 body_primary,
                           Vec3 body_secondary,
                           Vec3 reference_primary,
                           Vec3 reference_secondary,
                           Quat *out_attitude);
 
+/**
+ * # Safety
+ * `out_prediction` must be null or point to a valid, writable `ScalarKalman`.
+ */
 Bool space_ekf_predict_scalar(double state,
                               double covariance,
                               double nonlinear_delta,
@@ -1648,6 +3593,10 @@ double space_ekf_gain_scalar(double covariance,
                              double measurement_jacobian,
                              double measurement_noise);
 
+/**
+ * # Safety
+ * `out_update` must be null or point to a valid, writable `ScalarKalman`.
+ */
 Bool space_ekf_update_scalar(double predicted_state,
                              double predicted_covariance,
                              double measurement,
@@ -1656,12 +3605,20 @@ Bool space_ekf_update_scalar(double predicted_state,
                              double measurement_jacobian,
                              ScalarKalman *out_update);
 
+/**
+ * # Safety
+ * `out_attitude` must be null or point to a valid, writable `LeastSquaresAttitude`.
+ */
 Bool space_least_squares_attitude_two_vector(Vec3 body_primary,
                                              Vec3 body_secondary,
                                              Vec3 reference_primary,
                                              Vec3 reference_secondary,
                                              LeastSquaresAttitude *out_attitude);
 
+/**
+ * # Safety
+ * `out_observation` must be null or point to a valid, writable `GnssObservation`.
+ */
 Bool space_gnss_pseudorange(Vec3 receiver,
                             Vec3 satellite,
                             double receiver_clock_bias,
@@ -1679,6 +3636,10 @@ double space_gnss_double_difference_carrier_phase(double range_rover_sat_a,
 
 double space_structural_natural_frequency(double stiffness, double mass, double mode_factor);
 
+/**
+ * # Safety
+ * `out_force` must be null or point to a valid, writable `ContactForceModel`.
+ */
 Bool space_contact_force_hunt_crossley(double penetration,
                                        double penetration_rate,
                                        double stiffness,
@@ -1700,6 +3661,10 @@ double space_heat_pipe_thermal_resistance(double evaporator_resistance,
                                           double condenser_resistance,
                                           double wick_resistance);
 
+/**
+ * # Safety
+ * `out_battery` must be null or point to a valid, writable `BatteryEquivalentCircuit`.
+ */
 Bool space_battery_equivalent_circuit(double open_circuit_voltage,
                                       double current,
                                       double ohmic_resistance,
@@ -1709,12 +3674,20 @@ Bool space_battery_equivalent_circuit(double open_circuit_voltage,
                                       double capacity_coulombs,
                                       BatteryEquivalentCircuit *out_battery);
 
+/**
+ * # Safety
+ * `out_performance` must be null or point to a valid, writable `HallThrusterPerformance`.
+ */
 Bool space_hall_thruster_performance(double mass_flow_rate,
                                      double exhaust_velocity,
                                      double input_power,
                                      double standard_gravity,
                                      HallThrusterPerformance *out_performance);
 
+/**
+ * # Safety
+ * `out_command` must be null or point to a valid, writable `Vec3`.
+ */
 Bool space_artificial_potential_guidance(Vec3 position,
                                          Vec3 target,
                                          Vec3 obstacle,
@@ -1723,18 +3696,30 @@ Bool space_artificial_potential_guidance(Vec3 position,
                                          double influence_radius,
                                          Vec3 *out_command);
 
+/**
+ * # Safety
+ * `out_probability` must be null or point to a valid, writable `CollisionProbability`.
+ */
 Bool space_debris_collision_probability(double miss_distance,
                                         double combined_radius,
                                         double sigma_radial,
                                         double sigma_intrack,
                                         CollisionProbability *out_probability);
 
+/**
+ * # Safety
+ * `out_erosion` must be null or point to a valid, writable `AtomicOxygenErosion`.
+ */
 Bool space_atomic_oxygen_erosion(double fluence,
                                  double erosion_yield,
                                  double area,
                                  double density,
                                  AtomicOxygenErosion *out_erosion);
 
+/**
+ * # Safety
+ * `out_derivative` must be null or point to a valid, writable `FlexibleModeDerivative`.
+ */
 Bool space_flexible_mode_derivative(double displacement,
                                     double velocity,
                                     double natural_frequency,
@@ -1743,6 +3728,10 @@ Bool space_flexible_mode_derivative(double displacement,
                                     double modal_mass,
                                     FlexibleModeDerivative *out_derivative);
 
+/**
+ * # Safety
+ * `out_derivative` must be null or point to a valid, writable `SloshPendulumDerivative`.
+ */
 Bool space_slosh_pendulum_derivative(double angle,
                                      double angular_rate,
                                      double length,
@@ -1751,23 +3740,39 @@ Bool space_slosh_pendulum_derivative(double angle,
                                      double gravity,
                                      SloshPendulumDerivative *out_derivative);
 
+/**
+ * # Safety
+ * `out_derivative` must be null or point to a valid, writable `VariationalState`.
+ */
 Bool space_variational_two_body(Vec3 position,
                                 Vec3 velocity,
                                 double mu,
                                 VariationalState *out_derivative);
 
+/**
+ * # Safety
+ * `out_heat` must be null or point to a valid, writable `FluidLoopHeatTransfer`.
+ */
 Bool space_single_phase_loop_heat_transfer(double mass_flow_rate,
                                            double specific_heat,
                                            double inlet_temperature,
                                            double heat_input,
                                            FluidLoopHeatTransfer *out_heat);
 
+/**
+ * # Safety
+ * `out_measurement` must be null or point to a valid, writable `RadarMeasurement`.
+ */
 Bool space_radar_range_rate(Vec3 radar_position,
                             Vec3 target_position,
                             Vec3 radar_velocity,
                             Vec3 target_velocity,
                             RadarMeasurement *out_measurement);
 
+/**
+ * # Safety
+ * `out_properties` must be null or point to a valid, writable `MassProperties`.
+ */
 Bool space_mass_properties_two_body(double mass1,
                                     Vec3 position1,
                                     Vec3 inertia1_diag,
@@ -1781,11 +3786,19 @@ double space_docking_buffer_energy(double relative_speed,
                                    double stroke,
                                    double efficiency);
 
+/**
+ * # Safety
+ * `out_profile` must be null or point to a valid, writable `BangOffBangProfile`.
+ */
 Bool space_bang_off_bang_profile(double angle,
                                  double max_acceleration,
                                  double max_rate,
                                  BangOffBangProfile *out_profile);
 
+/**
+ * # Safety
+ * `out_acceleration` must be null or point to a valid, writable `Vec3`.
+ */
 Bool space_solar_radiation_pressure_acceleration(Vec3 sun_direction,
                                                  double solar_flux,
                                                  double reflectivity,
@@ -1793,6 +3806,11 @@ Bool space_solar_radiation_pressure_acceleration(Vec3 sun_direction,
                                                  double mass,
                                                  Vec3 *out_acceleration);
 
+/**
+ * # Safety
+ * `world` must be a valid pointer to a `WorldHandle` created by this library.
+ * `out_acceleration` must be null or point to a valid, writable `Vec3`.
+ */
 Bool space_apply_solar_radiation_pressure_to_body(struct WorldHandle *world,
                                                   RigidBodyHandleRaw body_handle,
                                                   Vec3 sun_direction,
@@ -1803,6 +3821,11 @@ Bool space_apply_solar_radiation_pressure_to_body(struct WorldHandle *world,
                                                   Bool wake_up,
                                                   Vec3 *out_acceleration);
 
+/**
+ * # Safety
+ * `world` must be a valid pointer to a `WorldHandle` created by this library.
+ * `out_acceleration` must be null or point to a valid, writable `Vec3`.
+ */
 uint8_t space_apply_solar_radiation_pressure_to_body_flag(struct WorldHandle *world,
                                                           RigidBodyHandleRaw body_handle,
                                                           Vec3 sun_direction,
@@ -1813,8 +3836,17 @@ uint8_t space_apply_solar_radiation_pressure_to_body_flag(struct WorldHandle *wo
                                                           Bool wake_up,
                                                           Vec3 *out_acceleration);
 
+/**
+ * # Safety
+ * `out_torque` must be null or point to a valid, writable `Vec3`.
+ */
 Bool space_gravity_gradient_torque(Vec3 position, Vec3 inertia_diag, double mu, Vec3 *out_torque);
 
+/**
+ * # Safety
+ * `world` must be a valid pointer to a `WorldHandle` created by this library.
+ * `out_torque` must be null or point to a valid, writable `Vec3`.
+ */
 Bool space_apply_gravity_gradient_torque_to_body(struct WorldHandle *world,
                                                  RigidBodyHandleRaw body_handle,
                                                  Vec3 inertia_diag,
@@ -1822,6 +3854,11 @@ Bool space_apply_gravity_gradient_torque_to_body(struct WorldHandle *world,
                                                  Bool wake_up,
                                                  Vec3 *out_torque);
 
+/**
+ * # Safety
+ * `world` must be a valid pointer to a `WorldHandle` created by this library.
+ * `out_torque` must be null or point to a valid, writable `Vec3`.
+ */
 uint8_t space_apply_gravity_gradient_torque_to_body_flag(struct WorldHandle *world,
                                                          RigidBodyHandleRaw body_handle,
                                                          Vec3 inertia_diag,
@@ -1829,11 +3866,20 @@ uint8_t space_apply_gravity_gradient_torque_to_body_flag(struct WorldHandle *wor
                                                          Bool wake_up,
                                                          Vec3 *out_torque);
 
+/**
+ * # Safety
+ * `out_dipole` must be null or point to a valid, writable `Vec3`.
+ */
 Bool space_magnetic_torquer_dipole(Vec3 commanded_torque,
                                    Vec3 magnetic_field,
                                    double max_dipole,
                                    Vec3 *out_dipole);
 
+/**
+ * # Safety
+ * `world` must be a valid pointer to a `WorldHandle` created by this library.
+ * `out_dipole` must be null or point to a valid, writable `Vec3`.
+ */
 Bool space_apply_magnetic_torquer_to_body(struct WorldHandle *world,
                                           RigidBodyHandleRaw body_handle,
                                           Vec3 commanded_torque,
@@ -1842,6 +3888,11 @@ Bool space_apply_magnetic_torquer_to_body(struct WorldHandle *world,
                                           Bool wake_up,
                                           Vec3 *out_dipole);
 
+/**
+ * # Safety
+ * `world` must be a valid pointer to a `WorldHandle` created by this library.
+ * `out_dipole` must be null or point to a valid, writable `Vec3`.
+ */
 uint8_t space_apply_magnetic_torquer_to_body_flag(struct WorldHandle *world,
                                                   RigidBodyHandleRaw body_handle,
                                                   Vec3 commanded_torque,
@@ -1850,11 +3901,19 @@ uint8_t space_apply_magnetic_torquer_to_body_flag(struct WorldHandle *world,
                                                   Bool wake_up,
                                                   Vec3 *out_dipole);
 
+/**
+ * # Safety
+ * `out_inverse` must be null or point to a valid, writable `CmgRobustInverse`.
+ */
 Bool space_cmg_robust_pseudoinverse_diag(Vec3 jacobian_diag,
                                          Vec3 desired_torque,
                                          double damping,
                                          CmgRobustInverse *out_inverse);
 
+/**
+ * # Safety
+ * `out_rates` must be null or point to a valid, writable `Sgp4SecularRates`.
+ */
 Bool space_sgp4_j2_secular_rates(double semi_major_axis,
                                  double eccentricity,
                                  double inclination,
@@ -1871,16 +3930,28 @@ double space_sagnac_phase_rate(double area, double angular_rate, double waveleng
 
 double space_solar_array_pd_torque(double angle_error, double rate_error, double kp, double kd);
 
+/**
+ * # Safety
+ * `out_rate` must be null or point to a valid, writable `ChemicalReactionRate`.
+ */
 Bool space_sabatier_methane_rate(double co2_molar_rate,
                                  double h2_molar_rate,
                                  double conversion,
                                  ChemicalReactionRate *out_rate);
 
+/**
+ * # Safety
+ * `out_rate` must be null or point to a valid, writable `ChemicalReactionRate`.
+ */
 Bool space_spe_oxygen_rate(double current,
                            double cells,
                            double faraday_efficiency,
                            ChemicalReactionRate *out_rate);
 
+/**
+ * # Safety
+ * `out_power` must be null or point to a valid, writable `RadiatorPower`.
+ */
 Bool space_radiator_power(double area,
                           double emissivity,
                           double temperature,
@@ -1900,6 +3971,10 @@ double space_surface_charging_current_balance(double photo_current,
                                               double electron_current,
                                               double ion_current);
 
+/**
+ * # Safety
+ * `out_state` must be null or point to a valid, writable `AirlockDepressurization`.
+ */
 Bool space_airlock_depressurization(double pressure,
                                     double ambient_pressure,
                                     double volume,
@@ -1913,6 +3988,12 @@ Bool space_airlock_depressurization(double pressure,
  * `vertices_xyz` — flat array of vertex positions (3×n_verts f64s)
  * `face_indices` — flat array of triangle indices (3×n_faces u32s)
  * `density` — constant density (kg/m³)
+ *
+ * # Safety
+ *
+ * `vertices_xyz` must point to at least 3×n_vertices readable f64s and
+ * `face_indices` to at least 3×n_faces readable u32s; `out_acceleration`
+ * must be valid for a single `Vec3` write.
  */
 Bool terrain_polyhedron_gravity(Vec3 position,
                                 const double *vertices_xyz,
@@ -1924,6 +4005,11 @@ Bool terrain_polyhedron_gravity(Vec3 position,
 
 /**
  * Compute terrain gravity from DEM (direct summation method).
+ *
+ * # Safety
+ *
+ * `dem` must point to at least nx×ny readable f64s; `out_acceleration` must
+ * be valid for a single `Vec3` write.
  */
 Bool terrain_gravity_dem(Vec3 position,
                          const double *dem,
@@ -1936,6 +4022,11 @@ Bool terrain_gravity_dem(Vec3 position,
 
 /**
  * Compute terrain gravity from DEM (FFT/quadrupole approximation).
+ *
+ * # Safety
+ *
+ * `dem` must point to at least nx×ny readable f64s; `out_acceleration` must
+ * be valid for a single `Vec3` write.
  */
 Bool terrain_gravity_dem_fft(Vec3 position,
                              const double *dem,
@@ -1948,6 +4039,10 @@ Bool terrain_gravity_dem_fft(Vec3 position,
 
 /**
  * Compute lunar mascon gravitational acceleration.
+ *
+ * # Safety
+ *
+ * `out_acceleration` must be valid for a single `Vec3` write.
  */
 Bool terrain_lunar_mascon_gravity(Vec3 position, Vec3 *out_acceleration);
 
@@ -1958,41 +4053,99 @@ uint32_t terrain_lunar_mascon_count(void);
 
 /**
  * Get a specific lunar mascon by index.
+ *
+ * # Safety
+ *
+ * `out_mascon` must be valid for a single `LunarMascon` write.
  */
 Bool terrain_lunar_mascon_get(uint32_t index, struct LunarMascon *out_mascon);
 
+/**
+ * Estimate the aerodynamic/gravity forces acting on a trajectory state.
+ *
+ * # Safety
+ *
+ * `out_report`, when non-null, must be valid for a single
+ * `TrajectoryForceReport` write.
+ */
 Bool trajectory_estimate_forces(TrajectoryState state,
                                 TrajectoryEnvironment env,
                                 TrajectoryForceReport *out_report);
 
+/**
+ * Advance a trajectory state by one integration step.
+ *
+ * # Safety
+ *
+ * `out_state` and `out_report`, when non-null, must each be valid for a
+ * single write of `TrajectoryState` / `TrajectoryForceReport`.
+ */
 Bool trajectory_integrate_step(TrajectoryState state,
                                TrajectoryEnvironment env,
                                double dt,
                                TrajectoryState *out_state,
                                TrajectoryForceReport *out_report);
 
+/**
+ * Apply trajectory forces to a rigid body in the world.
+ *
+ * # Safety
+ *
+ * `world` must be a valid, live world pointer; `out_report`, when non-null,
+ * must be valid for a single `TrajectoryForceReport` write.
+ */
 Bool trajectory_apply_forces_to_body(struct WorldHandle *world,
                                      RigidBodyHandleRaw body_handle,
                                      TrajectoryEnvironment env,
                                      Bool wake_up,
                                      TrajectoryForceReport *out_report);
 
+/**
+ * Flag-returning variant of `trajectory_apply_forces_to_body`.
+ *
+ * # Safety
+ *
+ * Same pointer contract as `trajectory_apply_forces_to_body`.
+ */
 uint8_t trajectory_apply_forces_to_body_flag(struct WorldHandle *world,
                                              RigidBodyHandleRaw body_handle,
                                              TrajectoryEnvironment env,
                                              Bool wake_up,
                                              TrajectoryForceReport *out_report);
 
+/**
+ * Estimate the glide forces acting on a gliding trajectory state.
+ *
+ * # Safety
+ *
+ * `out_report`, when non-null, must be valid for a single
+ * `TrajectoryGlideReport` write.
+ */
 Bool trajectory_glide_estimate(TrajectoryGlideState state,
                                TrajectoryGlideEnvironment env,
                                TrajectoryGlideReport *out_report);
 
+/**
+ * Advance a gliding trajectory state by one integration step.
+ *
+ * # Safety
+ *
+ * `out_state` and `out_report`, when non-null, must each be valid for a
+ * single write of `TrajectoryGlideState` / `TrajectoryGlideReport`.
+ */
 Bool trajectory_glide_integrate_step(TrajectoryGlideState state,
                                      TrajectoryGlideEnvironment env,
                                      double dt,
                                      TrajectoryGlideState *out_state,
                                      TrajectoryGlideReport *out_report);
 
+/**
+ * # Safety
+ *
+ * `voxels` must point to at least `size_x * size_y * size_z` readable bytes
+ * for the duration of the call. The returned builder handle is owned by the
+ * caller and must be released through the collider-builder ABI.
+ */
 struct ColliderBuilderHandle *collider_builder_create_voxels(const uint8_t *voxels,
                                                              uint32_t size_x,
                                                              uint32_t size_y,
@@ -2003,6 +4156,11 @@ struct ColliderBuilderHandle *collider_builder_create_voxels(const uint8_t *voxe
                                                              Vec3 origin,
                                                              VoxelColliderOptions options);
 
+/**
+ * # Safety
+ *
+ * Same pointer contract as `collider_builder_create_voxels`.
+ */
 struct ColliderBuilderHandle *collider_builder_create_voxels_auto(const uint8_t *voxels,
                                                                   uint32_t size_x,
                                                                   uint32_t size_y,
@@ -2013,6 +4171,12 @@ struct ColliderBuilderHandle *collider_builder_create_voxels_auto(const uint8_t 
                                                                   Vec3 origin,
                                                                   Bool dynamic_body);
 
+/**
+ * # Safety
+ *
+ * `voxels` must point to at least `size_x * size_y * size_z` readable bytes
+ * for the duration of the call.
+ */
 VoxelBuildStats voxel_build_stats(const uint8_t *voxels,
                                   uint32_t size_x,
                                   uint32_t size_y,
@@ -2035,6 +4199,11 @@ VoxelBuildStats voxel_obb_build_stats(Obb obb,
                                       double voxel_size_z,
                                       VoxelColliderOptions options);
 
+/**
+ * # Safety
+ *
+ * `out_stats` must be null or point to a valid, writable `VoxelBuildStats`.
+ */
 void voxel_aabb_build_stats_out(AabbDesc aabb,
                                 double voxel_size_x,
                                 double voxel_size_y,
@@ -2042,6 +4211,11 @@ void voxel_aabb_build_stats_out(AabbDesc aabb,
                                 VoxelColliderOptions options,
                                 VoxelBuildStats *out_stats);
 
+/**
+ * # Safety
+ *
+ * `out_stats` must be null or point to a valid, writable `VoxelBuildStats`.
+ */
 void voxel_obb_build_stats_out(Obb obb,
                                double voxel_size_x,
                                double voxel_size_y,
@@ -2073,26 +4247,54 @@ struct ColliderBuilderHandle *collider_builder_create_voxel_obb_auto(Obb obb,
                                                                      double voxel_size_z,
                                                                      Bool dynamic_body);
 
+/**
+ * # Safety
+ *
+ * `world` must be null or a valid world handle. `out_handles` must be null
+ * or point to `capacity` writable `ColliderHandleRaw` entries.
+ */
 uint32_t query_intersect_voxel_aabb(const struct WorldHandle *world,
                                     AabbDesc aabb,
                                     QueryFilterDesc filter,
                                     ColliderHandleRaw *out_handles,
                                     uint32_t capacity);
 
+/**
+ * # Safety
+ *
+ * `world` must be null or a valid world handle.
+ */
 uint32_t query_intersect_voxel_aabb_count(const struct WorldHandle *world,
                                           AabbDesc aabb,
                                           QueryFilterDesc filter);
 
+/**
+ * # Safety
+ *
+ * `world` must be null or a valid world handle. `out_handles` must be null
+ * or point to `capacity` writable `ColliderHandleRaw` entries.
+ */
 uint32_t query_intersect_voxel_obb(const struct WorldHandle *world,
                                    Obb obb,
                                    QueryFilterDesc filter,
                                    ColliderHandleRaw *out_handles,
                                    uint32_t capacity);
 
+/**
+ * # Safety
+ *
+ * `world` must be null or a valid world handle.
+ */
 uint32_t query_intersect_voxel_obb_count(const struct WorldHandle *world,
                                          Obb obb,
                                          QueryFilterDesc filter);
 
+/**
+ * # Safety
+ *
+ * `world` must be null or a valid world handle. On failure any partially
+ * inserted body is removed again before returning 0.
+ */
 RigidBodyHandleRaw world_insert_static_voxel_aabb(struct WorldHandle *world,
                                                   AabbDesc aabb,
                                                   double voxel_size_x,
@@ -2102,6 +4304,12 @@ RigidBodyHandleRaw world_insert_static_voxel_aabb(struct WorldHandle *world,
                                                   double friction,
                                                   double restitution);
 
+/**
+ * # Safety
+ *
+ * `world` must be null or a valid world handle. On failure any partially
+ * inserted body is removed again before returning 0.
+ */
 RigidBodyHandleRaw world_insert_dynamic_voxel_obb(struct WorldHandle *world,
                                                   Obb obb,
                                                   double voxel_size_x,
@@ -2112,51 +4320,160 @@ RigidBodyHandleRaw world_insert_dynamic_voxel_obb(struct WorldHandle *world,
                                                   double friction,
                                                   double restitution);
 
+/**
+ * Create a new physics world.  Non-finite gravity components fall back to zero.
+ *
+ * The returned pointer is owned by Rust; release it with `world_destroy`.
+ */
 struct WorldHandle *world_create(Vec3 gravity);
 
+/**
+ * Destroy a physics world created by `world_create`.  Null is a no-op.
+ *
+ * # Safety
+ * `world` must be a pointer returned by `world_create` (or null) and must not
+ * be used again after this call.
+ */
 void world_destroy(struct WorldHandle *world);
 
+/**
+ * Advance the simulation by `delta_seconds` (clamped to (0, 1]).
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 void world_step(struct WorldHandle *world, double delta_seconds);
 
+/**
+ * Set integration parameters (dt, solver iterations, CCD substeps).
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 Bool world_set_integration_parameters(struct WorldHandle *world,
                                       double dt,
                                       uint32_t solver_iterations,
                                       uint32_t ccd_substeps);
 
+/**
+ * Read integration parameters into `out_values` (dt, iterations, CCD substeps).
+ *
+ * # Safety
+ * `world` must be a valid world pointer (or null); `out_values` must point to
+ * writable memory for at least `capacity` f64 values.
+ */
 uint32_t world_get_integration_parameters(const struct WorldHandle *world,
                                           double *out_values,
                                           uint32_t capacity);
 
+/**
+ * Set the world gravity vector.  Non-finite input is ignored.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
+ */
 void world_set_gravity(struct WorldHandle *world, Vec3 gravity);
 
+/**
+ * Get the world gravity vector.
+ *
+ * # Safety
+ * `world` must be a valid world pointer (or null).
+ */
 Vec3 world_get_gravity(const struct WorldHandle *world);
 
+/**
+ * Number of rigid bodies in the world (-1 on null world).
+ *
+ * # Safety
+ * `world` must be a valid world pointer (or null).
+ */
 int32_t world_get_rigid_body_set_size(const struct WorldHandle *world);
 
+/**
+ * Number of colliders in the world (-1 on null world).
+ *
+ * # Safety
+ * `world` must be a valid world pointer (or null).
+ */
 int32_t world_get_collider_set_size(const struct WorldHandle *world);
 
+/**
+ * Write the world gravity into `out_gravity`.
+ *
+ * # Safety
+ * `out_gravity` must point to a writable `Vec3` (or be null); `world` must be
+ * a valid world pointer (or null).
+ */
 void world_get_gravity_out(const struct WorldHandle *world, Vec3 *out_gravity);
 
+/**
+ * Count of dynamic bodies (for sizing a `world_dynamic_body_snapshot` call).
+ *
+ * # Safety
+ * `world` must be a valid world pointer (or null).
+ */
 uint32_t world_dynamic_body_snapshot_count(const struct WorldHandle *world);
 
+/**
+ * Snapshot dynamic body handles + poses (7 f64 per body: pos3 + quat4).
+ *
+ * # Safety
+ * `world` must be a valid world pointer (or null); `out_handles` must point to
+ * writable memory for `capacity` handles and `out_values` for `capacity * 7`
+ * f64 values.
+ */
 uint32_t world_dynamic_body_snapshot(const struct WorldHandle *world,
                                      RigidBodyHandleRaw *out_handles,
                                      double *out_values,
                                      uint32_t capacity);
 
+/**
+ * Count of all bodies (for sizing a `world_body_snapshot` call).
+ *
+ * # Safety
+ * `world` must be a valid world pointer (or null).
+ */
 uint32_t world_body_snapshot_count(const struct WorldHandle *world);
 
+/**
+ * Snapshot all body handles + poses + velocities (13 f64 per body:
+ * pos3 + quat4 + linvel3 + angvel3).
+ *
+ * # Safety
+ * `world` must be a valid world pointer (or null); `out_handles` must point to
+ * writable memory for `capacity` handles and `out_values` for `capacity * 13`
+ * f64 values.
+ */
 uint32_t world_body_snapshot(const struct WorldHandle *world,
                              RigidBodyHandleRaw *out_handles,
                              double *out_values,
                              uint32_t capacity);
 
+/**
+ * Batch-update body poses (7 f64 per body: pos3 + quat4).  Returns the number
+ * of bodies actually updated.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`; `handles` and
+ * `values` must point to readable arrays of `count` handles and `count * 7`
+ * f64 values respectively.
+ */
 uint32_t world_update_body_poses(struct WorldHandle *world,
                                  const RigidBodyHandleRaw *handles,
                                  const double *values,
                                  uint32_t count,
                                  Bool wake_up);
 
+/**
+ * Batch-update body velocities (6 f64 per body: linvel3 + angvel3).  Returns
+ * the number of bodies actually updated.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`; `handles` and
+ * `values` must point to readable arrays of `count` handles and `count * 6`
+ * f64 values respectively.
+ */
 uint32_t world_update_body_velocities(struct WorldHandle *world,
                                       const RigidBodyHandleRaw *handles,
                                       const double *values,
@@ -2169,16 +4486,28 @@ uint32_t world_update_body_velocities(struct WorldHandle *world,
  * `body_id` maps to `CelestialBodyId` (0=Sun, 3=Earth, 4=Moon, 5=Mars, etc.).
  *
  * Returns handle (non-zero) on success, 0 on invalid body_id.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
  */
 uint64_t world_register_celestial_gravity(struct WorldHandle *world,
                                           uint32_t body_id,
                                           uint32_t max_degree);
 
+/**
+ * Number of force laws registered in the world's ForceRegistry.
+ *
+ * # Safety
+ * `world` must be a valid world pointer (or null).
+ */
 uint32_t world_get_force_registry_count(const struct WorldHandle *world);
 
 /**
  * Get count of registered force laws of a specific type.
  * `law_type` is the numeric discriminant of `ForceLawType`.
+ *
+ * # Safety
+ * `world` must be a valid world pointer (or null).
  */
 uint32_t world_get_force_registry_typed_count(const struct WorldHandle *world, uint32_t law_type);
 
@@ -2202,6 +4531,10 @@ uint32_t world_get_force_registry_typed_count(const struct WorldHandle *world, u
  * `max_commands` — max pending commands (force/set pose etc.)
  * `out_address` — receives the arena base address
  * `out_size` — receives the total arena size in bytes (for Java MemorySegment mapping)
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`; `out_address`
+ * and `out_size` may be null, otherwise each must point to a writable u64.
  */
 Bool world_create_shared_arena(struct WorldHandle *world,
                                uint32_t max_bodies,
@@ -2213,21 +4546,35 @@ Bool world_create_shared_arena(struct WorldHandle *world,
 
 /**
  * Destroy the shared arena (if any).
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create` (or null).  Any
+ * Java `MemorySegment` mapping the arena must be released before this call.
  */
 void world_destroy_shared_arena(struct WorldHandle *world);
 
 /**
  * Get the arena address (returns 0 if no arena).
+ *
+ * # Safety
+ * `world` must be a valid world pointer (or null).
  */
 uint64_t world_get_shared_arena_address(const struct WorldHandle *world);
 
 /**
  * Get the arena size (returns 0 if no arena).
+ *
+ * # Safety
+ * `world` must be a valid world pointer (or null).
  */
 uint64_t world_get_shared_arena_size(const struct WorldHandle *world);
 
 /**
  * Reset the event ring (Java calls this after draining events).
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create` (or null) and not
+ * yet destroyed.
  */
 void world_reset_shared_arena_events(struct WorldHandle *world);
 

@@ -6,7 +6,7 @@ use rapier3d::math::{Pose, Rotation, Vector};
 use rapier3d::prelude::{ColliderBuilder, SharedShape};
 
 use crate::rapier::error::{
-    ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, ffi_guard, set_error,
+    ERR_CAPACITY, ERR_INTERNAL, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, ffi_guard, set_error,
 };
 use crate::rapier::ffi::{
     AabbDesc, Bool, ColliderBuilderHandle, ColliderHandleRaw, Obb, QueryFilterDesc,
@@ -544,7 +544,12 @@ fn ceil_to_usize(value: f64) -> Option<usize> {
     Some(value as usize)
 }
 
-fn build_aabb_voxel_grid(aabb: AabbDesc, voxel_size_x: f64, voxel_size_y: f64, voxel_size_z: f64) -> Option<OwnedVoxelGrid> {
+fn build_aabb_voxel_grid(
+    aabb: AabbDesc,
+    voxel_size_x: f64,
+    voxel_size_y: f64,
+    voxel_size_z: f64,
+) -> Option<OwnedVoxelGrid> {
     if !vec3_finite(aabb.mins)
         || !vec3_finite(aabb.maxs)
         || !voxel_size_x.is_finite()
@@ -646,8 +651,19 @@ fn obb_world_aabb(obb: Obb, rotation: Rotation) -> Option<AabbDesc> {
     Some(AabbDesc { mins, maxs })
 }
 
-fn build_obb_voxel_grid(obb: Obb, voxel_size_x: f64, voxel_size_y: f64, voxel_size_z: f64) -> Option<OwnedVoxelGrid> {
-    if !voxel_size_x.is_finite() || voxel_size_x <= 0.0 || !voxel_size_y.is_finite() || voxel_size_y <= 0.0 || !voxel_size_z.is_finite() || voxel_size_z <= 0.0 {
+fn build_obb_voxel_grid(
+    obb: Obb,
+    voxel_size_x: f64,
+    voxel_size_y: f64,
+    voxel_size_z: f64,
+) -> Option<OwnedVoxelGrid> {
+    if !voxel_size_x.is_finite()
+        || voxel_size_x <= 0.0
+        || !voxel_size_y.is_finite()
+        || voxel_size_y <= 0.0
+        || !voxel_size_z.is_finite()
+        || voxel_size_z <= 0.0
+    {
         set_error(ERR_INVALID_ARGUMENT, "invalid voxel size");
         return None;
     }
@@ -704,8 +720,11 @@ fn create_voxels_with_options(
     origin: Vec3,
     options: VoxelColliderOptions,
 ) -> *mut ColliderBuilderHandle {
-    if voxels.is_null()
-        || size_x == 0
+    if voxels.is_null() {
+        set_error(ERR_NULL_POINTER, "voxels is null");
+        return std::ptr::null_mut();
+    }
+    if size_x == 0
         || size_y == 0
         || size_z == 0
         || !voxel_size_x.is_finite()
@@ -718,16 +737,20 @@ fn create_voxels_with_options(
         || !origin.y.is_finite()
         || !origin.z.is_finite()
     {
+        set_error(ERR_INVALID_ARGUMENT, "invalid voxel grid arguments");
         return std::ptr::null_mut();
     }
 
     let Some(xy) = (size_x as usize).checked_mul(size_y as usize) else {
+        set_error(ERR_CAPACITY, "voxel grid size overflow");
         return std::ptr::null_mut();
     };
     let Some(len) = xy.checked_mul(size_z as usize) else {
+        set_error(ERR_CAPACITY, "voxel grid size overflow");
         return std::ptr::null_mut();
     };
     if len > MAX_VOXEL_CELLS {
+        set_error(ERR_CAPACITY, "voxel grid too large");
         return std::ptr::null_mut();
     }
 
@@ -744,12 +767,18 @@ fn create_voxels_with_options(
     };
 
     let Some(builder) = build_voxel_collider(&grid, options) else {
+        set_error(ERR_CAPACITY, "voxel collider build failed");
         return std::ptr::null_mut();
     };
 
     Box::into_raw(Box::new(ColliderBuilderHandle { inner: builder }))
 }
 
+/// # Safety
+///
+/// `voxels` must point to at least `size_x * size_y * size_z` readable bytes
+/// for the duration of the call. The returned builder handle is owned by the
+/// caller and must be released through the collider-builder ABI.
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_voxels(
     voxels: *const u8,
@@ -762,9 +791,24 @@ pub extern "C" fn collider_builder_create_voxels(
     origin: Vec3,
     options: VoxelColliderOptions,
 ) -> *mut ColliderBuilderHandle {
-    create_voxels_with_options(voxels, size_x, size_y, size_z, voxel_size_x, voxel_size_y, voxel_size_z, origin, options)
+    ffi_guard(std::ptr::null_mut(), || {
+        create_voxels_with_options(
+            voxels,
+            size_x,
+            size_y,
+            size_z,
+            voxel_size_x,
+            voxel_size_y,
+            voxel_size_z,
+            origin,
+            options,
+        )
+    })
 }
 
+/// # Safety
+///
+/// Same pointer contract as `collider_builder_create_voxels`.
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_voxels_auto(
     voxels: *const u8,
@@ -777,22 +821,28 @@ pub extern "C" fn collider_builder_create_voxels_auto(
     origin: Vec3,
     dynamic_body: crate::rapier::ffi::Bool,
 ) -> *mut ColliderBuilderHandle {
-    create_voxels_with_options(
-        voxels,
-        size_x,
-        size_y,
-        size_z,
-        voxel_size_x,
-        voxel_size_y,
-        voxel_size_z,
-        origin,
-        VoxelColliderOptions {
-            dynamic_body,
-            ..VoxelColliderOptions::default()
-        },
-    )
+    ffi_guard(std::ptr::null_mut(), || {
+        create_voxels_with_options(
+            voxels,
+            size_x,
+            size_y,
+            size_z,
+            voxel_size_x,
+            voxel_size_y,
+            voxel_size_z,
+            origin,
+            VoxelColliderOptions {
+                dynamic_body,
+                ..VoxelColliderOptions::default()
+            },
+        )
+    })
 }
 
+/// # Safety
+///
+/// `voxels` must point to at least `size_x * size_y * size_z` readable bytes
+/// for the duration of the call.
 #[unsafe(no_mangle)]
 pub extern "C" fn voxel_build_stats(
     voxels: *const u8,
@@ -805,44 +855,53 @@ pub extern "C" fn voxel_build_stats(
     origin: Vec3,
     options: VoxelColliderOptions,
 ) -> VoxelBuildStats {
-    if voxels.is_null()
-        || size_x == 0
-        || size_y == 0
-        || size_z == 0
-        || !voxel_size_x.is_finite()
-        || voxel_size_x <= 0.0
-        || !voxel_size_y.is_finite()
-        || voxel_size_y <= 0.0
-        || !voxel_size_z.is_finite()
-        || voxel_size_z <= 0.0
-        || !origin.x.is_finite()
-        || !origin.y.is_finite()
-        || !origin.z.is_finite()
-    {
-        return VoxelBuildStats::default();
-    }
-    let Some(xy) = (size_x as usize).checked_mul(size_y as usize) else {
-        return VoxelBuildStats::default();
-    };
-    let Some(len) = xy.checked_mul(size_z as usize) else {
-        return VoxelBuildStats::default();
-    };
-    if len > MAX_VOXEL_CELLS {
-        return VoxelBuildStats::default();
-    }
+    ffi_guard(VoxelBuildStats::default(), || {
+        if voxels.is_null() {
+            set_error(ERR_NULL_POINTER, "voxels is null");
+            return VoxelBuildStats::default();
+        }
+        if size_x == 0
+            || size_y == 0
+            || size_z == 0
+            || !voxel_size_x.is_finite()
+            || voxel_size_x <= 0.0
+            || !voxel_size_y.is_finite()
+            || voxel_size_y <= 0.0
+            || !voxel_size_z.is_finite()
+            || voxel_size_z <= 0.0
+            || !origin.x.is_finite()
+            || !origin.y.is_finite()
+            || !origin.z.is_finite()
+        {
+            set_error(ERR_INVALID_ARGUMENT, "invalid voxel grid arguments");
+            return VoxelBuildStats::default();
+        }
+        let Some(xy) = (size_x as usize).checked_mul(size_y as usize) else {
+            set_error(ERR_CAPACITY, "voxel grid size overflow");
+            return VoxelBuildStats::default();
+        };
+        let Some(len) = xy.checked_mul(size_z as usize) else {
+            set_error(ERR_CAPACITY, "voxel grid size overflow");
+            return VoxelBuildStats::default();
+        };
+        if len > MAX_VOXEL_CELLS {
+            set_error(ERR_CAPACITY, "voxel grid too large");
+            return VoxelBuildStats::default();
+        }
 
-    let voxels = unsafe { slice::from_raw_parts(voxels, len) };
-    let grid = VoxelGrid {
-        voxels,
-        size_x: size_x as usize,
-        size_y: size_y as usize,
-        size_z: size_z as usize,
-        voxel_size_x,
-        voxel_size_y,
-        voxel_size_z,
-        origin,
-    };
-    compute_voxel_build_stats(&grid, options)
+        let voxels = unsafe { slice::from_raw_parts(voxels, len) };
+        let grid = VoxelGrid {
+            voxels,
+            size_x: size_x as usize,
+            size_y: size_y as usize,
+            size_z: size_z as usize,
+            voxel_size_x,
+            voxel_size_y,
+            voxel_size_z,
+            origin,
+        };
+        compute_voxel_build_stats(&grid, options)
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -853,10 +912,13 @@ pub extern "C" fn voxel_aabb_build_stats(
     voxel_size_z: f64,
     options: VoxelColliderOptions,
 ) -> VoxelBuildStats {
-    let Some(grid) = build_aabb_voxel_grid(aabb, voxel_size_x, voxel_size_y, voxel_size_z) else {
-        return VoxelBuildStats::default();
-    };
-    compute_voxel_build_stats(&grid.as_grid(), options)
+    ffi_guard(VoxelBuildStats::default(), || {
+        let Some(grid) = build_aabb_voxel_grid(aabb, voxel_size_x, voxel_size_y, voxel_size_z)
+        else {
+            return VoxelBuildStats::default();
+        };
+        compute_voxel_build_stats(&grid.as_grid(), options)
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -867,12 +929,17 @@ pub extern "C" fn voxel_obb_build_stats(
     voxel_size_z: f64,
     options: VoxelColliderOptions,
 ) -> VoxelBuildStats {
-    let Some(grid) = build_obb_voxel_grid(obb, voxel_size_x, voxel_size_y, voxel_size_z) else {
-        return VoxelBuildStats::default();
-    };
-    compute_voxel_build_stats(&grid.as_grid(), options)
+    ffi_guard(VoxelBuildStats::default(), || {
+        let Some(grid) = build_obb_voxel_grid(obb, voxel_size_x, voxel_size_y, voxel_size_z) else {
+            return VoxelBuildStats::default();
+        };
+        compute_voxel_build_stats(&grid.as_grid(), options)
+    })
 }
 
+/// # Safety
+///
+/// `out_stats` must be null or point to a valid, writable `VoxelBuildStats`.
 #[unsafe(no_mangle)]
 pub extern "C" fn voxel_aabb_build_stats_out(
     aabb: AabbDesc,
@@ -882,12 +949,19 @@ pub extern "C" fn voxel_aabb_build_stats_out(
     options: VoxelColliderOptions,
     out_stats: *mut VoxelBuildStats,
 ) {
-    let Some(out_stats) = (unsafe { out_stats.as_mut() }) else {
-        return;
-    };
-    *out_stats = voxel_aabb_build_stats(aabb, voxel_size_x, voxel_size_y, voxel_size_z, options);
+    ffi_guard((), || {
+        let Some(out_stats) = (unsafe { out_stats.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "voxel build stats output is null");
+            return;
+        };
+        *out_stats =
+            voxel_aabb_build_stats(aabb, voxel_size_x, voxel_size_y, voxel_size_z, options);
+    })
 }
 
+/// # Safety
+///
+/// `out_stats` must be null or point to a valid, writable `VoxelBuildStats`.
 #[unsafe(no_mangle)]
 pub extern "C" fn voxel_obb_build_stats_out(
     obb: Obb,
@@ -897,10 +971,13 @@ pub extern "C" fn voxel_obb_build_stats_out(
     options: VoxelColliderOptions,
     out_stats: *mut VoxelBuildStats,
 ) {
-    let Some(out_stats) = (unsafe { out_stats.as_mut() }) else {
-        return;
-    };
-    *out_stats = voxel_obb_build_stats(obb, voxel_size_x, voxel_size_y, voxel_size_z, options);
+    ffi_guard((), || {
+        let Some(out_stats) = (unsafe { out_stats.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "voxel build stats output is null");
+            return;
+        };
+        *out_stats = voxel_obb_build_stats(obb, voxel_size_x, voxel_size_y, voxel_size_z, options);
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -911,10 +988,13 @@ pub extern "C" fn collider_builder_create_voxel_aabb(
     voxel_size_z: f64,
     options: VoxelColliderOptions,
 ) -> *mut ColliderBuilderHandle {
-    let Some(grid) = build_aabb_voxel_grid(aabb, voxel_size_x, voxel_size_y, voxel_size_z) else {
-        return std::ptr::null_mut();
-    };
-    builder_from_owned_grid(grid, options)
+    ffi_guard(std::ptr::null_mut(), || {
+        let Some(grid) = build_aabb_voxel_grid(aabb, voxel_size_x, voxel_size_y, voxel_size_z)
+        else {
+            return std::ptr::null_mut();
+        };
+        builder_from_owned_grid(grid, options)
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -925,16 +1005,18 @@ pub extern "C" fn collider_builder_create_voxel_aabb_auto(
     voxel_size_z: f64,
     dynamic_body: crate::rapier::ffi::Bool,
 ) -> *mut ColliderBuilderHandle {
-    collider_builder_create_voxel_aabb(
-        aabb,
-        voxel_size_x,
-        voxel_size_y,
-        voxel_size_z,
-        VoxelColliderOptions {
-            dynamic_body,
-            ..VoxelColliderOptions::default()
-        },
-    )
+    ffi_guard(std::ptr::null_mut(), || {
+        collider_builder_create_voxel_aabb(
+            aabb,
+            voxel_size_x,
+            voxel_size_y,
+            voxel_size_z,
+            VoxelColliderOptions {
+                dynamic_body,
+                ..VoxelColliderOptions::default()
+            },
+        )
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -945,10 +1027,12 @@ pub extern "C" fn collider_builder_create_voxel_obb(
     voxel_size_z: f64,
     options: VoxelColliderOptions,
 ) -> *mut ColliderBuilderHandle {
-    let Some(grid) = build_obb_voxel_grid(obb, voxel_size_x, voxel_size_y, voxel_size_z) else {
-        return std::ptr::null_mut();
-    };
-    builder_from_owned_grid(grid, options)
+    ffi_guard(std::ptr::null_mut(), || {
+        let Some(grid) = build_obb_voxel_grid(obb, voxel_size_x, voxel_size_y, voxel_size_z) else {
+            return std::ptr::null_mut();
+        };
+        builder_from_owned_grid(grid, options)
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -959,18 +1043,24 @@ pub extern "C" fn collider_builder_create_voxel_obb_auto(
     voxel_size_z: f64,
     dynamic_body: crate::rapier::ffi::Bool,
 ) -> *mut ColliderBuilderHandle {
-    collider_builder_create_voxel_obb(
-        obb,
-        voxel_size_x, 
-        voxel_size_y, 
-        voxel_size_z,
-        VoxelColliderOptions {
-            dynamic_body,
-            ..VoxelColliderOptions::default()
-        },
-    )
+    ffi_guard(std::ptr::null_mut(), || {
+        collider_builder_create_voxel_obb(
+            obb,
+            voxel_size_x,
+            voxel_size_y,
+            voxel_size_z,
+            VoxelColliderOptions {
+                dynamic_body,
+                ..VoxelColliderOptions::default()
+            },
+        )
+    })
 }
 
+/// # Safety
+///
+/// `world` must be null or a valid world handle. `out_handles` must be null
+/// or point to `capacity` writable `ColliderHandleRaw` entries.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_voxel_aabb(
     world: *const WorldHandle,
@@ -979,62 +1069,73 @@ pub extern "C" fn query_intersect_voxel_aabb(
     out_handles: *mut ColliderHandleRaw,
     capacity: u32,
 ) -> u32 {
-    crate::rapier::query::query_intersect_obb(
-        world,
-        Obb {
-            center: Vec3 {
-                x: (aabb.mins.x + aabb.maxs.x) * 0.5,
-                y: (aabb.mins.y + aabb.maxs.y) * 0.5,
-                z: (aabb.mins.z + aabb.maxs.z) * 0.5,
+    ffi_guard(0, || {
+        crate::rapier::query::query_intersect_obb(
+            world,
+            Obb {
+                center: Vec3 {
+                    x: (aabb.mins.x + aabb.maxs.x) * 0.5,
+                    y: (aabb.mins.y + aabb.maxs.y) * 0.5,
+                    z: (aabb.mins.z + aabb.maxs.z) * 0.5,
+                },
+                half_extents: Vec3 {
+                    x: (aabb.maxs.x - aabb.mins.x) * 0.5,
+                    y: (aabb.maxs.y - aabb.mins.y) * 0.5,
+                    z: (aabb.maxs.z - aabb.mins.z) * 0.5,
+                },
+                rotation: crate::rapier::ffi::Quat {
+                    i: 0.0,
+                    j: 0.0,
+                    k: 0.0,
+                    w: 1.0,
+                },
             },
-            half_extents: Vec3 {
-                x: (aabb.maxs.x - aabb.mins.x) * 0.5,
-                y: (aabb.maxs.y - aabb.mins.y) * 0.5,
-                z: (aabb.maxs.z - aabb.mins.z) * 0.5,
-            },
-            rotation: crate::rapier::ffi::Quat {
-                i: 0.0,
-                j: 0.0,
-                k: 0.0,
-                w: 1.0,
-            },
-        },
-        filter,
-        out_handles,
-        capacity,
-    )
+            filter,
+            out_handles,
+            capacity,
+        )
+    })
 }
 
+/// # Safety
+///
+/// `world` must be null or a valid world handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_voxel_aabb_count(
     world: *const WorldHandle,
     aabb: AabbDesc,
     filter: QueryFilterDesc,
 ) -> u32 {
-    crate::rapier::query::query_intersect_obb_count(
-        world,
-        Obb {
-            center: Vec3 {
-                x: (aabb.mins.x + aabb.maxs.x) * 0.5,
-                y: (aabb.mins.y + aabb.maxs.y) * 0.5,
-                z: (aabb.mins.z + aabb.maxs.z) * 0.5,
+    ffi_guard(0, || {
+        crate::rapier::query::query_intersect_obb_count(
+            world,
+            Obb {
+                center: Vec3 {
+                    x: (aabb.mins.x + aabb.maxs.x) * 0.5,
+                    y: (aabb.mins.y + aabb.maxs.y) * 0.5,
+                    z: (aabb.mins.z + aabb.maxs.z) * 0.5,
+                },
+                half_extents: Vec3 {
+                    x: (aabb.maxs.x - aabb.mins.x) * 0.5,
+                    y: (aabb.maxs.y - aabb.mins.y) * 0.5,
+                    z: (aabb.maxs.z - aabb.mins.z) * 0.5,
+                },
+                rotation: crate::rapier::ffi::Quat {
+                    i: 0.0,
+                    j: 0.0,
+                    k: 0.0,
+                    w: 1.0,
+                },
             },
-            half_extents: Vec3 {
-                x: (aabb.maxs.x - aabb.mins.x) * 0.5,
-                y: (aabb.maxs.y - aabb.mins.y) * 0.5,
-                z: (aabb.maxs.z - aabb.mins.z) * 0.5,
-            },
-            rotation: crate::rapier::ffi::Quat {
-                i: 0.0,
-                j: 0.0,
-                k: 0.0,
-                w: 1.0,
-            },
-        },
-        filter,
-    )
+            filter,
+        )
+    })
 }
 
+/// # Safety
+///
+/// `world` must be null or a valid world handle. `out_handles` must be null
+/// or point to `capacity` writable `ColliderHandleRaw` entries.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_voxel_obb(
     world: *const WorldHandle,
@@ -1043,18 +1144,29 @@ pub extern "C" fn query_intersect_voxel_obb(
     out_handles: *mut ColliderHandleRaw,
     capacity: u32,
 ) -> u32 {
-    crate::rapier::query::query_intersect_obb(world, obb, filter, out_handles, capacity)
+    ffi_guard(0, || {
+        crate::rapier::query::query_intersect_obb(world, obb, filter, out_handles, capacity)
+    })
 }
 
+/// # Safety
+///
+/// `world` must be null or a valid world handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_voxel_obb_count(
     world: *const WorldHandle,
     obb: Obb,
     filter: QueryFilterDesc,
 ) -> u32 {
-    crate::rapier::query::query_intersect_obb_count(world, obb, filter)
+    ffi_guard(0, || {
+        crate::rapier::query::query_intersect_obb_count(world, obb, filter)
+    })
 }
 
+/// # Safety
+///
+/// `world` must be null or a valid world handle. On failure any partially
+/// inserted body is removed again before returning 0.
 #[unsafe(no_mangle)]
 pub extern "C" fn world_insert_static_voxel_aabb(
     world: *mut WorldHandle,
@@ -1066,39 +1178,59 @@ pub extern "C" fn world_insert_static_voxel_aabb(
     friction: f64,
     restitution: f64,
 ) -> RigidBodyHandleRaw {
-    let body = crate::rapier::rigid_body::rigid_body_builder_build(
-        crate::rapier::rigid_body::rigid_body_builder_create(
-            crate::rapier::ffi::BodyStatus::Fixed as u32,
-        ),
-    );
-    if body.is_null() {
-        return 0;
-    }
-    let body_handle = crate::rapier::rigid_body::world_insert_rigid_body(world, body);
-    if body_handle == 0 {
-        return 0;
-    }
-    let builder = collider_builder_create_voxel_aabb(aabb,  voxel_size_x, voxel_size_y, voxel_size_z, options);
-    if builder.is_null() {
-        crate::rapier::rigid_body::world_remove_rigid_body(world, body_handle, Bool::TRUE);
-        return 0;
-    }
-    crate::rapier::collider::collider_builder_set_friction(builder, friction);
-    crate::rapier::collider::collider_builder_set_restitution(builder, restitution);
-    let collider = crate::rapier::collider::collider_builder_build(builder);
-    if collider.is_null() {
-        crate::rapier::rigid_body::world_remove_rigid_body(world, body_handle, Bool::TRUE);
-        return 0;
-    }
-    let collider_handle =
-        crate::rapier::collider::world_insert_collider_with_parent(world, collider, body_handle);
-    if collider_handle == 0 {
-        crate::rapier::rigid_body::world_remove_rigid_body(world, body_handle, Bool::TRUE);
-        return 0;
-    }
-    body_handle
+    ffi_guard(0, || {
+        let body = crate::rapier::rigid_body::rigid_body_builder_build(
+            crate::rapier::rigid_body::rigid_body_builder_create(
+                crate::rapier::ffi::BodyStatus::Fixed as u32,
+            ),
+        );
+        if body.is_null() {
+            set_error(ERR_INTERNAL, "voxel body creation failed");
+            return 0;
+        }
+        let body_handle = crate::rapier::rigid_body::world_insert_rigid_body(world, body);
+        if body_handle == 0 {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return 0;
+        }
+        let builder = collider_builder_create_voxel_aabb(
+            aabb,
+            voxel_size_x,
+            voxel_size_y,
+            voxel_size_z,
+            options,
+        );
+        if builder.is_null() {
+            // collider_builder_create_voxel_aabb already reported the error.
+            crate::rapier::rigid_body::world_remove_rigid_body(world, body_handle, Bool::TRUE);
+            return 0;
+        }
+        crate::rapier::collider::collider_builder_set_friction(builder, friction);
+        crate::rapier::collider::collider_builder_set_restitution(builder, restitution);
+        let collider = crate::rapier::collider::collider_builder_build(builder);
+        if collider.is_null() {
+            set_error(ERR_INTERNAL, "voxel collider build failed");
+            crate::rapier::rigid_body::world_remove_rigid_body(world, body_handle, Bool::TRUE);
+            return 0;
+        }
+        let collider_handle = crate::rapier::collider::world_insert_collider_with_parent(
+            world,
+            collider,
+            body_handle,
+        );
+        if collider_handle == 0 {
+            set_error(ERR_INTERNAL, "voxel collider insertion failed");
+            crate::rapier::rigid_body::world_remove_rigid_body(world, body_handle, Bool::TRUE);
+            return 0;
+        }
+        body_handle
+    })
 }
 
+/// # Safety
+///
+/// `world` must be null or a valid world handle. On failure any partially
+/// inserted body is removed again before returning 0.
 #[unsafe(no_mangle)]
 pub extern "C" fn world_insert_dynamic_voxel_obb(
     world: *mut WorldHandle,
@@ -1111,65 +1243,69 @@ pub extern "C" fn world_insert_dynamic_voxel_obb(
     friction: f64,
     restitution: f64,
 ) -> RigidBodyHandleRaw {
-    options.dynamic_body = Bool::TRUE;
-    let body = crate::rapier::rigid_body::rigid_body_builder_build(
-        crate::rapier::rigid_body::rigid_body_builder_create(
-            crate::rapier::ffi::BodyStatus::Dynamic as u32,
-        ),
-    );
-    if body.is_null() {
-        return 0;
-    }
-    let body_handle = crate::rapier::rigid_body::world_insert_rigid_body(world, body);
-    if body_handle == 0 {
-        return 0;
-    }
-    let builder = collider_builder_create_voxel_obb(
-        Obb {
-            center: Vec3::default(),
-            half_extents: obb.half_extents,
-            rotation: crate::rapier::ffi::Quat {
-                i: 0.0,
-                j: 0.0,
-                k: 0.0,
-                w: 1.0,
+    ffi_guard(0, || {
+        options.dynamic_body = Bool::TRUE;
+        let body = crate::rapier::rigid_body::rigid_body_builder_build(
+            crate::rapier::rigid_body::rigid_body_builder_create(
+                crate::rapier::ffi::BodyStatus::Dynamic as u32,
+            ),
+        );
+        if body.is_null() {
+            set_error(ERR_INTERNAL, "voxel body creation failed");
+            return 0;
+        }
+        let body_handle = crate::rapier::rigid_body::world_insert_rigid_body(world, body);
+        if body_handle == 0 {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return 0;
+        }
+        let builder = collider_builder_create_voxel_obb(
+            Obb {
+                center: Vec3::default(),
+                half_extents: obb.half_extents,
+                rotation: crate::rapier::ffi::Quat {
+                    i: 0.0,
+                    j: 0.0,
+                    k: 0.0,
+                    w: 1.0,
+                },
             },
-        },
-        voxel_size_x, 
-        voxel_size_y, 
-        voxel_size_z,
-        options,
-    );
-    if builder.is_null() {
-        crate::rapier::rigid_body::world_remove_rigid_body(world, body_handle, Bool::TRUE);
-        return 0;
-    }
-    crate::rapier::collider::collider_builder_set_density(builder, density);
-    crate::rapier::collider::collider_builder_set_friction(builder, friction);
-    crate::rapier::collider::collider_builder_set_restitution(builder, restitution);
-    let collider = crate::rapier::collider::collider_builder_build(builder);
-    if collider.is_null() {
-        crate::rapier::rigid_body::world_remove_rigid_body(world, body_handle, Bool::TRUE);
-        return 0;
-    }
-    let collider_handle =
-        crate::rapier::collider::world_insert_collider_with_parent(world, collider, body_handle);
-    if collider_handle == 0 {
-        crate::rapier::rigid_body::world_remove_rigid_body(world, body_handle, Bool::TRUE);
-        return 0;
-    }
-    crate::rapier::rigid_body::rigid_body_set_pose(
-        world,
-        body_handle,
-        obb.center,
-        obb.rotation,
-        Bool::TRUE,
-    );
-    body_handle
+            voxel_size_x,
+            voxel_size_y,
+            voxel_size_z,
+            options,
+        );
+        if builder.is_null() {
+            // collider_builder_create_voxel_obb already reported the error.
+            crate::rapier::rigid_body::world_remove_rigid_body(world, body_handle, Bool::TRUE);
+            return 0;
+        }
+        crate::rapier::collider::collider_builder_set_density(builder, density);
+        crate::rapier::collider::collider_builder_set_friction(builder, friction);
+        crate::rapier::collider::collider_builder_set_restitution(builder, restitution);
+        let collider = crate::rapier::collider::collider_builder_build(builder);
+        if collider.is_null() {
+            set_error(ERR_INTERNAL, "voxel collider build failed");
+            crate::rapier::rigid_body::world_remove_rigid_body(world, body_handle, Bool::TRUE);
+            return 0;
+        }
+        let collider_handle = crate::rapier::collider::world_insert_collider_with_parent(
+            world,
+            collider,
+            body_handle,
+        );
+        if collider_handle == 0 {
+            set_error(ERR_INTERNAL, "voxel collider insertion failed");
+            crate::rapier::rigid_body::world_remove_rigid_body(world, body_handle, Bool::TRUE);
+            return 0;
+        }
+        crate::rapier::rigid_body::rigid_body_set_pose(
+            world,
+            body_handle,
+            obb.center,
+            obb.rotation,
+            Bool::TRUE,
+        );
+        body_handle
+    })
 }
-
-
-
-
-
-

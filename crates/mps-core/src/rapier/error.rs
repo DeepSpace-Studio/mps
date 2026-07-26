@@ -9,9 +9,29 @@
 use std::os::raw::c_char;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
-pub use mps_formula::error::{
-    ERR_CAPACITY, ERR_INTERNAL, ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, ERR_OK,
-    ERR_UNSUPPORTED, clear_error, set_error,
+pub use mps_formula::error::{clear_error, set_error};
+
+// The error codes are re-declared as local `pub const`s (instead of `pub use`
+// re-exports) so cbindgen — which only parses this crate, not dependencies —
+// emits them as `#define`s in the generated C header. The values must be
+// literals (cbindgen cannot evaluate cross-crate paths); the compile-time
+// assertions below pin them to the canonical values in `mps_formula::error`.
+pub const ERR_OK: u32 = 0;
+pub const ERR_NULL_POINTER: u32 = 1;
+pub const ERR_INVALID_ARGUMENT: u32 = 2;
+pub const ERR_NOT_FOUND: u32 = 3;
+pub const ERR_CAPACITY: u32 = 4;
+pub const ERR_UNSUPPORTED: u32 = 5;
+pub const ERR_INTERNAL: u32 = 6;
+
+const _: () = {
+    assert!(ERR_OK == mps_formula::error::ERR_OK);
+    assert!(ERR_NULL_POINTER == mps_formula::error::ERR_NULL_POINTER);
+    assert!(ERR_INVALID_ARGUMENT == mps_formula::error::ERR_INVALID_ARGUMENT);
+    assert!(ERR_NOT_FOUND == mps_formula::error::ERR_NOT_FOUND);
+    assert!(ERR_CAPACITY == mps_formula::error::ERR_CAPACITY);
+    assert!(ERR_UNSUPPORTED == mps_formula::error::ERR_UNSUPPORTED);
+    assert!(ERR_INTERNAL == mps_formula::error::ERR_INTERNAL);
 };
 
 /// Run `f`, converting any panic into `ERR_INTERNAL` and `default`.
@@ -30,17 +50,42 @@ pub fn ffi_guard<R>(default: R, f: impl FnOnce() -> R) -> R {
     }
 }
 
+/// Current thread's last error code (`ERR_OK` when no error).
 #[unsafe(no_mangle)]
 pub extern "C" fn last_error_code() -> u32 {
-    mps_formula::error::error_code()
+    ffi_guard(ERR_OK, || mps_formula::error::error_code())
 }
 
+/// Current thread's last error message ("ok" when no error).
+///
+/// The returned pointer is borrowed from a thread-local slot owned by Rust;
+/// it is invalidated by the next error-reporting call on the same thread and
+/// must not be freed or stored.
 #[unsafe(no_mangle)]
 pub extern "C" fn last_error_message() -> *const c_char {
-    mps_formula::error::error_message()
+    ffi_guard(std::ptr::null(), || mps_formula::error::error_message())
 }
 
+/// Reset the current thread's error slot to `ERR_OK` / "ok".
 #[unsafe(no_mangle)]
 pub extern "C" fn last_error_clear() {
-    clear_error();
+    ffi_guard((), || clear_error());
+}
+
+/// Static name of an error code ("ERR_OK", "ERR_NULL_POINTER", ...).
+///
+/// Unknown codes yield "ERR_UNKNOWN". The returned pointer refers to a
+/// string with `'static` lifetime owned by Rust; it must not be freed.
+#[unsafe(no_mangle)]
+pub extern "C" fn error_code_name(code: u32) -> *const c_char {
+    ffi_guard(std::ptr::null(), || match code {
+        ERR_OK => c"ERR_OK".as_ptr(),
+        ERR_NULL_POINTER => c"ERR_NULL_POINTER".as_ptr(),
+        ERR_INVALID_ARGUMENT => c"ERR_INVALID_ARGUMENT".as_ptr(),
+        ERR_NOT_FOUND => c"ERR_NOT_FOUND".as_ptr(),
+        ERR_CAPACITY => c"ERR_CAPACITY".as_ptr(),
+        ERR_UNSUPPORTED => c"ERR_UNSUPPORTED".as_ptr(),
+        ERR_INTERNAL => c"ERR_INTERNAL".as_ptr(),
+        _ => c"ERR_UNKNOWN".as_ptr(),
+    })
 }

@@ -1,8 +1,9 @@
-﻿use rapier3d::prelude::{
+use rapier3d::prelude::{
     FixedJointBuilder, ImpulseJointHandle as RapierImpulseJointHandle, PrismaticJointBuilder,
     RevoluteJointBuilder, RopeJointBuilder, SphericalJointBuilder, SpringJointBuilder, Vector,
 };
 
+use crate::rapier::error::{ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, ffi_guard, set_error};
 use crate::rapier::ffi::{
     Bool, ImpulseJointHandleRaw, JointAxisDesc, JointBuilderHandle, JointTypeDesc,
     RigidBodyHandleRaw, Vec3, WorldHandle, joint_axis_from_raw, joint_axis_to_rapier,
@@ -164,86 +165,137 @@ pub extern "C" fn joint_builder_create(
     b: f64,
     c: f64,
 ) -> *mut JointBuilderHandle {
-    if !vec3_finite(axis_or_primary) || !b.is_finite() || !c.is_finite() {
-        return std::ptr::null_mut();
-    }
-    let joint_type = joint_type_from_raw(joint_type);
-    let inner = match joint_type {
-        JointTypeDesc::Fixed => JointBuilderKind::Fixed(FixedJointBuilder::new()),
-        JointTypeDesc::Revolute => {
-            if !valid_axis(axis_or_primary) {
-                return std::ptr::null_mut();
-            }
-            JointBuilderKind::Revolute(RevoluteJointBuilder::new(vec3_to_rapier(axis_or_primary)))
+    ffi_guard(std::ptr::null_mut(), || {
+        if !vec3_finite(axis_or_primary) || !b.is_finite() || !c.is_finite() {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "joint builder parameters must be finite",
+            );
+            return std::ptr::null_mut();
         }
-        JointTypeDesc::Prismatic => {
-            if !valid_axis(axis_or_primary) {
-                return std::ptr::null_mut();
+        let joint_type = joint_type_from_raw(joint_type);
+        let inner = match joint_type {
+            JointTypeDesc::Fixed => JointBuilderKind::Fixed(FixedJointBuilder::new()),
+            JointTypeDesc::Revolute => {
+                if !valid_axis(axis_or_primary) {
+                    set_error(ERR_INVALID_ARGUMENT, "revolute axis must be non-zero");
+                    return std::ptr::null_mut();
+                }
+                JointBuilderKind::Revolute(RevoluteJointBuilder::new(vec3_to_rapier(
+                    axis_or_primary,
+                )))
             }
-            JointBuilderKind::Prismatic(PrismaticJointBuilder::new(vec3_to_rapier(axis_or_primary)))
-        }
-        JointTypeDesc::Rope => {
-            if b < 0.0 {
-                return std::ptr::null_mut();
+            JointTypeDesc::Prismatic => {
+                if !valid_axis(axis_or_primary) {
+                    set_error(ERR_INVALID_ARGUMENT, "prismatic axis must be non-zero");
+                    return std::ptr::null_mut();
+                }
+                JointBuilderKind::Prismatic(PrismaticJointBuilder::new(vec3_to_rapier(
+                    axis_or_primary,
+                )))
             }
-            JointBuilderKind::Rope(RopeJointBuilder::new(b))
-        }
-        JointTypeDesc::Spring => {
-            if b < 0.0 || c < 0.0 {
-                return std::ptr::null_mut();
+            JointTypeDesc::Rope => {
+                if b < 0.0 {
+                    set_error(ERR_INVALID_ARGUMENT, "rope length must be non-negative");
+                    return std::ptr::null_mut();
+                }
+                JointBuilderKind::Rope(RopeJointBuilder::new(b))
             }
-            JointBuilderKind::Spring(SpringJointBuilder::new(axis_or_primary.x, b, c))
-        }
-        JointTypeDesc::Spherical => JointBuilderKind::Spherical(SphericalJointBuilder::new()),
-    };
+            JointTypeDesc::Spring => {
+                if b < 0.0 || c < 0.0 {
+                    set_error(
+                        ERR_INVALID_ARGUMENT,
+                        "spring stiffness and damping must be non-negative",
+                    );
+                    return std::ptr::null_mut();
+                }
+                JointBuilderKind::Spring(SpringJointBuilder::new(axis_or_primary.x, b, c))
+            }
+            JointTypeDesc::Spherical => JointBuilderKind::Spherical(SphericalJointBuilder::new()),
+        };
 
-    Box::into_raw(Box::new(JointBuilderHandle { inner }))
+        Box::into_raw(Box::new(JointBuilderHandle { inner }))
+    })
 }
 
+/// # Safety
+///
+/// `builder` must be a pointer returned by `joint_builder_create` (or null, which is a
+/// no-op). Ownership is transferred to Rust and the pointer must not be used after
+/// this call.
 #[unsafe(no_mangle)]
 pub extern "C" fn joint_builder_destroy(builder: *mut JointBuilderHandle) {
-    if builder.is_null() {
-        return;
-    }
+    ffi_guard((), || {
+        if builder.is_null() {
+            return;
+        }
 
-    unsafe {
-        drop(Box::from_raw(builder));
-    }
+        unsafe {
+            drop(Box::from_raw(builder));
+        }
+    })
 }
 
+/// # Safety
+///
+/// `builder` must be a valid pointer returned by `joint_builder_create` and must
+/// remain alive for the duration of the call.
 #[unsafe(no_mangle)]
 pub extern "C" fn joint_builder_set_contacts_enabled(
     builder: *mut JointBuilderHandle,
     enabled: Bool,
 ) {
-    let Some(builder) = (unsafe { builder.as_mut() }) else {
-        return;
-    };
-    builder.inner.set_contacts_enabled(enabled.0 != 0);
+    ffi_guard((), || {
+        let Some(builder) = (unsafe { builder.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "joint builder is null");
+            return;
+        };
+        builder.inner.set_contacts_enabled(enabled.0 != 0);
+    })
 }
 
+/// # Safety
+///
+/// `builder` must be a valid pointer returned by `joint_builder_create` and must
+/// remain alive for the duration of the call.
 #[unsafe(no_mangle)]
 pub extern "C" fn joint_builder_set_local_anchor1(builder: *mut JointBuilderHandle, anchor: Vec3) {
-    let Some(builder) = (unsafe { builder.as_mut() }) else {
-        return;
-    };
-    if !vec3_finite(anchor) {
-        return;
-    }
-    builder.inner.set_local_anchor1(vec3_to_rapier(anchor));
+    ffi_guard((), || {
+        let Some(builder) = (unsafe { builder.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "joint builder is null");
+            return;
+        };
+        if !vec3_finite(anchor) {
+            set_error(ERR_INVALID_ARGUMENT, "anchor must be finite");
+            return;
+        }
+        builder.inner.set_local_anchor1(vec3_to_rapier(anchor));
+    })
 }
 
+/// # Safety
+///
+/// `builder` must be a valid pointer returned by `joint_builder_create` and must
+/// remain alive for the duration of the call.
 #[unsafe(no_mangle)]
 pub extern "C" fn joint_builder_set_local_anchor2(builder: *mut JointBuilderHandle, anchor: Vec3) {
-    let Some(builder) = (unsafe { builder.as_mut() }) else {
-        return;
-    };
-    if !vec3_finite(anchor) {
-        return;
-    }
-    builder.inner.set_local_anchor2(vec3_to_rapier(anchor));
+    ffi_guard((), || {
+        let Some(builder) = (unsafe { builder.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "joint builder is null");
+            return;
+        };
+        if !vec3_finite(anchor) {
+            set_error(ERR_INVALID_ARGUMENT, "anchor must be finite");
+            return;
+        }
+        builder.inner.set_local_anchor2(vec3_to_rapier(anchor));
+    })
 }
 
+/// # Safety
+///
+/// `builder` must be a valid pointer returned by `joint_builder_create` and must
+/// remain alive for the duration of the call.
 #[unsafe(no_mangle)]
 pub extern "C" fn joint_builder_set_limits(
     builder: *mut JointBuilderHandle,
@@ -251,17 +303,28 @@ pub extern "C" fn joint_builder_set_limits(
     min: f64,
     max: f64,
 ) {
-    let Some(builder) = (unsafe { builder.as_mut() }) else {
-        return;
-    };
-    if !min.is_finite() || !max.is_finite() || min > max {
-        return;
-    }
-    builder
-        .inner
-        .set_limits(joint_axis_from_raw(axis), min, max);
+    ffi_guard((), || {
+        let Some(builder) = (unsafe { builder.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "joint builder is null");
+            return;
+        };
+        if !min.is_finite() || !max.is_finite() || min > max {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "limits must be finite with min <= max",
+            );
+            return;
+        }
+        builder
+            .inner
+            .set_limits(joint_axis_from_raw(axis), min, max);
+    })
 }
 
+/// # Safety
+///
+/// `builder` must be a valid pointer returned by `joint_builder_create` and must
+/// remain alive for the duration of the call.
 #[unsafe(no_mangle)]
 pub extern "C" fn joint_builder_set_motor_velocity(
     builder: *mut JointBuilderHandle,
@@ -269,17 +332,28 @@ pub extern "C" fn joint_builder_set_motor_velocity(
     target_vel: f64,
     factor: f64,
 ) {
-    let Some(builder) = (unsafe { builder.as_mut() }) else {
-        return;
-    };
-    if !target_vel.is_finite() || !factor.is_finite() || factor < 0.0 {
-        return;
-    }
-    builder
-        .inner
-        .set_motor_velocity(joint_axis_from_raw(axis), target_vel, factor);
+    ffi_guard((), || {
+        let Some(builder) = (unsafe { builder.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "joint builder is null");
+            return;
+        };
+        if !target_vel.is_finite() || !factor.is_finite() || factor < 0.0 {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "motor velocity and factor must be finite, factor non-negative",
+            );
+            return;
+        }
+        builder
+            .inner
+            .set_motor_velocity(joint_axis_from_raw(axis), target_vel, factor);
+    })
 }
 
+/// # Safety
+///
+/// `builder` must be a valid pointer returned by `joint_builder_create` and must
+/// remain alive for the duration of the call.
 #[unsafe(no_mangle)]
 pub extern "C" fn joint_builder_set_motor_position(
     builder: *mut JointBuilderHandle,
@@ -288,20 +362,27 @@ pub extern "C" fn joint_builder_set_motor_position(
     stiffness: f64,
     damping: f64,
 ) {
-    let Some(builder) = (unsafe { builder.as_mut() }) else {
-        return;
-    };
-    if !target_pos.is_finite()
-        || !stiffness.is_finite()
-        || !damping.is_finite()
-        || stiffness < 0.0
-        || damping < 0.0
-    {
-        return;
-    }
-    builder
-        .inner
-        .set_motor_position(joint_axis_from_raw(axis), target_pos, stiffness, damping);
+    ffi_guard((), || {
+        let Some(builder) = (unsafe { builder.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "joint builder is null");
+            return;
+        };
+        if !target_pos.is_finite()
+            || !stiffness.is_finite()
+            || !damping.is_finite()
+            || stiffness < 0.0
+            || damping < 0.0
+        {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "motor position parameters must be finite, stiffness/damping non-negative",
+            );
+            return;
+        }
+        builder
+            .inner
+            .set_motor_position(joint_axis_from_raw(axis), target_pos, stiffness, damping);
+    })
 }
 
 fn build_and_insert(
@@ -353,6 +434,11 @@ fn build_and_insert(
     }
 }
 
+/// # Safety
+///
+/// `world` must be a valid world pointer. `builder` must be a pointer returned by
+/// `joint_builder_create`; on success its ownership is consumed by this call and it
+/// must not be used afterwards.
 #[unsafe(no_mangle)]
 pub extern "C" fn world_insert_impulse_joint(
     world: *mut WorldHandle,
@@ -361,34 +447,43 @@ pub extern "C" fn world_insert_impulse_joint(
     builder: *mut JointBuilderHandle,
     wake_up: Bool,
 ) -> ImpulseJointHandleRaw {
-    let Some(world) = (unsafe { world.as_mut() }) else {
-        return 0;
-    };
-    if builder.is_null() {
-        return 0;
-    }
+    ffi_guard(0, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return 0;
+        };
+        if builder.is_null() {
+            set_error(ERR_NULL_POINTER, "joint builder is null");
+            return 0;
+        }
 
-    let builder = unsafe { Box::from_raw(builder) };
-    let JointBuilderHandle { inner: joint } = *builder;
-    pack_impulse_joint_handle(build_and_insert(world, body1, body2, joint, wake_up.0 != 0))
+        let builder = unsafe { Box::from_raw(builder) };
+        let JointBuilderHandle { inner: joint } = *builder;
+        pack_impulse_joint_handle(build_and_insert(world, body1, body2, joint, wake_up.0 != 0))
+    })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world pointer and must remain alive for the duration of
+/// the call.
 #[unsafe(no_mangle)]
 pub extern "C" fn world_remove_impulse_joint(
     world: *mut WorldHandle,
     handle: ImpulseJointHandleRaw,
     wake_up: Bool,
 ) -> Bool {
-    let Some(world) = (unsafe { world.as_mut() }) else {
-        return Bool::FALSE;
-    };
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
 
-    world
-        .inner
-        .impulse_joints
-        .remove(unpack_impulse_joint_handle(handle), wake_up.0 != 0)
-        .is_some()
-        .into()
+        world
+            .inner
+            .impulse_joints
+            .remove(unpack_impulse_joint_handle(handle), wake_up.0 != 0)
+            .is_some()
+            .into()
+    })
 }
-
-

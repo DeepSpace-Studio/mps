@@ -1,4 +1,4 @@
-﻿//! Terrain and irregular-body gravity models.
+//! Terrain and irregular-body gravity models.
 //!
 //! ## Supported models
 //!
@@ -12,8 +12,10 @@
 //! - Zuber et al., "Gravity Field of the Moon from GRAIL", Science 339 (2013)
 //! - Parker, "The JPL Lunar Gravity Field to 660th Degree", LPSC 46 (2015)
 
-use crate::rapier::error::{ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, ERR_NOT_FOUND,
-    ERR_UNSUPPORTED, clear_error, set_error};
+use crate::rapier::error::{
+    ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, ERR_UNSUPPORTED,
+    clear_error, ffi_guard, set_error,
+};
 use crate::rapier::ffi::{Bool, Vec3, vec3_finite, vec3_from_rapier, vec3_to_rapier};
 
 const MAX_VERTICES: u32 = 100_000;
@@ -27,7 +29,7 @@ const MAX_FACES: u32 = 200_000;
 /// computation.
 #[derive(Clone, Copy, Debug)]
 struct PolyEdge {
-    r_e: rapier3d::prelude::Vector,  // vector from field point to edge vertex i
+    r_e: rapier3d::prelude::Vector, // vector from field point to edge vertex i
     r_ee: rapier3d::prelude::Vector, // vector from field point to edge vertex j
 }
 
@@ -52,8 +54,8 @@ struct PolyEdge {
 /// Returns `(potential, acceleration_x, acceleration_y, acceleration_z)`.
 pub fn polyhedron_gravity(
     position: Vec3,
-    vertices: &[f64],   // flat xyz triplets
-    faces: &[u32],      // flat face indices [a,b,c, ...]
+    vertices: &[f64], // flat xyz triplets
+    faces: &[u32],    // flat face indices [a,b,c, ...]
     n_vertices: u32,
     n_faces: u32,
     density: f64,
@@ -85,13 +87,19 @@ pub fn polyhedron_gravity(
 
         // Face vertices
         let v0 = rapier3d::prelude::Vector::new(
-            vertices[i0 * 3], vertices[i0 * 3 + 1], vertices[i0 * 3 + 2],
+            vertices[i0 * 3],
+            vertices[i0 * 3 + 1],
+            vertices[i0 * 3 + 2],
         );
         let v1 = rapier3d::prelude::Vector::new(
-            vertices[i1 * 3], vertices[i1 * 3 + 1], vertices[i1 * 3 + 2],
+            vertices[i1 * 3],
+            vertices[i1 * 3 + 1],
+            vertices[i1 * 3 + 2],
         );
         let v2 = rapier3d::prelude::Vector::new(
-            vertices[i2 * 3], vertices[i2 * 3 + 1], vertices[i2 * 3 + 2],
+            vertices[i2 * 3],
+            vertices[i2 * 3 + 1],
+            vertices[i2 * 3 + 2],
         );
 
         // Vectors from field point to vertices
@@ -147,10 +155,8 @@ fn tri_solid_angle(
     }
 
     let num = r0.dot(r1.cross(r2));
-    let den = r0_len * r1_len * r2_len
-        + r0.dot(r1) * r2_len
-        + r1.dot(r2) * r0_len
-        + r2.dot(r0) * r1_len;
+    let den =
+        r0_len * r1_len * r2_len + r0.dot(r1) * r2_len + r1.dot(r2) * r0_len + r2.dot(r0) * r1_len;
 
     2.0 * num.atan2(den)
 }
@@ -245,7 +251,8 @@ pub fn terrain_gravity_direct(
             let r_total = r_ref + height;
             let scale = r_total / r_cell;
             let cell_pos = rapier3d::prelude::Vector::new(
-                x * scale, y * scale,
+                x * scale,
+                y * scale,
                 (r_total * r_total - x * x * scale * scale - y * y * scale * scale).sqrt(),
             );
 
@@ -305,11 +312,15 @@ pub fn terrain_gravity_fft(
     for ix in 0..nx {
         for iy in 0..ny {
             let h = dem[ix * ny + iy];
-            if h.abs() < 1e-6 { continue; }
+            if h.abs() < 1e-6 {
+                continue;
+            }
             let x = (ix as f64 - nx as f64 * 0.5) * res;
             let y = (iy as f64 - ny as f64 * 0.5) * res;
             let r = (x * x + y * y).sqrt();
-            if r < 1e-12 { continue; }
+            if r < 1e-12 {
+                continue;
+            }
             let r_total = grid.reference_radius + h;
             let scale = r_total / r;
 
@@ -317,8 +328,10 @@ pub fn terrain_gravity_fft(
             total_mass += m;
             cm_x += m * x * scale;
             cm_y += m * y * scale;
-            cm_z += m * (r_total * r_total - x * x * scale * scale
-                - y * y * scale * scale).abs().sqrt();
+            cm_z += m
+                * (r_total * r_total - x * x * scale * scale - y * y * scale * scale)
+                    .abs()
+                    .sqrt();
         }
     }
 
@@ -365,73 +378,121 @@ static LUNAR_MASCONS: &[LunarMascon] = &[
     // Near-side mare basins (the "mascons" discovered by Muller & Sjogren 1968)
     // Imbrium basin — largest mascon
     LunarMascon {
-        center: Vec3 { x: -8.29e5, y: 4.52e5, z: 6.31e5 },
-        excess_mass: 8.0e18,  // 8 × 10¹⁸ kg excess
-        radius: 5.0e5,        // ~500 km
+        center: Vec3 {
+            x: -8.29e5,
+            y: 4.52e5,
+            z: 6.31e5,
+        },
+        excess_mass: 8.0e18, // 8 × 10¹⁸ kg excess
+        radius: 5.0e5,       // ~500 km
     },
     // Serenitatis basin
     LunarMascon {
-        center: Vec3 { x: -6.28e5, y: 3.08e5, z: 1.08e6 },
+        center: Vec3 {
+            x: -6.28e5,
+            y: 3.08e5,
+            z: 1.08e6,
+        },
         excess_mass: 4.5e18,
         radius: 3.5e5,
     },
     // Crisium basin
     LunarMascon {
-        center: Vec3 { x: -1.85e5, y: -1.67e5, z: 1.58e6 },
+        center: Vec3 {
+            x: -1.85e5,
+            y: -1.67e5,
+            z: 1.58e6,
+        },
         excess_mass: 3.0e18,
         radius: 3.0e5,
     },
     // Nectaris basin
     LunarMascon {
-        center: Vec3 { x: -4.23e5, y: -1.32e5, z: 1.28e6 },
+        center: Vec3 {
+            x: -4.23e5,
+            y: -1.32e5,
+            z: 1.28e6,
+        },
         excess_mass: 1.5e18,
         radius: 2.5e5,
     },
     // Humorum basin
     LunarMascon {
-        center: Vec3 { x: -4.80e5, y: -9.28e5, z: 4.21e5 },
+        center: Vec3 {
+            x: -4.80e5,
+            y: -9.28e5,
+            z: 4.21e5,
+        },
         excess_mass: 1.3e18,
         radius: 2.0e5,
     },
     // Orientale basin (youngest large basin, partially filled)
     LunarMascon {
-        center: Vec3 { x: -1.07e6, y: -1.23e6, z: -1.79e5 },
+        center: Vec3 {
+            x: -1.07e6,
+            y: -1.23e6,
+            z: -1.79e5,
+        },
         excess_mass: 2.5e18,
         radius: 4.0e5,
     },
     // South Pole-Aitken basin mascon (far side, largest impact basin)
     LunarMascon {
-        center: Vec3 { x: 2.69e5, y: 1.78e5, z: -1.72e6 },
+        center: Vec3 {
+            x: 2.69e5,
+            y: 1.78e5,
+            z: -1.72e6,
+        },
         excess_mass: 6.0e18,
         radius: 6.0e5,
     },
     // Smythii basin (eastern limb)
     LunarMascon {
-        center: Vec3 { x: 1.16e6, y: 2.92e5, z: 3.48e5 },
+        center: Vec3 {
+            x: 1.16e6,
+            y: 2.92e5,
+            z: 3.48e5,
+        },
         excess_mass: 0.8e18,
         radius: 2.0e5,
     },
     // Fecunditatis basin
     LunarMascon {
-        center: Vec3 { x: 5.60e5, y: -3.88e5, z: 1.15e6 },
+        center: Vec3 {
+            x: 5.60e5,
+            y: -3.88e5,
+            z: 1.15e6,
+        },
         excess_mass: 1.2e18,
         radius: 2.5e5,
     },
     // Tranquillitatis basin — Apollo 11 landing site region
     LunarMascon {
-        center: Vec3 { x: 4.33e5, y: 3.20e4, z: 1.38e6 },
+        center: Vec3 {
+            x: 4.33e5,
+            y: 3.20e4,
+            z: 1.38e6,
+        },
         excess_mass: 1.0e18,
         radius: 2.5e5,
     },
     // Procellarum region (KREEP terrane — higher density)
     LunarMascon {
-        center: Vec3 { x: -1.22e6, y: -4.88e5, z: 9.12e5 },
+        center: Vec3 {
+            x: -1.22e6,
+            y: -4.88e5,
+            z: 9.12e5,
+        },
         excess_mass: 5.0e18,
         radius: 6.0e5,
     },
     // Frigoris basin
     LunarMascon {
-        center: Vec3 { x: -4.94e5, y: 6.72e5, z: 1.37e6 },
+        center: Vec3 {
+            x: -4.94e5,
+            y: 6.72e5,
+            z: 1.37e6,
+        },
         excess_mass: 0.9e18,
         radius: 2.5e5,
     },
@@ -488,6 +549,12 @@ pub fn lunar_mascon_get(index: u32, out: &mut LunarMascon) -> Bool {
 /// `vertices_xyz` — flat array of vertex positions (3×n_verts f64s)
 /// `face_indices` — flat array of triangle indices (3×n_faces u32s)
 /// `density` — constant density (kg/m³)
+///
+/// # Safety
+///
+/// `vertices_xyz` must point to at least 3×n_vertices readable f64s and
+/// `face_indices` to at least 3×n_faces readable u32s; `out_acceleration`
+/// must be valid for a single `Vec3` write.
 #[unsafe(no_mangle)]
 pub extern "C" fn terrain_polyhedron_gravity(
     position: Vec3,
@@ -498,37 +565,42 @@ pub extern "C" fn terrain_polyhedron_gravity(
     density: f64,
     out_acceleration: *mut Vec3,
 ) -> Bool {
-    if !vec3_finite(position)
-        || vertices_xyz.is_null()
-        || face_indices.is_null()
-        || n_vertices == 0
-        || n_faces == 0
-        || n_vertices > MAX_VERTICES
-        || n_faces > MAX_FACES
-        || density <= 0.0
-        || out_acceleration.is_null()
-    {
-        set_error(ERR_INVALID_ARGUMENT, "invalid polyhedron parameters");
-        return Bool::FALSE;
-    }
+    ffi_guard(Bool::FALSE, || {
+        if !vec3_finite(position)
+            || vertices_xyz.is_null()
+            || face_indices.is_null()
+            || n_vertices == 0
+            || n_faces == 0
+            || n_vertices > MAX_VERTICES
+            || n_faces > MAX_FACES
+            || density <= 0.0
+            || out_acceleration.is_null()
+        {
+            set_error(ERR_INVALID_ARGUMENT, "invalid polyhedron parameters");
+            return Bool::FALSE;
+        }
 
-    let verts = unsafe {
-        std::slice::from_raw_parts(vertices_xyz, 3 * n_vertices as usize)
-    };
-    let faces = unsafe {
-        std::slice::from_raw_parts(face_indices, 3 * n_faces as usize)
-    };
-    let mut accel = Vec3::default();
+        let verts = unsafe { std::slice::from_raw_parts(vertices_xyz, 3 * n_vertices as usize) };
+        let faces = unsafe { std::slice::from_raw_parts(face_indices, 3 * n_faces as usize) };
+        let mut accel = Vec3::default();
 
-    let ok = polyhedron_gravity(position, verts, faces, n_vertices, n_faces, density, &mut accel);
-    if ok.0 != 0 {
-        unsafe { *out_acceleration = accel; }
-        clear_error();
-    }
-    ok
+        let ok = polyhedron_gravity(
+            position, verts, faces, n_vertices, n_faces, density, &mut accel,
+        );
+        if ok.0 != 0 {
+            unsafe { *out_acceleration = accel };
+            clear_error();
+        }
+        ok
+    })
 }
 
 /// Compute terrain gravity from DEM (direct summation method).
+///
+/// # Safety
+///
+/// `dem` must point to at least nx×ny readable f64s; `out_acceleration` must
+/// be valid for a single `Vec3` write.
 #[unsafe(no_mangle)]
 pub extern "C" fn terrain_gravity_dem(
     position: Vec3,
@@ -540,32 +612,41 @@ pub extern "C" fn terrain_gravity_dem(
     surface_density: f64,
     out_acceleration: *mut Vec3,
 ) -> Bool {
-    if !vec3_finite(position)
-        || dem.is_null()
-        || nx == 0 || ny == 0
-        || resolution <= 0.0
-        || reference_radius <= 0.0
-        || surface_density <= 0.0
-        || out_acceleration.is_null()
-    {
-        set_error(ERR_INVALID_ARGUMENT, "invalid DEM parameters");
-        return Bool::FALSE;
-    }
+    ffi_guard(Bool::FALSE, || {
+        if !vec3_finite(position)
+            || dem.is_null()
+            || nx == 0
+            || ny == 0
+            || resolution <= 0.0
+            || reference_radius <= 0.0
+            || surface_density <= 0.0
+            || out_acceleration.is_null()
+        {
+            set_error(ERR_INVALID_ARGUMENT, "invalid DEM parameters");
+            return Bool::FALSE;
+        }
 
-    let dem_slice = unsafe {
-        std::slice::from_raw_parts(dem, (nx * ny) as usize)
-    };
-    let grid = TerrainGrid {
-        nx, ny, resolution, reference_radius,
-    };
+        let dem_slice = unsafe { std::slice::from_raw_parts(dem, (nx * ny) as usize) };
+        let grid = TerrainGrid {
+            nx,
+            ny,
+            resolution,
+            reference_radius,
+        };
 
-    let accel = terrain_gravity_direct(position, dem_slice, grid, surface_density);
-    unsafe { *out_acceleration = accel; }
-    clear_error();
-    Bool::TRUE
+        let accel = terrain_gravity_direct(position, dem_slice, grid, surface_density);
+        unsafe { *out_acceleration = accel };
+        clear_error();
+        Bool::TRUE
+    })
 }
 
 /// Compute terrain gravity from DEM (FFT/quadrupole approximation).
+///
+/// # Safety
+///
+/// `dem` must point to at least nx×ny readable f64s; `out_acceleration` must
+/// be valid for a single `Vec3` write.
 #[unsafe(no_mangle)]
 pub extern "C" fn terrain_gravity_dem_fft(
     position: Vec3,
@@ -577,81 +658,92 @@ pub extern "C" fn terrain_gravity_dem_fft(
     surface_density: f64,
     out_acceleration: *mut Vec3,
 ) -> Bool {
-    if !vec3_finite(position)
-        || dem.is_null()
-        || nx == 0 || ny == 0
-        || resolution <= 0.0
-        || reference_radius <= 0.0
-        || surface_density <= 0.0
-        || out_acceleration.is_null()
-    {
-        set_error(ERR_INVALID_ARGUMENT, "invalid DEM parameters");
-        return Bool::FALSE;
-    }
+    ffi_guard(Bool::FALSE, || {
+        if !vec3_finite(position)
+            || dem.is_null()
+            || nx == 0
+            || ny == 0
+            || resolution <= 0.0
+            || reference_radius <= 0.0
+            || surface_density <= 0.0
+            || out_acceleration.is_null()
+        {
+            set_error(ERR_INVALID_ARGUMENT, "invalid DEM parameters");
+            return Bool::FALSE;
+        }
 
-    let dem_slice = unsafe {
-        std::slice::from_raw_parts(dem, (nx * ny) as usize)
-    };
-    let grid = TerrainGrid {
-        nx, ny, resolution, reference_radius,
-    };
+        let dem_slice = unsafe { std::slice::from_raw_parts(dem, (nx * ny) as usize) };
+        let grid = TerrainGrid {
+            nx,
+            ny,
+            resolution,
+            reference_radius,
+        };
 
-    let accel = terrain_gravity_fft(position, dem_slice, grid, surface_density);
-    unsafe { *out_acceleration = accel; }
-    clear_error();
-    Bool::TRUE
+        let accel = terrain_gravity_fft(position, dem_slice, grid, surface_density);
+        unsafe { *out_acceleration = accel };
+        clear_error();
+        Bool::TRUE
+    })
 }
 
 /// Compute lunar mascon gravitational acceleration.
+///
+/// # Safety
+///
+/// `out_acceleration` must be valid for a single `Vec3` write.
 #[unsafe(no_mangle)]
 pub extern "C" fn terrain_lunar_mascon_gravity(
     position: Vec3,
     out_acceleration: *mut Vec3,
 ) -> Bool {
-    if !vec3_finite(position) || out_acceleration.is_null() {
-        set_error(ERR_INVALID_ARGUMENT, "invalid position or null output");
-        return Bool::FALSE;
-    }
+    ffi_guard(Bool::FALSE, || {
+        if !vec3_finite(position) || out_acceleration.is_null() {
+            set_error(ERR_INVALID_ARGUMENT, "invalid position or null output");
+            return Bool::FALSE;
+        }
 
-    let accel = lunar_mascon_gravity(position);
-    unsafe { *out_acceleration = accel; }
-    clear_error();
-    Bool::TRUE
+        let accel = lunar_mascon_gravity(position);
+        unsafe { *out_acceleration = accel };
+        clear_error();
+        Bool::TRUE
+    })
 }
 
 /// Get the number of built-in lunar mascons.
 #[unsafe(no_mangle)]
 pub extern "C" fn terrain_lunar_mascon_count() -> u32 {
-    lunar_mascon_count()
+    ffi_guard(0, || lunar_mascon_count())
 }
 
 /// Get a specific lunar mascon by index.
+///
+/// # Safety
+///
+/// `out_mascon` must be valid for a single `LunarMascon` write.
 #[unsafe(no_mangle)]
-pub extern "C" fn terrain_lunar_mascon_get(
-    index: u32,
-    out_mascon: *mut LunarMascon,
-) -> Bool {
-    if out_mascon.is_null() {
-        set_error(ERR_NULL_POINTER, "output is null");
-        return Bool::FALSE;
-    }
-    let mut mc = LunarMascon {
-        center: Vec3::default(),
-        excess_mass: 0.0,
-        radius: 0.0,
-    };
-    if lunar_mascon_get(index, &mut mc).0 != 0 {
-        unsafe { *out_mascon = mc; }
-        clear_error();
-        Bool::TRUE
-    } else {
-        set_error(ERR_NOT_FOUND, "mascon index out of bounds");
-        Bool::FALSE
-    }
+pub extern "C" fn terrain_lunar_mascon_get(index: u32, out_mascon: *mut LunarMascon) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        if out_mascon.is_null() {
+            set_error(ERR_NULL_POINTER, "output is null");
+            return Bool::FALSE;
+        }
+        let mut mc = LunarMascon {
+            center: Vec3::default(),
+            excess_mass: 0.0,
+            radius: 0.0,
+        };
+        if lunar_mascon_get(index, &mut mc).0 != 0 {
+            unsafe { *out_mascon = mc };
+            clear_error();
+            Bool::TRUE
+        } else {
+            set_error(ERR_NOT_FOUND, "mascon index out of bounds");
+            Bool::FALSE
+        }
+    })
 }
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
-
-

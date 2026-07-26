@@ -1,4 +1,8 @@
-﻿use crate::rapier::ffi::{
+use crate::rapier::error::{
+    ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, clear_error, ffi_guard,
+    set_error,
+};
+use crate::rapier::ffi::{
     AabbDesc, Bool, MAX_OUTPUT_CAPACITY, MAX_TREE_ENTRIES, RTreeHandle, Vec3,
 };
 use smallvec::SmallVec;
@@ -263,93 +267,196 @@ fn query_node(node: &Node, bounds: Aabb, out_ids: &mut [u64], written: &mut usiz
     }
 }
 
+/// Create an empty R-tree index.
+///
+/// # Safety
+///
+/// The returned pointer is owned by the caller and must be freed exactly once
+/// with `rtree_destroy`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rtree_create() -> *mut RTreeHandle {
-    Box::into_raw(Box::new(RTreeHandle {
-        inner: RTreeIndex::new(),
-    }))
+    ffi_guard(std::ptr::null_mut(), || {
+        Box::into_raw(Box::new(RTreeHandle {
+            inner: RTreeIndex::new(),
+        }))
+    })
 }
 
+/// Destroy an R-tree index created by `rtree_create`.
+///
+/// # Safety
+///
+/// `tree` must be null or a pointer returned by `rtree_create`; it must not be
+/// used again after this call.
 #[unsafe(no_mangle)]
 pub extern "C" fn rtree_destroy(tree: *mut RTreeHandle) {
-    if tree.is_null() {
-        return;
-    }
+    ffi_guard((), || {
+        if tree.is_null() {
+            return;
+        }
 
-    unsafe {
-        drop(Box::from_raw(tree));
-    }
+        unsafe {
+            drop(Box::from_raw(tree));
+        }
+    })
 }
 
+/// Remove every entry from the tree.
+///
+/// # Safety
+///
+/// `tree` must be a valid pointer returned by `rtree_create`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rtree_clear(tree: *mut RTreeHandle) {
-    let Some(tree) = (unsafe { tree.as_mut() }) else {
-        return;
-    };
-    tree.inner.clear();
+    ffi_guard((), || {
+        let Some(tree) = (unsafe { tree.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "tree is null");
+            return;
+        };
+        tree.inner.clear();
+        clear_error();
+    })
 }
 
+/// Return the number of entries stored in the tree.
+///
+/// # Safety
+///
+/// `tree` must be a valid pointer returned by `rtree_create`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rtree_len(tree: *const RTreeHandle) -> u32 {
-    let Some(tree) = (unsafe { tree.as_ref() }) else {
-        return 0;
-    };
-    tree.inner.entries.len().min(u32::MAX as usize) as u32
+    ffi_guard(0, || {
+        let Some(tree) = (unsafe { tree.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "tree is null");
+            return 0;
+        };
+        let len = tree.inner.entries.len().min(u32::MAX as usize) as u32;
+        clear_error();
+        len
+    })
 }
 
+/// Insert or overwrite the bounds of `id` in the tree.
+///
+/// # Safety
+///
+/// `tree` must be a valid pointer returned by `rtree_create`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rtree_insert(tree: *mut RTreeHandle, id: u64, aabb: AabbDesc) -> Bool {
-    let Some(tree) = (unsafe { tree.as_mut() }) else {
-        return Bool::FALSE;
-    };
-    let Some(bounds) = Aabb::from_desc(aabb) else {
-        return Bool::FALSE;
-    };
-    tree.inner.insert(id, bounds).into()
+    ffi_guard(Bool::FALSE, || {
+        let Some(tree) = (unsafe { tree.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "tree is null");
+            return Bool::FALSE;
+        };
+        let Some(bounds) = Aabb::from_desc(aabb) else {
+            set_error(ERR_INVALID_ARGUMENT, "invalid AABB");
+            return Bool::FALSE;
+        };
+        if id == 0 {
+            set_error(ERR_INVALID_ARGUMENT, "id must be non-zero");
+            return Bool::FALSE;
+        }
+        if !tree.inner.insert(id, bounds) {
+            set_error(ERR_CAPACITY, "tree entry capacity exceeded");
+            return Bool::FALSE;
+        }
+        clear_error();
+        Bool::TRUE
+    })
 }
 
+/// Update the bounds of an existing `id` in the tree.
+///
+/// # Safety
+///
+/// `tree` must be a valid pointer returned by `rtree_create`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rtree_update(tree: *mut RTreeHandle, id: u64, aabb: AabbDesc) -> Bool {
-    let Some(tree) = (unsafe { tree.as_mut() }) else {
-        return Bool::FALSE;
-    };
-    if !tree.inner.entries.iter().any(|entry| entry.id == id) {
-        return Bool::FALSE;
-    }
-    let Some(bounds) = Aabb::from_desc(aabb) else {
-        return Bool::FALSE;
-    };
-    tree.inner.insert(id, bounds).into()
+    ffi_guard(Bool::FALSE, || {
+        let Some(tree) = (unsafe { tree.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "tree is null");
+            return Bool::FALSE;
+        };
+        if !tree.inner.entries.iter().any(|entry| entry.id == id) {
+            set_error(ERR_NOT_FOUND, "entry not found");
+            return Bool::FALSE;
+        }
+        let Some(bounds) = Aabb::from_desc(aabb) else {
+            set_error(ERR_INVALID_ARGUMENT, "invalid AABB");
+            return Bool::FALSE;
+        };
+        clear_error();
+        tree.inner.insert(id, bounds).into()
+    })
 }
 
+/// Remove `id` from the tree.
+///
+/// # Safety
+///
+/// `tree` must be a valid pointer returned by `rtree_create`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rtree_remove(tree: *mut RTreeHandle, id: u64) -> Bool {
-    let Some(tree) = (unsafe { tree.as_mut() }) else {
-        return Bool::FALSE;
-    };
-    tree.inner.remove(id).into()
+    ffi_guard(Bool::FALSE, || {
+        let Some(tree) = (unsafe { tree.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "tree is null");
+            return Bool::FALSE;
+        };
+        if !tree.inner.remove(id) {
+            set_error(ERR_NOT_FOUND, "entry not found");
+            return Bool::FALSE;
+        }
+        clear_error();
+        Bool::TRUE
+    })
 }
 
+/// Force an immediate rebuild of the tree structure.
+///
+/// # Safety
+///
+/// `tree` must be a valid pointer returned by `rtree_create`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rtree_rebuild(tree: *mut RTreeHandle) {
-    let Some(tree) = (unsafe { tree.as_mut() }) else {
-        return;
-    };
-    tree.inner.dirty = true;
-    tree.inner.rebuild_if_needed();
+    ffi_guard((), || {
+        let Some(tree) = (unsafe { tree.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "tree is null");
+            return;
+        };
+        tree.inner.dirty = true;
+        tree.inner.rebuild_if_needed();
+        clear_error();
+    })
 }
 
+/// Count the entries whose bounds intersect `aabb`.
+///
+/// # Safety
+///
+/// `tree` must be a valid pointer returned by `rtree_create`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rtree_query_aabb_count(tree: *mut RTreeHandle, aabb: AabbDesc) -> u32 {
-    let Some(tree) = (unsafe { tree.as_mut() }) else {
-        return 0;
-    };
-    let Some(bounds) = Aabb::from_desc(aabb) else {
-        return 0;
-    };
-    tree.inner.query_count(bounds)
+    ffi_guard(0, || {
+        let Some(tree) = (unsafe { tree.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "tree is null");
+            return 0;
+        };
+        let Some(bounds) = Aabb::from_desc(aabb) else {
+            set_error(ERR_INVALID_ARGUMENT, "invalid AABB");
+            return 0;
+        };
+        let count = tree.inner.query_count(bounds);
+        clear_error();
+        count
+    })
 }
 
+/// Write the ids of entries whose bounds intersect `aabb` into `out_ids`.
+///
+/// # Safety
+///
+/// `tree` must be a valid pointer returned by `rtree_create`, and `out_ids`
+/// must point to a writable buffer of at least `capacity` `u64` elements.
 #[unsafe(no_mangle)]
 pub extern "C" fn rtree_query_aabb(
     tree: *mut RTreeHandle,
@@ -357,18 +464,27 @@ pub extern "C" fn rtree_query_aabb(
     out_ids: *mut u64,
     capacity: u32,
 ) -> u32 {
-    let Some(tree) = (unsafe { tree.as_mut() }) else {
-        return 0;
-    };
-    if out_ids.is_null() || capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
-        return 0;
-    }
-    let Some(bounds) = Aabb::from_desc(aabb) else {
-        return 0;
-    };
+    ffi_guard(0, || {
+        let Some(tree) = (unsafe { tree.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "tree is null");
+            return 0;
+        };
+        if out_ids.is_null() {
+            set_error(ERR_NULL_POINTER, "output buffer is null");
+            return 0;
+        }
+        if capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
+            set_error(ERR_CAPACITY, "invalid output capacity");
+            return 0;
+        }
+        let Some(bounds) = Aabb::from_desc(aabb) else {
+            set_error(ERR_INVALID_ARGUMENT, "invalid AABB");
+            return 0;
+        };
 
-    let out = unsafe { std::slice::from_raw_parts_mut(out_ids, capacity as usize) };
-    tree.inner.query(bounds, out)
+        let out = unsafe { std::slice::from_raw_parts_mut(out_ids, capacity as usize) };
+        let written = tree.inner.query(bounds, out);
+        clear_error();
+        written
+    })
 }
-
-

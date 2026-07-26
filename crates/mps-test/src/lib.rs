@@ -18,6 +18,7 @@ pub mod rapier {
     pub mod crbtree;
     pub mod dop;
     pub mod electromagnetism;
+    pub mod error;
     pub mod events;
     pub mod ffi;
     pub mod fluid;
@@ -31,6 +32,7 @@ pub mod rapier {
     pub mod material_mechanics;
     pub mod molecular;
     pub mod neural;
+    pub mod nuclear;
     pub mod physchem;
     pub mod plasma;
     pub mod quantum;

@@ -215,7 +215,6 @@ use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use rapier3d::prelude::RigidBodyType;
 
 use crate::rapier::ffi::Vec3;
-use crate::rapier::forces::ForceLawType;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -353,7 +352,12 @@ impl SharedPhysicsArena {
     /// Returns the arena and the raw pointer (for passing to Java), or `None`
     /// if a capacity exceeds `MAX_ARENA_*`, the total size exceeds
     /// `MAX_ARENA_TOTAL_BYTES`, or the allocation fails.
-    pub fn new(max_bodies: u32, max_colliders: u32, max_events: u32, max_commands: u32) -> Option<Self> {
+    pub fn new(
+        max_bodies: u32,
+        max_colliders: u32,
+        max_events: u32,
+        max_commands: u32,
+    ) -> Option<Self> {
         if max_bodies > MAX_ARENA_BODIES
             || max_colliders > MAX_ARENA_COLLIDERS
             || max_events > MAX_ARENA_EVENTS
@@ -412,9 +416,11 @@ impl SharedPhysicsArena {
             (ptr.add(56) as *mut u32).write_unaligned(CMD_SLOT_STRIDE);
             (ptr.add(60) as *mut u32).write_unaligned(EVENT_SLOT_STRIDE);
             // Region offsets (Java reads these instead of recomputing)
-            (ptr.add(OFF_BODY_HANDLE_MAP) as *mut u64).write_unaligned(body_handle_map_offset as u64);
+            (ptr.add(OFF_BODY_HANDLE_MAP) as *mut u64)
+                .write_unaligned(body_handle_map_offset as u64);
             (ptr.add(OFF_FORCE_REPORT) as *mut u64).write_unaligned(force_report_offset as u64);
-            (ptr.add(OFF_INTEGRATION_PARAMS) as *mut u64).write_unaligned(integration_params_offset as u64);
+            (ptr.add(OFF_INTEGRATION_PARAMS) as *mut u64)
+                .write_unaligned(integration_params_offset as u64);
             (ptr.add(OFF_FORCE_SUMMARY) as *mut u64).write_unaligned(force_summary_offset as u64);
             (ptr.add(OFF_CMD_RING) as *mut u64).write_unaligned(cmd_ring_offset as u64);
             (ptr.add(OFF_EVENT_RING) as *mut u64).write_unaligned(event_ring_offset as u64);
@@ -465,7 +471,9 @@ impl SharedPhysicsArena {
     }
 
     fn set_header_u32(&self, offset: usize, value: u32) {
-        unsafe { (self.ptr.add(offset) as *mut u32).write_unaligned(value); }
+        unsafe {
+            (self.ptr.add(offset) as *mut u32).write_unaligned(value);
+        }
     }
 
     pub fn header_u64(&self, offset: usize) -> u64 {
@@ -479,9 +487,8 @@ impl SharedPhysicsArena {
     /// Get pointer to a body slot.
     pub fn body_slot_ptr(&self, index: u32) -> *mut u8 {
         unsafe {
-            self.ptr.add(
-                self.body_slots_offset + index as usize * BODY_SLOT_STRIDE as usize,
-            )
+            self.ptr
+                .add(self.body_slots_offset + index as usize * BODY_SLOT_STRIDE as usize)
         }
     }
 
@@ -491,9 +498,15 @@ impl SharedPhysicsArena {
     pub fn flush_body(
         &self,
         index: u32,
-        pos_x: f64, pos_y: f64, pos_z: f64,
-        vel_x: f64, vel_y: f64, vel_z: f64,
-        angvel_x: f64, angvel_y: f64, angvel_z: f64,
+        pos_x: f64,
+        pos_y: f64,
+        pos_z: f64,
+        vel_x: f64,
+        vel_y: f64,
+        vel_z: f64,
+        angvel_x: f64,
+        angvel_y: f64,
+        angvel_z: f64,
         body_type: u32,
         sleeping: u32,
         user_data: u64,
@@ -551,7 +564,9 @@ impl SharedPhysicsArena {
             return;
         }
         unsafe {
-            let slot = self.ptr.add(self.body_handle_map_offset + index as usize * 8);
+            let slot = self
+                .ptr
+                .add(self.body_handle_map_offset + index as usize * 8);
             (slot as *mut u64).write_unaligned(handle_raw);
         }
     }
@@ -560,46 +575,11 @@ impl SharedPhysicsArena {
     // Force report — per-ForceLawType contributions (32 slots)
     // -----------------------------------------------------------------------
 
-    /// Map ForceLawType to a compact u32 tag for the arena force report section.
-    pub fn force_law_type_tag(ft: ForceLawType) -> u32 {
-        match ft {
-            ForceLawType::WorldGravity => 0,
-            ForceLawType::UserForce => 1,
-            ForceLawType::NewtonianGravity => 2,
-            ForceLawType::CoulombFriction => 3,
-            ForceLawType::AirDrag => 4,
-            ForceLawType::Buoyancy => 5,
-            ForceLawType::Electromagnetic => 6,
-            ForceLawType::ElasticSpring => 7,
-            ForceLawType::PointGravity => 8,
-            ForceLawType::AerodynamicSurface => 9,
-            ForceLawType::AerodynamicVoxel => 10,
-            ForceLawType::FluidAABB => 11,
-            ForceLawType::MolecularLennardJones => 12,
-            ForceLawType::MolecularCoulomb => 13,
-            ForceLawType::SpaceJ2 => 14,
-            ForceLawType::SpaceCMG => 15,
-            ForceLawType::SpaceAtmosphericDrag => 16,
-            ForceLawType::SpaceSolarRadiation => 17,
-            ForceLawType::SpaceGravityGradient => 18,
-            ForceLawType::SpaceMagneticTorquer => 19,
-            ForceLawType::TrajectoryCoriolis => 20,
-            ForceLawType::TrajectoryCentrifugal => 21,
-            ForceLawType::TrajectoryGravity => 22,
-            ForceLawType::ControlPID => 23,
-            ForceLawType::Custom(_) => 0xFF,
-            _ => 0xFE,
-        }
-    }
-
     /// Flush the per-frame ForceReport to the arena's force_report region.
     ///
     /// Writes up to 32 ForceLawType contributions so Java can read which
     /// force types are active and how much force each contributed.
-    pub fn flush_force_breakdown(
-        &self,
-        report: &crate::rapier::forces::ForceReport,
-    ) {
+    pub fn flush_force_breakdown(&self, report: &crate::rapier::forces::ForceReport) {
         if self.force_report_offset == 0 {
             return;
         }
@@ -609,7 +589,7 @@ impl SharedPhysicsArena {
             if count >= 32 {
                 break;
             }
-            let type_tag = Self::force_law_type_tag(*law_type);
+            let type_tag = crate::rapier::ffi::force_law_type_tag(*law_type);
             let offset = self.force_report_offset + count as usize * 32;
             unsafe {
                 (self.ptr.add(offset) as *mut f64).write_unaligned(contrib.total_force.x);
@@ -643,9 +623,8 @@ impl SharedPhysicsArena {
     fn cmd_slot_ptr(&self, index: u32) -> *mut u8 {
         let wrapped = index % self.max_commands;
         unsafe {
-            self.ptr.add(
-                self.cmd_ring_offset + wrapped as usize * CMD_SLOT_STRIDE as usize,
-            )
+            self.ptr
+                .add(self.cmd_ring_offset + wrapped as usize * CMD_SLOT_STRIDE as usize)
         }
     }
 
@@ -687,9 +666,8 @@ impl SharedPhysicsArena {
     fn event_slot_ptr(&self, index: u32) -> *mut u8 {
         let wrapped = index % self.max_events;
         unsafe {
-            self.ptr.add(
-                self.event_ring_offset + wrapped as usize * EVENT_SLOT_STRIDE as usize,
-            )
+            self.ptr
+                .add(self.event_ring_offset + wrapped as usize * EVENT_SLOT_STRIDE as usize)
         }
     }
 
@@ -728,7 +706,8 @@ impl SharedPhysicsArena {
             (slot.add(56) as *mut f64).write_unaligned(0.0);
         }
 
-        self.event_write.store(write.wrapping_add(1), Ordering::Release);
+        self.event_write
+            .store(write.wrapping_add(1), Ordering::Release);
         // Update header event count
         let count = write.wrapping_add(1).wrapping_sub(read);
         self.set_header_u32(40, count.min(self.max_events));
@@ -739,9 +718,13 @@ impl SharedPhysicsArena {
         &self,
         collider1: u32,
         collider2: u32,
-        total_force_x: f64, total_force_y: f64, total_force_z: f64,
+        total_force_x: f64,
+        total_force_y: f64,
+        total_force_z: f64,
         total_force_mag: f64,
-        max_force_x: f64, max_force_y: f64, max_force_z: f64,
+        max_force_x: f64,
+        max_force_y: f64,
+        max_force_z: f64,
     ) {
         let write = self.event_write.load(Ordering::Relaxed);
         let read = self.event_read.load(Ordering::Acquire);
@@ -765,7 +748,8 @@ impl SharedPhysicsArena {
             (slot.add(56) as *mut f64).write_unaligned(max_force_y);
         }
 
-        self.event_write.store(write.wrapping_add(1), Ordering::Release);
+        self.event_write
+            .store(write.wrapping_add(1), Ordering::Release);
         let count = write.wrapping_add(1).wrapping_sub(read);
         self.set_header_u32(40, count.min(self.max_events));
     }
@@ -809,13 +793,8 @@ impl SharedPhysicsArena {
             let user_data = (body.user_data & 0xFFFF_FFFF_FFFF_FFFF) as u64;
 
             self.flush_body(
-                index,
-                pos.x, pos.y, pos.z,
-                vel.x, vel.y, vel.z,
-                angvel.x, angvel.y, angvel.z,
-                body_type,
-                sleeping,
-                user_data,
+                index, pos.x, pos.y, pos.z, vel.x, vel.y, vel.z, angvel.x, angvel.y, angvel.z,
+                body_type, sleeping, user_data,
             );
 
             index += 1;
@@ -836,9 +815,8 @@ impl SharedPhysicsArena {
 
     fn collider_slot_ptr(&self, index: u32) -> *mut u8 {
         unsafe {
-            self.ptr.add(
-                self.collider_slots_offset + index as usize * COLLIDER_SLOT_STRIDE as usize,
-            )
+            self.ptr
+                .add(self.collider_slots_offset + index as usize * COLLIDER_SLOT_STRIDE as usize)
         }
     }
 
@@ -855,7 +833,9 @@ impl SharedPhysicsArena {
         &self,
         index: u32,
         parent_body_index: u32,
-        pos_x: f64, pos_y: f64, pos_z: f64,
+        pos_x: f64,
+        pos_y: f64,
+        pos_z: f64,
         friction: f64,
         restitution: f64,
         density: f64,
@@ -890,23 +870,32 @@ impl SharedPhysicsArena {
     }
 
     fn clear_collider_slot(&self, index: u32) {
-        if index >= self.max_colliders { return; }
+        if index >= self.max_colliders {
+            return;
+        }
         let slot = self.collider_slot_ptr(index);
-        unsafe { (&*(slot as *const AtomicU64)).store(0, Ordering::Release); }
+        unsafe {
+            (&*(slot as *const AtomicU64)).store(0, Ordering::Release);
+        }
     }
 
     /// Flush all colliders after world_step.
     pub fn flush_all_colliders(&self, colliders: &rapier3d::prelude::ColliderSet) {
         let mut index = 0u32;
         for (_handle, collider) in colliders.iter() {
-            if index >= self.max_colliders { break; }
+            if index >= self.max_colliders {
+                break;
+            }
             let pos = collider.translation();
-            let parent = collider.parent().map_or(u32::MAX, |h| {
-                (h.into_raw_parts().0 & 0xFFFF_FFFF) as u32
-            });
+            let parent = collider
+                .parent()
+                .map_or(u32::MAX, |h| (h.into_raw_parts().0 & 0xFFFF_FFFF) as u32);
             self.flush_collider(
-                index, parent,
-                pos.x, pos.y, pos.z,
+                index,
+                parent,
+                pos.x,
+                pos.y,
+                pos.z,
                 collider.friction(),
                 collider.restitution(),
                 collider.density(),
@@ -918,7 +907,9 @@ impl SharedPhysicsArena {
             index += 1;
         }
         self.set_header_u32(36, index);
-        for i in index..self.max_colliders { self.clear_collider_slot(i); }
+        for i in index..self.max_colliders {
+            self.clear_collider_slot(i);
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -997,10 +988,15 @@ impl SharedPhysicsArena {
                 let collider1 = (evt.collider1 & 0xFFFF_FFFF) as u32;
                 let collider2 = (evt.collider2 & 0xFFFF_FFFF) as u32;
                 self.push_contact_force_event(
-                    collider1, collider2,
-                    evt.total_force.x, evt.total_force.y, evt.total_force.z,
+                    collider1,
+                    collider2,
+                    evt.total_force.x,
+                    evt.total_force.y,
+                    evt.total_force.z,
                     evt.total_force_magnitude,
-                    evt.max_force_direction.x, evt.max_force_direction.y, evt.max_force_direction.z,
+                    evt.max_force_direction.x,
+                    evt.max_force_direction.y,
+                    evt.max_force_direction.z,
                 );
                 evt_count += 1;
             }
@@ -1013,22 +1009,28 @@ impl SharedPhysicsArena {
     /// Set flags in the header atomically.
     pub fn set_flags(&self, flags: u32) {
         let ptr = unsafe { self.ptr.add(12) as *mut AtomicU32 };
-        unsafe { (*ptr).fetch_or(flags, Ordering::Release); }
+        unsafe {
+            (*ptr).fetch_or(flags, Ordering::Release);
+        }
     }
 
     /// Clear flags in the header atomically.
     pub fn clear_flags(&self, flags: u32) {
         let ptr = unsafe { self.ptr.add(12) as *mut AtomicU32 };
-        unsafe { (*ptr).fetch_and(!flags, Ordering::Release); }
+        unsafe {
+            (*ptr).fetch_and(!flags, Ordering::Release);
+        }
     }
 }
 
 impl Drop for SharedPhysicsArena {
     fn drop(&mut self) {
         if !self.ptr.is_null() {
-            let layout = Layout::from_size_align(self.size, 64)
-                .expect("arena layout must be valid");
-            unsafe { dealloc(self.ptr, layout); }
+            let layout =
+                Layout::from_size_align(self.size, 64).expect("arena layout must be valid");
+            unsafe {
+                dealloc(self.ptr, layout);
+            }
             self.ptr = std::ptr::null_mut();
         }
     }
@@ -1037,18 +1039,3 @@ impl Drop for SharedPhysicsArena {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

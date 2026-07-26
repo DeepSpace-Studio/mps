@@ -1,13 +1,17 @@
 use crate::rapier::error::{
     ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, clear_error, ffi_guard, set_error,
 };
+use crate::rapier::ffi::finite_positive;
 use crate::rapier::ffi::{
     BernoulliReport, Bool, FluidForceReport, FluidVolume, NavierStokesReport, RigidBodyHandleRaw,
     SphForceReport, SphParticle, Vec3, WorldHandle, unpack_rigid_body_handle, vec3_finite,
     vec3_from_rapier, vec3_to_rapier,
 };
-use crate::rapier::ffi::finite_positive;
 
+/// # Safety
+///
+/// `out_report` may be null or must point to writable space for one
+/// `FluidForceReport`.
 #[unsafe(no_mangle)]
 pub extern "C" fn fluid_estimate_aabb_forces(
     fluid: FluidVolume,
@@ -39,6 +43,10 @@ pub extern "C" fn fluid_estimate_aabb_forces(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle; `out_report` may be null or must
+/// point to writable space for one `FluidForceReport`.
 #[unsafe(no_mangle)]
 pub extern "C" fn fluid_apply_aabb_forces(
     world: *mut WorldHandle,
@@ -88,6 +96,10 @@ pub extern "C" fn fluid_apply_aabb_forces(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle; `out_report` may be null or must
+/// point to writable space for one `FluidForceReport`.
 #[unsafe(no_mangle)]
 pub extern "C" fn fluid_apply_aabb_forces_flag(
     world: *mut WorldHandle,
@@ -112,6 +124,9 @@ pub extern "C" fn fluid_apply_aabb_forces_flag(
     })
 }
 
+/// # Safety
+///
+/// `out_report` must point to writable space for one `NavierStokesReport`.
 #[unsafe(no_mangle)]
 pub extern "C" fn fluid_navier_stokes_simplified_step(
     velocity: Vec3,
@@ -126,8 +141,14 @@ pub extern "C" fn fluid_navier_stokes_simplified_step(
 ) -> Bool {
     ffi_guard(Bool::FALSE, || {
         let Some(report) = mps_formula::fluid::navier_stokes_simplified_step(
-            velocity, advection, pressure_gradient, laplacian_velocity,
-            external_acceleration, density, kinematic_viscosity, dt,
+            velocity,
+            advection,
+            pressure_gradient,
+            laplacian_velocity,
+            external_acceleration,
+            density,
+            kinematic_viscosity,
+            dt,
         ) else {
             set_error(ERR_INVALID_ARGUMENT, "invalid Navier-Stokes parameters");
             return Bool::FALSE;
@@ -149,6 +170,9 @@ pub extern "C" fn fluid_sph_poly6_kernel(distance: f64, smoothing_radius: f64) -
     })
 }
 
+/// # Safety
+///
+/// `out_gradient` must point to writable space for one `Vec3`.
 #[unsafe(no_mangle)]
 pub extern "C" fn fluid_sph_spiky_gradient(
     offset: Vec3,
@@ -157,11 +181,18 @@ pub extern "C" fn fluid_sph_spiky_gradient(
 ) -> Bool {
     ffi_guard(Bool::FALSE, || {
         if !vec3_finite(offset) {
-            set_error(ERR_INVALID_ARGUMENT, "invalid SPH spiky gradient parameters");
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "invalid SPH spiky gradient parameters",
+            );
             return Bool::FALSE;
         }
-        let Some(gradient) = mps_formula::fluid::sph_spiky_gradient(offset, smoothing_radius) else {
-            set_error(ERR_INVALID_ARGUMENT, "invalid SPH spiky gradient parameters");
+        let Some(gradient) = mps_formula::fluid::sph_spiky_gradient(offset, smoothing_radius)
+        else {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "invalid SPH spiky gradient parameters",
+            );
             return Bool::FALSE;
         };
         let Some(out_gradient) = (unsafe { out_gradient.as_mut() }) else {
@@ -181,6 +212,11 @@ pub extern "C" fn fluid_sph_viscosity_laplacian(distance: f64, smoothing_radius:
     })
 }
 
+/// # Safety
+///
+/// `particles` must point to `particle_count` `SphParticle` values (or be
+/// null when `particle_count` is 0); `out_density` must point to writable
+/// space for one `f64`.
 #[unsafe(no_mangle)]
 pub extern "C" fn fluid_sph_estimate_density(
     position: Vec3,
@@ -199,7 +235,9 @@ pub extern "C" fn fluid_sph_estimate_density(
             return Bool::FALSE;
         }
         let particles = unsafe { std::slice::from_raw_parts(particles, particle_count as usize) };
-        let Some(density) = mps_formula::fluid::sph_estimate_density(position, particles, smoothing_radius) else {
+        let Some(density) =
+            mps_formula::fluid::sph_estimate_density(position, particles, smoothing_radius)
+        else {
             set_error(ERR_INVALID_ARGUMENT, "invalid SPH particle");
             return Bool::FALSE;
         };
@@ -213,6 +251,11 @@ pub extern "C" fn fluid_sph_estimate_density(
     })
 }
 
+/// # Safety
+///
+/// `particles` must point to `particle_count` `SphParticle` values (or be
+/// null when `particle_count` is 0); `out_report` must point to writable
+/// space for one `SphForceReport`.
 #[unsafe(no_mangle)]
 pub extern "C" fn fluid_sph_estimate_forces(
     particle: SphParticle,
@@ -232,7 +275,13 @@ pub extern "C" fn fluid_sph_estimate_forces(
         }
         let particles = unsafe { std::slice::from_raw_parts(particles, particle_count as usize) };
         let Some(report) = mps_formula::fluid::sph_estimate_forces(
-            particle, particles, smoothing_radius, gas_constant, rest_density, viscosity, surface_tension,
+            particle,
+            particles,
+            smoothing_radius,
+            gas_constant,
+            rest_density,
+            viscosity,
+            surface_tension,
         ) else {
             set_error(ERR_INVALID_ARGUMENT, "invalid SPH force parameters");
             return Bool::FALSE;
@@ -256,10 +305,19 @@ pub extern "C" fn fluid_bernoulli_pressure(
     elevation: f64,
 ) -> f64 {
     ffi_guard(0.0, || {
-        mps_formula::fluid::bernoulli_pressure(total_pressure, density, velocity, gravity, elevation)
+        mps_formula::fluid::bernoulli_pressure(
+            total_pressure,
+            density,
+            velocity,
+            gravity,
+            elevation,
+        )
     })
 }
 
+/// # Safety
+///
+/// `out_report` must point to writable space for one `BernoulliReport`.
 #[unsafe(no_mangle)]
 pub extern "C" fn fluid_bernoulli_report(
     pressure: f64,
@@ -270,7 +328,9 @@ pub extern "C" fn fluid_bernoulli_report(
     out_report: *mut BernoulliReport,
 ) -> Bool {
     ffi_guard(Bool::FALSE, || {
-        let Some(report) = mps_formula::fluid::bernoulli_report(pressure, density, velocity, gravity, elevation) else {
+        let Some(report) =
+            mps_formula::fluid::bernoulli_report(pressure, density, velocity, gravity, elevation)
+        else {
             set_error(ERR_INVALID_ARGUMENT, "invalid Bernoulli parameters");
             return Bool::FALSE;
         };

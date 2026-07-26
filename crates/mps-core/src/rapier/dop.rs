@@ -1,8 +1,11 @@
-﻿use std::slice;
+use std::slice;
 
 use rapier3d::prelude::{ColliderBuilder, Vector};
 use smallvec::{SmallVec, smallvec};
 
+use crate::rapier::error::{
+    ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, ffi_guard, set_error,
+};
 use crate::rapier::ffi::{ColliderBuilderHandle, KdopPreset, kdop_preset_from_raw};
 
 const EPSILON: f64 = 1.0e-9;
@@ -183,38 +186,74 @@ fn build_direction_hull(points: &[Vector], directions: &[Vector]) -> Option<Coll
     ColliderBuilder::convex_hull(vertices.as_slice())
 }
 
+/// Read a point cloud from raw f64 triplets for the hull builders below.
 fn builder_from_raw_points(
     points_xyz: *const f64,
     point_count: u32,
 ) -> Option<SmallVec<[Vector; 32]>> {
-    if points_xyz.is_null() || !(4..=MAX_RAW_POINTS).contains(&point_count) {
+    if points_xyz.is_null() {
+        set_error(ERR_NULL_POINTER, "point input is null");
         return None;
     }
-    let value_count = (point_count as usize).checked_mul(3)?;
+    if point_count < 4 {
+        set_error(ERR_INVALID_ARGUMENT, "too few points for a hull");
+        return None;
+    }
+    if point_count > MAX_RAW_POINTS {
+        set_error(ERR_CAPACITY, "point count exceeds maximum");
+        return None;
+    }
+    let Some(value_count) = (point_count as usize).checked_mul(3) else {
+        set_error(ERR_CAPACITY, "point count is too large");
+        return None;
+    };
     let values = unsafe { slice::from_raw_parts(points_xyz, value_count) };
-    read_vectors(values)
+    let vectors = read_vectors(values);
+    if vectors.is_none() {
+        set_error(ERR_INVALID_ARGUMENT, "non-finite point coordinate");
+    }
+    vectors
 }
 
+/// Create a k-DOP collider builder from a point cloud.
+///
+/// # Safety
+///
+/// `points_xyz` must point to at least 3×point_count readable f64s. The
+/// returned builder handle is owned by the caller and must be released
+/// through the collider-builder destroy function.
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_kdop(
     points_xyz: *const f64,
     point_count: u32,
     preset: u32,
 ) -> *mut ColliderBuilderHandle {
-    let Some(points) = builder_from_raw_points(points_xyz, point_count) else {
-        return std::ptr::null_mut();
-    };
+    ffi_guard(std::ptr::null_mut(), || {
+        let Some(points) = builder_from_raw_points(points_xyz, point_count) else {
+            return std::ptr::null_mut();
+        };
 
-    let hull = KdopHull {
-        directions: kdop_directions(kdop_preset_from_raw(preset)),
-    };
-    let Some(builder) = hull.build(&points) else {
-        return std::ptr::null_mut();
-    };
+        let hull = KdopHull {
+            directions: kdop_directions(kdop_preset_from_raw(preset)),
+        };
+        let Some(builder) = hull.build(&points) else {
+            set_error(ERR_INVALID_ARGUMENT, "failed to build k-DOP hull");
+            return std::ptr::null_mut();
+        };
 
-    Box::into_raw(Box::new(ColliderBuilderHandle { inner: builder }))
+        clear_error();
+        Box::into_raw(Box::new(ColliderBuilderHandle { inner: builder }))
+    })
 }
 
+/// Create a fixed-directions-hull (FDH) collider builder from a point cloud.
+///
+/// # Safety
+///
+/// `points_xyz` must point to at least 3×point_count readable f64s and
+/// `directions_xyz` to at least 3×direction_count readable f64s. The returned
+/// builder handle is owned by the caller and must be released through the
+/// collider-builder destroy function.
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_fdh(
     points_xyz: *const f64,
@@ -222,36 +261,42 @@ pub extern "C" fn collider_builder_create_fdh(
     directions_xyz: *const f64,
     direction_count: u32,
 ) -> *mut ColliderBuilderHandle {
-    let Some(points) = builder_from_raw_points(points_xyz, point_count) else {
-        return std::ptr::null_mut();
-    };
-    if directions_xyz.is_null() || !(3..=MAX_RAW_DIRECTIONS).contains(&direction_count) {
-        return std::ptr::null_mut();
-    }
+    ffi_guard(std::ptr::null_mut(), || {
+        let Some(points) = builder_from_raw_points(points_xyz, point_count) else {
+            return std::ptr::null_mut();
+        };
+        if directions_xyz.is_null() {
+            set_error(ERR_NULL_POINTER, "direction input is null");
+            return std::ptr::null_mut();
+        }
+        if direction_count < 3 {
+            set_error(ERR_INVALID_ARGUMENT, "too few directions for a hull");
+            return std::ptr::null_mut();
+        }
+        if direction_count > MAX_RAW_DIRECTIONS {
+            set_error(ERR_CAPACITY, "direction count exceeds maximum");
+            return std::ptr::null_mut();
+        }
 
-    let Some(direction_value_count) = (direction_count as usize).checked_mul(3) else {
-        return std::ptr::null_mut();
-    };
-    let direction_values = unsafe { slice::from_raw_parts(directions_xyz, direction_value_count) };
-    let Some(directions) = read_vectors(direction_values) else {
-        return std::ptr::null_mut();
-    };
-    let hull = FdhHull {
-        directions: &directions,
-    };
-    let Some(builder) = hull.build(&points) else {
-        return std::ptr::null_mut();
-    };
+        let Some(direction_value_count) = (direction_count as usize).checked_mul(3) else {
+            set_error(ERR_CAPACITY, "direction count is too large");
+            return std::ptr::null_mut();
+        };
+        let direction_values =
+            unsafe { slice::from_raw_parts(directions_xyz, direction_value_count) };
+        let Some(directions) = read_vectors(direction_values) else {
+            set_error(ERR_INVALID_ARGUMENT, "non-finite direction component");
+            return std::ptr::null_mut();
+        };
+        let hull = FdhHull {
+            directions: &directions,
+        };
+        let Some(builder) = hull.build(&points) else {
+            set_error(ERR_INVALID_ARGUMENT, "failed to build FDH hull");
+            return std::ptr::null_mut();
+        };
 
-    Box::into_raw(Box::new(ColliderBuilderHandle { inner: builder }))
+        clear_error();
+        Box::into_raw(Box::new(ColliderBuilderHandle { inner: builder }))
+    })
 }
-
-
-
-
-
-
-
-
-
-

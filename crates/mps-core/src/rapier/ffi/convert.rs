@@ -12,6 +12,7 @@ use super::types::{
     JointTypeDesc, KdopPreset, NeuralActivation, Quat, QueryFilterDesc, RigidBodyHandleRaw,
     ShapeCastOptionsDesc, ShapeDesc, ShapeType, Vec3, VoxelColliderMode,
 };
+use crate::rapier::forces::ForceLawType;
 
 pub(crate) const MAX_OUTPUT_CAPACITY: u32 = 1_000_000;
 pub(crate) const MAX_TREE_ENTRIES: usize = 1_000_000;
@@ -107,9 +108,7 @@ pub fn pack_impulse_joint_handle(handle: RapierImpulseJointHandle) -> ImpulseJoi
     pack_handle_parts(id, generation)
 }
 
-pub fn unpack_impulse_joint_handle(
-    handle: ImpulseJointHandleRaw,
-) -> RapierImpulseJointHandle {
+pub fn unpack_impulse_joint_handle(handle: ImpulseJointHandleRaw) -> RapierImpulseJointHandle {
     let (id, generation) = unpack_handle_parts(handle);
     RapierImpulseJointHandle::from_raw_parts(id, generation)
 }
@@ -302,5 +301,60 @@ pub(crate) fn joint_axis_from_raw(value: u32) -> JointAxisDesc {
         4 => JointAxisDesc::AngY,
         5 => JointAxisDesc::AngZ,
         _ => JointAxisDesc::LinX,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ForceLawType tag mapping — single source of truth for both directions
+// ---------------------------------------------------------------------------
+
+/// Canonical `ForceLawType` ↔ u32 tag table.  The tags match cbindgen's C enum
+/// generation (0 = WorldGravity, 1 = UserForce, ...) and back both
+/// `force_law_type_from_u32` and `force_law_type_tag`.
+const FORCE_LAW_TYPE_TAGS: &[(ForceLawType, u32)] = &[
+    (ForceLawType::WorldGravity, 0),
+    (ForceLawType::UserForce, 1),
+    (ForceLawType::NewtonianGravity, 2),
+    (ForceLawType::CoulombFriction, 3),
+    (ForceLawType::AirDrag, 4),
+    (ForceLawType::Buoyancy, 5),
+    (ForceLawType::Electromagnetic, 6),
+    (ForceLawType::ElasticSpring, 7),
+    (ForceLawType::PointGravity, 8),
+    (ForceLawType::AerodynamicSurface, 9),
+    (ForceLawType::AerodynamicVoxel, 10),
+    (ForceLawType::FluidAABB, 11),
+    (ForceLawType::MolecularLennardJones, 12),
+    (ForceLawType::MolecularCoulomb, 13),
+    (ForceLawType::SpaceJ2, 14),
+    (ForceLawType::SpaceCMG, 15),
+    (ForceLawType::SpaceAtmosphericDrag, 16),
+    (ForceLawType::SpaceSolarRadiation, 17),
+    (ForceLawType::SpaceGravityGradient, 18),
+    (ForceLawType::SpaceMagneticTorquer, 19),
+    (ForceLawType::TrajectoryCoriolis, 20),
+    (ForceLawType::TrajectoryCentrifugal, 21),
+    (ForceLawType::TrajectoryGravity, 22),
+    (ForceLawType::ControlPID, 23),
+    (ForceLawType::CelestialGravity, 24),
+    (ForceLawType::TerrainGravity, 25),
+];
+
+/// Convert a u32 tag to `ForceLawType`.  Returns `None` for out-of-range tags.
+pub(crate) fn force_law_type_from_u32(tag: u32) -> Option<ForceLawType> {
+    FORCE_LAW_TYPE_TAGS
+        .iter()
+        .find_map(|(ft, t)| (*t == tag).then_some(*ft))
+}
+
+/// Map a `ForceLawType` to its compact u32 tag (arena force report section).
+/// `Custom` laws report 0xFF; variants outside the table report 0xFE.
+pub(crate) fn force_law_type_tag(ft: ForceLawType) -> u32 {
+    match ft {
+        ForceLawType::Custom(_) => 0xFF,
+        _ => FORCE_LAW_TYPE_TAGS
+            .iter()
+            .find(|(f, _)| *f == ft)
+            .map_or(0xFE, |(_, t)| *t),
     }
 }

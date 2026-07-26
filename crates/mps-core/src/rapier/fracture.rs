@@ -39,6 +39,9 @@ fn fragment_valid(fragment: FractureFragmentDesc) -> bool {
         && finite_non_negative(fragment.density)
 }
 
+/// # Safety
+///
+/// `out_report` must point to writable space for one `StressIntensityReport`.
 #[unsafe(no_mangle)]
 pub extern "C" fn fracture_stress_intensity_factor(
     stress: f64,
@@ -56,7 +59,8 @@ pub extern "C" fn fracture_stress_intensity_factor(
             set_error(ERR_INVALID_ARGUMENT, "invalid stress intensity parameters");
             return Bool::FALSE;
         }
-        let stress_intensity = geometry_factor * stress * (std::f64::consts::PI * crack_length).sqrt();
+        let stress_intensity =
+            geometry_factor * stress * (std::f64::consts::PI * crack_length).sqrt();
         let safety_factor = if stress_intensity.abs() > EPSILON {
             fracture_toughness / stress_intensity.abs()
         } else {
@@ -76,6 +80,9 @@ pub extern "C" fn fracture_stress_intensity_factor(
     })
 }
 
+/// # Safety
+///
+/// `out_report` must point to writable space for one `GriffithReport`.
 #[unsafe(no_mangle)]
 pub extern "C" fn fracture_griffith_criterion(
     stress: f64,
@@ -108,6 +115,11 @@ pub extern "C" fn fracture_griffith_criterion(
     })
 }
 
+/// # Safety
+///
+/// `cycle_counts` and `cycles_to_failure` must each point to `count` `f64`
+/// values; `out_report` must point to writable space for one
+/// `MinerDamageReport`.
 #[unsafe(no_mangle)]
 pub extern "C" fn fracture_miner_damage(
     cycle_counts: *const f64,
@@ -148,6 +160,9 @@ pub extern "C" fn fracture_miner_damage(
     })
 }
 
+/// # Safety
+///
+/// `out_report` must point to writable space for one `SnCurveReport`.
 #[unsafe(no_mangle)]
 pub extern "C" fn fracture_sn_curve_life(
     stress_amplitude: f64,
@@ -183,6 +198,9 @@ pub extern "C" fn fracture_sn_curve_life(
     })
 }
 
+/// # Safety
+///
+/// `out_report` must point to writable space for one `FractureEnergyReport`.
 #[unsafe(no_mangle)]
 pub extern "C" fn fracture_energy_release(
     strain_energy: f64,
@@ -217,6 +235,9 @@ pub extern "C" fn fracture_energy_release(
     })
 }
 
+/// # Safety
+///
+/// `out_report` must point to writable space for one `FractureModeReport`.
 #[unsafe(no_mangle)]
 pub extern "C" fn fracture_mode_from_stress(
     tensile_stress: f64,
@@ -260,6 +281,14 @@ pub extern "C" fn fracture_mode_from_stress(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle; `fragments` must point to
+/// `fragment_count` `FractureFragmentDesc` values; `out_body_handles` must
+/// point to writable space for `capacity` body handles; `out_joint_handles`
+/// must point to writable space for `capacity` joint handles when
+/// `connect_fragments` is non-zero; `out_report` may be null or must point
+/// to writable space for one `FractureReplaceReport`.
 #[unsafe(no_mangle)]
 pub extern "C" fn world_replace_body_with_fracture_fragments(
     world: *mut WorldHandle,
@@ -333,10 +362,11 @@ pub extern "C" fn world_replace_body_with_fracture_fragments(
             .friction(fragment.friction.max(0.0))
             .restitution(fragment.restitution.max(0.0))
             .build();
-            world
-                .inner
-                .colliders
-                .insert_with_parent(collider, body_handle, &mut world.inner.bodies);
+            world.inner.colliders.insert_with_parent(
+                collider,
+                body_handle,
+                &mut world.inner.bodies,
+            );
             let packed = pack_rigid_body_handle(body_handle);
             out_bodies[index] = packed;
             created_bodies.push((body_handle, local));

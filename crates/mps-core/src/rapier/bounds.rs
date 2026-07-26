@@ -2,7 +2,9 @@ use rapier3d::math::{Pose, Rotation, Vector};
 use rapier3d::prelude::{ColliderBuilder, SharedShape};
 use smallvec::SmallVec;
 
-use crate::rapier::error::ffi_guard;
+use crate::rapier::error::{
+    ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, ffi_guard, set_error,
+};
 use crate::rapier::ffi::{
     Capsule, ColliderBuilderHandle, ColliderHandleRaw, Cylinder, Ellipsoid, MAX_OUTPUT_CAPACITY,
     Prism, QueryFilterDesc, SphericalShell, Ssv, WorldHandle, isometry_from_parts,
@@ -163,9 +165,11 @@ pub(crate) fn prism_shape(prism: Prism) -> Option<(Pose, SharedShape)> {
 
 fn builder_from_shape(shape: Option<(Pose, SharedShape)>) -> *mut ColliderBuilderHandle {
     let Some((pose, shape)) = shape else {
+        set_error(ERR_INVALID_ARGUMENT, "invalid collider shape parameters");
         return std::ptr::null_mut();
     };
 
+    clear_error();
     Box::into_raw(Box::new(ColliderBuilderHandle {
         inner: ColliderBuilder::new(shape).position(pose),
     }))
@@ -177,9 +181,11 @@ fn intersect_bound_count(
     filter: QueryFilterDesc,
 ) -> u32 {
     let Some(world) = (unsafe { world.as_ref() }) else {
+        set_error(ERR_NULL_POINTER, "world is null");
         return 0;
     };
     let Some((pose, shape)) = bound else {
+        set_error(ERR_INVALID_ARGUMENT, "invalid bound shape parameters");
         return 0;
     };
 
@@ -190,6 +196,7 @@ fn intersect_bound_count(
         query_filter_from_desc(filter),
     );
 
+    clear_error();
     query.intersect_shape(pose, shape.as_ref()).count() as u32
 }
 
@@ -201,12 +208,19 @@ fn intersect_bound(
     capacity: u32,
 ) -> u32 {
     let Some(world) = (unsafe { world.as_ref() }) else {
+        set_error(ERR_NULL_POINTER, "world is null");
         return 0;
     };
-    if out_handles.is_null() || capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
+    if out_handles.is_null() {
+        set_error(ERR_NULL_POINTER, "output handle buffer is null");
+        return 0;
+    }
+    if capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
+        set_error(ERR_CAPACITY, "invalid output capacity");
         return 0;
     }
     let Some((pose, shape)) = bound else {
+        set_error(ERR_INVALID_ARGUMENT, "invalid bound shape parameters");
         return 0;
     };
 
@@ -227,9 +241,14 @@ fn intersect_bound(
         written += 1;
     }
 
+    clear_error();
     written as u32
 }
 
+/// # Safety
+///
+/// The returned builder is owned by the caller and must be consumed by
+/// `collider_builder_build` or freed with `collider_builder_destroy`.
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_capsule(capsule: Capsule) -> *mut ColliderBuilderHandle {
     ffi_guard(std::ptr::null_mut(), || {
@@ -237,11 +256,19 @@ pub extern "C" fn collider_builder_create_capsule(capsule: Capsule) -> *mut Coll
     })
 }
 
+/// # Safety
+///
+/// The returned builder is owned by the caller and must be consumed by
+/// `collider_builder_build` or freed with `collider_builder_destroy`.
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_ssv(ssv: Ssv) -> *mut ColliderBuilderHandle {
     ffi_guard(std::ptr::null_mut(), || builder_from_shape(ssv_shape(ssv)))
 }
 
+/// # Safety
+///
+/// The returned builder is owned by the caller and must be consumed by
+/// `collider_builder_build` or freed with `collider_builder_destroy`.
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_ellipsoid(
     ellipsoid: Ellipsoid,
@@ -251,6 +278,10 @@ pub extern "C" fn collider_builder_create_ellipsoid(
     })
 }
 
+/// # Safety
+///
+/// The returned builder is owned by the caller and must be consumed by
+/// `collider_builder_build` or freed with `collider_builder_destroy`.
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_prism(prism: Prism) -> *mut ColliderBuilderHandle {
     ffi_guard(std::ptr::null_mut(), || {
@@ -258,6 +289,10 @@ pub extern "C" fn collider_builder_create_prism(prism: Prism) -> *mut ColliderBu
     })
 }
 
+/// # Safety
+///
+/// The returned builder is owned by the caller and must be consumed by
+/// `collider_builder_build` or freed with `collider_builder_destroy`.
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_cylinder(
     cylinder: Cylinder,
@@ -267,6 +302,10 @@ pub extern "C" fn collider_builder_create_cylinder(
     })
 }
 
+/// # Safety
+///
+/// The returned builder is owned by the caller and must be consumed by
+/// `collider_builder_build` or freed with `collider_builder_destroy`.
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_spherical_shell(
     shell: SphericalShell,
@@ -276,6 +315,9 @@ pub extern "C" fn collider_builder_create_spherical_shell(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_capsule_count(
     world: *const WorldHandle,
@@ -287,6 +329,9 @@ pub extern "C" fn query_intersect_capsule_count(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_capsule_count_all(
     world: *const WorldHandle,
@@ -297,6 +342,10 @@ pub extern "C" fn query_intersect_capsule_count_all(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle and `out_handles` must point to
+/// writable space for at least `capacity` collider handles.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_capsule(
     world: *const WorldHandle,
@@ -310,6 +359,10 @@ pub extern "C" fn query_intersect_capsule(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle and `out_handles` must point to
+/// writable space for at least `capacity` collider handles.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_capsule_all(
     world: *const WorldHandle,
@@ -328,17 +381,21 @@ pub extern "C" fn query_intersect_capsule_all(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_ssv_count(
     world: *const WorldHandle,
     ssv: Ssv,
     filter: QueryFilterDesc,
 ) -> u32 {
-    ffi_guard(0, || {
-        intersect_bound_count(world, ssv_shape(ssv), filter)
-    })
+    ffi_guard(0, || intersect_bound_count(world, ssv_shape(ssv), filter))
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_ssv_count_all(world: *const WorldHandle, ssv: Ssv) -> u32 {
     ffi_guard(0, || {
@@ -346,6 +403,10 @@ pub extern "C" fn query_intersect_ssv_count_all(world: *const WorldHandle, ssv: 
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle and `out_handles` must point to
+/// writable space for at least `capacity` collider handles.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_ssv(
     world: *const WorldHandle,
@@ -359,6 +420,10 @@ pub extern "C" fn query_intersect_ssv(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle and `out_handles` must point to
+/// writable space for at least `capacity` collider handles.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_ssv_all(
     world: *const WorldHandle,
@@ -377,6 +442,9 @@ pub extern "C" fn query_intersect_ssv_all(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_ellipsoid_count(
     world: *const WorldHandle,
@@ -388,6 +456,9 @@ pub extern "C" fn query_intersect_ellipsoid_count(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_ellipsoid_count_all(
     world: *const WorldHandle,
@@ -398,6 +469,10 @@ pub extern "C" fn query_intersect_ellipsoid_count_all(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle and `out_handles` must point to
+/// writable space for at least `capacity` collider handles.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_ellipsoid(
     world: *const WorldHandle,
@@ -417,6 +492,10 @@ pub extern "C" fn query_intersect_ellipsoid(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle and `out_handles` must point to
+/// writable space for at least `capacity` collider handles.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_ellipsoid_all(
     world: *const WorldHandle,
@@ -435,6 +514,9 @@ pub extern "C" fn query_intersect_ellipsoid_all(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_prism_count(
     world: *const WorldHandle,
@@ -446,6 +528,9 @@ pub extern "C" fn query_intersect_prism_count(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_prism_count_all(world: *const WorldHandle, prism: Prism) -> u32 {
     ffi_guard(0, || {
@@ -453,6 +538,10 @@ pub extern "C" fn query_intersect_prism_count_all(world: *const WorldHandle, pri
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle and `out_handles` must point to
+/// writable space for at least `capacity` collider handles.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_prism(
     world: *const WorldHandle,
@@ -466,6 +555,10 @@ pub extern "C" fn query_intersect_prism(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle and `out_handles` must point to
+/// writable space for at least `capacity` collider handles.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_prism_all(
     world: *const WorldHandle,
@@ -484,6 +577,9 @@ pub extern "C" fn query_intersect_prism_all(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_cylinder_count(
     world: *const WorldHandle,
@@ -495,6 +591,9 @@ pub extern "C" fn query_intersect_cylinder_count(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_cylinder_count_all(
     world: *const WorldHandle,
@@ -505,6 +604,10 @@ pub extern "C" fn query_intersect_cylinder_count_all(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle and `out_handles` must point to
+/// writable space for at least `capacity` collider handles.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_cylinder(
     world: *const WorldHandle,
@@ -524,6 +627,10 @@ pub extern "C" fn query_intersect_cylinder(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle and `out_handles` must point to
+/// writable space for at least `capacity` collider handles.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_cylinder_all(
     world: *const WorldHandle,
@@ -542,6 +649,9 @@ pub extern "C" fn query_intersect_cylinder_all(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_spherical_shell_count(
     world: *const WorldHandle,
@@ -553,6 +663,9 @@ pub extern "C" fn query_intersect_spherical_shell_count(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_spherical_shell_count_all(
     world: *const WorldHandle,
@@ -563,6 +676,10 @@ pub extern "C" fn query_intersect_spherical_shell_count_all(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle and `out_handles` must point to
+/// writable space for at least `capacity` collider handles.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_spherical_shell(
     world: *const WorldHandle,
@@ -582,6 +699,10 @@ pub extern "C" fn query_intersect_spherical_shell(
     })
 }
 
+/// # Safety
+///
+/// `world` must be a valid world handle and `out_handles` must point to
+/// writable space for at least `capacity` collider handles.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_spherical_shell_all(
     world: *const WorldHandle,

@@ -1,9 +1,12 @@
-﻿use std::slice;
+use std::slice;
 
 use rapier3d::math::{Pose, Rotation, Vector};
 use rapier3d::prelude::{ColliderBuilder, SharedShape};
 use smallvec::SmallVec;
 
+use crate::rapier::error::{
+    ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, ffi_guard, set_error,
+};
 use crate::rapier::ffi::{
     ColliderBuilderHandle, ColliderHandleRaw, MAX_OUTPUT_CAPACITY, NeuralActivation,
     NeuralBoundsDesc, QueryFilterDesc, WorldHandle, neural_activation_from_raw,
@@ -229,9 +232,11 @@ fn neural_shape(desc: NeuralBoundsDesc, weights: &[f64]) -> Option<(Pose, Shared
 
 fn weights_from_raw(weights: *const f64, weight_count: u32) -> Option<&'static [f64]> {
     if weights.is_null() {
+        set_error(ERR_NULL_POINTER, "weights pointer is null");
         return None;
     }
     if weight_count == 0 || weight_count > 1_048_576 {
+        set_error(ERR_INVALID_ARGUMENT, "invalid weight count");
         return None;
     }
     Some(unsafe { slice::from_raw_parts(weights, weight_count as usize) })
@@ -254,9 +259,14 @@ fn intersect_neural_count(
     filter: QueryFilterDesc,
 ) -> u32 {
     let Some(world) = (unsafe { world.as_ref() }) else {
+        set_error(ERR_NULL_POINTER, "world is null");
         return 0;
     };
     let Some((pose, shape)) = neural_shape(desc, weights) else {
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "invalid neural bounds description or weights",
+        );
         return 0;
     };
 
@@ -267,7 +277,9 @@ fn intersect_neural_count(
         query_filter_from_desc(filter),
     );
 
-    query.intersect_shape(pose, shape.as_ref()).count() as u32
+    let count = query.intersect_shape(pose, shape.as_ref()).count() as u32;
+    clear_error();
+    count
 }
 
 fn intersect_neural(
@@ -279,12 +291,22 @@ fn intersect_neural(
     capacity: u32,
 ) -> u32 {
     let Some(world) = (unsafe { world.as_ref() }) else {
+        set_error(ERR_NULL_POINTER, "world is null");
         return 0;
     };
-    if out_handles.is_null() || capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
+    if out_handles.is_null() {
+        set_error(ERR_NULL_POINTER, "output buffer is null");
+        return 0;
+    }
+    if capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
+        set_error(ERR_CAPACITY, "invalid output capacity");
         return 0;
     }
     let Some((pose, shape)) = neural_shape(desc, weights) else {
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "invalid neural bounds description or weights",
+        );
         return 0;
     };
 
@@ -305,37 +327,78 @@ fn intersect_neural(
         written += 1;
     }
 
+    clear_error();
     written as u32
 }
 
+/// Return the number of weights the network layout requires.
 #[unsafe(no_mangle)]
 pub extern "C" fn neural_bounds_required_weight_count(
     hidden_width: u32,
     hidden_layers: u32,
 ) -> u32 {
-    if hidden_layers > MAX_HIDDEN_LAYERS || hidden_width > MAX_HIDDEN_WIDTH {
-        return 0;
-    }
-    if hidden_layers > 0 && hidden_width == 0 {
-        return 0;
-    }
-    required_weight_count(hidden_width as usize, hidden_layers as usize)
-        .and_then(|value| u32::try_from(value).ok())
-        .unwrap_or(0)
+    ffi_guard(0, || {
+        if hidden_layers > MAX_HIDDEN_LAYERS || hidden_width > MAX_HIDDEN_WIDTH {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "hidden layer configuration is too large",
+            );
+            return 0;
+        }
+        if hidden_layers > 0 && hidden_width == 0 {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "hidden width must be non-zero with hidden layers",
+            );
+            return 0;
+        }
+        let Some(count) = required_weight_count(hidden_width as usize, hidden_layers as usize)
+            .and_then(|value| u32::try_from(value).ok())
+        else {
+            set_error(ERR_INVALID_ARGUMENT, "weight count overflow");
+            return 0;
+        };
+        clear_error();
+        count
+    })
 }
 
+/// Create a collider builder whose shape is a neural-network-expanded bounds hull.
+///
+/// # Safety
+///
+/// `weights` must point to a readable buffer of `weight_count` `f64` values.
+/// The returned pointer is owned by the caller and must be consumed or freed
+/// through the collider-builder ABI.
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_neural_bounds(
     desc: NeuralBoundsDesc,
     weights: *const f64,
     weight_count: u32,
 ) -> *mut ColliderBuilderHandle {
-    let Some(weights) = weights_from_raw(weights, weight_count) else {
-        return std::ptr::null_mut();
-    };
-    builder_from_neural(desc, weights)
+    ffi_guard(std::ptr::null_mut(), || {
+        let Some(weights) = weights_from_raw(weights, weight_count) else {
+            return std::ptr::null_mut();
+        };
+        let builder = builder_from_neural(desc, weights);
+        if builder.is_null() {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "invalid neural bounds description or weights",
+            );
+            return std::ptr::null_mut();
+        }
+        clear_error();
+        builder
+    })
 }
 
+/// Count the colliders intersecting a neural-bounds shape.
+///
+/// # Safety
+///
+/// `world` must be a valid world pointer, and `weights` must point to a
+/// readable buffer of `weight_count` `f64` values.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_neural_bounds_count(
     world: *const WorldHandle,
@@ -344,12 +407,20 @@ pub extern "C" fn query_intersect_neural_bounds_count(
     weight_count: u32,
     filter: QueryFilterDesc,
 ) -> u32 {
-    let Some(weights) = weights_from_raw(weights, weight_count) else {
-        return 0;
-    };
-    intersect_neural_count(world, desc, weights, filter)
+    ffi_guard(0, || {
+        let Some(weights) = weights_from_raw(weights, weight_count) else {
+            return 0;
+        };
+        intersect_neural_count(world, desc, weights, filter)
+    })
 }
 
+/// Count the colliders intersecting a neural-bounds shape with a default filter.
+///
+/// # Safety
+///
+/// `world` must be a valid world pointer, and `weights` must point to a
+/// readable buffer of `weight_count` `f64` values.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_neural_bounds_count_all(
     world: *const WorldHandle,
@@ -357,15 +428,24 @@ pub extern "C" fn query_intersect_neural_bounds_count_all(
     weights: *const f64,
     weight_count: u32,
 ) -> u32 {
-    query_intersect_neural_bounds_count(
-        world,
-        desc,
-        weights,
-        weight_count,
-        QueryFilterDesc::default(),
-    )
+    ffi_guard(0, || {
+        query_intersect_neural_bounds_count(
+            world,
+            desc,
+            weights,
+            weight_count,
+            QueryFilterDesc::default(),
+        )
+    })
 }
 
+/// Write the handles of colliders intersecting a neural-bounds shape.
+///
+/// # Safety
+///
+/// `world` must be a valid world pointer, `weights` must point to a readable
+/// buffer of `weight_count` `f64` values, and `out_handles` must point to a
+/// writable buffer of at least `capacity` handle elements.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_neural_bounds(
     world: *const WorldHandle,
@@ -376,12 +456,22 @@ pub extern "C" fn query_intersect_neural_bounds(
     out_handles: *mut ColliderHandleRaw,
     capacity: u32,
 ) -> u32 {
-    let Some(weights) = weights_from_raw(weights, weight_count) else {
-        return 0;
-    };
-    intersect_neural(world, desc, weights, filter, out_handles, capacity)
+    ffi_guard(0, || {
+        let Some(weights) = weights_from_raw(weights, weight_count) else {
+            return 0;
+        };
+        intersect_neural(world, desc, weights, filter, out_handles, capacity)
+    })
 }
 
+/// Write the handles of colliders intersecting a neural-bounds shape with a
+/// default filter.
+///
+/// # Safety
+///
+/// `world` must be a valid world pointer, `weights` must point to a readable
+/// buffer of `weight_count` `f64` values, and `out_handles` must point to a
+/// writable buffer of at least `capacity` handle elements.
 #[unsafe(no_mangle)]
 pub extern "C" fn query_intersect_neural_bounds_all(
     world: *const WorldHandle,
@@ -391,15 +481,15 @@ pub extern "C" fn query_intersect_neural_bounds_all(
     out_handles: *mut ColliderHandleRaw,
     capacity: u32,
 ) -> u32 {
-    query_intersect_neural_bounds(
-        world,
-        desc,
-        weights,
-        weight_count,
-        QueryFilterDesc::default(),
-        out_handles,
-        capacity,
-    )
+    ffi_guard(0, || {
+        query_intersect_neural_bounds(
+            world,
+            desc,
+            weights,
+            weight_count,
+            QueryFilterDesc::default(),
+            out_handles,
+            capacity,
+        )
+    })
 }
-
-

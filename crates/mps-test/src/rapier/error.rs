@@ -3,8 +3,8 @@ mod tests {
     use std::ffi::CStr;
 
     use mps_core::rapier::error::{
-        ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, ERR_OK, ERR_CAPACITY, last_error_clear,
-        last_error_code, last_error_message,
+        ERR_CAPACITY, ERR_INTERNAL, ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, ERR_OK,
+        ERR_UNSUPPORTED, error_code_name, last_error_clear, last_error_code, last_error_message,
     };
     use mps_core::rapier::ffi::{Bool, QueryFilterDesc, Vec3};
     use mps_core::rapier::query::query_cast_rays;
@@ -16,7 +16,9 @@ mod tests {
     fn last_message() -> String {
         let ptr = last_error_message();
         assert!(!ptr.is_null());
-        unsafe { CStr::from_ptr(ptr) }.to_string_lossy().into_owned()
+        unsafe { CStr::from_ptr(ptr) }
+            .to_string_lossy()
+            .into_owned()
     }
 
     #[test]
@@ -113,6 +115,34 @@ mod tests {
         assert_eq!(last_error_code(), ERR_OK);
         assert_eq!(last_message(), "ok");
         world_destroy(world);
+    }
+
+    #[test]
+    fn error_code_name_known_codes() {
+        let name = |code: u32| {
+            let ptr = error_code_name(code);
+            assert!(!ptr.is_null());
+            unsafe { CStr::from_ptr(ptr) }
+                .to_string_lossy()
+                .into_owned()
+        };
+        assert_eq!(name(ERR_OK), "ERR_OK");
+        assert_eq!(name(ERR_NULL_POINTER), "ERR_NULL_POINTER");
+        assert_eq!(name(ERR_INVALID_ARGUMENT), "ERR_INVALID_ARGUMENT");
+        assert_eq!(name(ERR_NOT_FOUND), "ERR_NOT_FOUND");
+        assert_eq!(name(ERR_CAPACITY), "ERR_CAPACITY");
+        assert_eq!(name(ERR_UNSUPPORTED), "ERR_UNSUPPORTED");
+        assert_eq!(name(ERR_INTERNAL), "ERR_INTERNAL");
+    }
+
+    #[test]
+    fn error_code_name_unknown_code() {
+        let ptr = error_code_name(9999);
+        assert!(!ptr.is_null());
+        let name = unsafe { CStr::from_ptr(ptr) }
+            .to_string_lossy()
+            .into_owned();
+        assert_eq!(name, "ERR_UNKNOWN");
     }
 
     #[test]

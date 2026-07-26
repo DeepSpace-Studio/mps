@@ -315,6 +315,11 @@ pub extern "C" fn anvilkit_app_create() -> *mut crate::rapier::ffi::AnvilKitAppH
     })
 }
 
+/// # Safety
+///
+/// `app` must be null or a handle returned by `anvilkit_app_create` that has
+/// not been destroyed yet; ownership transfers back to Rust and the handle is
+/// invalid after this call.
 #[unsafe(no_mangle)]
 pub extern "C" fn anvilkit_app_destroy(app: *mut crate::rapier::ffi::AnvilKitAppHandle) {
     ffi_guard((), || {
@@ -327,6 +332,9 @@ pub extern "C" fn anvilkit_app_destroy(app: *mut crate::rapier::ffi::AnvilKitApp
     })
 }
 
+/// # Safety
+///
+/// `app` must be null or a valid handle returned by `anvilkit_app_create`.
 #[unsafe(no_mangle)]
 pub extern "C" fn anvilkit_app_update(app: *mut crate::rapier::ffi::AnvilKitAppHandle) {
     ffi_guard((), || {
@@ -337,6 +345,9 @@ pub extern "C" fn anvilkit_app_update(app: *mut crate::rapier::ffi::AnvilKitAppH
     })
 }
 
+/// # Safety
+///
+/// `app` must be null or a valid handle returned by `anvilkit_app_create`.
 #[unsafe(no_mangle)]
 pub extern "C" fn anvilkit_app_spawn_body(
     app: *mut crate::rapier::ffi::AnvilKitAppHandle,
@@ -352,6 +363,9 @@ pub extern "C" fn anvilkit_app_spawn_body(
     })
 }
 
+/// # Safety
+///
+/// `app` must be null or a valid handle returned by `anvilkit_app_create`.
 #[unsafe(no_mangle)]
 pub extern "C" fn anvilkit_app_spawn_body_with_collider(
     app: *mut crate::rapier::ffi::AnvilKitAppHandle,
@@ -369,6 +383,9 @@ pub extern "C" fn anvilkit_app_spawn_body_with_collider(
     })
 }
 
+/// # Safety
+///
+/// `app` must be null or a valid handle returned by `anvilkit_app_create`.
 #[unsafe(no_mangle)]
 pub extern "C" fn anvilkit_app_set_transform(
     app: *mut crate::rapier::ffi::AnvilKitAppHandle,
@@ -384,6 +401,9 @@ pub extern "C" fn anvilkit_app_set_transform(
     })
 }
 
+/// # Safety
+///
+/// `app` must be null or a valid handle returned by `anvilkit_app_create`.
 #[unsafe(no_mangle)]
 pub extern "C" fn anvilkit_app_set_material(
     app: *mut crate::rapier::ffi::AnvilKitAppHandle,
@@ -398,6 +418,10 @@ pub extern "C" fn anvilkit_app_set_material(
     })
 }
 
+/// # Safety
+///
+/// `app` and `world` must be null or valid handles returned by
+/// `anvilkit_app_create` / the world-creation ABI.
 #[unsafe(no_mangle)]
 pub extern "C" fn anvilkit_app_sync_to_world(
     app: *mut crate::rapier::ffi::AnvilKitAppHandle,
@@ -414,6 +438,9 @@ pub extern "C" fn anvilkit_app_sync_to_world(
     })
 }
 
+/// # Safety
+///
+/// `app` must be null or a valid handle returned by `anvilkit_app_create`.
 #[unsafe(no_mangle)]
 pub extern "C" fn anvilkit_app_entity_to_body(
     app: *const crate::rapier::ffi::AnvilKitAppHandle,
@@ -430,6 +457,9 @@ pub extern "C" fn anvilkit_app_entity_to_body(
     })
 }
 
+/// # Safety
+///
+/// `app` must be null or a valid handle returned by `anvilkit_app_create`.
 #[unsafe(no_mangle)]
 pub extern "C" fn anvilkit_app_entity_to_collider(
     app: *const crate::rapier::ffi::AnvilKitAppHandle,
@@ -450,6 +480,10 @@ pub extern "C" fn anvilkit_app_entity_to_collider(
     })
 }
 
+/// # Safety
+///
+/// `app` and `world` must be null or valid handles returned by
+/// `anvilkit_app_create` / the world-creation ABI.
 #[unsafe(no_mangle)]
 pub extern "C" fn anvilkit_app_create_constraint(
     app: *mut crate::rapier::ffi::AnvilKitAppHandle,
@@ -462,57 +496,70 @@ pub extern "C" fn anvilkit_app_create_constraint(
     c: f64,
     wake_up: Bool,
 ) -> u64 {
-    let Some(app) = (unsafe { app.as_mut() }) else {
-        return 0;
-    };
-    let Some(world) = (unsafe { world.as_mut() }) else {
-        return 0;
-    };
-    let Ok(entity1) = Entity::try_from_bits(entity1_bits) else {
-        return 0;
-    };
-    let Ok(entity2) = Entity::try_from_bits(entity2_bits) else {
-        return 0;
-    };
-    let Some(body1) = app.inner.entity_to_body.get(&entity1).copied() else {
-        return 0;
-    };
-    let Some(body2) = app.inner.entity_to_body.get(&entity2).copied() else {
-        return 0;
-    };
+    ffi_guard(0, || {
+        let Some(app) = (unsafe { app.as_mut() }) else {
+            return 0;
+        };
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            return 0;
+        };
+        let Ok(entity1) = Entity::try_from_bits(entity1_bits) else {
+            return 0;
+        };
+        let Ok(entity2) = Entity::try_from_bits(entity2_bits) else {
+            return 0;
+        };
+        let Some(body1) = app.inner.entity_to_body.get(&entity1).copied() else {
+            return 0;
+        };
+        let Some(body2) = app.inner.entity_to_body.get(&entity2).copied() else {
+            return 0;
+        };
 
-    let builder = crate::rapier::joints::joint_builder_create(joint_type, axis_or_primary, b, c);
-    if builder.is_null() {
-        return 0;
-    }
-    let handle =
-        crate::rapier::joints::world_insert_impulse_joint(world, body1, body2, builder, wake_up);
-    crate::rapier::joints::joint_builder_destroy(builder);
-    if handle == 0 {
-        return 0;
-    }
+        let builder =
+            crate::rapier::joints::joint_builder_create(joint_type, axis_or_primary, b, c);
+        if builder.is_null() {
+            return 0;
+        }
+        let handle = crate::rapier::joints::world_insert_impulse_joint(
+            world, body1, body2, builder, wake_up,
+        );
+        crate::rapier::joints::joint_builder_destroy(builder);
+        if handle == 0 {
+            return 0;
+        }
 
-    let id = app.inner.next_constraint_id;
-    app.inner.next_constraint_id = app.inner.next_constraint_id.saturating_add(1);
-    app.inner.constraint_to_joint.insert(id, handle);
-    id
+        let id = app.inner.next_constraint_id;
+        app.inner.next_constraint_id = app.inner.next_constraint_id.saturating_add(1);
+        app.inner.constraint_to_joint.insert(id, handle);
+        id
+    })
 }
 
+/// # Safety
+///
+/// `app` must be null or a valid handle returned by `anvilkit_app_create`.
 #[unsafe(no_mangle)]
 pub extern "C" fn anvilkit_app_constraint_to_joint(
     app: *const crate::rapier::ffi::AnvilKitAppHandle,
     constraint_id: u64,
 ) -> ImpulseJointHandleRaw {
-    let Some(app) = (unsafe { app.as_ref() }) else {
-        return 0;
-    };
-    app.inner
-        .constraint_to_joint
-        .get(&constraint_id)
-        .copied()
-        .unwrap_or(0)
+    ffi_guard(0, || {
+        let Some(app) = (unsafe { app.as_ref() }) else {
+            return 0;
+        };
+        app.inner
+            .constraint_to_joint
+            .get(&constraint_id)
+            .copied()
+            .unwrap_or(0)
+    })
 }
 
+/// # Safety
+///
+/// `app` and `world` must be null or valid handles returned by
+/// `anvilkit_app_create` / the world-creation ABI.
 #[unsafe(no_mangle)]
 pub extern "C" fn anvilkit_app_remove_constraint(
     app: *mut crate::rapier::ffi::AnvilKitAppHandle,
@@ -520,18 +567,25 @@ pub extern "C" fn anvilkit_app_remove_constraint(
     constraint_id: u64,
     wake_up: Bool,
 ) -> Bool {
-    let Some(app) = (unsafe { app.as_mut() }) else {
-        return Bool::FALSE;
-    };
-    let Some(world) = (unsafe { world.as_mut() }) else {
-        return Bool::FALSE;
-    };
-    let Some(handle) = app.inner.constraint_to_joint.remove(&constraint_id) else {
-        return Bool::FALSE;
-    };
-    crate::rapier::joints::world_remove_impulse_joint(world, handle, wake_up)
+    ffi_guard(Bool::FALSE, || {
+        let Some(app) = (unsafe { app.as_mut() }) else {
+            return Bool::FALSE;
+        };
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            return Bool::FALSE;
+        };
+        let Some(handle) = app.inner.constraint_to_joint.remove(&constraint_id) else {
+            return Bool::FALSE;
+        };
+        crate::rapier::joints::world_remove_impulse_joint(world, handle, wake_up)
+    })
 }
 
+/// # Safety
+///
+/// `app` and `world` must be null or valid handles. `surfaces` must point to
+/// `surface_count` readable `AeroSurface` entries, and `out_report` must be
+/// null or point to a valid, writable `AeroForceReport`.
 #[unsafe(no_mangle)]
 pub extern "C" fn anvilkit_app_apply_aero_surfaces(
     app: *mut crate::rapier::ffi::AnvilKitAppHandle,
@@ -544,31 +598,38 @@ pub extern "C" fn anvilkit_app_apply_aero_surfaces(
     wake_up: Bool,
     out_report: *mut AeroForceReport,
 ) -> Bool {
-    let Some(app) = (unsafe { app.as_mut() }) else {
-        return Bool::FALSE;
-    };
-    let Some(world) = (unsafe { world.as_mut() }) else {
-        return Bool::FALSE;
-    };
-    let Ok(entity) = Entity::try_from_bits(entity_bits) else {
-        return Bool::FALSE;
-    };
-    let Some(handle) = app.inner.entity_to_body.get(&entity).copied() else {
-        return Bool::FALSE;
-    };
+    ffi_guard(Bool::FALSE, || {
+        let Some(app) = (unsafe { app.as_mut() }) else {
+            return Bool::FALSE;
+        };
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            return Bool::FALSE;
+        };
+        let Ok(entity) = Entity::try_from_bits(entity_bits) else {
+            return Bool::FALSE;
+        };
+        let Some(handle) = app.inner.entity_to_body.get(&entity).copied() else {
+            return Bool::FALSE;
+        };
 
-    aerodynamics::aero_apply_surfaces(
-        world,
-        handle,
-        wind_velocity,
-        air_density,
-        surfaces,
-        surface_count,
-        wake_up,
-        out_report,
-    )
+        aerodynamics::aero_apply_surfaces(
+            world,
+            handle,
+            wind_velocity,
+            air_density,
+            surfaces,
+            surface_count,
+            wake_up,
+            out_report,
+        )
+    })
 }
 
+/// # Safety
+///
+/// `app` and `world` must be null or valid handles. `voxels` must point to at
+/// least `size_x * size_y * size_z` readable bytes, and `out_report` must be
+/// null or point to a valid, writable `AeroForceReport`.
 #[unsafe(no_mangle)]
 pub extern "C" fn anvilkit_app_apply_aero_voxel_grid(
     app: *mut crate::rapier::ffi::AnvilKitAppHandle,
@@ -587,37 +648,43 @@ pub extern "C" fn anvilkit_app_apply_aero_voxel_grid(
     wake_up: Bool,
     out_report: *mut AeroForceReport,
 ) -> Bool {
-    let Some(app) = (unsafe { app.as_mut() }) else {
-        return Bool::FALSE;
-    };
-    let Some(world) = (unsafe { world.as_mut() }) else {
-        return Bool::FALSE;
-    };
-    let Ok(entity) = Entity::try_from_bits(entity_bits) else {
-        return Bool::FALSE;
-    };
-    let Some(handle) = app.inner.entity_to_body.get(&entity).copied() else {
-        return Bool::FALSE;
-    };
+    ffi_guard(Bool::FALSE, || {
+        let Some(app) = (unsafe { app.as_mut() }) else {
+            return Bool::FALSE;
+        };
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            return Bool::FALSE;
+        };
+        let Ok(entity) = Entity::try_from_bits(entity_bits) else {
+            return Bool::FALSE;
+        };
+        let Some(handle) = app.inner.entity_to_body.get(&entity).copied() else {
+            return Bool::FALSE;
+        };
 
-    aerodynamics::aero_apply_voxel_grid(
-        world,
-        handle,
-        wind_velocity,
-        air_density,
-        voxels,
-        size_x,
-        size_y,
-        size_z,
-        voxel_size,
-        local_origin,
-        drag_coefficient,
-        lift_coefficient,
-        wake_up,
-        out_report,
-    )
+        aerodynamics::aero_apply_voxel_grid(
+            world,
+            handle,
+            wind_velocity,
+            air_density,
+            voxels,
+            size_x,
+            size_y,
+            size_z,
+            voxel_size,
+            local_origin,
+            drag_coefficient,
+            lift_coefficient,
+            wake_up,
+            out_report,
+        )
+    })
 }
 
+/// # Safety
+///
+/// `app` and `world` must be null or valid handles. `out_report` must be null
+/// or point to a valid, writable `FluidForceReport`.
 #[unsafe(no_mangle)]
 pub extern "C" fn anvilkit_app_apply_fluid_aabb_forces(
     app: *mut crate::rapier::ffi::AnvilKitAppHandle,
@@ -629,30 +696,36 @@ pub extern "C" fn anvilkit_app_apply_fluid_aabb_forces(
     wake_up: Bool,
     out_report: *mut FluidForceReport,
 ) -> Bool {
-    let Some(app) = (unsafe { app.as_mut() }) else {
-        return Bool::FALSE;
-    };
-    let Some(world) = (unsafe { world.as_mut() }) else {
-        return Bool::FALSE;
-    };
-    let Ok(entity) = Entity::try_from_bits(entity_bits) else {
-        return Bool::FALSE;
-    };
-    let Some(handle) = app.inner.entity_to_body.get(&entity).copied() else {
-        return Bool::FALSE;
-    };
+    ffi_guard(Bool::FALSE, || {
+        let Some(app) = (unsafe { app.as_mut() }) else {
+            return Bool::FALSE;
+        };
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            return Bool::FALSE;
+        };
+        let Ok(entity) = Entity::try_from_bits(entity_bits) else {
+            return Bool::FALSE;
+        };
+        let Some(handle) = app.inner.entity_to_body.get(&entity).copied() else {
+            return Bool::FALSE;
+        };
 
-    fluid::fluid_apply_aabb_forces(
-        world,
-        handle,
-        fluid_volume,
-        body_half_extents,
-        body_volume,
-        wake_up,
-        out_report,
-    )
+        fluid::fluid_apply_aabb_forces(
+            world,
+            handle,
+            fluid_volume,
+            body_half_extents,
+            body_volume,
+            wake_up,
+            out_report,
+        )
+    })
 }
 
+/// # Safety
+///
+/// `app` and `world` must be null or valid handles. `out_report` must be null
+/// or point to a valid, writable `TrajectoryForceReport`.
 #[unsafe(no_mangle)]
 pub extern "C" fn anvilkit_app_apply_trajectory_forces(
     app: *mut crate::rapier::ffi::AnvilKitAppHandle,
@@ -662,22 +735,27 @@ pub extern "C" fn anvilkit_app_apply_trajectory_forces(
     wake_up: Bool,
     out_report: *mut TrajectoryForceReport,
 ) -> Bool {
-    let Some(app) = (unsafe { app.as_mut() }) else {
-        return Bool::FALSE;
-    };
-    let Some(world) = (unsafe { world.as_mut() }) else {
-        return Bool::FALSE;
-    };
-    let Ok(entity) = Entity::try_from_bits(entity_bits) else {
-        return Bool::FALSE;
-    };
-    let Some(handle) = app.inner.entity_to_body.get(&entity).copied() else {
-        return Bool::FALSE;
-    };
+    ffi_guard(Bool::FALSE, || {
+        let Some(app) = (unsafe { app.as_mut() }) else {
+            return Bool::FALSE;
+        };
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            return Bool::FALSE;
+        };
+        let Ok(entity) = Entity::try_from_bits(entity_bits) else {
+            return Bool::FALSE;
+        };
+        let Some(handle) = app.inner.entity_to_body.get(&entity).copied() else {
+            return Bool::FALSE;
+        };
 
-    trajectory::trajectory_apply_forces_to_body(world, handle, environment, wake_up, out_report)
+        trajectory::trajectory_apply_forces_to_body(world, handle, environment, wake_up, out_report)
+    })
 }
 
+/// # Safety
+///
+/// `out_report` must be null or point to a valid, writable `StressStrainReport`.
 #[unsafe(no_mangle)]
 pub extern "C" fn material_stress_strain_linear(
     material: MaterialProperties,
@@ -685,22 +763,24 @@ pub extern "C" fn material_stress_strain_linear(
     delta_temperature: f64,
     out_report: *mut StressStrainReport,
 ) -> Bool {
-    if !material_valid(material) || !strain.is_finite() || !delta_temperature.is_finite() {
-        return Bool::FALSE;
-    }
-    let thermal_strain = material.thermal_expansion * delta_temperature;
-    let mechanical_strain = strain - thermal_strain;
-    let stress = material.youngs_modulus * mechanical_strain;
-    let Some(out_report) = (unsafe { out_report.as_mut() }) else {
-        return Bool::FALSE;
-    };
-    *out_report = StressStrainReport {
-        strain,
-        stress,
-        elastic_energy_density: 0.5 * stress * mechanical_strain,
-        thermal_strain,
-    };
-    Bool::TRUE
+    ffi_guard(Bool::FALSE, || {
+        if !material_valid(material) || !strain.is_finite() || !delta_temperature.is_finite() {
+            return Bool::FALSE;
+        }
+        let thermal_strain = material.thermal_expansion * delta_temperature;
+        let mechanical_strain = strain - thermal_strain;
+        let stress = material.youngs_modulus * mechanical_strain;
+        let Some(out_report) = (unsafe { out_report.as_mut() }) else {
+            return Bool::FALSE;
+        };
+        *out_report = StressStrainReport {
+            strain,
+            stress,
+            elastic_energy_density: 0.5 * stress * mechanical_strain,
+            thermal_strain,
+        };
+        Bool::TRUE
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -708,12 +788,17 @@ pub extern "C" fn material_elastic_collision_relative_speed(
     relative_normal_speed: f64,
     restitution: f64,
 ) -> f64 {
-    if !relative_normal_speed.is_finite() || !restitution.is_finite() || restitution < 0.0 {
-        return f64::NAN;
-    }
-    -restitution * relative_normal_speed
+    ffi_guard(0.0, || {
+        if !relative_normal_speed.is_finite() || !restitution.is_finite() || restitution < 0.0 {
+            return f64::NAN;
+        }
+        -restitution * relative_normal_speed
+    })
 }
 
+/// # Safety
+///
+/// `out_report` must be null or point to a valid, writable `HertzContactReport`.
 #[unsafe(no_mangle)]
 pub extern "C" fn material_hertz_contact_force(
     material1: MaterialProperties,
@@ -725,52 +810,52 @@ pub extern "C" fn material_hertz_contact_force(
     damping: f64,
     out_report: *mut HertzContactReport,
 ) -> Bool {
-    if !material_valid(material1)
-        || !material_valid(material2)
-        || !radius1.is_finite()
-        || !radius2.is_finite()
-        || !penetration.is_finite()
-        || !penetration_rate.is_finite()
-        || !damping.is_finite()
-        || radius1 <= 0.0
-        || radius2 <= 0.0
-        || penetration < 0.0
-        || damping < 0.0
-        || material1.youngs_modulus <= 0.0
-        || material2.youngs_modulus <= 0.0
-    {
-        return Bool::FALSE;
-    }
+    ffi_guard(Bool::FALSE, || {
+        if !material_valid(material1)
+            || !material_valid(material2)
+            || !radius1.is_finite()
+            || !radius2.is_finite()
+            || !penetration.is_finite()
+            || !penetration_rate.is_finite()
+            || !damping.is_finite()
+            || radius1 <= 0.0
+            || radius2 <= 0.0
+            || penetration < 0.0
+            || damping < 0.0
+            || material1.youngs_modulus <= 0.0
+            || material2.youngs_modulus <= 0.0
+        {
+            return Bool::FALSE;
+        }
 
-    let compliance1 =
-        (1.0 - material1.poisson_ratio * material1.poisson_ratio) / material1.youngs_modulus;
-    let compliance2 =
-        (1.0 - material2.poisson_ratio * material2.poisson_ratio) / material2.youngs_modulus;
-    let effective_modulus = 1.0 / (compliance1 + compliance2);
-    let effective_radius = 1.0 / (1.0 / radius1 + 1.0 / radius2);
-    let contact_radius = (effective_radius * penetration).sqrt();
-    let normal_force =
-        (4.0 / 3.0) * effective_modulus * effective_radius.sqrt() * penetration.powf(1.5);
-    let stiffness = if penetration > EPSILON {
-        2.0 * effective_modulus * (effective_radius * penetration).sqrt()
-    } else {
-        0.0
-    };
-    let damping_force = damping * penetration_rate.max(0.0);
-    let Some(out_report) = (unsafe { out_report.as_mut() }) else {
-        return Bool::FALSE;
-    };
-    *out_report = HertzContactReport {
-        effective_modulus,
-        effective_radius,
-        contact_radius,
-        contact_area: std::f64::consts::PI * contact_radius * contact_radius,
-        normal_force,
-        stiffness,
-        damping_force,
-        total_force: normal_force + damping_force,
-    };
-    Bool::TRUE
+        let compliance1 =
+            (1.0 - material1.poisson_ratio * material1.poisson_ratio) / material1.youngs_modulus;
+        let compliance2 =
+            (1.0 - material2.poisson_ratio * material2.poisson_ratio) / material2.youngs_modulus;
+        let effective_modulus = 1.0 / (compliance1 + compliance2);
+        let effective_radius = 1.0 / (1.0 / radius1 + 1.0 / radius2);
+        let contact_radius = (effective_radius * penetration).sqrt();
+        let normal_force =
+            (4.0 / 3.0) * effective_modulus * effective_radius.sqrt() * penetration.powf(1.5);
+        let stiffness = if penetration > EPSILON {
+            2.0 * effective_modulus * (effective_radius * penetration).sqrt()
+        } else {
+            0.0
+        };
+        let damping_force = damping * penetration_rate.max(0.0);
+        let Some(out_report) = (unsafe { out_report.as_mut() }) else {
+            return Bool::FALSE;
+        };
+        *out_report = HertzContactReport {
+            effective_modulus,
+            effective_radius,
+            contact_radius,
+            contact_area: std::f64::consts::PI * contact_radius * contact_radius,
+            normal_force,
+            stiffness,
+            damping_force,
+            total_force: normal_force + damping_force,
+        };
+        Bool::TRUE
+    })
 }
-
-
