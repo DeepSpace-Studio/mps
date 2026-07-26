@@ -706,6 +706,11 @@ pub extern "C" fn terrain_lunar_mascon_gravity(
 }
 
 /// Get the number of built-in lunar mascons.
+///
+/// # Safety
+///
+/// This function takes no pointers and performs no memory access; it is safe
+/// to call from any context.
 #[unsafe(no_mangle)]
 pub extern "C" fn terrain_lunar_mascon_count() -> u32 {
     ffi_guard(0, lunar_mascon_count)

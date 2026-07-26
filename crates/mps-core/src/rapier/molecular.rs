@@ -6,6 +6,14 @@ use crate::rapier::ffi::{
     WorldHandle, unpack_rigid_body_handle, vec3_finite, vec3_to_rapier,
 };
 
+/// Computes the Lennard-Jones potential at `distance` for well depth `epsilon`
+/// and size parameter `sigma`; returns `NaN` with `ERR_INVALID_ARGUMENT` on
+/// invalid parameters.
+///
+/// # Safety
+///
+/// This function takes no pointers and transfers no ownership; it is always
+/// safe to call.
 #[unsafe(no_mangle)]
 pub extern "C" fn molecular_lennard_jones_potential(
     distance: f64,
@@ -70,6 +78,13 @@ pub extern "C" fn molecular_lennard_jones_force(
     })
 }
 
+/// Computes the Coulomb potential between `charge_a` and `charge_b` at
+/// `distance`; returns `NaN` with `ERR_INVALID_ARGUMENT` on invalid parameters.
+///
+/// # Safety
+///
+/// This function takes no pointers and transfers no ownership; it is always
+/// safe to call.
 #[unsafe(no_mangle)]
 pub extern "C" fn molecular_coulomb_potential(
     distance: f64,
@@ -251,6 +266,12 @@ pub extern "C" fn molecular_apply_pair_forces_flag(
     })
 }
 
+/// Returns the vacuum Coulomb constant (Coulomb's constant in vacuum).
+///
+/// # Safety
+///
+/// This function takes no pointers and transfers no ownership; it is always
+/// safe to call.
 #[unsafe(no_mangle)]
 pub extern "C" fn molecular_vacuum_coulomb_constant() -> f64 {
     ffi_guard(0.0, mps_formula::molecular::vacuum_coulomb_constant)

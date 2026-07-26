@@ -214,6 +214,17 @@ fn jacobi_eigen_symmetric(mut matrix: Vec<f64>, n: usize) -> Option<(Vec<f64>, V
     Some((values, vectors))
 }
 
+/// Solves the generalized eigenvalue problem K·φ = λ·M·φ and reports the
+/// lowest `requested_modes` eigenvalues, frequencies, and mode shapes.
+///
+/// # Safety
+///
+/// `stiffness_matrix` and `mass_matrix` must point to readable `dof*dof` `f64`
+/// elements; `out_eigenvalues` and `out_frequencies_hz` to writable memory for
+/// `eigen_capacity` `f64` elements and `out_mode_shapes` for
+/// `mode_shape_capacity` `f64` elements. `out_report` may be null; otherwise it
+/// must point to a writable `ModalAnalysisReport`. Null array pointers fail
+/// with `ERR_NULL_POINTER`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn acoustic_generalized_modal_analysis(
     stiffness_matrix: *const f64,
@@ -315,6 +326,14 @@ pub extern "C" fn acoustic_generalized_modal_analysis(
     Bool::TRUE
 }
 
+/// Computes natural frequency and damping characteristics of a single-DOF
+/// spring-mass-damper mode.
+///
+/// # Safety
+///
+/// `out_report` must be non-null and point to writable memory for one
+/// `StructuralModeReport`; a null pointer fails with `ERR_NULL_POINTER`.
+/// No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn acoustic_structural_mode_sdof(
     stiffness: f64,
@@ -357,6 +376,16 @@ pub extern "C" fn acoustic_structural_mode_sdof(
     Bool::TRUE
 }
 
+/// Advances one explicit time step of the discrete acoustic wave equation over
+/// `cell_count` pressure cells.
+///
+/// # Safety
+///
+/// `previous_pressure`, `current_pressure`, and `laplacian_pressure` must point
+/// to readable `cell_count` `f64` elements; `out_next_pressure` to writable
+/// memory for `capacity` `f64` elements (`capacity >= cell_count`).
+/// `out_report` may be null; otherwise a writable `AcousticWaveReport`. Null
+/// array pointers fail with `ERR_NULL_POINTER`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn acoustic_wave_equation_step(
     previous_pressure: *const f64,
@@ -423,6 +452,16 @@ pub extern "C" fn acoustic_wave_equation_step(
     Bool::TRUE
 }
 
+/// Finds the modal frequency nearest to an excitation frequency and reports
+/// whether it is resonant within `tolerance_hz`.
+///
+/// # Safety
+///
+/// `modal_frequencies_hz` must be non-null and point to readable `mode_count`
+/// `f64` elements; `damping_ratios` may be null (zero damping assumed),
+/// otherwise readable `mode_count` `f64` elements. `out_report` must be
+/// non-null and point to a writable `AcousticResonanceReport`. Null pointers
+/// fail with `ERR_NULL_POINTER`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn acoustic_detect_resonance(
     excitation_frequency_hz: f64,
@@ -500,6 +539,14 @@ pub extern "C" fn acoustic_detect_resonance(
     Bool::TRUE
 }
 
+/// Estimates the acoustic excitation (impulse, brightness, amplitude) produced
+/// by a contact between two materials.
+///
+/// # Safety
+///
+/// `out_report` must be non-null and point to writable memory for one
+/// `AcousticExcitationReport`; a null pointer fails with `ERR_NULL_POINTER`.
+/// No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn acoustic_contact_material_excitation(
     material_a: AcousticMaterial,
@@ -560,6 +607,17 @@ pub extern "C" fn acoustic_contact_material_excitation(
     Bool::TRUE
 }
 
+/// Advances one time step of modal synthesis: integrates each mode's damped
+/// oscillator and sums them into one output sample.
+///
+/// # Safety
+///
+/// `modal_frequencies_hz`, `modal_gains`, `mode_displacements`, and
+/// `mode_velocities` must each point to `mode_count` `f64` elements (the latter
+/// two writable); `damping_ratios` may be null (default damping), otherwise
+/// `mode_count` readable `f64` elements. `out_report` must be non-null and
+/// point to a writable `ModalSynthesisReport`. Null pointers fail with
+/// `ERR_NULL_POINTER`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn acoustic_modal_synthesis_step(
     modal_frequencies_hz: *const f64,
@@ -656,6 +714,14 @@ pub extern "C" fn acoustic_modal_synthesis_step(
     Bool::TRUE
 }
 
+/// Spatialize a mono sample between listener and source positions, producing
+/// equal-power stereo gains, distance attenuation, and pan.
+///
+/// # Safety
+///
+/// `out_sample` must be non-null and point to writable memory for one
+/// `SpatializedSample`; a null pointer fails with `ERR_NULL_POINTER`.
+/// No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn acoustic_spatialize_mono_sample(
     mono_sample: f64,

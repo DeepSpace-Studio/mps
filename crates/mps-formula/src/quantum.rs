@@ -64,11 +64,22 @@ fn compute_tunneling(barrier: QuantumBarrier) -> Option<QuantumTunnelingReport> 
     })
 }
 
+/// Returns the reduced Planck constant (ħ, in J·s).
+///
+/// # Safety
+///
+/// Takes no arguments and dereferences no pointers.
 #[unsafe(no_mangle)]
 pub extern "C" fn quantum_reduced_planck_constant() -> f64 {
     REDUCED_PLANCK
 }
 
+/// Returns the probability density |ψ|² of a quantum wave function.
+///
+/// # Safety
+///
+/// `wave` is passed by value; no pointers are dereferenced. Non-finite
+/// amplitudes return `f64::NAN`.
 #[unsafe(no_mangle)]
 pub extern "C" fn quantum_wave_probability_density(wave: QuantumWaveFunction) -> f64 {
     if !wave_function_valid(wave) {
@@ -77,6 +88,14 @@ pub extern "C" fn quantum_wave_probability_density(wave: QuantumWaveFunction) ->
     wave.amplitude_real * wave.amplitude_real + wave.amplitude_imag * wave.amplitude_imag
 }
 
+/// Normalizes a quantum wave function to unit norm and writes it to `out_wave`.
+///
+/// # Safety
+///
+/// `out_wave` must be non-null and point to writable memory for one
+/// `QuantumWaveFunction`; a null pointer fails with `ERR_NULL_POINTER`.
+/// `wave` is passed by value (no ownership transfer); a non-finite or
+/// zero-norm wave function fails with `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn quantum_wave_normalize(
     wave: QuantumWaveFunction,
@@ -104,6 +123,13 @@ pub extern "C" fn quantum_wave_normalize(
     Bool::TRUE
 }
 
+/// Returns the WKB tunneling transmission coefficient exp(-2·S/ħ).
+///
+/// # Safety
+///
+/// Takes only scalar values; no pointers are dereferenced. `action_integral`
+/// must be finite and non-negative; `reduced_planck` must be zero (uses the
+/// default ħ) or finite and positive. Invalid inputs return `f64::NAN`.
 #[unsafe(no_mangle)]
 pub extern "C" fn quantum_wkb_transmission(action_integral: f64, reduced_planck: f64) -> f64 {
     let hbar = effective_hbar(reduced_planck);
@@ -113,6 +139,14 @@ pub extern "C" fn quantum_wkb_transmission(action_integral: f64, reduced_planck:
     (-2.0 * action_integral / hbar).exp().clamp(0.0, 1.0)
 }
 
+/// Computes tunneling through a rectangular barrier and writes the report to `out_report`.
+///
+/// # Safety
+///
+/// `out_report` must be non-null and point to writable memory for one
+/// `QuantumTunnelingReport`; a null pointer fails with `ERR_NULL_POINTER`.
+/// `barrier` is passed by value (no ownership transfer); invalid barrier
+/// fields fail with `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn quantum_rectangular_barrier_tunneling(
     barrier: QuantumBarrier,
@@ -131,6 +165,12 @@ pub extern "C" fn quantum_rectangular_barrier_tunneling(
     Bool::TRUE
 }
 
+/// Returns the transmission probability for a rectangular potential barrier.
+///
+/// # Safety
+///
+/// `barrier` is passed by value; no pointers are dereferenced. Invalid
+/// barrier fields return `f64::NAN`.
 #[unsafe(no_mangle)]
 pub extern "C" fn quantum_rectangular_barrier_probability(barrier: QuantumBarrier) -> f64 {
     compute_tunneling(barrier)
@@ -138,6 +178,13 @@ pub extern "C" fn quantum_rectangular_barrier_probability(barrier: QuantumBarrie
         .unwrap_or(f64::NAN)
 }
 
+/// Returns the zero-point energy ½ħω of a quantum harmonic oscillator.
+///
+/// # Safety
+///
+/// Takes only scalar values; no pointers are dereferenced. `angular_frequency`
+/// must be finite and non-negative; `reduced_planck` must be zero (uses the
+/// default ħ) or finite and positive. Invalid inputs return `f64::NAN`.
 #[unsafe(no_mangle)]
 pub extern "C" fn quantum_zero_point_energy(angular_frequency: f64, reduced_planck: f64) -> f64 {
     let hbar = effective_hbar(reduced_planck);
@@ -147,6 +194,16 @@ pub extern "C" fn quantum_zero_point_energy(angular_frequency: f64, reduced_plan
     0.5 * hbar * angular_frequency
 }
 
+/// Computes quantum harmonic-oscillator energy levels and writes the report
+/// to `out_report`.
+///
+/// # Safety
+///
+/// `out_report` must be non-null and point to writable memory for one
+/// `QuantumOscillatorReport`; a null pointer fails with `ERR_NULL_POINTER`.
+/// `angular_frequency` must be finite and non-negative; `reduced_planck` must
+/// be zero (uses the default ħ) or finite and positive. Invalid scalar inputs
+/// fail with `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn quantum_harmonic_oscillator_report(
     angular_frequency: f64,

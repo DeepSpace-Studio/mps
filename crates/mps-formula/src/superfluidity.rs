@@ -117,6 +117,13 @@ fn ring_valid(ring: &VortexRing) -> bool {
 ///
 /// For a straight segment from s₁ to s₂, the induced velocity at point p is
 /// evaluated using the analytical formula involving the solid angle.
+///
+/// # Safety
+///
+/// `out_velocity` must point to writable memory for one `BiotSavartVelocity`;
+/// a null pointer fails with `ERR_NULL_POINTER`. `segment` and `field_point`
+/// are passed by value; non-finite values fail with `ERR_INVALID_ARGUMENT`.
+/// No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn sf_biot_savart_velocity(
     segment: VortexSegment,
@@ -226,6 +233,11 @@ pub extern "C" fn sf_biot_savart_velocity(
 ///   v_ring = (κ / 4πR) * [ln(8R/ξ) - 1/2]
 ///
 /// where κ = h/m is the circulation quantum and ξ is the healing length.
+///
+/// # Safety
+///
+/// `out_velocity` must point to writable memory for one `Vec3`; a null
+/// pointer fails with `ERR_NULL_POINTER`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn sf_vortex_ring_velocity(ring: VortexRing, out_velocity: *mut Vec3) -> Bool {
     if !ring_valid(&ring) {
@@ -255,6 +267,10 @@ pub extern "C" fn sf_vortex_ring_velocity(ring: VortexRing, out_velocity: *mut V
 }
 
 /// Return the circulation quantum constant κ₀ = h/m for ⁴He.
+///
+/// # Safety
+///
+/// Takes no arguments and dereferences no pointers; always safe to call.
 #[unsafe(no_mangle)]
 pub extern "C" fn sf_circulation_quantum() -> f64 {
     PLANCK / HELIUM_MASS
@@ -274,6 +290,14 @@ pub fn circulation_quantum_const() -> f64 {
 /// `segments` — pointer to an array of `VortexSegment`.
 /// `segment_count` — number of segments.
 /// `sample_point` — a point on the loop where the velocity is integrated.
+///
+/// # Safety
+///
+/// `segments` must point to `segment_count` readable `VortexSegment` elements
+/// (`segment_count > 0`); a null pointer fails with `ERR_NULL_POINTER`.
+/// `out_circulation` must point to writable memory for one
+/// `QuantisedCirculation`; a null pointer fails with `ERR_NULL_POINTER`.
+/// No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn sf_circulation_around_loop(
     segments: *const VortexSegment,
@@ -343,6 +367,13 @@ pub extern "C" fn sf_circulation_around_loop(
 /// components (m/s) equally spaced around the loop.
 /// `loop_radius` — radius of the circular loop (m).
 /// `sample_count` — number of samples.
+///
+/// # Safety
+///
+/// `tangent_velocities` must point to `sample_count` readable `f64` elements
+/// (`sample_count >= 3`); a null pointer fails with `ERR_NULL_POINTER`.
+/// `out_quantum` must point to writable memory for one `i32`; a null pointer
+/// fails with `ERR_NULL_POINTER`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn sf_quantum_number_estimate(
     tangent_velocities: *const f64,
@@ -386,6 +417,11 @@ pub extern "C" fn sf_quantum_number_estimate(
 ///
 /// For a generic vortex line passing through `vortex_center` with direction
 /// `vortex_axis`, the phase wraps by 2π around the line.
+///
+/// # Safety
+///
+/// `out_param` must point to writable memory for one `GpOrderParameter`; a
+/// null pointer fails with `ERR_NULL_POINTER`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn sf_gp_order_parameter(
     x: f64,
@@ -483,6 +519,11 @@ pub extern "C" fn sf_gp_order_parameter(
 ///
 /// Simplified: uses a Thomas–Fermi approximation with a harmonic trapping
 /// potential V_trap = ½ m ω² r².
+///
+/// # Safety
+///
+/// `out_energy` must point to writable memory for one `GpEnergyDensity`; a
+/// null pointer fails with `ERR_NULL_POINTER`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn sf_gp_energy_density(
     density: f64,
@@ -586,6 +627,11 @@ pub extern "C" fn sf_gp_energy_density(
 ///   ∂a/∂τ = -(1/ħ) · (g a² - μ) · a
 ///
 /// This converges to the equilibrium a = √(μ/g).
+///
+/// # Safety
+///
+/// `out_next_amplitude` must point to writable memory for one `f64`; a null
+/// pointer fails with `ERR_NULL_POINTER`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn sf_gp_amplitude_evolution(
     amplitude: f64,
@@ -649,6 +695,12 @@ pub extern "C" fn sf_gp_amplitude_evolution(
 ///   2. If the minimum distance < reconnection_distance, reconnect by
 ///      swapping endpoints: s1_start ↔ s2_start and s1_end ↔ s2_end.
 ///   3. Return the new segments and energy dissipation estimate.
+///
+/// # Safety
+///
+/// `out_report` must point to writable memory for one
+/// `VortexReconnectionReport`; a null pointer fails with `ERR_NULL_POINTER`.
+/// Both segments are passed by value. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn sf_vortex_reconnection(
     seg1: VortexSegment,
@@ -768,6 +820,14 @@ pub extern "C" fn sf_vortex_reconnection(
 /// `segments` — pointer to array of `VortexSegment`.
 /// `segment_count` — number of segments.
 /// `box_volume` — volume of the bounding box containing the tangle (for line density).
+///
+/// # Safety
+///
+/// When `segment_count > 0`, `segments` must point to `segment_count`
+/// readable `VortexSegment` elements; a null `segments` (or `segment_count`
+/// of 0) is not dereferenced and yields default statistics. `out_stats` must
+/// point to writable memory for one `VortexTangleStats`; a null pointer
+/// fails with `ERR_NULL_POINTER`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn sf_vortex_tangle_stats(
     segments: *const VortexSegment,
@@ -879,6 +939,13 @@ pub extern "C" fn sf_vortex_tangle_stats(
 /// `plane_center`, with `nx` × `ny` points covering extents `extent_x` × `extent_y`.
 ///
 /// `out_grid` — pre-allocated buffer of `GpGridPoint` of length `nx * ny`.
+///
+/// # Safety
+///
+/// `out_grid` must point to writable memory for at least
+/// `min(nx * ny, out_len)` `GpGridPoint` elements; a null pointer fails with
+/// `ERR_NULL_POINTER` and the function returns 0. Returns the number of
+/// elements written. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn sf_gp_grid_sample(
     plane_center: Vec3,
@@ -990,6 +1057,11 @@ pub extern "C" fn sf_gp_grid_sample(
 
 /// Compute the healing length ξ = ħ / √(2mgn) given the coupling constant
 /// and background density.
+///
+/// # Safety
+///
+/// Takes only scalar values; no pointers are dereferenced. All parameters
+/// must be positive and finite; invalid inputs return `f64::NAN`.
 #[unsafe(no_mangle)]
 pub extern "C" fn sf_healing_length(
     coupling_constant: f64,
@@ -1012,6 +1084,11 @@ pub extern "C" fn sf_healing_length(
 }
 
 /// Compute the speed of sound c = √(gn/m) for a superfluid.
+///
+/// # Safety
+///
+/// Takes only scalar values; no pointers are dereferenced. All parameters
+/// must be positive and finite; invalid inputs return `f64::NAN`.
 #[unsafe(no_mangle)]
 pub extern "C" fn sf_sound_speed(
     coupling_constant: f64,
@@ -1033,12 +1110,20 @@ pub extern "C" fn sf_sound_speed(
 }
 
 /// Return the helium mass constant.
+///
+/// # Safety
+///
+/// Takes no arguments and dereferences no pointers; always safe to call.
 #[unsafe(no_mangle)]
 pub extern "C" fn sf_helium_mass() -> f64 {
     HELIUM_MASS
 }
 
 /// Return the scattering length for ⁴He.
+///
+/// # Safety
+///
+/// Takes no arguments and dereferences no pointers; always safe to call.
 #[unsafe(no_mangle)]
 pub extern "C" fn sf_helium_scattering_length() -> f64 {
     HELIUM_SCATTERING_LENGTH

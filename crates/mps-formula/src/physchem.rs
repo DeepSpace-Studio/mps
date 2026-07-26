@@ -51,6 +51,15 @@ fn laplacian_center(values: &[f64], width: usize, height: usize, x: usize, y: us
     left + right + up + down - 4.0 * center
 }
 
+/// Computes the catalyzed reaction rate (`base_rate` × catalyst multiplier)
+/// and writes the breakdown to `out_report`.
+///
+/// # Safety
+///
+/// `out_report` must be non-null and point to writable memory for one
+/// `CatalystReport`; a null pointer fails with `ERR_NULL_POINTER`.
+/// `base_rate` and `catalyst` are passed by value (no ownership transfer);
+/// invalid values fail with `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn physchem_catalyst_rate_multiplier(
     base_rate: f64,
@@ -77,6 +86,13 @@ pub extern "C" fn physchem_catalyst_rate_multiplier(
     Bool::TRUE
 }
 
+/// Computes the Gray-Scott reaction and diffusion terms for a single grid cell.
+///
+/// # Safety
+///
+/// `out_report` must point to writable memory for one `GrayScottReactionReport`;
+/// a null pointer fails with `ERR_NULL_POINTER`. Non-finite or invalid scalar
+/// inputs and catalyst fields fail with `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn physchem_gray_scott_reaction_terms(
     u: f64,
@@ -118,6 +134,16 @@ pub extern "C" fn physchem_gray_scott_reaction_terms(
     Bool::TRUE
 }
 
+/// Advances a 2D Gray-Scott reaction-diffusion grid by one explicit Euler step.
+///
+/// # Safety
+///
+/// `u_values` and `v_values` must point to readable arrays of `width * height`
+/// `f64` elements; `out_u_values` and `out_v_values` must point to writable
+/// memory for `capacity` `f64` elements (`capacity >= width * height`,
+/// `width * height <= MAX_GRID_CELLS`). Null grid pointers fail with
+/// `ERR_NULL_POINTER`; `out_report` may be null, otherwise it must point to
+/// writable memory for one `ReactionDiffusionReport`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn physchem_gray_scott_step_2d(
     u_values: *const f64,
@@ -216,6 +242,14 @@ pub extern "C" fn physchem_gray_scott_step_2d(
     Bool::TRUE
 }
 
+/// Advances a reaction-diffusion concentration by one explicit Euler step.
+///
+/// # Safety
+///
+/// Takes only scalar values; no pointers are dereferenced. `concentration`,
+/// `laplacian`, `reaction_rate`, and `source` must be finite and
+/// `diffusion_coefficient` and `dt` finite and non-negative; invalid inputs
+/// return `f64::NAN` instead of an error code.
 #[unsafe(no_mangle)]
 pub extern "C" fn physchem_reaction_diffusion_explicit(
     concentration: f64,
@@ -237,6 +271,13 @@ pub extern "C" fn physchem_reaction_diffusion_explicit(
     (concentration + dt * (diffusion_coefficient * laplacian + reaction_rate + source)).max(0.0)
 }
 
+/// Computes the buoyancy acceleration and force from a concentration difference.
+///
+/// # Safety
+///
+/// `out_report` must point to writable memory for one `ConcentrationBuoyancyReport`;
+/// a null pointer fails with `ERR_NULL_POINTER`. Non-finite or negative scalar
+/// inputs fail with `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn physchem_concentration_buoyancy(
     concentration: f64,

@@ -18,6 +18,13 @@ pub(crate) struct CharacterControllerState {
     pub(crate) collisions: Vec<RapierCharacterCollision>,
 }
 
+/// Creates a new character controller and returns an opaque handle to it.
+///
+/// # Safety
+///
+/// The returned pointer is owned by Rust and must be passed to
+/// `character_controller_destroy` exactly once. Returns null on internal
+/// failure (see `last_error_code`).
 #[unsafe(no_mangle)]
 pub extern "C" fn character_controller_create() -> *mut CharacterControllerHandle {
     ffi_guard(std::ptr::null_mut(), || {

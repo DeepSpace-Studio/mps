@@ -5,8 +5,8 @@ use rapier3d::prelude::{
 use std::sync::Arc;
 
 use crate::rapier::error::{
-    ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, clear_error, ffi_guard,
-    set_error,
+    ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, ERR_UNSUPPORTED,
+    clear_error, ffi_guard, set_error,
 };
 use crate::rapier::ffi::{
     Bool, MAX_OUTPUT_CAPACITY, Quat, RigidBodyHandleRaw, Vec3, WorldHandle,
@@ -100,6 +100,10 @@ impl PhysicsWorld {
 /// Create a new physics world.  Non-finite gravity components fall back to zero.
 ///
 /// The returned pointer is owned by Rust; release it with `world_destroy`.
+///
+/// # Safety
+/// No pointer arguments are dereferenced.  The returned pointer is owned by
+/// Rust and must be released exactly once with `world_destroy`.
 #[unsafe(no_mangle)]
 pub extern "C" fn world_create(gravity: Vec3) -> *mut WorldHandle {
     ffi_guard(std::ptr::null_mut(), || {
@@ -146,6 +150,17 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
         if !delta_seconds.is_finite() || delta_seconds <= 0.0 || delta_seconds > MAX_STEP_SECONDS {
             return;
         }
+
+        // Thread-contract guard (see the `events` module docs): refuse to step
+        // while an init-time event call holds the producer cache — stepping
+        // would race its exclusive access.
+        let Some(_step_guard) = world.inner.events.step_guard() else {
+            set_error(
+                ERR_UNSUPPORTED,
+                "world_step during event ring/callback init",
+            );
+            return;
+        };
 
         world.inner.integration_parameters.dt = delta_seconds;
 

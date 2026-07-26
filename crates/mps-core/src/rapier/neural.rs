@@ -332,6 +332,10 @@ fn intersect_neural(
 }
 
 /// Return the number of weights the network layout requires.
+///
+/// # Safety
+///
+/// This function takes no pointers; any `u32` inputs are safe to pass.
 #[unsafe(no_mangle)]
 pub extern "C" fn neural_bounds_required_weight_count(
     hidden_width: u32,

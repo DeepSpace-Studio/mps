@@ -1,5 +1,8 @@
 #[cfg(test)]
 mod tests {
+    use mps_core::rapier::error::{
+        ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, last_error_code,
+    };
     use mps_core::rapier::ffi::*;
     use mps_core::rapier::rigid_body::*;
     use mps_core::rapier::world::world_create;
@@ -718,6 +721,895 @@ mod tests {
         let world = make_world();
         let handle = make_dynamic_body(world);
         rigid_body_enable_ccd(world, handle, Bool::TRUE);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn enable_ccd_rejects_invalid_handle() {
+        let world = make_world();
+        assert_eq!(rigid_body_enable_ccd(world, 0, Bool::TRUE), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_NOT_FOUND);
+        world_destroy(world);
+    }
+
+    // ---- builder negative cases ----
+
+    #[test]
+    fn builder_build_null_returns_null() {
+        assert!(rigid_body_builder_build(std::ptr::null_mut()).is_null());
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+    }
+
+    #[test]
+    fn builder_set_translation_rejects_null_builder() {
+        rigid_body_builder_set_translation(std::ptr::null_mut(), Vec3::default());
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+    }
+
+    #[test]
+    fn builder_set_pose_rejects_nan() {
+        let b = rigid_body_builder_create(BodyStatus::Dynamic as u32);
+        rigid_body_builder_set_pose(
+            b,
+            Vec3 {
+                x: f64::NAN,
+                y: 0.0,
+                z: 0.0,
+            },
+            Quat {
+                i: 0.0,
+                j: 0.0,
+                k: 0.0,
+                w: 1.0,
+            },
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        rigid_body_builder_destroy(b);
+    }
+
+    #[test]
+    fn builder_set_additional_mass_properties_rejects_negative_inertia() {
+        let b = rigid_body_builder_create(BodyStatus::Dynamic as u32);
+        rigid_body_builder_set_additional_mass_properties(
+            b,
+            Vec3::default(),
+            1.0,
+            Vec3 {
+                x: -1.0,
+                y: 1.0,
+                z: 1.0,
+            },
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        rigid_body_builder_destroy(b);
+    }
+
+    #[test]
+    fn builder_set_linvel_rejects_nan() {
+        let b = rigid_body_builder_create(BodyStatus::Dynamic as u32);
+        rigid_body_builder_set_linvel(
+            b,
+            Vec3 {
+                x: 0.0,
+                y: f64::NAN,
+                z: 0.0,
+            },
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        rigid_body_builder_destroy(b);
+    }
+
+    #[test]
+    fn builder_set_gravity_scale_rejects_nan() {
+        let b = rigid_body_builder_create(BodyStatus::Dynamic as u32);
+        rigid_body_builder_set_gravity_scale(b, f64::NAN);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        rigid_body_builder_destroy(b);
+    }
+
+    #[test]
+    fn builder_set_angular_damping_rejects_negative() {
+        let b = rigid_body_builder_create(BodyStatus::Dynamic as u32);
+        rigid_body_builder_set_angular_damping(b, -0.5);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        rigid_body_builder_destroy(b);
+    }
+
+    // ---- stale / wrong-generation handles ----
+
+    #[test]
+    fn removed_body_handle_reports_not_found() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        assert_eq!(
+            world_remove_rigid_body(world, handle, Bool::FALSE),
+            Bool::TRUE
+        );
+        let t = rigid_body_get_translation(world, handle);
+        assert_eq!(t.x, 0.0);
+        assert_eq!(last_error_code(), ERR_NOT_FOUND);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn wrong_generation_handle_reports_not_found() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        // Handles are packed as ((generation << 32) | id) + 1; bumping the high
+        // word yields a stale generation for the same slot.
+        let stale = handle + (1u64 << 32);
+        let t = rigid_body_get_translation(world, stale);
+        assert_eq!(t.x, 0.0);
+        assert_eq!(last_error_code(), ERR_NOT_FOUND);
+        world_destroy(world);
+    }
+
+    // ---- world_remove_rigid_body_flag ----
+
+    #[test]
+    fn remove_flag_removes_body() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        assert_eq!(world_remove_rigid_body_flag(world, handle, Bool::FALSE), 1);
+        assert_eq!(world_remove_rigid_body_flag(world, handle, Bool::FALSE), 0);
+        assert_eq!(last_error_code(), ERR_NOT_FOUND);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn remove_flag_rejects_null_world() {
+        assert_eq!(
+            world_remove_rigid_body_flag(std::ptr::null_mut(), 1, Bool::FALSE),
+            0
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+    }
+
+    // ---- get_rotation_out ----
+
+    #[test]
+    fn get_rotation_out_writes_value() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        let half = std::f64::consts::FRAC_PI_4;
+        let q = Quat {
+            i: 0.0,
+            j: 0.0,
+            k: half.sin(),
+            w: half.cos(),
+        };
+        assert_eq!(
+            rigid_body_set_rotation(world, handle, q, Bool::TRUE),
+            Bool::TRUE
+        );
+        let mut out = Quat::default();
+        rigid_body_get_rotation_out(world, handle, &mut out);
+        assert!((out.k - half.sin()).abs() < 1e-9);
+        assert!((out.w - half.cos()).abs() < 1e-9);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn get_rotation_out_rejects_null_out() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        rigid_body_get_rotation_out(world, handle, std::ptr::null_mut());
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+        world_destroy(world);
+    }
+
+    // ---- get_linvel_out / get_angvel_out ----
+
+    #[test]
+    fn get_linvel_out_writes_value() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        assert_eq!(
+            rigid_body_set_linvel(
+                world,
+                handle,
+                Vec3 {
+                    x: 3.0,
+                    y: 4.0,
+                    z: 5.0
+                },
+                Bool::TRUE
+            ),
+            Bool::TRUE
+        );
+        let mut out = Vec3::default();
+        rigid_body_get_linvel_out(world, handle, &mut out);
+        assert!((out.x - 3.0).abs() < 1e-9);
+        assert!((out.y - 4.0).abs() < 1e-9);
+        assert!((out.z - 5.0).abs() < 1e-9);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn get_linvel_out_rejects_null_out() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        rigid_body_get_linvel_out(world, handle, std::ptr::null_mut());
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn get_angvel_out_writes_value() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        assert_eq!(
+            rigid_body_set_angvel(
+                world,
+                handle,
+                Vec3 {
+                    x: 0.0,
+                    y: 2.0,
+                    z: 0.0
+                },
+                Bool::TRUE
+            ),
+            Bool::TRUE
+        );
+        let mut out = Vec3::default();
+        rigid_body_get_angvel_out(world, handle, &mut out);
+        assert!((out.y - 2.0).abs() < 1e-9);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn get_angvel_out_rejects_null_out() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        rigid_body_get_angvel_out(world, handle, std::ptr::null_mut());
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+        world_destroy(world);
+    }
+
+    // ---- setter invalid handles / NaN ----
+
+    #[test]
+    fn set_translation_rejects_invalid_handle() {
+        let world = make_world();
+        assert_eq!(
+            rigid_body_set_translation(world, 0, Vec3::default(), Bool::TRUE),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NOT_FOUND);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn set_rotation_rejects_invalid_handle() {
+        let world = make_world();
+        assert_eq!(
+            rigid_body_set_rotation(
+                world,
+                0,
+                Quat {
+                    i: 0.0,
+                    j: 0.0,
+                    k: 0.0,
+                    w: 1.0
+                },
+                Bool::TRUE
+            ),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NOT_FOUND);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn set_pose_rejects_nan_rotation() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        assert_eq!(
+            rigid_body_set_pose(
+                world,
+                handle,
+                Vec3::default(),
+                Quat {
+                    i: 0.0,
+                    j: f64::NAN,
+                    k: 0.0,
+                    w: 1.0
+                },
+                Bool::TRUE
+            ),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn set_pose_rejects_invalid_handle() {
+        let world = make_world();
+        assert_eq!(
+            rigid_body_set_pose(
+                world,
+                0,
+                Vec3::default(),
+                Quat {
+                    i: 0.0,
+                    j: 0.0,
+                    k: 0.0,
+                    w: 1.0
+                },
+                Bool::TRUE
+            ),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NOT_FOUND);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn set_linvel_rejects_invalid_handle() {
+        let world = make_world();
+        assert_eq!(
+            rigid_body_set_linvel(world, 0, Vec3::default(), Bool::TRUE),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NOT_FOUND);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn set_angvel_rejects_nan() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        assert_eq!(
+            rigid_body_set_angvel(
+                world,
+                handle,
+                Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: f64::NAN
+                },
+                Bool::TRUE
+            ),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn set_angvel_rejects_invalid_handle() {
+        let world = make_world();
+        assert_eq!(
+            rigid_body_set_angvel(world, 0, Vec3::default(), Bool::TRUE),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NOT_FOUND);
+        world_destroy(world);
+    }
+
+    // ---- mass / force getters ----
+
+    #[test]
+    fn get_mass_is_zero_without_colliders() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        assert_eq!(rigid_body_get_mass(world, handle), 0.0);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn get_mass_includes_additional_mass_properties() {
+        let world = make_world();
+        let builder = rigid_body_builder_create(BodyStatus::Dynamic as u32);
+        rigid_body_builder_set_additional_mass_properties(
+            builder,
+            Vec3::default(),
+            2.5,
+            Vec3 {
+                x: 1.0,
+                y: 1.0,
+                z: 1.0,
+            },
+        );
+        let body = rigid_body_builder_build(builder);
+        assert!(!body.is_null());
+        let handle = world_insert_rigid_body(world, body);
+        assert_ne!(handle, 0);
+        // Additional mass-properties are folded into the local mass only when
+        // the mass properties are recomputed, which happens during a step.
+        mps_core::rapier::world::world_step(world, 1.0 / 60.0);
+        let mass = rigid_body_get_mass(world, handle);
+        assert!((mass - 2.5).abs() < 1e-9, "unexpected mass: {mass}");
+        world_destroy(world);
+    }
+
+    #[test]
+    fn get_mass_rejects_null_world() {
+        assert_eq!(rigid_body_get_mass(std::ptr::null_mut(), 1), 0.0);
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+    }
+
+    #[test]
+    fn get_mass_rejects_invalid_handle() {
+        let world = make_world();
+        assert_eq!(rigid_body_get_mass(world, 0), 0.0);
+        assert_eq!(last_error_code(), ERR_NOT_FOUND);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn get_force_returns_added_force() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        assert_eq!(
+            rigid_body_add_force(
+                world,
+                handle,
+                Vec3 {
+                    x: 1.0,
+                    y: 2.0,
+                    z: 3.0
+                },
+                Bool::TRUE
+            ),
+            Bool::TRUE
+        );
+        let f = rigid_body_get_force(world, handle);
+        assert!((f.x - 1.0).abs() < 1e-9);
+        assert!((f.y - 2.0).abs() < 1e-9);
+        assert!((f.z - 3.0).abs() < 1e-9);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn get_force_rejects_null_world() {
+        let f = rigid_body_get_force(std::ptr::null(), 1);
+        assert_eq!(f.x, 0.0);
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+    }
+
+    #[test]
+    fn get_force_rejects_invalid_handle() {
+        let world = make_world();
+        let f = rigid_body_get_force(world, 0);
+        assert_eq!(f.x, 0.0);
+        assert_eq!(last_error_code(), ERR_NOT_FOUND);
+        world_destroy(world);
+    }
+
+    // ---- forces / torques: additional coverage ----
+
+    #[test]
+    fn add_force_at_point_applies() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        assert_eq!(
+            rigid_body_add_force_at_point(
+                world,
+                handle,
+                Vec3 {
+                    x: 0.0,
+                    y: 10.0,
+                    z: 0.0
+                },
+                Vec3 {
+                    x: 1.0,
+                    y: 0.0,
+                    z: 0.0
+                },
+                Bool::TRUE
+            ),
+            Bool::TRUE
+        );
+        world_destroy(world);
+    }
+
+    #[test]
+    fn add_force_at_point_rejects_nan_point() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        assert_eq!(
+            rigid_body_add_force_at_point(
+                world,
+                handle,
+                Vec3 {
+                    x: 0.0,
+                    y: 10.0,
+                    z: 0.0
+                },
+                Vec3 {
+                    x: f64::NAN,
+                    y: 0.0,
+                    z: 0.0
+                },
+                Bool::TRUE
+            ),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn add_force_at_point_rejects_invalid_handle() {
+        let world = make_world();
+        assert_eq!(
+            rigid_body_add_force_at_point(world, 0, Vec3::default(), Vec3::default(), Bool::TRUE),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NOT_FOUND);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn reset_force_clears_user_force() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        assert_eq!(
+            rigid_body_add_force(
+                world,
+                handle,
+                Vec3 {
+                    x: 0.0,
+                    y: 50.0,
+                    z: 0.0
+                },
+                Bool::TRUE
+            ),
+            Bool::TRUE
+        );
+        assert_eq!(
+            rigid_body_reset_force(world, handle, Bool::TRUE),
+            Bool::TRUE
+        );
+        let f = rigid_body_get_force(world, handle);
+        assert_eq!(f.x, 0.0);
+        assert_eq!(f.y, 0.0);
+        assert_eq!(f.z, 0.0);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn reset_force_rejects_invalid_handle() {
+        let world = make_world();
+        assert_eq!(rigid_body_reset_force(world, 0, Bool::TRUE), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_NOT_FOUND);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn reset_torque_works() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        assert_eq!(
+            rigid_body_reset_torque(world, handle, Bool::TRUE),
+            Bool::TRUE
+        );
+        world_destroy(world);
+    }
+
+    #[test]
+    fn reset_torque_rejects_invalid_handle() {
+        let world = make_world();
+        assert_eq!(rigid_body_reset_torque(world, 0, Bool::TRUE), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_NOT_FOUND);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn add_torque_rejects_nan() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        assert_eq!(
+            rigid_body_add_torque(
+                world,
+                handle,
+                Vec3 {
+                    x: f64::NAN,
+                    y: 0.0,
+                    z: 0.0
+                },
+                Bool::TRUE
+            ),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn apply_impulse_rejects_nan() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        assert_eq!(
+            rigid_body_apply_impulse(
+                world,
+                handle,
+                Vec3 {
+                    x: 0.0,
+                    y: f64::NAN,
+                    z: 0.0
+                },
+                Bool::TRUE
+            ),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn apply_torque_impulse_rejects_nan() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        assert_eq!(
+            rigid_body_apply_torque_impulse(
+                world,
+                handle,
+                Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: f64::NAN
+                },
+                Bool::TRUE
+            ),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        world_destroy(world);
+    }
+
+    // ---- _flag variants ----
+
+    #[test]
+    fn set_translation_flag_moves_body() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        assert_eq!(
+            rigid_body_set_translation_flag(
+                world,
+                handle,
+                Vec3 {
+                    x: 7.0,
+                    y: 8.0,
+                    z: 9.0
+                },
+                Bool::TRUE
+            ),
+            1
+        );
+        let t = rigid_body_get_translation(world, handle);
+        assert!((t.x - 7.0).abs() < 1e-9);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn set_translation_flag_rejects_invalid_handle() {
+        let world = make_world();
+        assert_eq!(
+            rigid_body_set_translation_flag(world, 0, Vec3::default(), Bool::TRUE),
+            0
+        );
+        assert_eq!(last_error_code(), ERR_NOT_FOUND);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn set_rotation_flag_rotates_body() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        let half = std::f64::consts::FRAC_PI_4;
+        assert_eq!(
+            rigid_body_set_rotation_flag(
+                world,
+                handle,
+                Quat {
+                    i: 0.0,
+                    j: 0.0,
+                    k: half.sin(),
+                    w: half.cos()
+                },
+                Bool::TRUE
+            ),
+            1
+        );
+        let q = rigid_body_get_rotation(world, handle);
+        assert!((q.w - half.cos()).abs() < 1e-9);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn set_pose_flag_moves_body() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        assert_eq!(
+            rigid_body_set_pose_flag(
+                world,
+                handle,
+                Vec3 {
+                    x: 4.0,
+                    y: 5.0,
+                    z: 6.0
+                },
+                Quat {
+                    i: 0.0,
+                    j: 0.0,
+                    k: 0.0,
+                    w: 1.0
+                },
+                Bool::TRUE
+            ),
+            1
+        );
+        let t = rigid_body_get_translation(world, handle);
+        assert!((t.x - 4.0).abs() < 1e-9);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn set_linvel_flag_updates_velocity() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        assert_eq!(
+            rigid_body_set_linvel_flag(
+                world,
+                handle,
+                Vec3 {
+                    x: 1.0,
+                    y: 0.0,
+                    z: 0.0
+                },
+                Bool::TRUE
+            ),
+            1
+        );
+        let v = rigid_body_get_linvel(world, handle);
+        assert!((v.x - 1.0).abs() < 1e-9);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn set_angvel_flag_updates_angular_velocity() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        assert_eq!(
+            rigid_body_set_angvel_flag(
+                world,
+                handle,
+                Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 3.0
+                },
+                Bool::TRUE
+            ),
+            1
+        );
+        let v = rigid_body_get_angvel(world, handle);
+        assert!((v.z - 3.0).abs() < 1e-9);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn add_force_flag_applies() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        assert_eq!(
+            rigid_body_add_force_flag(
+                world,
+                handle,
+                Vec3 {
+                    x: 0.0,
+                    y: 1.0,
+                    z: 0.0
+                },
+                Bool::TRUE
+            ),
+            1
+        );
+        world_destroy(world);
+    }
+
+    #[test]
+    fn add_torque_flag_applies() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        assert_eq!(
+            rigid_body_add_torque_flag(
+                world,
+                handle,
+                Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 1.0
+                },
+                Bool::TRUE
+            ),
+            1
+        );
+        world_destroy(world);
+    }
+
+    #[test]
+    fn apply_impulse_flag_applies() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        assert_eq!(
+            rigid_body_apply_impulse_flag(
+                world,
+                handle,
+                Vec3 {
+                    x: 1.0,
+                    y: 0.0,
+                    z: 0.0
+                },
+                Bool::TRUE
+            ),
+            1
+        );
+        world_destroy(world);
+    }
+
+    #[test]
+    fn apply_torque_impulse_flag_applies() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        assert_eq!(
+            rigid_body_apply_torque_impulse_flag(
+                world,
+                handle,
+                Vec3 {
+                    x: 0.0,
+                    y: 1.0,
+                    z: 0.0
+                },
+                Bool::TRUE
+            ),
+            1
+        );
+        world_destroy(world);
+    }
+
+    #[test]
+    fn enable_ccd_flag_enables() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        assert_eq!(rigid_body_enable_ccd_flag(world, handle, Bool::TRUE), 1);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn enable_ccd_flag_rejects_invalid_handle() {
+        let world = make_world();
+        assert_eq!(rigid_body_enable_ccd_flag(world, 0, Bool::TRUE), 0);
+        assert_eq!(last_error_code(), ERR_NOT_FOUND);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn sleep_and_wake_up_flag_roundtrip() {
+        let world = make_world();
+        let handle = make_dynamic_body(world);
+        assert_eq!(rigid_body_is_sleeping_flag(world, handle), 0);
+        assert_eq!(rigid_body_sleep_flag(world, handle), 1);
+        assert_eq!(rigid_body_is_sleeping_flag(world, handle), 1);
+        assert_eq!(rigid_body_wake_up_flag(world, handle, Bool::TRUE), 1);
+        assert_eq!(rigid_body_is_sleeping_flag(world, handle), 0);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn sleep_rejects_null_world() {
+        assert_eq!(rigid_body_sleep(std::ptr::null_mut(), 1), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+    }
+
+    #[test]
+    fn wake_up_rejects_invalid_handle() {
+        let world = make_world();
+        assert_eq!(rigid_body_wake_up(world, 0, Bool::TRUE), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_NOT_FOUND);
         world_destroy(world);
     }
 

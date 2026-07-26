@@ -37,6 +37,13 @@ fn joint_limit_valid(limit: SkeletalJointLimit) -> bool {
         && finite_non_negative(limit.damping)
 }
 
+/// Computes the Hill muscle force-length factor (Gaussian around the optimal fiber length).
+///
+/// # Safety
+///
+/// Takes only scalar values; no pointers are dereferenced. `fiber_length`,
+/// `optimal_fiber_length`, and `width` must be finite and positive; invalid
+/// inputs return `f64::NAN` instead of an error code.
 #[unsafe(no_mangle)]
 pub extern "C" fn biomechanics_hill_force_length_factor(
     fiber_length: f64,
@@ -54,6 +61,13 @@ pub extern "C" fn biomechanics_hill_force_length_factor(
     (-x * x).exp()
 }
 
+/// Computes the Hill muscle force-velocity factor for a given fiber velocity.
+///
+/// # Safety
+///
+/// Takes only scalar values; no pointers are dereferenced. `fiber_velocity`
+/// must be finite and `max_contraction_velocity` finite and positive; invalid
+/// inputs return `f64::NAN` instead of an error code.
 #[unsafe(no_mangle)]
 pub extern "C" fn biomechanics_hill_force_velocity_factor(
     fiber_velocity: f64,
@@ -70,6 +84,15 @@ pub extern "C" fn biomechanics_hill_force_velocity_factor(
     }
 }
 
+/// Evaluates a Hill-type muscle model and writes the force breakdown to `out_report`.
+///
+/// # Safety
+///
+/// `out_report` must be null or point to writable memory for one
+/// `HillMuscleReport`; a null pointer fails with `ERR_NULL_POINTER`. `desc`
+/// and `state` are passed by value (no ownership transfer) and must satisfy
+/// the finite/positive/range checks in `muscle_desc_valid` /
+/// `muscle_state_valid`; invalid values fail with `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn biomechanics_hill_muscle_evaluate(
     desc: HillMuscleDesc,
@@ -114,6 +137,13 @@ pub extern "C" fn biomechanics_hill_muscle_evaluate(
     Bool::TRUE
 }
 
+/// Convenience wrapper returning the tendon force of the three-element Hill muscle model.
+///
+/// # Safety
+///
+/// Takes only scalar values and a by-value `HillMuscleDesc` (no pointers are
+/// dereferenced, no ownership transfer). Inputs must pass the same validation
+/// as `biomechanics_hill_muscle_evaluate`; invalid inputs return `f64::NAN`.
 #[unsafe(no_mangle)]
 pub extern "C" fn biomechanics_hill_three_element_force(
     activation: f64,
@@ -137,6 +167,15 @@ pub extern "C" fn biomechanics_hill_three_element_force(
     }
 }
 
+/// Applies a skeletal joint limit, clamping `angle` and computing a corrective torque.
+///
+/// # Safety
+///
+/// `out_report` must be null or point to writable memory for one
+/// `SkeletalConstraintReport`; a null pointer fails with `ERR_NULL_POINTER`.
+/// `angle` and `angular_velocity` must be finite and `limit` (passed by value,
+/// no ownership transfer) must pass the checks in `joint_limit_valid`; invalid
+/// values fail with `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn biomechanics_skeletal_joint_limit(
     angle: f64,
@@ -173,6 +212,13 @@ pub extern "C" fn biomechanics_skeletal_joint_limit(
     Bool::TRUE
 }
 
+/// Computes the joint torque produced by a muscle force acting at a moment arm.
+///
+/// # Safety
+///
+/// Takes only scalar values; no pointers are dereferenced. `muscle_force` and
+/// `moment_arm` must be finite; invalid inputs return `f64::NAN` instead of an
+/// error code.
 #[unsafe(no_mangle)]
 pub extern "C" fn biomechanics_muscle_joint_torque(muscle_force: f64, moment_arm: f64) -> f64 {
     if !muscle_force.is_finite() || !moment_arm.is_finite() {

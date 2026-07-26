@@ -20,6 +20,12 @@ fn field_valid(field: ElectromagneticField) -> bool {
     vec3_finite(field.electric) && vec3_finite(field.magnetic)
 }
 
+/// Compute the Lorentz force F = q(E + v x B) and the resulting acceleration.
+///
+/// # Safety
+///
+/// `out_report` must point to writable memory for one `LorentzForceReport`;
+/// a null pointer fails with `ERR_NULL_POINTER`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn em_lorentz_force(
     charge: f64,
@@ -59,6 +65,12 @@ pub extern "C" fn em_lorentz_force(
     Bool::TRUE
 }
 
+/// Compute the magnetic flux Phi = B . n_hat * A through a planar surface.
+///
+/// # Safety
+///
+/// `out_report` must point to writable memory for one `MagneticFluxReport`;
+/// a null pointer fails with `ERR_NULL_POINTER`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn em_magnetic_flux(
     magnetic_field: Vec3,
@@ -92,6 +104,12 @@ pub extern "C" fn em_magnetic_flux(
     Bool::TRUE
 }
 
+/// Compute Faraday induction (flux rate, induced EMF, induced current).
+///
+/// # Safety
+///
+/// `out_report` must point to writable memory for one `FaradayInductionReport`;
+/// a null pointer fails with `ERR_NULL_POINTER`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn em_faraday_induction(
     previous_flux: f64,
@@ -130,6 +148,12 @@ pub extern "C" fn em_faraday_induction(
     Bool::TRUE
 }
 
+/// Advance an electromagnetic field at a single point by `dt` via Maxwell's equations.
+///
+/// # Safety
+///
+/// `out_report` must point to writable memory for one `MaxwellPointReport`;
+/// a null pointer fails with `ERR_NULL_POINTER`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn em_maxwell_point_update(
     field: ElectromagneticField,
@@ -190,6 +214,18 @@ pub extern "C" fn em_maxwell_point_update(
     Bool::TRUE
 }
 
+/// Advance an FDTD Yee grid of `cell_count` cells by `dt`.
+///
+/// # Safety
+///
+/// `electric_fields`, `magnetic_fields`, `curl_electric` and `curl_magnetic`
+/// must each point to at least `cell_count` readable `Vec3` elements;
+/// `out_electric_fields` and `out_magnetic_fields` must each point to writable
+/// memory for `capacity` `Vec3` elements (only the first `cell_count` are
+/// written). Requires `0 < cell_count <= MAX_FIELD_CELLS` (2_000_000) and
+/// `capacity >= cell_count`, failing with `ERR_CAPACITY` otherwise; any null
+/// grid pointer fails with `ERR_NULL_POINTER`. `out_report` may be null, in
+/// which case the report is skipped. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn em_fdtd_yee_update(
     electric_fields: *const Vec3,
@@ -279,11 +315,21 @@ pub extern "C" fn em_fdtd_yee_update(
     Bool::TRUE
 }
 
+/// Return the vacuum permittivity epsilon0 (F/m).
+///
+/// # Safety
+///
+/// This function takes no pointers and has no safety preconditions.
 #[unsafe(no_mangle)]
 pub extern "C" fn em_vacuum_permittivity() -> f64 {
     VACUUM_PERMITTIVITY
 }
 
+/// Return the vacuum permeability mu0 (H/m).
+///
+/// # Safety
+///
+/// This function takes no pointers and has no safety preconditions.
 #[unsafe(no_mangle)]
 pub extern "C" fn em_vacuum_permeability() -> f64 {
     VACUUM_PERMEABILITY

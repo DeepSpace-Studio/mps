@@ -79,6 +79,13 @@ fn average_after_oc(
         / densities.len() as f64
 }
 
+/// Computes the SIMP-interpolated stiffness and its density derivative for one cell.
+///
+/// # Safety
+///
+/// `out_report` must point to writable memory for one `SimpMaterialReport`;
+/// a null `out_report` fails with `ERR_NULL_POINTER`. `density` and `params`
+/// are passed by value; invalid values fail with `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn topology_simp_material(
     density: f64,
@@ -109,6 +116,12 @@ pub extern "C" fn topology_simp_material(
     Bool::TRUE
 }
 
+/// Returns the SIMP-interpolated stiffness for a single density value.
+///
+/// # Safety
+///
+/// This function takes no pointers and performs no memory access; all
+/// parameters are passed by value. Invalid inputs yield `NaN`.
 #[unsafe(no_mangle)]
 pub extern "C" fn topology_simp_stiffness(
     density: f64,
@@ -127,6 +140,12 @@ pub extern "C" fn topology_simp_stiffness(
     stiffness_min + density.powf(penalization) * (stiffness_solid - stiffness_min)
 }
 
+/// Returns the compliance sensitivity of one element for the OC update.
+///
+/// # Safety
+///
+/// This function takes no pointers and performs no memory access; all
+/// parameters are passed by value. Invalid inputs yield `NaN`.
 #[unsafe(no_mangle)]
 pub extern "C" fn topology_compliance_sensitivity(
     density: f64,
@@ -143,6 +162,17 @@ pub extern "C" fn topology_compliance_sensitivity(
         * element_energy
 }
 
+/// Performs one optimality-criteria (OC) density update over a density field.
+///
+/// # Safety
+///
+/// `densities` and `sensitivities` must each point to `cell_count` readable
+/// `f64` elements; `out_densities` must point to writable memory for
+/// `capacity` `f64` elements (`cell_count <= capacity`,
+/// `0 < cell_count <= 2_000_000`). `out_report` may be null; when non-null it
+/// must point to writable memory for one `TopologyOptimizationReport`. Null
+/// required pointers fail with `ERR_NULL_POINTER`. No ownership is
+/// transferred; the caller keeps ownership of all buffers.
 #[unsafe(no_mangle)]
 pub extern "C" fn topology_oc_update(
     densities: *const f64,
@@ -212,6 +242,15 @@ pub extern "C" fn topology_oc_update(
     Bool::TRUE
 }
 
+/// Applies a radial weighted-average density filter to a 2D density grid.
+///
+/// # Safety
+///
+/// `densities` must point to `width * height` readable `f64` elements in
+/// row-major order; `out_densities` must point to writable memory for
+/// `capacity` `f64` elements (`width * height <= capacity`,
+/// `0 < width * height <= 2_000_000`). Null pointers fail with
+/// `ERR_NULL_POINTER`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn topology_density_filter_2d(
     densities: *const f64,
@@ -286,6 +325,16 @@ pub extern "C" fn topology_density_filter_2d(
     Bool::TRUE
 }
 
+/// Thresholds a density field into a binary (0/1) voxel grid.
+///
+/// # Safety
+///
+/// `densities` must point to `cell_count` readable `f64` elements;
+/// `out_voxels` must point to writable memory for `capacity` `u8` elements
+/// (`cell_count <= capacity`, `0 < cell_count <= 2_000_000`). `out_stats` may
+/// be null; when non-null it must point to writable memory for one
+/// `DensityFieldStats`. Null required pointers fail with `ERR_NULL_POINTER`.
+/// No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn topology_density_to_voxels(
     densities: *const f64,
@@ -326,6 +375,18 @@ pub extern "C" fn topology_density_to_voxels(
     Bool::TRUE
 }
 
+/// Runs one runtime topology step: derives sensitivities from element
+/// energies, then applies an OC density update.
+///
+/// # Safety
+///
+/// `densities` and `element_energies` must each point to `cell_count`
+/// readable `f64` elements; `out_densities` must point to writable memory for
+/// `capacity` `f64` elements (`cell_count <= capacity`,
+/// `0 < cell_count <= 2_000_000`). `out_report` may be null; when non-null it
+/// must point to writable memory for one `TopologyOptimizationReport`. Null
+/// required pointers fail with `ERR_NULL_POINTER`. No ownership is
+/// transferred; the caller keeps ownership of all buffers.
 #[unsafe(no_mangle)]
 pub extern "C" fn topology_runtime_shape_density_step(
     densities: *const f64,

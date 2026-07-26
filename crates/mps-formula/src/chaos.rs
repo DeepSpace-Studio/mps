@@ -51,6 +51,12 @@ fn lorenz_deriv(state: LorenzState, params: LorenzParams) -> LorenzStepReport {
 }
 
 /// Perform one RK4 step of the Lorenz system.
+///
+/// # Safety
+///
+/// `out_report` must be non-null and point to writable memory for one
+/// `LorenzStepReport`. No ownership is transferred. A null `out_report`
+/// fails with `ERR_NULL_POINTER`.
 #[unsafe(no_mangle)]
 pub extern "C" fn chaos_lorenz_step(
     state: LorenzState,
@@ -110,6 +116,12 @@ pub extern "C" fn chaos_lorenz_step(
 /// pre-allocated output buffer of length `out_len`.
 ///
 /// Returns the number of steps actually written.
+///
+/// # Safety
+///
+/// `out_states` must point to writable memory for `min(steps, out_len)`
+/// `LorenzState` elements. No ownership is transferred. When `steps > 0`,
+/// a null `out_states` fails with `ERR_NULL_POINTER`.
 #[unsafe(no_mangle)]
 pub extern "C" fn chaos_lorenz_integrate(
     initial: LorenzState,
@@ -172,6 +184,10 @@ pub extern "C" fn chaos_lorenz_integrate(
 /// Return the number of states written (for use after `chaos_lorenz_integrate`).
 /// Identical to the return value; provided as a convenience for FFI callers
 /// who want it stored in memory.
+///
+/// # Safety
+///
+/// This function takes no pointers and is always safe to call.
 #[unsafe(no_mangle)]
 pub extern "C" fn chaos_lorenz_integrate_count(steps: u32, out_len: u32) -> u32 {
     steps.min(out_len)
@@ -217,6 +233,12 @@ fn state_finite(s: LorenzState) -> bool {
 /// `perturbation` is the initial separation magnitude (typical 1e-8).
 /// `renorm_every` re-normalises every N integration steps.
 /// `total_steps` total integration steps for the estimate.
+///
+/// # Safety
+///
+/// `out_report` must be non-null and point to writable memory for one
+/// `LyapunovReport`. No ownership is transferred. A null `out_report`
+/// fails with `ERR_NULL_POINTER`.
 #[unsafe(no_mangle)]
 pub extern "C" fn chaos_lyapunov_lorenz(
     initial: LorenzState,
@@ -359,6 +381,13 @@ pub extern "C" fn chaos_lyapunov_lorenz(
 /// `embedding_dim` — embedding dimension m (typically 3–7).
 /// `delay` — time delay τ in samples (typically 1–10).
 /// `out_report` — filled with the estimated exponent.
+///
+/// # Safety
+///
+/// `data` must point to a readable array of `data_len` `f64` samples;
+/// `out_report` must be non-null and point to writable memory for one
+/// `LyapunovReport`. No ownership is transferred. A null `data` or
+/// `out_report` pointer fails with `ERR_NULL_POINTER`.
 #[unsafe(no_mangle)]
 pub extern "C" fn chaos_lyapunov_rosenstein(
     data: *const f64,
@@ -493,6 +522,14 @@ pub extern "C" fn chaos_lyapunov_rosenstein(
 /// `out_points` — pre-allocated buffer for `BifurcationPoint`.
 /// `out_len` — capacity of the output buffer.
 /// Returns the number of points actually written.
+///
+/// # Safety
+///
+/// `out_points` must point to writable memory for `out_len`
+/// `BifurcationPoint` elements, with
+/// `out_len >= param_steps * samples_per_value` (smaller buffers fail with
+/// `ERR_CAPACITY`). No ownership is transferred; the pointer is not
+/// null-checked.
 #[unsafe(no_mangle)]
 pub extern "C" fn chaos_bifurcation_lorenz(
     initial: LorenzState,
@@ -679,6 +716,12 @@ pub extern "C" fn chaos_bifurcation_lorenz(
 ///   α2 = ( 2 sin(θ1 - θ2) ( ω1² L1 (m1 + m2) + g (m1 + m2) cos θ1
 ///         + ω2² L2 m2 cos(θ1 - θ2) ) )
 ///        / ( L2 ( 2 m1 + m2 - m2 cos(2 θ1 - 2 θ2) ) )
+///
+/// # Safety
+///
+/// `out_accel` must be non-null and point to writable memory for one
+/// `DoublePendulumAccel`. No ownership is transferred. A null `out_accel`
+/// fails with `ERR_NULL_POINTER`.
 #[unsafe(no_mangle)]
 pub extern "C" fn chaos_double_pendulum_accel(
     state: DoublePendulumState,
@@ -724,6 +767,12 @@ pub extern "C" fn chaos_double_pendulum_accel(
 ///
 /// The system is a 4D ODE: (θ1, ω1, θ2, ω2) with ω = dθ/dt and
 /// α = dω/dt given by `chaos_double_pendulum_accel`.
+///
+/// # Safety
+///
+/// `out_next` must be non-null and point to writable memory for one
+/// `DoublePendulumState`. No ownership is transferred. A null `out_next`
+/// fails with `ERR_NULL_POINTER`.
 #[unsafe(no_mangle)]
 pub extern "C" fn chaos_double_pendulum_step(
     state: DoublePendulumState,
@@ -823,6 +872,12 @@ pub extern "C" fn chaos_double_pendulum_step(
 /// pre-allocated output buffer.
 ///
 /// Returns the number of states written.
+///
+/// # Safety
+///
+/// `out_states` must point to writable memory for `min(steps, out_len)`
+/// `DoublePendulumState` elements. No ownership is transferred. When
+/// `steps > 0`, a null `out_states` fails with `ERR_NULL_POINTER`.
 #[unsafe(no_mangle)]
 pub extern "C" fn chaos_double_pendulum_integrate(
     initial: DoublePendulumState,
@@ -966,6 +1021,14 @@ fn double_pendulum_state_finite(s: DoublePendulumState) -> bool {
 /// `data_len` — length of the time series.
 /// `params` — detection parameters (embedding, neighbourhood, threshold).
 /// `out_report` — filled with the analysis results.
+///
+/// # Safety
+///
+/// `data` must point to a readable array of at least
+/// `min(params.sample_steps, data_len)` `f64` samples; `out_report` must
+/// be non-null and point to writable memory for one
+/// `ChaosDetectionReport`. No ownership is transferred. Null pointers fail
+/// with `ERR_NULL_POINTER`.
 #[unsafe(no_mangle)]
 pub extern "C" fn chaos_detect(
     data: *const f64,
@@ -1133,6 +1196,12 @@ pub extern "C" fn chaos_detect(
 // ===========================================================================
 
 /// Perform one iteration of the logistic map: x_{n+1} = r * x_n * (1 - x_n).
+///
+/// # Safety
+///
+/// `out_next` must be non-null and point to writable memory for one
+/// `LogisticMapState`. No ownership is transferred. A null `out_next`
+/// fails with `ERR_NULL_POINTER`.
 #[unsafe(no_mangle)]
 pub extern "C" fn chaos_logistic_step(x: f64, r: f64, out_next: *mut LogisticMapState) -> Bool {
     if !finite(x) || !finite(r) {
@@ -1153,6 +1222,12 @@ pub extern "C" fn chaos_logistic_step(x: f64, r: f64, out_next: *mut LogisticMap
 }
 
 /// Run the logistic map for N steps, returning all iterates.
+///
+/// # Safety
+///
+/// `out_values` must point to writable memory for `min(steps, out_len)`
+/// `f64` elements. No ownership is transferred. When `steps > 0`, a null
+/// `out_values` fails with `ERR_NULL_POINTER`.
 #[unsafe(no_mangle)]
 pub extern "C" fn chaos_logistic_iterate(
     initial_x: f64,
@@ -1196,6 +1271,14 @@ pub extern "C" fn chaos_logistic_iterate(
 /// For each of `param_steps` values of r between `r_min` and `r_max`:
 ///   1. Run `transient_steps` iterations to reach the attractor.
 ///   2. Record the next `samples_per_value` iterates.
+///
+/// # Safety
+///
+/// `out_points` must point to writable memory for `out_len`
+/// `BifurcationPoint` elements, with
+/// `out_len >= param_steps * samples_per_value` (smaller buffers fail with
+/// `ERR_CAPACITY`). No ownership is transferred; the pointer is not
+/// null-checked.
 #[unsafe(no_mangle)]
 pub extern "C" fn chaos_logistic_bifurcation(
     initial_x: f64,

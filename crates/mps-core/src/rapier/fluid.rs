@@ -163,6 +163,12 @@ pub extern "C" fn fluid_navier_stokes_simplified_step(
     })
 }
 
+/// Evaluates the SPH poly6 kernel for a distance and smoothing radius.
+///
+/// # Safety
+///
+/// This function takes no pointers; all inputs are passed by value and there
+/// are no safety requirements on the caller.
 #[unsafe(no_mangle)]
 pub extern "C" fn fluid_sph_poly6_kernel(distance: f64, smoothing_radius: f64) -> f64 {
     ffi_guard(0.0, || {
@@ -205,6 +211,13 @@ pub extern "C" fn fluid_sph_spiky_gradient(
     })
 }
 
+/// Evaluates the Laplacian of the SPH viscosity kernel for a distance and
+/// smoothing radius.
+///
+/// # Safety
+///
+/// This function takes no pointers; all inputs are passed by value and there
+/// are no safety requirements on the caller.
 #[unsafe(no_mangle)]
 pub extern "C" fn fluid_sph_viscosity_laplacian(distance: f64, smoothing_radius: f64) -> f64 {
     ffi_guard(0.0, || {
@@ -234,7 +247,14 @@ pub extern "C" fn fluid_sph_estimate_density(
             set_error(ERR_NULL_POINTER, "SPH particle pointer is null");
             return Bool::FALSE;
         }
-        let particles = unsafe { std::slice::from_raw_parts(particles, particle_count as usize) };
+        // `from_raw_parts` requires a non-null (aligned) pointer even for
+        // length 0, so the documented "null with count 0" case needs an
+        // empty slice instead.
+        let particles = if particle_count == 0 {
+            &[]
+        } else {
+            unsafe { std::slice::from_raw_parts(particles, particle_count as usize) }
+        };
         let Some(density) =
             mps_formula::fluid::sph_estimate_density(position, particles, smoothing_radius)
         else {
@@ -273,7 +293,13 @@ pub extern "C" fn fluid_sph_estimate_forces(
             set_error(ERR_NULL_POINTER, "SPH particle pointer is null");
             return Bool::FALSE;
         }
-        let particles = unsafe { std::slice::from_raw_parts(particles, particle_count as usize) };
+        // See `fluid_sph_estimate_density`: `from_raw_parts` requires a
+        // non-null pointer even for length 0.
+        let particles = if particle_count == 0 {
+            &[]
+        } else {
+            unsafe { std::slice::from_raw_parts(particles, particle_count as usize) }
+        };
         let Some(report) = mps_formula::fluid::sph_estimate_forces(
             particle,
             particles,
@@ -296,6 +322,12 @@ pub extern "C" fn fluid_sph_estimate_forces(
     })
 }
 
+/// Computes the static pressure from a Bernoulli-equation total pressure.
+///
+/// # Safety
+///
+/// This function takes no pointers; all inputs are passed by value and there
+/// are no safety requirements on the caller.
 #[unsafe(no_mangle)]
 pub extern "C" fn fluid_bernoulli_pressure(
     total_pressure: f64,

@@ -306,6 +306,13 @@ impl AnvilKitAppState {
     }
 }
 
+/// Creates a new AnvilKit app state and returns an opaque handle to it.
+///
+/// # Safety
+///
+/// Takes no pointers and cannot fail on input; the returned handle is owned by
+/// the caller and must eventually be passed to `anvilkit_app_destroy` (or
+/// leaked).
 #[unsafe(no_mangle)]
 pub extern "C" fn anvilkit_app_create() -> *mut crate::rapier::ffi::AnvilKitAppHandle {
     ffi_guard(std::ptr::null_mut(), || {
@@ -783,6 +790,13 @@ pub extern "C" fn material_stress_strain_linear(
     })
 }
 
+/// Computes the post-collision relative normal speed from restitution.
+///
+/// # Safety
+///
+/// All parameters are passed by value; this function performs no memory
+/// access and is always memory-safe. Non-finite inputs or a negative
+/// `restitution` yield `NaN`.
 #[unsafe(no_mangle)]
 pub extern "C" fn material_elastic_collision_relative_speed(
     relative_normal_speed: f64,

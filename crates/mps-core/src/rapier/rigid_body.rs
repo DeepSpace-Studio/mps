@@ -20,6 +20,12 @@ fn builder_from_status(status: BodyStatus) -> RigidBodyBuilder {
     }
 }
 
+/// Creates a rigid body builder for the given body status.
+///
+/// # Safety
+///
+/// Takes no pointers. The returned pointer is owned by the caller and must be released with
+/// `rigid_body_builder_build` or `rigid_body_builder_destroy`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rigid_body_builder_create(status: u32) -> *mut RigidBodyBuilderHandle {
     ffi_guard(std::ptr::null_mut(), || {

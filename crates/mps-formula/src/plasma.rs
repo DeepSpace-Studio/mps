@@ -84,6 +84,12 @@ fn clamp(x: f64, lo: f64, hi: f64) -> f64 {
 /// `ion_density` — n_i (m⁻³, typically ≈ n_e)
 /// `ion_mass` — m_i (kg, e.g. 1.672e-27 for protons)
 /// `ion_charge_state` — Z (e.g. 1 for singly ionised)
+///
+/// # Safety
+///
+/// `out_params` must be non-null and point to writable memory for one
+/// `PlasmaParamsReport`; a null pointer fails with `ERR_NULL_POINTER`.
+/// No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn pl_plasma_params(
     electron_density: f64,
@@ -177,6 +183,10 @@ pub extern "C" fn pl_plasma_params(
 }
 
 /// Compute the Debye length directly from density and temperature.
+///
+/// # Safety
+///
+/// This function takes only scalar arguments and dereferences no pointers.
 #[unsafe(no_mangle)]
 pub extern "C" fn pl_debye_length(density: f64, temperature: f64) -> f64 {
     if !finite_positive(density) || !finite_positive(temperature) {
@@ -192,6 +202,10 @@ pub extern "C" fn pl_debye_length(density: f64, temperature: f64) -> f64 {
 }
 
 /// Compute the plasma frequency from density.
+///
+/// # Safety
+///
+/// This function takes only scalar arguments and dereferences no pointers.
 #[unsafe(no_mangle)]
 pub extern "C" fn pl_plasma_frequency(density: f64) -> f64 {
     if !finite_positive(density) {
@@ -217,6 +231,12 @@ pub extern "C" fn pl_plasma_frequency(density: f64) -> f64 {
 ///
 /// References:
 ///   Birdsall & Langdon, "Plasma Physics via Computer Simulation"
+///
+/// # Safety
+///
+/// `out_particle` must be non-null and point to writable memory for one
+/// `PicParticle`; a null pointer fails with `ERR_NULL_POINTER`.
+/// No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn pl_boris_push(
     particle: PicParticle,
@@ -303,6 +323,12 @@ pub extern "C" fn pl_boris_push(
 /// `origin_x/y/z` — position of grid cell centre (0,0,0).
 ///
 /// Returns the interpolated field at the particle position.
+///
+/// # Safety
+///
+/// `grid` must be non-null and point to readable `nx * ny * nz` `GridField`
+/// elements; `out_field` must point to writable memory for one `GridField`.
+/// Null pointers fail with `ERR_NULL_POINTER`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn pl_interpolate_field(
     grid: *const GridField,
@@ -428,6 +454,12 @@ pub extern "C" fn pl_interpolate_field(
 /// The current density contribution is: j = ρ · v
 ///
 /// `cell_volume` — volume of a single grid cell (m³).
+///
+/// # Safety
+///
+/// `out_density` must be non-null and point to writable memory for one
+/// `ChargeDensityCell`; a null pointer fails with `ERR_NULL_POINTER`.
+/// No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn pl_deposit_particle(
     particle: PicParticle,
@@ -470,6 +502,13 @@ pub extern "C" fn pl_deposit_particle(
 /// `particles` — pointer to array of `PicParticle`.
 /// `count` — number of particles.
 /// `out_moments` — computed moments.
+///
+/// # Safety
+///
+/// `particles` must be non-null and point to readable `count` `PicParticle`
+/// elements; `out_moments` must point to writable memory for one
+/// `VlasovMomentReport`. Null pointers fail with `ERR_NULL_POINTER`.
+/// No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn pl_vlasov_moments(
     particles: *const PicParticle,
@@ -582,6 +621,13 @@ pub extern "C" fn pl_vlasov_moments(
 /// `e_out` — pre-allocated output array for electric field E = −dφ/dx (V/m).
 ///
 /// Returns Bool::TRUE on success.
+///
+/// # Safety
+///
+/// `rho` must be non-null and point to readable `n` `f64` elements;
+/// `phi_out` and `e_out` must each point to writable memory for `n` `f64`
+/// elements. Null pointers fail with `ERR_NULL_POINTER`.
+/// No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn pl_poisson_solve_1d(
     rho: *const f64,
@@ -677,6 +723,13 @@ pub extern "C" fn pl_poisson_solve_1d(
 /// `threshold` — maximum |B| at a null point (T).
 ///
 /// Returns the first X-point found (if any).
+///
+/// # Safety
+///
+/// `bx_grid` and `by_grid` must each be non-null and point to readable
+/// `nx * ny` `f64` elements; `out_xpoint` must point to writable memory for
+/// one `MagneticXPoint`. Null pointers fail with `ERR_NULL_POINTER`.
+/// No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn pl_find_xpoint(
     bx_grid: *const f64,
@@ -782,6 +835,10 @@ pub extern "C" fn pl_find_xpoint(
 /// where S = μ₀ L v_A / η is the Lundquist number.
 ///
 /// `lundquist_number` — S = μ₀ L_A v_A / η (dimensionless).
+///
+/// # Safety
+///
+/// This function takes only scalar arguments and dereferences no pointers.
 #[unsafe(no_mangle)]
 pub extern "C" fn pl_sweet_parker_rate(lundquist_number: f64) -> f64 {
     if !finite_positive(lundquist_number) {
@@ -800,6 +857,10 @@ pub extern "C" fn pl_sweet_parker_rate(lundquist_number: f64) -> f64 {
 ///   R ≈ π / (4 ln S)
 ///
 /// `lundquist_number` — S (dimensionless).
+///
+/// # Safety
+///
+/// This function takes only scalar arguments and dereferences no pointers.
 #[unsafe(no_mangle)]
 pub extern "C" fn pl_petschek_rate(lundquist_number: f64) -> f64 {
     if !finite_positive(lundquist_number) || lundquist_number <= 1.0 {
@@ -811,6 +872,10 @@ pub extern "C" fn pl_petschek_rate(lundquist_number: f64) -> f64 {
 }
 
 /// Compute the Alfvén speed v_A = B / √(μ₀ n m_i).
+///
+/// # Safety
+///
+/// This function takes only scalar arguments and dereferences no pointers.
 #[unsafe(no_mangle)]
 pub extern "C" fn pl_alfven_speed(magnetic_field: f64, density: f64, ion_mass: f64) -> f64 {
     if !finite_non_negative(magnetic_field) {
@@ -829,6 +894,10 @@ pub extern "C" fn pl_alfven_speed(magnetic_field: f64, density: f64, ion_mass: f
 }
 
 /// Compute the Lundquist number S = μ₀ L v_A / η.
+///
+/// # Safety
+///
+/// This function takes only scalar arguments and dereferences no pointers.
 #[unsafe(no_mangle)]
 pub extern "C" fn pl_lundquist_number(
     length_scale: f64,
@@ -860,6 +929,14 @@ pub extern "C" fn pl_lundquist_number(
 /// `particle_count` — number of particles.
 /// `grid` — pointer to array of `GridField`.
 /// `grid_cells` — total number of grid cells.
+///
+/// # Safety
+///
+/// `particles` must be non-null and point to readable `particle_count`
+/// `PicParticle` elements; `grid` must be non-null and point to readable
+/// `grid_cells` `GridField` elements; `out_report` must point to writable
+/// memory for one `PicStepReport`. Null pointers fail with
+/// `ERR_NULL_POINTER`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn pl_pic_step_report(
     particles: *const PicParticle,

@@ -203,6 +203,16 @@ fn root_bounds(particles: &[NBodyParticle]) -> Bounds {
     Bounds { center, half_size }
 }
 
+/// Computes direct all-pairs gravitational accelerations for an N-body system.
+///
+/// # Safety
+///
+/// `particles` must point to `particle_count` readable `NBodyParticle` elements
+/// (`0 < particle_count <= 100_000`); `out_accelerations` must point to writable
+/// memory for `capacity` `Vec3` elements (`capacity >= particle_count`);
+/// `out_report` may be null, in which case the report is not written.
+/// Null `particles` or `out_accelerations` fail with `ERR_NULL_POINTER`;
+/// no ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn astro_nbody_direct_accelerations(
     particles: *const NBodyParticle,
@@ -268,6 +278,16 @@ pub extern "C" fn astro_nbody_direct_accelerations(
     Bool::TRUE
 }
 
+/// Computes Barnes-Hut tree-approximated gravitational accelerations for an N-body system.
+///
+/// # Safety
+///
+/// `particles` must point to `particle_count` readable `NBodyParticle` elements
+/// (`0 < particle_count <= 100_000`); `out_accelerations` must point to writable
+/// memory for `capacity` `Vec3` elements (`capacity >= particle_count`);
+/// `out_report` may be null, in which case the report is not written.
+/// Null `particles` or `out_accelerations` fail with `ERR_NULL_POINTER`;
+/// no ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn astro_nbody_barnes_hut_accelerations(
     particles: *const NBodyParticle,
@@ -333,6 +353,12 @@ pub extern "C" fn astro_nbody_barnes_hut_accelerations(
     Bool::TRUE
 }
 
+/// Computes the FMM monopole (single-cluster) gravitational acceleration at a position.
+///
+/// # Safety
+///
+/// `out_acceleration` must point to writable memory for one `Vec3` element;
+/// a null pointer fails with `ERR_NULL_POINTER`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn astro_fmm_monopole_acceleration(
     position: Vec3,
@@ -363,6 +389,13 @@ pub extern "C" fn astro_fmm_monopole_acceleration(
     Bool::TRUE
 }
 
+/// Computes the first-order post-Newtonian relativistic correction for a two-body orbit.
+///
+/// # Safety
+///
+/// `out_report` must point to writable memory for one `RelativisticOrbitReport`
+/// element; a null pointer fails with `ERR_NULL_POINTER`.
+/// No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn astro_relativistic_orbit_correction(
     position: Vec3,
@@ -418,6 +451,13 @@ pub extern "C" fn astro_relativistic_orbit_correction(
     Bool::TRUE
 }
 
+/// Computes the fluid and rigid Roche limits of a primary body and tests an orbital
+/// distance against them.
+///
+/// # Safety
+///
+/// `out_report` must point to writable memory for one `RocheLimitReport` element;
+/// a null pointer fails with `ERR_NULL_POINTER`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn astro_roche_limit(
     primary_radius: f64,
@@ -451,6 +491,14 @@ pub extern "C" fn astro_roche_limit(
     Bool::TRUE
 }
 
+/// Finds the best small-integer orbital period ratio and reports whether two orbits
+/// are in resonance within a tolerance.
+///
+/// # Safety
+///
+/// `out_report` must point to writable memory for one `OrbitalResonanceReport`
+/// element; a null pointer fails with `ERR_NULL_POINTER`.
+/// No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn astro_orbital_resonance_detect(
     inner_period: f64,
@@ -499,6 +547,13 @@ pub extern "C" fn astro_orbital_resonance_detect(
     Bool::TRUE
 }
 
+/// Applies the Barnes-Hut opening-angle criterion to decide whether a tree node
+/// must be opened.
+///
+/// # Safety
+///
+/// This function takes no pointers and performs no memory access; it is always
+/// safe to call.
 #[unsafe(no_mangle)]
 pub extern "C" fn astro_barnes_hut_should_open(
     node_width: f64,

@@ -35,6 +35,11 @@ fn write_out<T: Copy>(out: *mut T, value: T) -> Bool {
 // ---------------------------------------------------------------------------
 
 /// Compute the Lorentz factor gamma = 1/sqrt(1 - v^2/c^2).
+///
+/// # Safety
+///
+/// `out_gamma` must be non-null and point to writable memory for one `f64`.
+/// No ownership is transferred; a null pointer fails with `ERR_NULL_POINTER`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rel_lorentz_factor(speed: f64, out_gamma: *mut f64) -> Bool {
     if !finite_non_negative(speed) {
@@ -62,6 +67,12 @@ pub extern "C" fn rel_lorentz_factor(speed: f64, out_gamma: *mut f64) -> Bool {
 /// Build the full 4x4 Lorentz boost matrix for a given velocity 3-vector.
 ///
 /// The matrix acts on column 4-vectors (ct, x, y, z)^T.
+///
+/// # Safety
+///
+/// `out_boost` must be non-null and point to writable memory for one
+/// `LorentzBoost`. No ownership is transferred; a null pointer fails with
+/// `ERR_NULL_POINTER`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rel_lorentz_boost(velocity: Vec3, out_boost: *mut LorentzBoost) -> Bool {
     if !vec3_finite(velocity) {
@@ -134,6 +145,12 @@ pub extern "C" fn rel_lorentz_boost(velocity: Vec3, out_boost: *mut LorentzBoost
 }
 
 /// Apply a Lorentz boost to a 4-vector (ct, x, y, z).
+///
+/// # Safety
+///
+/// `out_transformed` must be non-null and point to writable memory for one
+/// `LorentzTransformedFrame`. No ownership is transferred; a null pointer
+/// fails with `ERR_NULL_POINTER`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rel_transform_four_vector(
     boost: LorentzBoost,
@@ -165,6 +182,11 @@ pub extern "C" fn rel_transform_four_vector(
 /// Relativistic velocity addition (3D general formula).
 ///
 /// w = (u + v_∥ + v_⊥/γ_u) / (1 + u·v/c²)
+///
+/// # Safety
+///
+/// `out_result` must be non-null and point to writable memory for one `Vec3`.
+/// No ownership is transferred; a null pointer fails with `ERR_NULL_POINTER`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rel_velocity_addition(u: Vec3, v: Vec3, out_result: *mut Vec3) -> Bool {
     if !vec3_finite(u) || !vec3_finite(v) {
@@ -214,6 +236,10 @@ pub extern "C" fn rel_velocity_addition(u: Vec3, v: Vec3, out_result: *mut Vec3)
 }
 
 /// Rapidity = arctanh(v/c).
+///
+/// # Safety
+///
+/// Takes only scalar values; no pointers are dereferenced.
 #[unsafe(no_mangle)]
 pub extern "C" fn rel_rapidity(speed: f64) -> f64 {
     if !finite_non_negative(speed) {
@@ -233,6 +259,10 @@ pub extern "C" fn rel_rapidity(speed: f64) -> f64 {
 }
 
 /// Beta (v/c) from Lorentz factor: beta = sqrt(1 - 1/gamma^2).
+///
+/// # Safety
+///
+/// Takes only scalar values; no pointers are dereferenced.
 #[unsafe(no_mangle)]
 pub extern "C" fn rel_beta_from_gamma(gamma: f64) -> f64 {
     if !gamma.is_finite() || gamma < 1.0 {
@@ -244,6 +274,10 @@ pub extern "C" fn rel_beta_from_gamma(gamma: f64) -> f64 {
 }
 
 /// Return the speed of light constant.
+///
+/// # Safety
+///
+/// Takes no arguments; no pointers are dereferenced.
 #[unsafe(no_mangle)]
 pub extern "C" fn rel_speed_of_light() -> f64 {
     SPEED_OF_LIGHT
@@ -254,6 +288,10 @@ pub extern "C" fn rel_speed_of_light() -> f64 {
 // ---------------------------------------------------------------------------
 
 /// Compute the Schwarzschild radius rs = 2GM/c^2.
+///
+/// # Safety
+///
+/// Takes only scalar values; no pointers are dereferenced.
 #[unsafe(no_mangle)]
 pub extern "C" fn rel_schwarzschild_radius(mass: f64, gravitational_constant: f64) -> f64 {
     if !finite_positive(mass) || !finite_positive(gravitational_constant) {
@@ -268,6 +306,12 @@ pub extern "C" fn rel_schwarzschild_radius(mass: f64, gravitational_constant: f6
 }
 
 /// Compute the Schwarzschild metric coefficients at a given radius.
+///
+/// # Safety
+///
+/// `out_metric` must be non-null and point to writable memory for one
+/// `SchwarzschildMetric`. No ownership is transferred; a null pointer fails
+/// with `ERR_NULL_POINTER`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rel_schwarzschild_metric(
     radius: f64,
@@ -315,6 +359,10 @@ pub extern "C" fn rel_schwarzschild_metric(
 ///
 /// Returns the deflection angle in radians. Returns ERR_UNSUPPORTED when the
 /// impact parameter is close to the photon sphere (b < 2.6 * rs).
+///
+/// # Safety
+///
+/// Takes only scalar values; no pointers are dereferenced.
 #[unsafe(no_mangle)]
 pub extern "C" fn rel_light_deflection_angle(
     impact_parameter: f64,
@@ -351,6 +399,12 @@ pub extern "C" fn rel_light_deflection_angle(
 /// V_eff(r) = -GM/r + L^2/(2*r^2) - G*M*L^2/(c^2*r^3)
 ///
 /// The orbiting body's mass m and angular momentum L are parameters.
+///
+/// # Safety
+///
+/// `out_potential` must be non-null and point to writable memory for one
+/// `f64`. No ownership is transferred; a null pointer fails with
+/// `ERR_NULL_POINTER`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rel_effective_potential(
     radius: f64,
@@ -402,6 +456,12 @@ pub extern "C" fn rel_effective_potential(
 ///
 /// Stationary factor: dtau/dt = sqrt(1 - rs/r)
 /// Orbital factor (circular orbit): dtau/dt = sqrt(1 - 3*rs/(2*r))
+///
+/// # Safety
+///
+/// `out_dilation` must be non-null and point to writable memory for one
+/// `GravitationalTimeDilation`. No ownership is transferred; a null pointer
+/// fails with `ERR_NULL_POINTER`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rel_gravitational_time_dilation(
     radius: f64,
@@ -451,6 +511,10 @@ pub extern "C" fn rel_gravitational_time_dilation(
 }
 
 /// Lightweight gravitational time dilation: returns sqrt(1 - rs/r) directly.
+///
+/// # Safety
+///
+/// Takes only scalar values; no pointers are dereferenced.
 #[unsafe(no_mangle)]
 pub extern "C" fn rel_gravitational_time_dilation_simple(
     radius: f64,
@@ -479,6 +543,12 @@ pub extern "C" fn rel_gravitational_time_dilation_simple(
 // ---------------------------------------------------------------------------
 
 /// Compute length contraction: L = L0 / gamma.
+///
+/// # Safety
+///
+/// `out_contraction` must be non-null and point to writable memory for one
+/// `LengthContraction`. No ownership is transferred; a null pointer fails
+/// with `ERR_NULL_POINTER`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rel_length_contraction(
     proper_length: f64,
@@ -531,6 +601,12 @@ pub extern "C" fn rel_length_contraction(
 /// no well-defined gamma from velocity alone — gamma and total energy
 /// are returned as INFINITY, and momentum is set to a unit vector scaled
 /// by INFINITY (direction only).
+///
+/// # Safety
+///
+/// `out_particle` must be non-null and point to writable memory for one
+/// `RelativisticParticle`. No ownership is transferred; a null pointer fails
+/// with `ERR_NULL_POINTER`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rel_particle_properties(
     mass: f64,
@@ -617,6 +693,10 @@ pub extern "C" fn rel_particle_properties(
 /// m0 = sqrt(E^2/c^4 - p^2/c^2)
 ///
 /// Returns NAN for tachyonic states (E^2 < p^2 * c^2).
+///
+/// # Safety
+///
+/// Takes only scalar values; no pointers are dereferenced.
 #[unsafe(no_mangle)]
 pub extern "C" fn rel_invariant_mass(energy: f64, px: f64, py: f64, pz: f64) -> f64 {
     if !energy.is_finite() || energy < 0.0 || !px.is_finite() || !py.is_finite() || !pz.is_finite()

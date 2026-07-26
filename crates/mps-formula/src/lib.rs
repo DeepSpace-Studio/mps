@@ -1,4 +1,3 @@
-#![allow(clippy::missing_safety_doc)]
 // C ABI entry points validate raw pointers at the boundary (length/null checks
 // plus `ffi_guard`), so the safe-fn-raw-pointer lint is noise here — same
 // pattern as mps-core.

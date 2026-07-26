@@ -51,6 +51,12 @@ pub fn ffi_guard<R>(default: R, f: impl FnOnce() -> R) -> R {
 }
 
 /// Current thread's last error code (`ERR_OK` when no error).
+///
+/// # Safety
+///
+/// No pointer parameters; safe to call from any thread. The error slot is
+/// thread-local, so the result reflects only errors reported on the calling
+/// thread.
 #[unsafe(no_mangle)]
 pub extern "C" fn last_error_code() -> u32 {
     ffi_guard(ERR_OK, mps_formula::error::error_code)
@@ -61,12 +67,24 @@ pub extern "C" fn last_error_code() -> u32 {
 /// The returned pointer is borrowed from a thread-local slot owned by Rust;
 /// it is invalidated by the next error-reporting call on the same thread and
 /// must not be freed or stored.
+///
+/// # Safety
+///
+/// No pointer parameters; safe to call from any thread. The returned pointer
+/// is borrowed from a thread-local slot owned by Rust (no ownership transfer):
+/// it remains valid only until the next error-reporting call on the same
+/// thread and must not be freed by the caller.
 #[unsafe(no_mangle)]
 pub extern "C" fn last_error_message() -> *const c_char {
     ffi_guard(std::ptr::null(), mps_formula::error::error_message)
 }
 
 /// Reset the current thread's error slot to `ERR_OK` / "ok".
+///
+/// # Safety
+///
+/// No pointer parameters; safe to call from any thread. Only the calling
+/// thread's error slot is affected.
 #[unsafe(no_mangle)]
 pub extern "C" fn last_error_clear() {
     ffi_guard((), clear_error);
@@ -76,6 +94,13 @@ pub extern "C" fn last_error_clear() {
 ///
 /// Unknown codes yield "ERR_UNKNOWN". The returned pointer refers to a
 /// string with `'static` lifetime owned by Rust; it must not be freed.
+///
+/// # Safety
+///
+/// No pointer parameters; safe to call from any thread with any `code` value
+/// (unknown codes return "ERR_UNKNOWN"). The returned pointer refers to a
+/// `'static` string owned by Rust (no ownership transfer) and must not be
+/// freed by the caller.
 #[unsafe(no_mangle)]
 pub extern "C" fn error_code_name(code: u32) -> *const c_char {
     ffi_guard(std::ptr::null(), || match code {

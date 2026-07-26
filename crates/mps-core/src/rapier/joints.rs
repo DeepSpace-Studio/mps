@@ -158,6 +158,14 @@ impl JointBuilderKind {
     }
 }
 
+/// Creates a joint builder of the given type and returns an owned pointer to it.
+///
+/// # Safety
+///
+/// No pointers are dereferenced. The returned pointer is owned by the caller and
+/// must be released with `joint_builder_destroy` (or consumed by
+/// `world_insert_impulse_joint`). Invalid parameters fail with
+/// `ERR_INVALID_ARGUMENT` and return null.
 #[unsafe(no_mangle)]
 pub extern "C" fn joint_builder_create(
     joint_type: u32,

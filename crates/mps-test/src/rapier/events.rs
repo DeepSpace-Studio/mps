@@ -1,5 +1,9 @@
 #[cfg(test)]
 mod tests {
+    use mps_core::rapier::error::{
+        ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, ERR_OK, ERR_UNSUPPORTED,
+        last_error_code,
+    };
     use mps_core::rapier::events::*;
     use mps_core::rapier::ffi::*;
     use mps_core::rapier::ffi::{BodyStatus, ShapeDesc, Vec3};
@@ -314,6 +318,527 @@ mod tests {
 
         // Unregister with zero handle is no-op
         world_unregister_callback(world, 0);
+
+        mps_core::rapier::world::world_destroy(world);
+    }
+
+    fn valid_coulomb_law() -> CoulombFrictionLaw {
+        CoulombFrictionLaw {
+            static_coefficient: 0.9,
+            dynamic_coefficient: 0.4,
+            velocity_threshold: 0.01,
+            enabled: Bool::TRUE,
+        }
+    }
+
+    fn valid_air_drag_law() -> AirDragLaw {
+        AirDragLaw {
+            fluid_velocity: Vec3::default(),
+            density: 1.225,
+            dynamic_viscosity: 1.8e-5,
+            characteristic_length: 0.1,
+            reference_area: 0.01,
+            drag_coefficient: 0.47,
+            reynolds_stokes_limit: 1.0,
+            enabled: Bool::TRUE,
+        }
+    }
+
+    fn valid_external_force_law() -> ExternalForceLaw {
+        ExternalForceLaw {
+            buoyancy_enabled: Bool::FALSE,
+            fluid_density: 1.0,
+            displaced_volume: 1.0,
+            buoyancy_gravity: Vec3 {
+                x: 0.0,
+                y: -9.81,
+                z: 0.0,
+            },
+            electromagnetic_enabled: Bool::FALSE,
+            charge: 1.0,
+            electric_field: Vec3::default(),
+            magnetic_field: Vec3::default(),
+            elastic_enabled: Bool::FALSE,
+            spring_anchor: Vec3::default(),
+            spring_stiffness: 1.0,
+            spring_damping: 0.1,
+            gravity_enabled: Bool::FALSE,
+            gravity_source: Vec3::default(),
+            gravitational_parameter: 1.0,
+            enabled: Bool::TRUE,
+        }
+    }
+
+    #[test]
+    fn custom_physics_law_setters_reject_null_world() {
+        assert_eq!(
+            world_set_coulomb_friction_law(std::ptr::null_mut(), valid_coulomb_law()),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+
+        assert_eq!(
+            world_set_air_drag_law(std::ptr::null_mut(), valid_air_drag_law()),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+
+        assert_eq!(
+            world_set_external_force_law(std::ptr::null_mut(), valid_external_force_law()),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+
+        assert_eq!(
+            world_set_newton_gravity_law(std::ptr::null_mut(), NewtonGravityLaw::default()),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+    }
+
+    #[test]
+    fn custom_physics_law_getters_reject_null_pointers() {
+        let world = mps_core::rapier::world::world_create(Vec3::default());
+
+        let mut law = CoulombFrictionLaw::default();
+        assert_eq!(
+            world_get_coulomb_friction_law(std::ptr::null(), &mut law),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+        assert_eq!(
+            world_get_coulomb_friction_law(world, std::ptr::null_mut()),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+
+        let mut drag = AirDragLaw::default();
+        assert_eq!(
+            world_get_air_drag_law(std::ptr::null(), &mut drag),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+        assert_eq!(
+            world_get_air_drag_law(world, std::ptr::null_mut()),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+
+        let mut external = ExternalForceLaw::default();
+        assert_eq!(
+            world_get_external_force_law(std::ptr::null(), &mut external),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+        assert_eq!(
+            world_get_external_force_law(world, std::ptr::null_mut()),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+
+        let mut gravity = NewtonGravityLaw::default();
+        assert_eq!(
+            world_get_newton_gravity_law(std::ptr::null(), &mut gravity),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+        assert_eq!(
+            world_get_newton_gravity_law(world, std::ptr::null_mut()),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+
+        let mut report = CustomPhysicsReport::default();
+        assert_eq!(
+            world_get_custom_physics_report(std::ptr::null(), &mut report),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+        assert_eq!(
+            world_get_custom_physics_report(world, std::ptr::null_mut()),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+
+        mps_core::rapier::world::world_destroy(world);
+    }
+
+    #[test]
+    fn coulomb_friction_law_rejects_invalid_coefficients() {
+        let world = mps_core::rapier::world::world_create(Vec3::default());
+
+        let nan_static = CoulombFrictionLaw {
+            static_coefficient: f64::NAN,
+            ..valid_coulomb_law()
+        };
+        assert_eq!(
+            world_set_coulomb_friction_law(world, nan_static),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+
+        let negative_dynamic = CoulombFrictionLaw {
+            dynamic_coefficient: -0.1,
+            ..valid_coulomb_law()
+        };
+        assert_eq!(
+            world_set_coulomb_friction_law(world, negative_dynamic),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+
+        let infinite_threshold = CoulombFrictionLaw {
+            velocity_threshold: f64::INFINITY,
+            ..valid_coulomb_law()
+        };
+        assert_eq!(
+            world_set_coulomb_friction_law_flag(world, infinite_threshold),
+            0
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+
+        // A valid law clears the error slot again.
+        assert_eq!(
+            world_set_coulomb_friction_law(world, valid_coulomb_law()),
+            Bool::TRUE
+        );
+        assert_eq!(last_error_code(), ERR_OK);
+
+        mps_core::rapier::world::world_destroy(world);
+    }
+
+    #[test]
+    fn air_drag_law_rejects_invalid_parameters() {
+        let world = mps_core::rapier::world::world_create(Vec3::default());
+
+        let nan_density = AirDragLaw {
+            density: f64::NAN,
+            ..valid_air_drag_law()
+        };
+        assert_eq!(world_set_air_drag_law(world, nan_density), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+
+        // dynamic_viscosity must be strictly positive.
+        let zero_viscosity = AirDragLaw {
+            dynamic_viscosity: 0.0,
+            ..valid_air_drag_law()
+        };
+        assert_eq!(world_set_air_drag_law(world, zero_viscosity), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+
+        // characteristic_length must be strictly positive.
+        let negative_length = AirDragLaw {
+            characteristic_length: -1.0,
+            ..valid_air_drag_law()
+        };
+        assert_eq!(world_set_air_drag_law_flag(world, negative_length), 0);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+
+        mps_core::rapier::world::world_destroy(world);
+    }
+
+    #[test]
+    fn external_force_law_rejects_invalid_parameters() {
+        let world = mps_core::rapier::world::world_create(Vec3::default());
+
+        let nan_charge = ExternalForceLaw {
+            charge: f64::NAN,
+            ..valid_external_force_law()
+        };
+        assert_eq!(world_set_external_force_law(world, nan_charge), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+
+        let negative_density = ExternalForceLaw {
+            fluid_density: -1.0,
+            ..valid_external_force_law()
+        };
+        assert_eq!(
+            world_set_external_force_law(world, negative_density),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+
+        let negative_stiffness = ExternalForceLaw {
+            spring_stiffness: -0.5,
+            ..valid_external_force_law()
+        };
+        assert_eq!(
+            world_set_external_force_law_flag(world, negative_stiffness),
+            0
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+
+        mps_core::rapier::world::world_destroy(world);
+    }
+
+    #[test]
+    fn newton_gravity_law_rejects_invalid_parameters() {
+        let world = mps_core::rapier::world::world_create(Vec3::default());
+
+        // The default law is valid and accepted.
+        assert_eq!(
+            world_set_newton_gravity_law(world, NewtonGravityLaw::default()),
+            Bool::TRUE
+        );
+        assert_eq!(last_error_code(), ERR_OK);
+
+        // min_distance must be strictly positive.
+        let zero_min_distance = NewtonGravityLaw {
+            min_distance: 0.0,
+            ..NewtonGravityLaw::default()
+        };
+        assert_eq!(
+            world_set_newton_gravity_law(world, zero_min_distance),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+
+        let negative_constant = NewtonGravityLaw {
+            gravitational_constant: -1.0,
+            ..NewtonGravityLaw::default()
+        };
+        assert_eq!(
+            world_set_newton_gravity_law(world, negative_constant),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+
+        let nan_max_distance = NewtonGravityLaw {
+            max_distance: f64::NAN,
+            ..NewtonGravityLaw::default()
+        };
+        assert_eq!(
+            world_set_newton_gravity_law_flag(world, nan_max_distance),
+            0
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+
+        mps_core::rapier::world::world_destroy(world);
+    }
+
+    #[test]
+    fn legacy_event_reads_reject_null_and_invalid_capacity() {
+        let world = mps_core::rapier::world::world_create(Vec3::default());
+        let mut collision_out = vec![CollisionEventRecord::default(); 8];
+        let mut force_out = vec![ContactForceEventRecord::default(); 8];
+
+        // Null world.
+        assert_eq!(
+            world_get_collision_events(std::ptr::null(), collision_out.as_mut_ptr(), 8),
+            0
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+        assert_eq!(
+            world_get_contact_force_events(std::ptr::null(), force_out.as_mut_ptr(), 8),
+            0
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+
+        // Null output buffer.
+        assert_eq!(
+            world_get_collision_events(world, std::ptr::null_mut(), 8),
+            0
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+        assert_eq!(
+            world_get_contact_force_events(world, std::ptr::null_mut(), 8),
+            0
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+
+        // Zero capacity and capacity above MAX_OUTPUT_CAPACITY (1_000_000).
+        assert_eq!(
+            world_get_collision_events(world, collision_out.as_mut_ptr(), 0),
+            0
+        );
+        assert_eq!(last_error_code(), ERR_CAPACITY);
+        assert_eq!(
+            world_get_contact_force_events(world, force_out.as_mut_ptr(), 1_000_001),
+            0
+        );
+        assert_eq!(last_error_code(), ERR_CAPACITY);
+
+        // Null-world scalar reads return failure sentinels.
+        assert_eq!(world_collision_event_count(std::ptr::null()), 0);
+        assert_eq!(world_contact_force_event_count(std::ptr::null()), 0);
+        let record = world_get_collision_event(std::ptr::null(), 0);
+        assert_eq!(record.collider1, 0);
+        let record = world_get_contact_force_event(std::ptr::null(), 0);
+        assert_eq!(record.collider1, 0);
+
+        // Out-of-range index on a valid world returns a zeroed record.
+        let record = world_get_collision_event(world, 42);
+        assert_eq!(record.collider1, 0);
+        assert_eq!(record.started, Bool::FALSE);
+
+        mps_core::rapier::world::world_destroy(world);
+    }
+
+    #[test]
+    fn event_ring_init_rejects_null_world_and_invalid_capacity() {
+        let world = mps_core::rapier::world::world_create(Vec3::default());
+
+        assert_eq!(
+            world_init_collision_event_ring(std::ptr::null_mut(), 64),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+        assert_eq!(
+            world_init_contact_force_event_ring(std::ptr::null_mut(), 64),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+
+        // Capacity 0 and capacity above MAX_OUTPUT_CAPACITY (1_000_000).
+        assert_eq!(world_init_collision_event_ring(world, 0), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_CAPACITY);
+        assert_eq!(
+            world_init_contact_force_event_ring(world, 1_000_001),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_CAPACITY);
+
+        // A valid init still succeeds after the failures.
+        assert_eq!(world_init_collision_event_ring(world, 64), Bool::TRUE);
+        assert_eq!(last_error_code(), ERR_OK);
+
+        mps_core::rapier::world::world_destroy(world);
+    }
+
+    #[test]
+    fn event_ring_drain_rejects_invalid_arguments() {
+        let world = mps_core::rapier::world::world_create(Vec3::default());
+        let mut collision_out = vec![CollisionEventRecord::default(); 8];
+        let mut force_out = vec![ContactForceEventRecord::default(); 8];
+
+        // Null world.
+        assert_eq!(
+            world_drain_collision_event_ring(std::ptr::null(), collision_out.as_mut_ptr(), 8),
+            0
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+        assert_eq!(
+            world_drain_contact_force_event_ring(std::ptr::null(), force_out.as_mut_ptr(), 8),
+            0
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+
+        // Null output, zero capacity and over-limit capacity all report ERR_CAPACITY.
+        assert_eq!(
+            world_drain_collision_event_ring(world, std::ptr::null_mut(), 8),
+            0
+        );
+        assert_eq!(last_error_code(), ERR_CAPACITY);
+        assert_eq!(
+            world_drain_contact_force_event_ring(world, force_out.as_mut_ptr(), 0),
+            0
+        );
+        assert_eq!(last_error_code(), ERR_CAPACITY);
+        assert_eq!(
+            world_drain_collision_event_ring(world, collision_out.as_mut_ptr(), 1_000_001),
+            0
+        );
+        assert_eq!(last_error_code(), ERR_CAPACITY);
+
+        // Draining an uninitialized ring is valid and yields zero events.
+        assert_eq!(
+            world_drain_contact_force_event_ring(world, force_out.as_mut_ptr(), 8),
+            0
+        );
+        assert_eq!(last_error_code(), ERR_OK);
+
+        mps_core::rapier::world::world_destroy(world);
+    }
+
+    #[test]
+    fn event_ring_stats_and_len_reject_null_pointers() {
+        let world = mps_core::rapier::world::world_create(Vec3::default());
+        let mut stats = EventRingBufferStats::default();
+
+        assert_eq!(
+            world_collision_event_ring_stats(std::ptr::null(), &mut stats),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+        assert_eq!(
+            world_collision_event_ring_stats(world, std::ptr::null_mut()),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+
+        assert_eq!(
+            world_contact_force_event_ring_stats(std::ptr::null(), &mut stats),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+        assert_eq!(
+            world_contact_force_event_ring_stats(world, std::ptr::null_mut()),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+
+        // Null-world ring lengths return 0.
+        assert_eq!(world_collision_event_ring_len(std::ptr::null()), 0);
+        assert_eq!(world_contact_force_event_ring_len(std::ptr::null()), 0);
+
+        mps_core::rapier::world::world_destroy(world);
+    }
+
+    #[test]
+    fn callback_registration_rejects_null_world() {
+        assert_eq!(
+            world_register_collision_callback(std::ptr::null_mut(), 0, 0),
+            0
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+        assert_eq!(
+            world_register_contact_force_callback(std::ptr::null_mut(), 0, 0),
+            0
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+
+        // Unregistering on a null world is a no-op and must not crash.
+        world_unregister_callback(std::ptr::null_mut(), 1);
+    }
+
+    #[test]
+    fn dispatch_mode_rejects_invalid_value() {
+        let world = mps_core::rapier::world::world_create(Vec3::default());
+
+        assert_eq!(
+            world_set_event_dispatch_mode(std::ptr::null_mut(), 0),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+
+        assert_eq!(world_set_event_dispatch_mode(world, 3), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        assert_eq!(world_set_event_dispatch_mode(world, u32::MAX), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+
+        // All documented modes are accepted.
+        for mode in 0..=2 {
+            assert_eq!(world_set_event_dispatch_mode(world, mode), Bool::TRUE);
+            assert_eq!(last_error_code(), ERR_OK);
+        }
+
+        mps_core::rapier::world::world_destroy(world);
+    }
+
+    #[test]
+    fn disabled_pair_filter_callbacks_report_unsupported() {
+        let world = mps_core::rapier::world::world_create(Vec3::default());
+
+        world_set_contact_pair_filter_callback(std::ptr::null_mut(), 0, 0);
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+        world_set_intersection_pair_filter_callback(std::ptr::null_mut(), 0, 0);
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+
+        // External pair-filter callbacks are disabled for ABI safety.
+        world_set_contact_pair_filter_callback(world, 0, 0);
+        assert_eq!(last_error_code(), ERR_UNSUPPORTED);
+        world_set_intersection_pair_filter_callback(world, 0, 0);
+        assert_eq!(last_error_code(), ERR_UNSUPPORTED);
 
         mps_core::rapier::world::world_destroy(world);
     }

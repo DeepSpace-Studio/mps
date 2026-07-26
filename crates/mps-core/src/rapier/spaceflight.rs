@@ -58,6 +58,12 @@ fn clamp_unit(value: f64) -> f64 {
     value.clamp(-1.0, 1.0)
 }
 
+/// Computes the orbital period from the gravitational parameter and semi-major axis
+/// (Kepler's third law).
+///
+/// # Safety
+/// This function takes no pointers and transfers no ownership; it is safe to call with
+/// any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn space_kepler_period(mu: f64, semi_major_axis: f64) -> f64 {
     ffi_guard(0.0, || {
@@ -69,6 +75,11 @@ pub extern "C" fn space_kepler_period(mu: f64, semi_major_axis: f64) -> f64 {
     })
 }
 
+/// Computes the semi-major axis from the gravitational parameter and orbital period.
+///
+/// # Safety
+/// This function takes no pointers and transfers no ownership; it is safe to call with
+/// any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn space_kepler_semi_major_axis(mu: f64, period: f64) -> f64 {
     ffi_guard(0.0, || {
@@ -550,6 +561,11 @@ pub extern "C" fn space_cw_derivative(
     })
 }
 
+/// Computes the time of flight for an elliptic Lambert arc.
+///
+/// # Safety
+/// This function takes no pointers and transfers no ownership; it is safe to call with
+/// any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn space_lambert_time_elliptic(
     mu: f64,
@@ -610,6 +626,11 @@ pub extern "C" fn space_dh_transform(
     })
 }
 
+/// Computes the first (base) joint angle of a planar arm from the wrist position.
+///
+/// # Safety
+/// This function takes no pointers and transfers no ownership; it is safe to call with
+/// any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn space_arm_first_joint_inverse(wrist_x: f64, wrist_y: f64) -> f64 {
     ffi_guard(0.0, || {
@@ -621,6 +642,11 @@ pub extern "C" fn space_arm_first_joint_inverse(wrist_x: f64, wrist_y: f64) -> f
     })
 }
 
+/// Computes the third joint angle of a planar arm via the law of cosines.
+///
+/// # Safety
+/// This function takes no pointers and transfers no ownership; it is safe to call with
+/// any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn space_arm_third_joint_angle(
     planar_radius: f64,
@@ -830,6 +856,11 @@ pub extern "C" fn space_friis_link(
     })
 }
 
+/// Converts a frequency to the corresponding free-space wavelength.
+///
+/// # Safety
+/// This function takes no pointers and transfers no ownership; it is safe to call with
+/// any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn space_friis_wavelength_from_frequency(frequency: f64) -> f64 {
     ffi_guard(0.0, || {
@@ -841,6 +872,11 @@ pub extern "C" fn space_friis_wavelength_from_frequency(frequency: f64) -> f64 {
     })
 }
 
+/// Computes the Tsiolkovsky rocket equation delta-v.
+///
+/// # Safety
+/// This function takes no pointers and transfers no ownership; it is safe to call with
+/// any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn space_tsiolkovsky_delta_v(
     specific_impulse: f64,
@@ -896,6 +932,11 @@ pub extern "C" fn space_hohmann_transfer(
     })
 }
 
+/// Computes atmospheric density using the exponential scale-height model.
+///
+/// # Safety
+/// This function takes no pointers and transfers no ownership; it is safe to call with
+/// any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn space_atmospheric_density_scale_height(
     reference_density: f64,
@@ -1139,6 +1180,11 @@ pub extern "C" fn space_ekf_predict_scalar(
     })
 }
 
+/// Computes the scalar Kalman gain.
+///
+/// # Safety
+/// This function takes no pointers and transfers no ownership; it is safe to call with
+/// any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn space_ekf_gain_scalar(
     covariance: f64,
@@ -1268,6 +1314,11 @@ pub extern "C" fn space_gnss_pseudorange(
     })
 }
 
+/// Computes the GNSS double-difference carrier phase observable in cycles.
+///
+/// # Safety
+/// This function takes no pointers and transfers no ownership; it is safe to call with
+/// any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn space_gnss_double_difference_carrier_phase(
     range_rover_sat_a: f64,
@@ -1296,6 +1347,11 @@ pub extern "C" fn space_gnss_double_difference_carrier_phase(
     })
 }
 
+/// Computes a structural natural frequency from stiffness, mass, and a mode factor.
+///
+/// # Safety
+/// This function takes no pointers and transfers no ownership; it is safe to call with
+/// any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn space_structural_natural_frequency(
     stiffness: f64,
@@ -1345,6 +1401,11 @@ pub extern "C" fn space_contact_force_hunt_crossley(
     })
 }
 
+/// Computes the absorbed radiation dose including a quality factor.
+///
+/// # Safety
+/// This function takes no pointers and transfers no ownership; it is safe to call with
+/// any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn space_radiation_absorbed_dose(
     energy_joules: f64,
@@ -1363,6 +1424,11 @@ pub extern "C" fn space_radiation_absorbed_dose(
     })
 }
 
+/// Computes the semi-major axis decay rate due to atmospheric drag.
+///
+/// # Safety
+/// This function takes no pointers and transfers no ownership; it is safe to call with
+/// any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn space_semi_major_axis_decay_rate(
     semi_major_axis: f64,
@@ -1389,6 +1455,11 @@ pub extern "C" fn space_semi_major_axis_decay_rate(
     })
 }
 
+/// Sums the evaporator, vapor, condenser, and wick thermal resistances of a heat pipe.
+///
+/// # Safety
+/// This function takes no pointers and transfers no ownership; it is safe to call with
+/// any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn space_heat_pipe_thermal_resistance(
     evaporator_resistance: f64,
@@ -1831,6 +1902,11 @@ pub extern "C" fn space_mass_properties_two_body(
     })
 }
 
+/// Computes the kinetic energy a docking buffer must absorb, scaled by its efficiency.
+///
+/// # Safety
+/// This function takes no pointers and transfers no ownership; it is safe to call with
+/// any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn space_docking_buffer_energy(
     relative_speed: f64,
@@ -2280,6 +2356,11 @@ pub extern "C" fn space_sgp4_j2_secular_rates(
     })
 }
 
+/// Computes a clamped closing-speed command for a docking glideslope.
+///
+/// # Safety
+/// This function takes no pointers and transfers no ownership; it is safe to call with
+/// any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn space_docking_glideslope_command(
     range: f64,
@@ -2295,6 +2376,11 @@ pub extern "C" fn space_docking_glideslope_command(
     })
 }
 
+/// Computes the Sagnac phase rate of a ring interferometer.
+///
+/// # Safety
+/// This function takes no pointers and transfers no ownership; it is safe to call with
+/// any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn space_sagnac_phase_rate(area: f64, angular_rate: f64, wavelength: f64) -> f64 {
     ffi_guard(0.0, || {
@@ -2306,6 +2392,11 @@ pub extern "C" fn space_sagnac_phase_rate(area: f64, angular_rate: f64, waveleng
     })
 }
 
+/// Computes the PD control torque for a solar array drive.
+///
+/// # Safety
+/// This function takes no pointers and transfers no ownership; it is safe to call with
+/// any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn space_solar_array_pd_torque(
     angle_error: f64,
@@ -2419,6 +2510,11 @@ pub extern "C" fn space_radiator_power(
     })
 }
 
+/// Computes the critical projectile diameter a Whipple shield can defeat.
+///
+/// # Safety
+/// This function takes no pointers and transfers no ownership; it is safe to call with
+/// any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn space_whipple_critical_projectile_diameter(
     bumper_thickness: f64,
@@ -2450,6 +2546,11 @@ pub extern "C" fn space_whipple_critical_projectile_diameter(
     })
 }
 
+/// Computes the net spacecraft surface charging current balance.
+///
+/// # Safety
+/// This function takes no pointers and transfers no ownership; it is safe to call with
+/// any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn space_surface_charging_current_balance(
     photo_current: f64,

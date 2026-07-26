@@ -215,6 +215,15 @@ Bool aero_estimate_surface_force(Vec3 body_linvel,
                                  AeroSurface surface,
                                  AeroForceReport *out_report);
 
+/**
+ * Creates a new AnvilKit app state and returns an opaque handle to it.
+ *
+ * # Safety
+ *
+ * Takes no pointers and cannot fail on input; the returned handle is owned by
+ * the caller and must eventually be passed to `anvilkit_app_destroy` (or
+ * leaked).
+ */
 struct AnvilKitAppHandle *anvilkit_app_create(void);
 
 /**
@@ -410,6 +419,15 @@ Bool material_stress_strain_linear(MaterialProperties material,
                                    double delta_temperature,
                                    StressStrainReport *out_report);
 
+/**
+ * Computes the post-collision relative normal speed from restitution.
+ *
+ * # Safety
+ *
+ * All parameters are passed by value; this function performs no memory
+ * access and is always memory-safe. Non-finite inputs or a negative
+ * `restitution` yield `NaN`.
+ */
 double material_elastic_collision_relative_speed(double relative_normal_speed, double restitution);
 
 /**
@@ -709,14 +727,56 @@ uint32_t query_intersect_spherical_shell_all(const struct WorldHandle *world,
                                              ColliderHandleRaw *out_handles,
                                              uint32_t capacity);
 
+/**
+ * Creates a collider builder from a generic shape type and packed shape data.
+ *
+ * # Safety
+ *
+ * All parameters are passed by value; no raw pointers are dereferenced.
+ * An invalid shape descriptor fails with `ERR_INVALID_ARGUMENT` and returns null.
+ */
 struct ColliderBuilderHandle *collider_builder_create(uint32_t shape_type, Vec3 shape_data);
 
+/**
+ * Creates a halfspace collider builder with the given plane normal.
+ *
+ * # Safety
+ *
+ * `normal` is passed by value; no raw pointers are dereferenced.
+ * A non-finite normal fails with `ERR_INVALID_ARGUMENT` and returns null.
+ */
 struct ColliderBuilderHandle *collider_builder_create_halfspace(Vec3 normal);
 
+/**
+ * Creates a collider builder from an extended shape descriptor.
+ *
+ * # Safety
+ *
+ * `shape_desc` is passed by value; no raw pointers are dereferenced.
+ * An invalid shape descriptor fails with `ERR_INVALID_ARGUMENT` and returns null.
+ */
 struct ColliderBuilderHandle *collider_builder_create_ex(ShapeDesc shape_desc);
 
+/**
+ * Creates an oriented box (cuboid) collider builder from an OBB descriptor.
+ *
+ * # Safety
+ *
+ * `obb` is passed by value; no raw pointers are dereferenced.
+ * A non-finite center/rotation or non-positive half extents fail with
+ * `ERR_INVALID_ARGUMENT` and return null.
+ */
 struct ColliderBuilderHandle *collider_builder_create_obb(Obb obb);
 
+/**
+ * Creates a ball collider builder from a sphere descriptor.
+ *
+ * # Safety
+ *
+ * `sphere` is passed by value; no raw pointers are dereferenced.
+ * A non-finite center or a non-finite/non-positive radius fails with
+ * `ERR_INVALID_ARGUMENT` and returns null.
+ */
 struct ColliderBuilderHandle *collider_builder_create_sphere(Sphere sphere);
 
 /**
@@ -745,8 +805,26 @@ struct ColliderBuilderHandle *collider_builder_create_convex_hull(const double *
 struct ColliderBuilderHandle *collider_builder_create_point_cloud_bounds(const double *points_xyz,
                                                                          uint32_t point_count);
 
+/**
+ * Creates a collider builder covering the union of two AABBs.
+ *
+ * # Safety
+ *
+ * `first` and `second` are passed by value; no raw pointers are dereferenced.
+ * An invalid AABB (non-finite or `mins > maxs`) fails with
+ * `ERR_INVALID_ARGUMENT` and returns null.
+ */
 struct ColliderBuilderHandle *collider_builder_create_double_bv(AabbDesc first, AabbDesc second);
 
+/**
+ * Creates a convex-hull collider builder from a skewed box (center + 3 axis vectors).
+ *
+ * # Safety
+ *
+ * All parameters are passed by value; no raw pointers are dereferenced.
+ * Non-finite vectors or near-zero-length axes fail with `ERR_INVALID_ARGUMENT`
+ * and return null.
+ */
 struct ColliderBuilderHandle *collider_builder_create_skewed_obb(Vec3 center,
                                                                  Vec3 axis_x,
                                                                  Vec3 axis_y,
@@ -1246,6 +1324,15 @@ uint32_t query_intersect_aabb_rigid_bodies(const struct WorldHandle *world,
                                            RigidBodyHandleRaw *out_handles,
                                            uint32_t capacity);
 
+/**
+ * Creates a new character controller and returns an opaque handle to it.
+ *
+ * # Safety
+ *
+ * The returned pointer is owned by Rust and must be passed to
+ * `character_controller_destroy` exactly once. Returns null on internal
+ * failure (see `last_error_code`).
+ */
 struct CharacterControllerHandle *character_controller_create(void);
 
 /**
@@ -1492,6 +1579,12 @@ struct ColliderBuilderHandle *collider_builder_create_fdh(const double *points_x
 
 /**
  * Current thread's last error code (`ERR_OK` when no error).
+ *
+ * # Safety
+ *
+ * No pointer parameters; safe to call from any thread. The error slot is
+ * thread-local, so the result reflects only errors reported on the calling
+ * thread.
  */
 uint32_t last_error_code(void);
 
@@ -1501,11 +1594,23 @@ uint32_t last_error_code(void);
  * The returned pointer is borrowed from a thread-local slot owned by Rust;
  * it is invalidated by the next error-reporting call on the same thread and
  * must not be freed or stored.
+ *
+ * # Safety
+ *
+ * No pointer parameters; safe to call from any thread. The returned pointer
+ * is borrowed from a thread-local slot owned by Rust (no ownership transfer):
+ * it remains valid only until the next error-reporting call on the same
+ * thread and must not be freed by the caller.
  */
 const char *last_error_message(void);
 
 /**
  * Reset the current thread's error slot to `ERR_OK` / "ok".
+ *
+ * # Safety
+ *
+ * No pointer parameters; safe to call from any thread. Only the calling
+ * thread's error slot is affected.
  */
 void last_error_clear(void);
 
@@ -1514,6 +1619,13 @@ void last_error_clear(void);
  *
  * Unknown codes yield "ERR_UNKNOWN". The returned pointer refers to a
  * string with `'static` lifetime owned by Rust; it must not be freed.
+ *
+ * # Safety
+ *
+ * No pointer parameters; safe to call from any thread with any `code` value
+ * (unknown codes return "ERR_UNKNOWN"). The returned pointer refers to a
+ * `'static` string owned by Rust (no ownership transfer) and must not be
+ * freed by the caller.
  */
 const char *error_code_name(uint32_t code);
 
@@ -1821,9 +1933,9 @@ void world_clear_intersection_pair_filter_callback(struct WorldHandle *world);
  *
  * `world` must be a valid world pointer returned by `world_create`.
  * Init-time only: must be called before `world_step` runs on any thread and
- * with no concurrent event-ring FFI calls on the same world.  Re-initializing
- * the ring while the physics thread produces events is undefined behavior
- * (the producer cache is an `UnsafeCell`).
+ * with no concurrent event-ring FFI calls on the same world.  The producer
+ * cache is an `UnsafeCell`; violations of this contract are caught at runtime
+ * and fail with `ERR_UNSUPPORTED` (see the `events` module docs).
  */
 Bool world_init_collision_event_ring(struct WorldHandle *world, uint32_t capacity);
 
@@ -1931,8 +2043,8 @@ void world_clear_event_rings(struct WorldHandle *world);
  * exact `CollisionEventFn` signature that stays valid while registered.
  * Init-time only: must be called before `world_step` runs on any thread and
  * with no concurrent event-ring/callback FFI calls on the same world.  The
- * producer cache is an `UnsafeCell`; concurrent registration while the
- * physics thread dispatches events is undefined behavior.
+ * producer cache is an `UnsafeCell`; violations of this contract are caught
+ * at runtime and fail with `ERR_UNSUPPORTED` (see the `events` module docs).
  */
 EventCallbackHandle world_register_collision_callback(struct WorldHandle *world,
                                                       uintptr_t callback,
@@ -2031,6 +2143,14 @@ Bool fluid_navier_stokes_simplified_step(Vec3 velocity,
                                          double dt,
                                          NavierStokesReport *out_report);
 
+/**
+ * Evaluates the SPH poly6 kernel for a distance and smoothing radius.
+ *
+ * # Safety
+ *
+ * This function takes no pointers; all inputs are passed by value and there
+ * are no safety requirements on the caller.
+ */
 double fluid_sph_poly6_kernel(double distance, double smoothing_radius);
 
 /**
@@ -2040,6 +2160,15 @@ double fluid_sph_poly6_kernel(double distance, double smoothing_radius);
  */
 Bool fluid_sph_spiky_gradient(Vec3 offset, double smoothing_radius, Vec3 *out_gradient);
 
+/**
+ * Evaluates the Laplacian of the SPH viscosity kernel for a distance and
+ * smoothing radius.
+ *
+ * # Safety
+ *
+ * This function takes no pointers; all inputs are passed by value and there
+ * are no safety requirements on the caller.
+ */
 double fluid_sph_viscosity_laplacian(double distance, double smoothing_radius);
 
 /**
@@ -2072,6 +2201,14 @@ Bool fluid_sph_estimate_forces(SphParticle particle,
                                double surface_tension,
                                SphForceReport *out_report);
 
+/**
+ * Computes the static pressure from a Bernoulli-equation total pressure.
+ *
+ * # Safety
+ *
+ * This function takes no pointers; all inputs are passed by value and there
+ * are no safety requirements on the caller.
+ */
 double fluid_bernoulli_pressure(double total_pressure,
                                 double density,
                                 double velocity,
@@ -2176,6 +2313,16 @@ Bool world_replace_body_with_fracture_fragments(struct WorldHandle *world,
                                                 uint32_t capacity,
                                                 FractureReplaceReport *out_report);
 
+/**
+ * Creates a joint builder of the given type and returns an owned pointer to it.
+ *
+ * # Safety
+ *
+ * No pointers are dereferenced. The returned pointer is owned by the caller and
+ * must be released with `joint_builder_destroy` (or consumed by
+ * `world_insert_impulse_joint`). Invalid parameters fail with
+ * `ERR_INVALID_ARGUMENT` and return null.
+ */
 struct JointBuilderHandle *joint_builder_create(uint32_t joint_type,
                                                 Vec3 axis_or_primary,
                                                 double b,
@@ -2271,6 +2418,16 @@ Bool world_remove_impulse_joint(struct WorldHandle *world,
                                 ImpulseJointHandleRaw handle,
                                 Bool wake_up);
 
+/**
+ * Computes the Lennard-Jones potential at `distance` for well depth `epsilon`
+ * and size parameter `sigma`; returns `NaN` with `ERR_INVALID_ARGUMENT` on
+ * invalid parameters.
+ *
+ * # Safety
+ *
+ * This function takes no pointers and transfers no ownership; it is always
+ * safe to call.
+ */
 double molecular_lennard_jones_potential(double distance, double epsilon, double sigma);
 
 /**
@@ -2284,6 +2441,15 @@ Bool molecular_lennard_jones_force(Vec3 displacement,
                                    double softening,
                                    Vec3 *out_force);
 
+/**
+ * Computes the Coulomb potential between `charge_a` and `charge_b` at
+ * `distance`; returns `NaN` with `ERR_INVALID_ARGUMENT` on invalid parameters.
+ *
+ * # Safety
+ *
+ * This function takes no pointers and transfers no ownership; it is always
+ * safe to call.
+ */
 double molecular_coulomb_potential(double distance,
                                    double charge_a,
                                    double charge_b,
@@ -2342,10 +2508,22 @@ uint8_t molecular_apply_pair_forces_flag(struct WorldHandle *world,
                                          Bool wake_up,
                                          MolecularPairReport *out_report);
 
+/**
+ * Returns the vacuum Coulomb constant (Coulomb's constant in vacuum).
+ *
+ * # Safety
+ *
+ * This function takes no pointers and transfers no ownership; it is always
+ * safe to call.
+ */
 double molecular_vacuum_coulomb_constant(void);
 
 /**
  * Return the number of weights the network layout requires.
+ *
+ * # Safety
+ *
+ * This function takes no pointers; any `u32` inputs are safe to pass.
  */
 uint32_t neural_bounds_required_weight_count(uint32_t hidden_width, uint32_t hidden_layers);
 
@@ -2691,6 +2869,14 @@ ColliderHandleRaw query_cast_shape_out(const struct WorldHandle *world,
                                        QueryFilterDesc filter,
                                        ShapeCastHit *out_hit);
 
+/**
+ * Creates a rigid body builder for the given body status.
+ *
+ * # Safety
+ *
+ * Takes no pointers. The returned pointer is owned by the caller and must be released with
+ * `rigid_body_builder_build` or `rigid_body_builder_destroy`.
+ */
 struct RigidBodyBuilderHandle *rigid_body_builder_create(uint32_t status);
 
 /**
@@ -3318,8 +3504,23 @@ uint32_t rtree_query_aabb(struct RTreeHandle *tree,
                           uint64_t *out_ids,
                           uint32_t capacity);
 
+/**
+ * Computes the orbital period from the gravitational parameter and semi-major axis
+ * (Kepler's third law).
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
 double space_kepler_period(double mu, double semi_major_axis);
 
+/**
+ * Computes the semi-major axis from the gravitational parameter and orbital period.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
 double space_kepler_semi_major_axis(double mu, double period);
 
 /**
@@ -3430,6 +3631,13 @@ uint8_t space_apply_cmg_torque_to_body_flag(struct WorldHandle *world,
  */
 Bool space_cw_derivative(CwState state, double mean_motion, CwDerivative *out_derivative);
 
+/**
+ * Computes the time of flight for an elliptic Lambert arc.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
 double space_lambert_time_elliptic(double mu,
                                    double semi_major_axis,
                                    double alpha,
@@ -3442,8 +3650,22 @@ double space_lambert_time_elliptic(double mu,
  */
 Bool space_dh_transform(double theta, double d, double a, double alpha, DhTransform *out_transform);
 
+/**
+ * Computes the first (base) joint angle of a planar arm from the wrist position.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
 double space_arm_first_joint_inverse(double wrist_x, double wrist_y);
 
+/**
+ * Computes the third joint angle of a planar arm via the law of cosines.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
 double space_arm_third_joint_angle(double planar_radius,
                                    double vertical_offset,
                                    double link2,
@@ -3505,8 +3727,22 @@ Bool space_friis_link(double transmit_power,
                       double system_loss,
                       FriisLink *out_link);
 
+/**
+ * Converts a frequency to the corresponding free-space wavelength.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
 double space_friis_wavelength_from_frequency(double frequency);
 
+/**
+ * Computes the Tsiolkovsky rocket equation delta-v.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
 double space_tsiolkovsky_delta_v(double specific_impulse,
                                  double standard_gravity,
                                  double initial_mass,
@@ -3521,6 +3757,13 @@ Bool space_hohmann_transfer(double mu,
                             double radius2,
                             HohmannTransfer *out_transfer);
 
+/**
+ * Computes atmospheric density using the exponential scale-height model.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
 double space_atmospheric_density_scale_height(double reference_density,
                                               double altitude,
                                               double reference_altitude,
@@ -3589,6 +3832,13 @@ Bool space_ekf_predict_scalar(double state,
                               double process_noise,
                               ScalarKalman *out_prediction);
 
+/**
+ * Computes the scalar Kalman gain.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
 double space_ekf_gain_scalar(double covariance,
                              double measurement_jacobian,
                              double measurement_noise);
@@ -3627,6 +3877,13 @@ Bool space_gnss_pseudorange(Vec3 receiver,
                             double troposphere_delay,
                             GnssObservation *out_observation);
 
+/**
+ * Computes the GNSS double-difference carrier phase observable in cycles.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
 double space_gnss_double_difference_carrier_phase(double range_rover_sat_a,
                                                   double range_rover_sat_b,
                                                   double range_base_sat_a,
@@ -3634,6 +3891,13 @@ double space_gnss_double_difference_carrier_phase(double range_rover_sat_a,
                                                   double wavelength,
                                                   double ambiguity);
 
+/**
+ * Computes a structural natural frequency from stiffness, mass, and a mode factor.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
 double space_structural_natural_frequency(double stiffness, double mass, double mode_factor);
 
 /**
@@ -3647,8 +3911,22 @@ Bool space_contact_force_hunt_crossley(double penetration,
                                        double exponent,
                                        ContactForceModel *out_force);
 
+/**
+ * Computes the absorbed radiation dose including a quality factor.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
 double space_radiation_absorbed_dose(double energy_joules, double mass_kg, double quality_factor);
 
+/**
+ * Computes the semi-major axis decay rate due to atmospheric drag.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
 double space_semi_major_axis_decay_rate(double semi_major_axis,
                                         double density,
                                         double drag_coefficient,
@@ -3656,6 +3934,13 @@ double space_semi_major_axis_decay_rate(double semi_major_axis,
                                         double mass,
                                         double mu);
 
+/**
+ * Sums the evaporator, vapor, condenser, and wick thermal resistances of a heat pipe.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
 double space_heat_pipe_thermal_resistance(double evaporator_resistance,
                                           double vapor_resistance,
                                           double condenser_resistance,
@@ -3781,6 +4066,13 @@ Bool space_mass_properties_two_body(double mass1,
                                     Vec3 inertia2_diag,
                                     MassProperties *out_properties);
 
+/**
+ * Computes the kinetic energy a docking buffer must absorb, scaled by its efficiency.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
 double space_docking_buffer_energy(double relative_speed,
                                    double reduced_mass,
                                    double stroke,
@@ -3922,12 +4214,33 @@ Bool space_sgp4_j2_secular_rates(double semi_major_axis,
                                  double j2,
                                  Sgp4SecularRates *out_rates);
 
+/**
+ * Computes a clamped closing-speed command for a docking glideslope.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
 double space_docking_glideslope_command(double range,
                                         double desired_slope,
                                         double closing_speed_limit);
 
+/**
+ * Computes the Sagnac phase rate of a ring interferometer.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
 double space_sagnac_phase_rate(double area, double angular_rate, double wavelength);
 
+/**
+ * Computes the PD control torque for a solar array drive.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
 double space_solar_array_pd_torque(double angle_error, double rate_error, double kp, double kd);
 
 /**
@@ -3959,12 +4272,26 @@ Bool space_radiator_power(double area,
                           double absorbed_power,
                           RadiatorPower *out_power);
 
+/**
+ * Computes the critical projectile diameter a Whipple shield can defeat.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
 double space_whipple_critical_projectile_diameter(double bumper_thickness,
                                                   double bumper_density,
                                                   double projectile_density,
                                                   double impact_velocity,
                                                   double standoff);
 
+/**
+ * Computes the net spacecraft surface charging current balance.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
 double space_surface_charging_current_balance(double photo_current,
                                               double secondary_current,
                                               double backscatter_current,
@@ -4048,6 +4375,11 @@ Bool terrain_lunar_mascon_gravity(Vec3 position, Vec3 *out_acceleration);
 
 /**
  * Get the number of built-in lunar mascons.
+ *
+ * # Safety
+ *
+ * This function takes no pointers and performs no memory access; it is safe
+ * to call from any context.
  */
 uint32_t terrain_lunar_mascon_count(void);
 
@@ -4187,12 +4519,34 @@ VoxelBuildStats voxel_build_stats(const uint8_t *voxels,
                                   Vec3 origin,
                                   VoxelColliderOptions options);
 
+/**
+ * Computes build statistics for a voxelized AABB without building a collider.
+ *
+ * # Safety
+ *
+ * All arguments are passed by value; no pointers are dereferenced. `aabb`
+ * must have finite mins/maxs with `mins < maxs` on every axis, and each
+ * voxel size must be finite and positive; violations fail with
+ * `ERR_INVALID_ARGUMENT` (or `ERR_CAPACITY` when the grid exceeds the cell
+ * limit) and return a zeroed `VoxelBuildStats`.
+ */
 VoxelBuildStats voxel_aabb_build_stats(AabbDesc aabb,
                                        double voxel_size_x,
                                        double voxel_size_y,
                                        double voxel_size_z,
                                        VoxelColliderOptions options);
 
+/**
+ * Computes build statistics for a voxelized OBB without building a collider.
+ *
+ * # Safety
+ *
+ * All arguments are passed by value; no pointers are dereferenced. `obb`
+ * must have a finite center and rotation and finite, positive half extents,
+ * and each voxel size must be finite and positive; violations fail with
+ * `ERR_INVALID_ARGUMENT` (or `ERR_CAPACITY` when the grid exceeds the cell
+ * limit) and return a zeroed `VoxelBuildStats`.
+ */
 VoxelBuildStats voxel_obb_build_stats(Obb obb,
                                       double voxel_size_x,
                                       double voxel_size_y,
@@ -4223,24 +4577,62 @@ void voxel_obb_build_stats_out(Obb obb,
                                VoxelColliderOptions options,
                                VoxelBuildStats *out_stats);
 
+/**
+ * Builds a collider builder from an AABB voxelized at the given voxel size.
+ *
+ * # Safety
+ *
+ * All arguments are passed by value; no pointers are dereferenced. `aabb`
+ * must have finite mins/maxs with `mins < maxs` on every axis, and each
+ * voxel size must be finite and positive; violations fail with
+ * `ERR_INVALID_ARGUMENT` (or `ERR_CAPACITY` when the grid exceeds the cell
+ * limit) and return null. The returned builder handle is owned by the
+ * caller and must be released through the collider-builder ABI.
+ */
 struct ColliderBuilderHandle *collider_builder_create_voxel_aabb(AabbDesc aabb,
                                                                  double voxel_size_x,
                                                                  double voxel_size_y,
                                                                  double voxel_size_z,
                                                                  VoxelColliderOptions options);
 
+/**
+ * Builds a collider builder from a voxelized AABB with default options.
+ *
+ * # Safety
+ *
+ * Same argument contract as `collider_builder_create_voxel_aabb`.
+ */
 struct ColliderBuilderHandle *collider_builder_create_voxel_aabb_auto(AabbDesc aabb,
                                                                       double voxel_size_x,
                                                                       double voxel_size_y,
                                                                       double voxel_size_z,
                                                                       Bool dynamic_body);
 
+/**
+ * Builds a collider builder from an OBB voxelized at the given voxel size.
+ *
+ * # Safety
+ *
+ * All arguments are passed by value; no pointers are dereferenced. `obb`
+ * must have a finite center and rotation and finite, positive half extents,
+ * and each voxel size must be finite and positive; violations fail with
+ * `ERR_INVALID_ARGUMENT` (or `ERR_CAPACITY` when the grid exceeds the cell
+ * limit) and return null. The returned builder handle is owned by the
+ * caller and must be released through the collider-builder ABI.
+ */
 struct ColliderBuilderHandle *collider_builder_create_voxel_obb(Obb obb,
                                                                 double voxel_size_x,
                                                                 double voxel_size_y,
                                                                 double voxel_size_z,
                                                                 VoxelColliderOptions options);
 
+/**
+ * Builds a collider builder from a voxelized OBB with default options.
+ *
+ * # Safety
+ *
+ * Same argument contract as `collider_builder_create_voxel_obb`.
+ */
 struct ColliderBuilderHandle *collider_builder_create_voxel_obb_auto(Obb obb,
                                                                      double voxel_size_x,
                                                                      double voxel_size_y,
@@ -4324,6 +4716,10 @@ RigidBodyHandleRaw world_insert_dynamic_voxel_obb(struct WorldHandle *world,
  * Create a new physics world.  Non-finite gravity components fall back to zero.
  *
  * The returned pointer is owned by Rust; release it with `world_destroy`.
+ *
+ * # Safety
+ * No pointer arguments are dereferenced.  The returned pointer is owned by
+ * Rust and must be released exactly once with `world_destroy`.
  */
 struct WorldHandle *world_create(Vec3 gravity);
 

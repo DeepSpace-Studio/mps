@@ -524,6 +524,12 @@ pub fn zonal_harmonics_acceleration(
 /// `out_acceleration` — output acceleration vector (m/s²)
 ///
 /// Returns Bool::TRUE on success.
+///
+/// # Safety
+///
+/// `out_acceleration` must be non-null and point to writable memory for one
+/// `Vec3`. No ownership is transferred. A null output pointer or a non-finite
+/// `position` fails with `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn gravity_spherical_harmonics(
     position: Vec3,
@@ -553,6 +559,12 @@ pub extern "C" fn gravity_spherical_harmonics(
 }
 
 /// Compute ellipsoid gravitational acceleration.
+///
+/// # Safety
+///
+/// `out_acceleration` must be non-null and point to writable memory for one
+/// `Vec3`. No ownership is transferred. A null output pointer or a non-finite
+/// `position` fails with `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn gravity_ellipsoid(
     position: Vec3,
@@ -583,6 +595,14 @@ pub extern "C" fn gravity_ellipsoid(
 /// Compute zonal-harmonic (J2–J6) acceleration.
 ///
 /// `jn` points to an array of `jn_count` zonal coefficients (J2, J3, …).
+///
+/// # Safety
+///
+/// `jn` must be non-null and point to readable memory for `jn_count` `f64`
+/// elements; `out_acceleration` must be non-null and point to writable memory
+/// for one `Vec3`. No ownership is transferred. A null pointer, `jn_count == 0`,
+/// non-finite `position`, or non-positive `gm` / `equatorial_radius` fails with
+/// `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn gravity_zonal_harmonics(
     position: Vec3,
@@ -613,6 +633,14 @@ pub extern "C" fn gravity_zonal_harmonics(
 }
 
 /// Compute quadrupole tensor acceleration.
+///
+/// # Safety
+///
+/// `quadrupole` must be non-null and point to readable memory for 9 `f64`
+/// elements (row-major 3×3 tensor); `out_acceleration` must be non-null and
+/// point to writable memory for one `Vec3`. No ownership is transferred. A null
+/// pointer, non-finite `position`, or non-positive `gm` fails with
+/// `ERR_INVALID_ARGUMENT`.
 #[unsafe(no_mangle)]
 pub extern "C" fn gravity_quadrupole_tensor(
     position: Vec3,

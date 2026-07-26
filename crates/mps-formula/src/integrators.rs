@@ -499,6 +499,13 @@ pub fn keplerian_elements(
 /// pre-compute the acceleration and pass it as `accel_now`.  The integrator
 /// advances position/velocity and returns the *new* acceleration at the
 /// updated position via `accel_next_out`.
+///
+/// # Safety
+///
+/// `position` and `velocity` must point to writable `Vec3` values and
+/// `accel_now` must point to a readable `Vec3`; any of them being null fails
+/// with `ERR_INVALID_ARGUMENT`. `accel_next_out` may be null; when non-null
+/// it must point to a writable `Vec3`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn integrator_leapfrog_step(
     position: *mut Vec3,
@@ -537,6 +544,11 @@ pub extern "C" fn integrator_leapfrog_step(
 }
 
 /// Compute post-Newtonian relativistic acceleration correction.
+///
+/// # Safety
+///
+/// `out_acceleration` must point to writable memory for one `Vec3`; a null
+/// pointer fails with `ERR_INVALID_ARGUMENT`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn integrator_post_newtonian(
     position: Vec3,
@@ -564,6 +576,11 @@ pub extern "C" fn integrator_post_newtonian(
 }
 
 /// Compute specific orbital energy.
+///
+/// # Safety
+///
+/// `out_energy` must point to writable memory for one `f64`; a null pointer
+/// fails with `ERR_INVALID_ARGUMENT`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn integrator_specific_energy(
     position: Vec3,
@@ -583,6 +600,12 @@ pub extern "C" fn integrator_specific_energy(
 }
 
 /// Compute Keplerian orbital elements.
+///
+/// # Safety
+///
+/// `out_elements` must point to writable memory for 6 `f64` elements
+/// ([a, e, i, RAAN, argp, nu]); a null pointer fails with
+/// `ERR_INVALID_ARGUMENT`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn integrator_keplerian_elements(
     position: Vec3,

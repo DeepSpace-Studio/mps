@@ -70,6 +70,11 @@ fn wave_params_valid(params: &PlaneWaveParams) -> bool {
 // ===========================================================================
 
 /// Compute wavenumber from wavelength: k = 2π / λ.
+///
+/// # Safety
+///
+/// Takes only scalar values; no pointers are dereferenced. `wavelength` must
+/// be finite and positive; invalid input returns `f64::NAN`.
 #[unsafe(no_mangle)]
 pub extern "C" fn wo_wavenumber(wavelength: f64) -> f64 {
     if !finite_positive(wavelength) {
@@ -84,6 +89,11 @@ pub extern "C" fn wo_wavenumber(wavelength: f64) -> f64 {
 }
 
 /// Compute wavelength from wavenumber: λ = 2π / k.
+///
+/// # Safety
+///
+/// Takes only scalar values; no pointers are dereferenced. `wavenumber` must
+/// be finite and positive; invalid input returns `f64::NAN`.
 #[unsafe(no_mangle)]
 pub extern "C" fn wo_wavelength(wavenumber: f64) -> f64 {
     if !finite_positive(wavenumber) {
@@ -102,6 +112,12 @@ pub extern "C" fn wo_wavelength(wavenumber: f64) -> f64 {
 /// where k = (kx, ky, kz) and ωt is a global time phase offset.
 ///
 /// For a wave propagating along the z-axis: E = A₀ · exp(i (k·z − φ₀))
+///
+/// # Safety
+///
+/// `out_amplitude` must be non-null and point to writable memory for one
+/// `ComplexAmplitude`; a null pointer fails with `ERR_NULL_POINTER`. No
+/// ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn wo_plane_wave(
     params: PlaneWaveParams,
@@ -139,6 +155,12 @@ pub extern "C" fn wo_plane_wave(
 ///   E = A₀ · exp(i k r) / r
 ///
 /// where r is the distance from the source to the observation point.
+///
+/// # Safety
+///
+/// `out_wave` must be non-null and point to writable memory for one
+/// `SphericalWavePoint`; a null pointer fails with `ERR_NULL_POINTER`. No
+/// ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn wo_spherical_wave(
     source_x: f64,
@@ -211,6 +233,13 @@ pub extern "C" fn wo_spherical_wave(
 ///   E(P) = Σ_j A_j · exp(i k r_j) / r_j
 ///
 /// where r_j is the distance from source j to the observation point.
+///
+/// # Safety
+///
+/// `sources` must point to `source_count` readable `PointSource` elements
+/// (`source_count > 0`); a null pointer fails with `ERR_NULL_POINTER`.
+/// `out_amplitude` must point to writable memory for one `ComplexAmplitude`.
+/// No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn wo_huygens_fresnel(
     sources: *const PointSource,
@@ -281,6 +310,12 @@ pub extern "C" fn wo_huygens_fresnel(
 /// This simplified version assumes uniform illumination (A = 1) over the
 /// aperture and performs a numerical Riemann sum over `samples_x × samples_y`
 /// sub-divisions of the aperture.
+///
+/// # Safety
+///
+/// `out_point` must be non-null and point to writable memory for one
+/// `DiffractionPoint`; a null pointer fails with `ERR_NULL_POINTER`. No
+/// ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn wo_fresnel_diffraction_point(
     aperture: ApertureDesc,
@@ -377,6 +412,12 @@ pub extern "C" fn wo_fresnel_diffraction_point(
 ///   E(P) = (1 / iλ) ∫∫ A(ξ,η) · exp(i k r) / r · cosθ dξ dη
 ///
 /// where cosθ = z/r is the obliquity factor for normal incidence.
+///
+/// # Safety
+///
+/// `out_point` must be non-null and point to writable memory for one
+/// `KirchhoffDiffractionPoint`; a null pointer fails with `ERR_NULL_POINTER`.
+/// No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn wo_kirchhoff_diffraction_point(
     aperture: ApertureDesc,
@@ -497,6 +538,12 @@ pub extern "C" fn wo_kirchhoff_diffraction_point(
 ///
 /// Returns the normalised intensity:
 ///   I = I₀ · cos²(π d x / λ D) · sinc²(π a x / λ D)
+///
+/// # Safety
+///
+/// `out_point` must be non-null and point to writable memory for one
+/// `YoungSlitPoint`; a null pointer fails with `ERR_NULL_POINTER`. No
+/// ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn wo_young_slit_point(
     slit_separation: f64,
@@ -583,6 +630,13 @@ pub extern "C" fn wo_young_slit_point(
 
 /// Compute the Young's interference pattern across a 1D array of points
 /// (along the x-axis) and write intensities into a pre-allocated buffer.
+///
+/// # Safety
+///
+/// `out_intensities` must point to writable memory for `out_len` `f64`
+/// elements; a null pointer fails with `ERR_NULL_POINTER`. At most
+/// `min(num_points, out_len)` elements are written. No ownership is
+/// transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn wo_young_slit_pattern(
     slit_separation: f64,
@@ -654,6 +708,12 @@ pub extern "C" fn wo_young_slit_pattern(
 /// (reflection off a higher-index medium).
 ///
 /// Interference intensity: I = I₀ · [1 + cos(δ)] / 2  (simplified)
+///
+/// # Safety
+///
+/// `out_report` must be non-null and point to writable memory for one
+/// `ThinFilmInterferenceReport`; a null pointer fails with
+/// `ERR_NULL_POINTER`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn wo_thin_film_interference(
     params: ThinFilmParams,
@@ -735,6 +795,12 @@ pub extern "C" fn wo_thin_film_interference(
 /// `count` — number of wavelengths.
 ///
 /// Returns the number of intensities written.
+///
+/// # Safety
+///
+/// `wavelengths` must point to `count` readable `f64` elements and
+/// `intensities_out` to writable memory for `count` `f64` elements; null
+/// pointers fail with `ERR_NULL_POINTER`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn wo_thin_film_spectrum(
     params: ThinFilmParams,
@@ -792,6 +858,12 @@ pub extern "C" fn wo_thin_film_spectrum(
 ///   r_n = √(n λ D)
 ///
 /// Also determines whether the zone contributes constructively.
+///
+/// # Safety
+///
+/// `out_zone` must be non-null and point to writable memory for one
+/// `FresnelZoneReport`; a null pointer fails with `ERR_NULL_POINTER`. No
+/// ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn wo_fresnel_zone(
     zone_index: u32,
@@ -836,6 +908,12 @@ pub extern "C" fn wo_fresnel_zone(
 ///
 /// `num_zones` — number of zones to sum.
 /// `out_intensity` — normalised intensity after summing N zones.
+///
+/// # Safety
+///
+/// `out_intensity` must be non-null and point to writable memory for one
+/// `f64`; a null pointer fails with `ERR_NULL_POINTER`. No ownership is
+/// transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn wo_fresnel_zone_sum(
     num_zones: u32,
@@ -882,6 +960,12 @@ pub extern "C" fn wo_fresnel_zone_sum(
 /// Results are written into `out_grid` (array of `DiffractionPoint`, capacity `out_len`).
 ///
 /// Returns the number of points written.
+///
+/// # Safety
+///
+/// `out_grid` must point to writable memory for `out_len` `DiffractionPoint`
+/// elements; a null pointer fails with `ERR_NULL_POINTER`. At most
+/// `min(nx * ny, out_len)` elements are written. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn wo_fresnel_grid(
     aperture: ApertureDesc,

@@ -64,6 +64,17 @@ fn distance_project(
     Some(c.abs())
 }
 
+/// Predict soft-body particle positions for one step (apply damping and
+/// gravity to velocities, then integrate).
+///
+/// # Safety
+///
+/// `positions`, `velocities` and `inverse_masses` must each point to
+/// `particle_count` readable elements (`Vec3` / `f64`);
+/// `out_predicted_positions` must point to writable memory for `capacity`
+/// `Vec3` elements with `particle_count <= capacity`. A null input or
+/// output pointer fails with `ERR_NULL_POINTER`; `out_report` may be null.
+/// No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn softbody_predict_positions(
     positions: *const Vec3,
@@ -139,6 +150,18 @@ pub extern "C" fn softbody_predict_positions(
     Bool::TRUE
 }
 
+/// Accumulate mass-spring forces (stiffness plus relative-velocity damping)
+/// into per-particle force vectors.
+///
+/// # Safety
+///
+/// `positions` and `velocities` must each point to `particle_count`
+/// readable `Vec3` elements; `out_forces` must point to writable memory for
+/// `force_capacity` `Vec3` elements with `particle_count <= force_capacity`.
+/// `springs` must point to `spring_count` readable `SoftSpring` elements
+/// and be non-null when `spring_count > 0`. Null pointers fail with
+/// `ERR_NULL_POINTER`; `out_report` may be null. No ownership is
+/// transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn softbody_mass_spring_forces(
     positions: *const Vec3,
@@ -222,6 +245,18 @@ pub extern "C" fn softbody_mass_spring_forces(
     Bool::TRUE
 }
 
+/// Solve XPBD distance constraints, updating particle positions and
+/// constraint `lambda` accumulators in place.
+///
+/// # Safety
+///
+/// `positions` must point to writable memory for `particle_count` `Vec3`
+/// elements and `inverse_masses` to `particle_count` readable `f64`
+/// elements; `constraints` must point to writable memory for
+/// `constraint_count` `SoftDistanceConstraint` elements and be non-null
+/// when `constraint_count > 0`. Null pointers fail with
+/// `ERR_NULL_POINTER`; `out_report` may be null. No ownership is
+/// transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn softbody_solve_xpbd_distance_constraints(
     positions: *mut Vec3,
@@ -303,6 +338,18 @@ pub extern "C" fn softbody_solve_xpbd_distance_constraints(
     Bool::TRUE
 }
 
+/// Solve XPBD bending constraints as distance constraints between their
+/// particle pairs, updating positions and `lambda` accumulators in place.
+///
+/// # Safety
+///
+/// Same contract as `softbody_solve_xpbd_distance_constraints`: `positions`
+/// must point to writable memory for `particle_count` `Vec3` elements,
+/// `inverse_masses` to `particle_count` readable `f64` elements, and
+/// `constraints` to `constraint_count` writable `SoftBendingConstraint`
+/// elements, non-null when `constraint_count > 0`. Null pointers fail with
+/// `ERR_NULL_POINTER`; `out_report` may be null. No ownership is
+/// transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn softbody_solve_xpbd_bending_constraints(
     positions: *mut Vec3,
@@ -355,6 +402,17 @@ pub extern "C" fn softbody_solve_xpbd_bending_constraints(
     result
 }
 
+/// Project active particles out of collision spheres, updating positions in
+/// place.
+///
+/// # Safety
+///
+/// `positions` must point to writable memory for `particle_count` `Vec3`
+/// elements and `inverse_masses` to `particle_count` readable `f64`
+/// elements; `spheres` must point to `sphere_count` readable
+/// `SoftSphereCollision` elements and be non-null when `sphere_count > 0`.
+/// Null pointers fail with `ERR_NULL_POINTER`; `out_report` may be null.
+/// No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn softbody_solve_sphere_collision_constraints(
     positions: *mut Vec3,
@@ -421,6 +479,17 @@ pub fn tetra_volume(a: Vector, b: Vector, c: Vector, d: Vector) -> f64 {
     (b - a).dot((c - a).cross(d - a)) / 6.0
 }
 
+/// Solve XPBD volume constraints on tetrahedra, updating particle positions
+/// and constraint `lambda` accumulators in place.
+///
+/// # Safety
+///
+/// `positions` must point to writable memory for `particle_count` `Vec3`
+/// elements and `inverse_masses` to `particle_count` readable `f64`
+/// elements; `constraints` must point to writable memory for
+/// `constraint_count` `SoftVolumeConstraint` elements and be non-null when
+/// `constraint_count > 0`. Null pointers fail with `ERR_NULL_POINTER`;
+/// `out_report` may be null. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn softbody_solve_xpbd_volume_constraints(
     positions: *mut Vec3,
@@ -527,6 +596,17 @@ pub extern "C" fn softbody_solve_xpbd_volume_constraints(
     Bool::TRUE
 }
 
+/// Update particle velocities from the previous and current positions over
+/// one timestep.
+///
+/// # Safety
+///
+/// `previous_positions` and `current_positions` must each point to
+/// `particle_count` readable `Vec3` elements; `out_velocities` must point
+/// to writable memory for `capacity` `Vec3` elements with
+/// `particle_count <= capacity`. Null pointers fail with
+/// `ERR_NULL_POINTER`; `out_report` may be null. No ownership is
+/// transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn softbody_update_velocities(
     previous_positions: *const Vec3,

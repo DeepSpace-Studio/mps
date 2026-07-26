@@ -24,6 +24,13 @@ fn material_valid(material: MaterialProperties) -> bool {
         && material.thermal_expansion.is_finite()
 }
 
+/// Fourier heat conduction through a slab: flux, heat rate, and thermal resistance.
+///
+/// # Safety
+///
+/// `out_report` must point to writable memory for one `HeatConductionReport`
+/// element; a null pointer fails with `ERR_NULL_POINTER`. No ownership is
+/// transferred; the caller keeps ownership of `out_report`.
 #[unsafe(no_mangle)]
 pub extern "C" fn thermal_fourier_conduction(
     hot_temperature: f64,
@@ -68,6 +75,13 @@ pub extern "C" fn thermal_fourier_conduction(
     Bool::TRUE
 }
 
+/// Phase-change heating: splits `heat_input` into sensible and latent heat.
+///
+/// # Safety
+///
+/// `out_report` must point to writable memory for one `PhaseChangeReport`
+/// element; a null pointer fails with `ERR_NULL_POINTER`. No ownership is
+/// transferred; the caller keeps ownership of `out_report`.
 #[unsafe(no_mangle)]
 pub extern "C" fn thermal_phase_change(
     temperature: f64,
@@ -133,6 +147,13 @@ pub extern "C" fn thermal_phase_change(
     Bool::TRUE
 }
 
+/// Solid fraction interpolation between solidus and liquidus temperatures.
+///
+/// # Safety
+///
+/// `out_report` must point to writable memory for one `PhaseChangeReport`
+/// element; a null pointer fails with `ERR_NULL_POINTER`. No ownership is
+/// transferred; the caller keeps ownership of `out_report`.
 #[unsafe(no_mangle)]
 pub extern "C" fn thermal_phase_condition(
     temperature: f64,
@@ -170,6 +191,13 @@ pub extern "C" fn thermal_phase_condition(
     Bool::TRUE
 }
 
+/// Stefan-Boltzmann radiative heat exchange: emitted, absorbed, and net power.
+///
+/// # Safety
+///
+/// `out_report` must point to writable memory for one `ThermalRadiationReport`
+/// element; a null pointer fails with `ERR_NULL_POINTER`. No ownership is
+/// transferred; the caller keeps ownership of `out_report`.
 #[unsafe(no_mangle)]
 pub extern "C" fn thermal_stefan_boltzmann_radiation(
     temperature: f64,
@@ -203,6 +231,20 @@ pub extern "C" fn thermal_stefan_boltzmann_radiation(
     Bool::TRUE
 }
 
+/// One explicit FEM heat-diffusion timestep over a node/edge network.
+///
+/// # Safety
+///
+/// `nodes` must point to a readable array of `node_count` `FemHeatNode`
+/// elements (`0 < node_count <= MAX_FEM_NODES`); `edges` must point to a
+/// readable array of `edge_count` `FemHeatEdge` elements
+/// (`edge_count <= MAX_FEM_EDGES`) and may be null only when `edge_count == 0`;
+/// `out_temperatures` must point to writable memory for `capacity` `f64`
+/// elements (`capacity >= node_count`); `out_report` may be null, otherwise it
+/// must point to writable memory for one `FemHeatDiffusionReport` element.
+/// Null pointers fail with `ERR_NULL_POINTER`, count/capacity violations with
+/// `ERR_CAPACITY`. No ownership is transferred; the caller keeps ownership of
+/// all buffers.
 #[unsafe(no_mangle)]
 pub extern "C" fn thermal_fem_diffusion_step(
     nodes: *const FemHeatNode,
@@ -288,6 +330,13 @@ pub extern "C" fn thermal_fem_diffusion_step(
     Bool::TRUE
 }
 
+/// Thermal stress from constrained thermal expansion (1D).
+///
+/// # Safety
+///
+/// `out_report` must point to writable memory for one `ThermalStressReport`
+/// element; a null pointer fails with `ERR_NULL_POINTER`. No ownership is
+/// transferred; the caller keeps ownership of `out_report`.
 #[unsafe(no_mangle)]
 pub extern "C" fn thermal_stress_from_expansion(
     material: MaterialProperties,
@@ -317,6 +366,14 @@ pub extern "C" fn thermal_stress_from_expansion(
     Bool::TRUE
 }
 
+/// 3D thermoelastic stress/strain for an isotropic material under a
+/// temperature change.
+///
+/// # Safety
+///
+/// `out_report` must point to writable memory for one `ThermoelasticReport`
+/// element; a null pointer fails with `ERR_NULL_POINTER`. No ownership is
+/// transferred; the caller keeps ownership of `out_report`.
 #[unsafe(no_mangle)]
 pub extern "C" fn thermal_thermoelastic_stress_strain(
     material: MaterialProperties,

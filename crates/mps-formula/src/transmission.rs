@@ -52,6 +52,14 @@ fn spiral_valid(desc: SpiralConstraintDesc) -> bool {
     finite_non_negative(desc.initial_radius) && finite(desc.radial_pitch) && finite(desc.phase)
 }
 
+/// Evaluates a gear constraint and writes the resulting report to `out_report`.
+///
+/// # Safety
+///
+/// `out_report` must be null or point to writable memory for one
+/// `GearConstraintReport` element; a null pointer fails with `ERR_NULL_POINTER`.
+/// Non-finite or otherwise invalid constraint parameters fail with
+/// `ERR_INVALID_ARGUMENT`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn transmission_gear_evaluate(
     driver_angle: f64,
@@ -93,6 +101,12 @@ pub extern "C" fn transmission_gear_evaluate(
     Bool::TRUE
 }
 
+/// Computes the driven gear target angle for a given driver angle.
+///
+/// # Safety
+///
+/// This function takes no pointers and performs no memory access; non-finite
+/// inputs or a non-positive `ratio` return `f64::NAN`.
 #[unsafe(no_mangle)]
 pub extern "C" fn transmission_gear_target_angle(
     driver_angle: f64,
@@ -107,6 +121,14 @@ pub extern "C" fn transmission_gear_target_angle(
     phase + sign * ratio * driver_angle
 }
 
+/// Evaluates a screw constraint and writes the resulting report to `out_report`.
+///
+/// # Safety
+///
+/// `out_report` must be null or point to writable memory for one
+/// `ScrewConstraintReport` element; a null pointer fails with `ERR_NULL_POINTER`.
+/// Non-finite or otherwise invalid constraint parameters fail with
+/// `ERR_INVALID_ARGUMENT`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn transmission_screw_evaluate(
     screw_angle: f64,
@@ -144,6 +166,12 @@ pub extern "C" fn transmission_screw_evaluate(
     Bool::TRUE
 }
 
+/// Computes the nut target translation for a given screw angle.
+///
+/// # Safety
+///
+/// This function takes no pointers and performs no memory access; non-finite
+/// inputs return `f64::NAN`.
 #[unsafe(no_mangle)]
 pub extern "C" fn transmission_screw_target_translation(
     screw_angle: f64,
@@ -158,6 +186,14 @@ pub extern "C" fn transmission_screw_target_translation(
     phase + handedness * lead * screw_angle / TAU
 }
 
+/// Evaluates a cycloidal cam constraint and writes the report to `out_report`.
+///
+/// # Safety
+///
+/// `out_report` must be null or point to writable memory for one
+/// `CamConstraintReport` element; a null pointer fails with `ERR_NULL_POINTER`.
+/// Non-finite or otherwise invalid constraint parameters fail with
+/// `ERR_INVALID_ARGUMENT`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn transmission_cycloidal_cam_evaluate(
     cam_angle: f64,
@@ -200,6 +236,15 @@ pub extern "C" fn transmission_cycloidal_cam_evaluate(
     Bool::TRUE
 }
 
+/// Evaluates an Archimedean spiral constraint and writes the report to
+/// `out_report`.
+///
+/// # Safety
+///
+/// `out_report` must be null or point to writable memory for one
+/// `SpiralConstraintReport` element; a null pointer fails with
+/// `ERR_NULL_POINTER`. Non-finite or otherwise invalid constraint parameters
+/// fail with `ERR_INVALID_ARGUMENT`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn transmission_archimedean_spiral_evaluate(
     angle: f64,
@@ -254,6 +299,13 @@ pub extern "C" fn transmission_archimedean_spiral_evaluate(
     Bool::TRUE
 }
 
+/// Computes the spiral radius for a given angle.
+///
+/// # Safety
+///
+/// This function takes no pointers and performs no memory access; non-finite
+/// inputs, a negative `initial_radius`, or a resulting negative radius return
+/// `f64::NAN`.
 #[unsafe(no_mangle)]
 pub extern "C" fn transmission_archimedean_spiral_radius(
     angle: f64,

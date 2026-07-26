@@ -130,6 +130,12 @@ fn solve_dense_system_in_place(
     true
 }
 
+/// Computes the absolute volume of a tetrahedron from its four vertices.
+///
+/// # Safety
+///
+/// All parameters are passed by value and no pointers are dereferenced; invalid
+/// (non-finite) vertex coordinates return `f64::NAN` instead of an error code.
 #[unsafe(no_mangle)]
 pub extern "C" fn continuum_tetra_volume(tetra: FemTetrahedron) -> f64 {
     if !tetra_valid(tetra) {
@@ -142,6 +148,14 @@ pub extern "C" fn continuum_tetra_volume(tetra: FemTetrahedron) -> f64 {
     signed_tetra_volume(a, b, c, d).abs()
 }
 
+/// Evaluates the barycentric shape functions (and their gradients) of a tetrahedron
+/// at a given point.
+///
+/// # Safety
+///
+/// `out_report` must be a valid pointer to writable memory for one
+/// `FemShapeFunctionReport`; a null `out_report` fails with `ERR_NULL_POINTER`.
+/// No ownership is transferred; the caller keeps ownership of `out_report`.
 #[unsafe(no_mangle)]
 pub extern "C" fn continuum_tetra_shape_functions(
     tetra: FemTetrahedron,
@@ -176,6 +190,15 @@ pub extern "C" fn continuum_tetra_shape_functions(
     Bool::TRUE
 }
 
+/// Fills the 6x6 linear-elastic constitutive matrix (row-major) for a material.
+///
+/// # Safety
+///
+/// `out_matrix` must point to writable memory for `capacity` `f64` elements
+/// (`capacity >= 36`); only the first 36 elements are written. `out_report` may
+/// be null; otherwise it must point to writable memory for one
+/// `FemConstitutiveReport`. A null or too-small `out_matrix` fails with
+/// `ERR_CAPACITY`.
 #[unsafe(no_mangle)]
 pub extern "C" fn continuum_linear_elastic_constitutive_matrix(
     material: MaterialProperties,
@@ -220,6 +243,14 @@ pub extern "C" fn continuum_linear_elastic_constitutive_matrix(
     Bool::TRUE
 }
 
+/// Fills the 6x12 strain-displacement (B) matrix of a linear tetrahedral element.
+///
+/// # Safety
+///
+/// `out_matrix` must point to writable memory for `capacity` `f64` elements
+/// (`capacity >= 72`); only the first 72 elements are written. `out_volume` may
+/// be null; otherwise it must point to writable memory for one `f64`. A null or
+/// too-small `out_matrix` fails with `ERR_CAPACITY`.
 #[unsafe(no_mangle)]
 pub extern "C" fn continuum_tetra_strain_displacement_matrix(
     tetra: FemTetrahedron,
@@ -265,6 +296,19 @@ pub extern "C" fn continuum_tetra_strain_displacement_matrix(
     Bool::TRUE
 }
 
+/// Advances one time step of a structural dynamics system with the Newmark-beta method.
+///
+/// # Safety
+///
+/// `mass_matrix`, `damping_matrix`, and `stiffness_matrix` must each point to
+/// readable memory for `dof * dof` `f64` elements (row-major); `displacement`,
+/// `velocity`, `acceleration`, and `external_force` must each point to readable
+/// memory for `dof` `f64` elements. The four `out_*` buffers must each point to
+/// writable memory for `capacity` `f64` elements (`1 <= dof <= 512` and
+/// `capacity >= dof`); only the first `dof` elements of each are written.
+/// `out_report` may be null; otherwise it must point to writable memory for one
+/// `NewmarkBetaReport`. Null pointers fail with `ERR_NULL_POINTER`; invalid
+/// sizes fail with `ERR_CAPACITY`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn continuum_newmark_beta_solve(
     mass_matrix: *const f64,
@@ -410,6 +454,14 @@ pub extern "C" fn continuum_newmark_beta_solve(
     Bool::TRUE
 }
 
+/// Fills the 12x12 element stiffness matrix of a linear tetrahedral element.
+///
+/// # Safety
+///
+/// `out_stiffness` must point to writable memory for `capacity` `f64` elements
+/// (`capacity >= 144`); only the first 144 elements are written. `out_volume`
+/// may be null; otherwise it must point to writable memory for one `f64`. A
+/// null or too-small `out_stiffness` fails with `ERR_CAPACITY`.
 #[unsafe(no_mangle)]
 pub extern "C" fn continuum_linear_tetra_element_stiffness(
     tetra: FemTetrahedron,
@@ -473,6 +525,14 @@ pub extern "C" fn continuum_linear_tetra_element_stiffness(
     Bool::TRUE
 }
 
+/// Computes the 3x3 deformation gradient (row-major) mapping a reference
+/// tetrahedron onto a deformed one.
+///
+/// # Safety
+///
+/// `out_matrix` must point to writable memory for `capacity` `f64` elements
+/// (`capacity >= 9`); only the first 9 elements are written. A null or
+/// too-small `out_matrix` fails with `ERR_CAPACITY`.
 #[unsafe(no_mangle)]
 pub extern "C" fn continuum_deformation_gradient(
     reference_tetra: FemTetrahedron,

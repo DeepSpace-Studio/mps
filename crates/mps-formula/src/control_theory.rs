@@ -78,6 +78,14 @@ fn simulate_mpc_cost(
     cost
 }
 
+/// Advances a PID controller by one step, updating the state and optionally
+/// writing a `PidReport`.
+///
+/// # Safety
+///
+/// `state` must point to a valid, writable `PidState`; a null pointer fails
+/// with `ERR_NULL_POINTER`. `out_report` may be null; if non-null it must
+/// point to writable memory for one `PidReport`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn control_pid_step(
     setpoint: f64,
@@ -130,6 +138,20 @@ pub extern "C" fn control_pid_step(
     Bool::TRUE
 }
 
+/// Advances a linear state-space system by one step (x⁺ = A·x + B·u,
+/// y = C·x + D·u) and optionally writes a `StateSpaceReport`.
+///
+/// # Safety
+///
+/// `a_matrix`, `b_matrix`, `c_matrix`, `d_matrix` must point to readable
+/// row-major `f64` arrays of `n*n`, `n*m`, `p*n`, `p*m` elements and
+/// `state` / `input` to `n` / `m` elements (`n = state_count`,
+/// `m = input_count`, `p = output_count`). `out_next_state` / `out_output`
+/// must point to writable memory for `state_capacity` / `output_capacity`
+/// `f64` elements (capacities must be at least the corresponding counts).
+/// Any null pointer fails with `ERR_NULL_POINTER`; invalid dimensions fail
+/// with `ERR_CAPACITY`. `out_report` may be null; if non-null it must point
+/// to writable memory for one `StateSpaceReport`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn control_state_space_step(
     a_matrix: *const f64,
@@ -221,6 +243,20 @@ pub extern "C" fn control_state_space_step(
     Bool::TRUE
 }
 
+/// Solves a box-constrained MPC quadratic program by gradient descent and
+/// writes the first control step; optionally writes an `MpcReport`.
+///
+/// # Safety
+///
+/// `a_matrix`, `b_matrix` must point to readable row-major `f64` arrays of
+/// `n*n` / `n*m` elements and `q_diag`, `r_diag`, `initial_state`,
+/// `target_state` to `n`, `m`, `n`, `n` elements (`n = config.state_count`,
+/// `m = config.input_count`). `out_first_control` must point to writable
+/// memory for `control_capacity` `f64` elements (`control_capacity >= m`).
+/// Any null pointer fails with `ERR_NULL_POINTER`; an invalid `config` or
+/// insufficient capacity fails with `ERR_CAPACITY`. `out_report` may be null;
+/// if non-null it must point to writable memory for one `MpcReport`. No
+/// ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn control_mpc_solve_box_qp(
     a_matrix: *const f64,
@@ -304,6 +340,16 @@ pub extern "C" fn control_mpc_solve_box_qp(
     Bool::TRUE
 }
 
+/// Computes an LQR-like stabilizing control u = clamp(-K·x, min, max).
+///
+/// # Safety
+///
+/// `state` must point to a readable `f64` array of `state_count` elements and
+/// `gain_matrix` to a readable row-major array of `input_count * state_count`
+/// elements. `out_control` must point to writable memory for `capacity` `f64`
+/// elements (`capacity >= input_count`). Any null pointer fails with
+/// `ERR_NULL_POINTER`; invalid dimensions fail with `ERR_CAPACITY`. No
+/// ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn control_lqr_like_stabilizing_input(
     state: *const f64,

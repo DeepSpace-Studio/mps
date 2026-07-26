@@ -129,6 +129,12 @@ fn builder_from_compound(parts: Vec<(Pose, SharedShape)>) -> *mut ColliderBuilde
     }))
 }
 
+/// Creates a collider builder from a generic shape type and packed shape data.
+///
+/// # Safety
+///
+/// All parameters are passed by value; no raw pointers are dereferenced.
+/// An invalid shape descriptor fails with `ERR_INVALID_ARGUMENT` and returns null.
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create(
     shape_type: u32,
@@ -153,6 +159,12 @@ pub extern "C" fn collider_builder_create(
     })
 }
 
+/// Creates a halfspace collider builder with the given plane normal.
+///
+/// # Safety
+///
+/// `normal` is passed by value; no raw pointers are dereferenced.
+/// A non-finite normal fails with `ERR_INVALID_ARGUMENT` and returns null.
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_halfspace(normal: Vec3) -> *mut ColliderBuilderHandle {
     ffi_guard(std::ptr::null_mut(), || {
@@ -169,6 +181,12 @@ pub extern "C" fn collider_builder_create_halfspace(normal: Vec3) -> *mut Collid
     })
 }
 
+/// Creates a collider builder from an extended shape descriptor.
+///
+/// # Safety
+///
+/// `shape_desc` is passed by value; no raw pointers are dereferenced.
+/// An invalid shape descriptor fails with `ERR_INVALID_ARGUMENT` and returns null.
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_ex(shape_desc: ShapeDesc) -> *mut ColliderBuilderHandle {
     ffi_guard(std::ptr::null_mut(), || {
@@ -183,6 +201,13 @@ pub extern "C" fn collider_builder_create_ex(shape_desc: ShapeDesc) -> *mut Coll
     })
 }
 
+/// Creates an oriented box (cuboid) collider builder from an OBB descriptor.
+///
+/// # Safety
+///
+/// `obb` is passed by value; no raw pointers are dereferenced.
+/// A non-finite center/rotation or non-positive half extents fail with
+/// `ERR_INVALID_ARGUMENT` and return null.
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_obb(obb: Obb) -> *mut ColliderBuilderHandle {
     ffi_guard(std::ptr::null_mut(), || {
@@ -208,6 +233,13 @@ pub extern "C" fn collider_builder_create_obb(obb: Obb) -> *mut ColliderBuilderH
     })
 }
 
+/// Creates a ball collider builder from a sphere descriptor.
+///
+/// # Safety
+///
+/// `sphere` is passed by value; no raw pointers are dereferenced.
+/// A non-finite center or a non-finite/non-positive radius fails with
+/// `ERR_INVALID_ARGUMENT` and returns null.
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_sphere(sphere: Sphere) -> *mut ColliderBuilderHandle {
     ffi_guard(std::ptr::null_mut(), || {
@@ -324,6 +356,13 @@ pub extern "C" fn collider_builder_create_point_cloud_bounds(
     })
 }
 
+/// Creates a collider builder covering the union of two AABBs.
+///
+/// # Safety
+///
+/// `first` and `second` are passed by value; no raw pointers are dereferenced.
+/// An invalid AABB (non-finite or `mins > maxs`) fails with
+/// `ERR_INVALID_ARGUMENT` and returns null.
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_double_bv(
     first: AabbDesc,
@@ -350,6 +389,13 @@ pub extern "C" fn collider_builder_create_double_bv(
     })
 }
 
+/// Creates a convex-hull collider builder from a skewed box (center + 3 axis vectors).
+///
+/// # Safety
+///
+/// All parameters are passed by value; no raw pointers are dereferenced.
+/// Non-finite vectors or near-zero-length axes fail with `ERR_INVALID_ARGUMENT`
+/// and return null.
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_skewed_obb(
     center: Vec3,

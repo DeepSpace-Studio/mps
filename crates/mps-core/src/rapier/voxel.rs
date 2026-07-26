@@ -904,6 +904,15 @@ pub extern "C" fn voxel_build_stats(
     })
 }
 
+/// Computes build statistics for a voxelized AABB without building a collider.
+///
+/// # Safety
+///
+/// All arguments are passed by value; no pointers are dereferenced. `aabb`
+/// must have finite mins/maxs with `mins < maxs` on every axis, and each
+/// voxel size must be finite and positive; violations fail with
+/// `ERR_INVALID_ARGUMENT` (or `ERR_CAPACITY` when the grid exceeds the cell
+/// limit) and return a zeroed `VoxelBuildStats`.
 #[unsafe(no_mangle)]
 pub extern "C" fn voxel_aabb_build_stats(
     aabb: AabbDesc,
@@ -921,6 +930,15 @@ pub extern "C" fn voxel_aabb_build_stats(
     })
 }
 
+/// Computes build statistics for a voxelized OBB without building a collider.
+///
+/// # Safety
+///
+/// All arguments are passed by value; no pointers are dereferenced. `obb`
+/// must have a finite center and rotation and finite, positive half extents,
+/// and each voxel size must be finite and positive; violations fail with
+/// `ERR_INVALID_ARGUMENT` (or `ERR_CAPACITY` when the grid exceeds the cell
+/// limit) and return a zeroed `VoxelBuildStats`.
 #[unsafe(no_mangle)]
 pub extern "C" fn voxel_obb_build_stats(
     obb: Obb,
@@ -980,6 +998,16 @@ pub extern "C" fn voxel_obb_build_stats_out(
     })
 }
 
+/// Builds a collider builder from an AABB voxelized at the given voxel size.
+///
+/// # Safety
+///
+/// All arguments are passed by value; no pointers are dereferenced. `aabb`
+/// must have finite mins/maxs with `mins < maxs` on every axis, and each
+/// voxel size must be finite and positive; violations fail with
+/// `ERR_INVALID_ARGUMENT` (or `ERR_CAPACITY` when the grid exceeds the cell
+/// limit) and return null. The returned builder handle is owned by the
+/// caller and must be released through the collider-builder ABI.
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_voxel_aabb(
     aabb: AabbDesc,
@@ -997,6 +1025,11 @@ pub extern "C" fn collider_builder_create_voxel_aabb(
     })
 }
 
+/// Builds a collider builder from a voxelized AABB with default options.
+///
+/// # Safety
+///
+/// Same argument contract as `collider_builder_create_voxel_aabb`.
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_voxel_aabb_auto(
     aabb: AabbDesc,
@@ -1019,6 +1052,16 @@ pub extern "C" fn collider_builder_create_voxel_aabb_auto(
     })
 }
 
+/// Builds a collider builder from an OBB voxelized at the given voxel size.
+///
+/// # Safety
+///
+/// All arguments are passed by value; no pointers are dereferenced. `obb`
+/// must have a finite center and rotation and finite, positive half extents,
+/// and each voxel size must be finite and positive; violations fail with
+/// `ERR_INVALID_ARGUMENT` (or `ERR_CAPACITY` when the grid exceeds the cell
+/// limit) and return null. The returned builder handle is owned by the
+/// caller and must be released through the collider-builder ABI.
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_voxel_obb(
     obb: Obb,
@@ -1035,6 +1078,11 @@ pub extern "C" fn collider_builder_create_voxel_obb(
     })
 }
 
+/// Builds a collider builder from a voxelized OBB with default options.
+///
+/// # Safety
+///
+/// Same argument contract as `collider_builder_create_voxel_obb`.
 #[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_create_voxel_obb_auto(
     obb: Obb,

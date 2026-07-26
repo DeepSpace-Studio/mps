@@ -1,3 +1,40 @@
+//! Collision/contact-force event collection and dispatch.
+//!
+//! # Threading model
+//!
+//! Events flow through three channels, each with its own thread contract:
+//!
+//! * **Legacy Vec queues** (`collision_events` / `contact_force_events`) —
+//!   `Mutex`-protected, safe for arbitrary concurrent access.
+//! * **SPSC ring buffers** (`EventRing<T>` inside the `producer_cache`
+//!   `UnsafeCell`) — single producer (the physics thread, while inside
+//!   `pipeline.step`) / single consumer (the Java drain thread), synchronized
+//!   through Release/Acquire atomics on the cursors. The backing buffer is
+//!   allocated once at init time and never reallocated while stepping.
+//! * **Callback slots** (`CallbackSlot`) — typed function pointers behind a
+//!   `Mutex`; dispatch happens on the physics thread.
+//!
+//! Init-time-only operations (ring (re-)init, callback registration, dispatch
+//! mode changes) take `&mut` to the `UnsafeCell` producer cache and therefore
+//! must **not** run concurrently with `world_step` or with each other. This
+//! contract is enforced at runtime: `world_step` raises `step_active` for its
+//! whole duration and every init-time FFI entry takes `init_guard()`; a
+//! violation fails with `ERR_UNSUPPORTED` instead of causing undefined
+//! behavior. The raw-address→function-pointer transmutes in
+//! `collision_callback_from_raw` / `contact_force_callback_from_raw` are a
+//! frozen-ABI requirement (Java passes callback addresses as `usize`) and
+//! happen exactly once at registration; the caller must pass the address of a
+//! function with the exact documented signature.
+//!
+//! # Verification
+//!
+//! The SPSC ring logic is covered by unit/integration tests
+//! (`mps-test/src/rapier/events.rs`) exercising wrap-around, drop counters and
+//! concurrent drain-during-step. For formal model checking of the lock-free
+//! cursor protocol, the `EventRing` push/drain pair is small enough to be
+//! ported into a loom harness; Miri can validate the `UnsafeCell` accesses
+//! under the single-threaded test suite.
+
 use parking_lot::{Mutex, RwLock};
 use rapier3d::geometry::{CollisionEvent, CollisionEventFlags, ContactPair, SolverFlags};
 use rapier3d::prelude::{
@@ -6,7 +43,7 @@ use rapier3d::prelude::{
 use smallvec::SmallVec;
 use std::cell::UnsafeCell;
 use std::mem;
-use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 
 use crate::rapier::error::{
     ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, ERR_UNSUPPORTED, clear_error, ffi_guard,
@@ -37,6 +74,37 @@ pub(crate) struct CollectingEventHandler {
     custom_physics: RwLock<CustomPhysicsState>,
     /// Lock-free producer cache — safe: single-producer (physics thread) writes, drains use atomics.
     producer_cache: UnsafeCell<ProducerCache>,
+    /// Runtime contract guard: raised for the whole duration of `world_step`.
+    /// Init-time-only FFI calls check it via `init_guard()` and fail with
+    /// `ERR_UNSUPPORTED` instead of aliasing the `UnsafeCell` producer cache.
+    step_active: AtomicBool,
+    /// Runtime contract guard: held while an init-time-only FFI call mutates
+    /// the producer cache. Catches two init-time calls racing each other.
+    init_active: AtomicBool,
+}
+
+/// RAII guard released when an init-time-only FFI call returns. Created by
+/// [`CollectingEventHandler::init_guard`]; while alive, no other init-time
+/// call can begin on this world.
+pub(crate) struct EventInitGuard<'a> {
+    events: &'a CollectingEventHandler,
+}
+
+impl Drop for EventInitGuard<'_> {
+    fn drop(&mut self) {
+        self.events.init_active.store(false, Ordering::Release);
+    }
+}
+
+/// RAII guard that marks `world_step` as in-flight; released on scope exit.
+pub(crate) struct StepGuard<'a> {
+    events: &'a CollectingEventHandler,
+}
+
+impl Drop for StepGuard<'_> {
+    fn drop(&mut self) {
+        self.events.step_active.store(false, Ordering::Release);
+    }
 }
 
 // SAFETY: CollectingEventHandler is Send + Sync under the following thread
@@ -49,14 +117,41 @@ pub(crate) struct CollectingEventHandler {
 //   calls; drain reads synchronize with the producer through the
 //   Release/Acquire atomics inside `EventRing`.
 // * Registration and ring (re-)initialization take
-//   `&mut *producer_cache.get()` and are therefore **init-time only**: calling
-//   them concurrently with `world_step` or with each other is undefined
-//   behavior — see the `# Safety` docs on the `world_init_*_event_ring` and
-//   `world_register_*_callback` FFI functions.
+//   `&mut *producer_cache.get()` and are therefore **init-time only**. This is
+//   enforced at runtime: `world_step` holds `step_active` and every init-time
+//   FFI entry must acquire `init_guard()` first; a violation fails with
+//   `ERR_UNSUPPORTED` instead of causing undefined behavior — see the `# Safety`
+//   docs on the `world_init_*_event_ring` and `world_register_*_callback` FFI
+//   functions.
 unsafe impl Send for CollectingEventHandler {}
 unsafe impl Sync for CollectingEventHandler {}
 
 impl CollectingEventHandler {
+    /// Mark `world_step` as in-flight until the returned guard drops. Fails
+    /// (returns `None`) if an init-time call currently holds the producer
+    /// cache — stepping then would race the init-time `&mut`.
+    pub(crate) fn step_guard(&self) -> Option<StepGuard<'_>> {
+        if self.init_active.load(Ordering::Acquire) {
+            return None;
+        }
+        self.step_active.store(true, Ordering::Release);
+        Some(StepGuard { events: self })
+    }
+
+    /// Begin an init-time-only producer-cache mutation. Fails (returns
+    /// `None`) when `world_step` is in flight or another init-time call is
+    /// active — the caller must report an error instead of touching the
+    /// `UnsafeCell` producer cache.
+    pub(crate) fn init_guard(&self) -> Option<EventInitGuard<'_>> {
+        if self.step_active.load(Ordering::Acquire) {
+            return None;
+        }
+        self.init_active
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .ok()
+            .map(|_| EventInitGuard { events: self })
+    }
+
     pub(crate) fn clear(&self) {
         self.collision_events.lock().clear();
         self.contact_force_events.lock().clear();
@@ -1407,9 +1502,9 @@ pub extern "C" fn world_clear_intersection_pair_filter_callback(world: *mut Worl
 ///
 /// `world` must be a valid world pointer returned by `world_create`.
 /// Init-time only: must be called before `world_step` runs on any thread and
-/// with no concurrent event-ring FFI calls on the same world.  Re-initializing
-/// the ring while the physics thread produces events is undefined behavior
-/// (the producer cache is an `UnsafeCell`).
+/// with no concurrent event-ring FFI calls on the same world.  The producer
+/// cache is an `UnsafeCell`; violations of this contract are caught at runtime
+/// and fail with `ERR_UNSUPPORTED` (see the `events` module docs).
 #[unsafe(no_mangle)]
 pub extern "C" fn world_init_collision_event_ring(world: *mut WorldHandle, capacity: u32) -> Bool {
     ffi_guard(Bool::FALSE, || {
@@ -1421,7 +1516,14 @@ pub extern "C" fn world_init_collision_event_ring(world: *mut WorldHandle, capac
             set_error(ERR_CAPACITY, "invalid collision event ring capacity");
             return Bool::FALSE;
         }
-        // SAFETY: single writer (init is called before physics starts, or on main thread)
+        let Some(_init) = world.inner.events.init_guard() else {
+            set_error(
+                ERR_UNSUPPORTED,
+                "collision event ring init while physics is stepping",
+            );
+            return Bool::FALSE;
+        };
+        // SAFETY: the init-time thread contract is enforced at runtime by `_init`.
         let pc = unsafe { &mut *world.inner.events.producer_cache.get() };
         pc.collisions = Some(CollisionEventRing::new(capacity));
         clear_error();
@@ -1448,6 +1550,14 @@ pub extern "C" fn world_init_contact_force_event_ring(
             set_error(ERR_CAPACITY, "invalid contact force event ring capacity");
             return Bool::FALSE;
         }
+        let Some(_init) = world.inner.events.init_guard() else {
+            set_error(
+                ERR_UNSUPPORTED,
+                "contact force event ring init while physics is stepping",
+            );
+            return Bool::FALSE;
+        };
+        // SAFETY: the init-time thread contract is enforced at runtime by `_init`.
         let pc = unsafe { &mut *world.inner.events.producer_cache.get() };
         pc.contact_forces = Some(ContactForceEventRing::new(capacity));
         clear_error();
@@ -1663,8 +1773,8 @@ pub extern "C" fn world_clear_event_rings(world: *mut WorldHandle) {
 /// exact `CollisionEventFn` signature that stays valid while registered.
 /// Init-time only: must be called before `world_step` runs on any thread and
 /// with no concurrent event-ring/callback FFI calls on the same world.  The
-/// producer cache is an `UnsafeCell`; concurrent registration while the
-/// physics thread dispatches events is undefined behavior.
+/// producer cache is an `UnsafeCell`; violations of this contract are caught
+/// at runtime and fail with `ERR_UNSUPPORTED` (see the `events` module docs).
 #[unsafe(no_mangle)]
 pub extern "C" fn world_register_collision_callback(
     world: *mut WorldHandle,
@@ -1676,7 +1786,14 @@ pub extern "C" fn world_register_collision_callback(
             set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
-        // SAFETY: callback registration is init-time, before physics starts
+        let Some(_init) = world.inner.events.init_guard() else {
+            set_error(
+                ERR_UNSUPPORTED,
+                "collision callback registration while physics is stepping",
+            );
+            return 0;
+        };
+        // SAFETY: the init-time thread contract is enforced at runtime by `_init`.
         let pc = unsafe { &mut *world.inner.events.producer_cache.get() };
         let new_handle = pc.next_handle.load(Ordering::Relaxed).wrapping_add(1);
         pc.next_handle.store(new_handle, Ordering::Release);
@@ -1711,6 +1828,14 @@ pub extern "C" fn world_register_contact_force_callback(
             set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
+        let Some(_init) = world.inner.events.init_guard() else {
+            set_error(
+                ERR_UNSUPPORTED,
+                "contact force callback registration while physics is stepping",
+            );
+            return 0;
+        };
+        // SAFETY: the init-time thread contract is enforced at runtime by `_init`.
         let pc = unsafe { &mut *world.inner.events.producer_cache.get() };
         let new_handle = pc.next_handle.load(Ordering::Relaxed).wrapping_add(1);
         pc.next_handle.store(new_handle, Ordering::Release);
@@ -1743,6 +1868,14 @@ pub extern "C" fn world_unregister_callback(world: *mut WorldHandle, handle: Eve
         if handle == 0 {
             return;
         }
+        let Some(_init) = world.inner.events.init_guard() else {
+            set_error(
+                ERR_UNSUPPORTED,
+                "callback unregistration while physics is stepping",
+            );
+            return;
+        };
+        // SAFETY: the init-time thread contract is enforced at runtime by `_init`.
         let pc = unsafe { &mut *world.inner.events.producer_cache.get() };
         if pc.collision_cb.handle.load(Ordering::Relaxed) == handle {
             *pc.collision_cb.cb.lock() = None;
@@ -1783,6 +1916,14 @@ pub extern "C" fn world_set_event_dispatch_mode(world: *mut WorldHandle, mode: u
                 return Bool::FALSE;
             }
         };
+        let Some(_init) = world.inner.events.init_guard() else {
+            set_error(
+                ERR_UNSUPPORTED,
+                "event dispatch mode change while physics is stepping",
+            );
+            return Bool::FALSE;
+        };
+        // SAFETY: the init-time thread contract is enforced at runtime by `_init`.
         let pc = unsafe { &mut *world.inner.events.producer_cache.get() };
         pc.dispatch_mode.store(mode as u32, Ordering::Release);
         clear_error();

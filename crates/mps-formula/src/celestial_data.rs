@@ -624,6 +624,14 @@ pub static NEPTUNE: CelestialBody = CelestialBody {
 ///
 /// `max_degree` is returned directly.
 /// Returns 0 on success; sets error on invalid ID.
+///
+/// # Safety
+///
+/// Every `out_*` pointer may be null, in which case that value is not written;
+/// each non-null scalar output must point to writable memory for one element
+/// (`f64`, or `u32` for `out_max_degree`), and `out_j2_j6` must point to
+/// writable memory for 5 `f64` elements. An invalid `body_id` fails with
+/// `ERR_INVALID_ARGUMENT`. No ownership is transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn celestial_get_body(
     body_id: u32,
@@ -700,6 +708,14 @@ pub extern "C" fn celestial_get_body(
 /// `c_coeffs_out` and `s_coeffs_out` must point to pre-allocated buffers of
 /// size `len` (use `celestial_get_sh_coeff_count(body_id)` first).
 /// Returns the number of coefficients actually written.
+///
+/// # Safety
+///
+/// `c_coeffs_out` and `s_coeffs_out` may each be null, in which case that
+/// buffer is not written; each non-null buffer must point to writable memory
+/// for `capacity` `f64` elements (only `min(capacity, coefficient count)`
+/// elements are written). An invalid `body_id` returns 0. No ownership is
+/// transferred.
 #[unsafe(no_mangle)]
 pub extern "C" fn celestial_get_sh_coeffs(
     body_id: u32,
@@ -725,6 +741,11 @@ pub extern "C" fn celestial_get_sh_coeffs(
 }
 
 /// Return the number of spherical-harmonic coefficients for a given body.
+///
+/// # Safety
+///
+/// No pointers are dereferenced; this function is safe to call with any
+/// `body_id` (invalid IDs return 0).
 #[unsafe(no_mangle)]
 pub extern "C" fn celestial_get_sh_coeff_count(body_id: u32) -> u32 {
     let id = match celestial_body_id_from_u32(body_id) {
