@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod tests {
     use mps_core::rapier::bridge::*;
-    use mps_core::rapier::ffi::*;
     use mps_core::rapier::ffi::Vec3;
 
     #[test]
@@ -34,11 +33,8 @@ mod tests {
     #[test]
     fn bulk_snapshot_rejects_null_world() {
         let mut buf = [0.0f64; 13];
-        let count = bulk_body_snapshot_to_direct_buffer(
-            std::ptr::null(),
-            buf.as_mut_ptr() as i64,
-            1,
-        );
+        let count =
+            bulk_body_snapshot_to_direct_buffer(std::ptr::null(), buf.as_mut_ptr() as i64, 1);
         assert_eq!(count, 0);
     }
 
@@ -60,8 +56,7 @@ mod tests {
         mps_core::rapier::rigid_body::world_insert_rigid_body(world, body);
 
         let mut buf = vec![0.0f64; 13 * 10];
-        let count =
-            bulk_body_snapshot_to_direct_buffer(world, buf.as_mut_ptr() as i64, 10);
+        let count = bulk_body_snapshot_to_direct_buffer(world, buf.as_mut_ptr() as i64, 10);
         assert_eq!(count, 1);
         assert!((buf[0] - 1.0).abs() < 1e-12);
         assert!((buf[1] - 2.0).abs() < 1e-12);
@@ -70,6 +65,3 @@ mod tests {
         mps_core::rapier::world::world_destroy(world);
     }
 }
-
-
-

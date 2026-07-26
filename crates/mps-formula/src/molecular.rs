@@ -4,8 +4,7 @@
 //! All input/output types are from `crate::ffi::types`.
 
 use crate::ffi::{
-    Bool, MolecularForceLaw, MolecularPairReport, MolecularParticle, Vec3,
-    vec3_finite,
+    Bool, MolecularForceLaw, MolecularPairReport, MolecularParticle, Vec3, vec3_finite,
 };
 use crate::math::{finite_non_negative, finite_positive};
 
@@ -58,12 +57,7 @@ fn effective_distance_sq(displacement: &Vec3, softening: f64) -> f64 {
 
 /// Lennard-Jones potential and force between a pair.
 /// Returns (potential, force_vector).
-fn lennard_jones_pair(
-    epsilon: f64,
-    sigma: f64,
-    displacement: &Vec3,
-    distance: f64,
-) -> (f64, Vec3) {
+fn lennard_jones_pair(epsilon: f64, sigma: f64, displacement: &Vec3, distance: f64) -> (f64, Vec3) {
     if epsilon == 0.0 || sigma <= 0.0 || distance <= EPSILON {
         return (0.0, Vec3::default());
     }
@@ -185,7 +179,11 @@ pub fn lennard_jones_force(
     sigma: f64,
     softening: f64,
 ) -> Option<Vec3> {
-    if !vec3_finite(displacement) || !finite_non_negative(epsilon) || !finite_positive(sigma) || !finite_non_negative(softening) {
+    if !vec3_finite(displacement)
+        || !finite_non_negative(epsilon)
+        || !finite_positive(sigma)
+        || !finite_non_negative(softening)
+    {
         return None;
     }
     let distance = effective_distance_sq(&displacement, softening).sqrt();
@@ -206,7 +204,11 @@ pub fn coulomb_potential(
         relative_permittivity,
         ..MolecularForceLaw::default()
     };
-    if !finite_positive(distance) || !charge_a.is_finite() || !charge_b.is_finite() || !force_law_valid(law) {
+    if !finite_positive(distance)
+        || !charge_a.is_finite()
+        || !charge_b.is_finite()
+        || !force_law_valid(law)
+    {
         return None;
     }
     let law = normalized_force_law(law);
@@ -229,7 +231,11 @@ pub fn coulomb_force(
         coulomb_enabled: Bool::TRUE,
         ..MolecularForceLaw::default()
     };
-    if !vec3_finite(displacement) || !charge_a.is_finite() || !charge_b.is_finite() || !force_law_valid(law) {
+    if !vec3_finite(displacement)
+        || !charge_a.is_finite()
+        || !charge_b.is_finite()
+        || !force_law_valid(law)
+    {
         return None;
     }
     let law = normalized_force_law(law);

@@ -28,8 +28,8 @@ pub mod rapier {
     pub mod integrators;
     pub mod interaction;
     pub mod joints;
-    pub mod math;
     pub mod material_mechanics;
+    pub mod math;
     pub mod molecular;
     pub mod neural;
     pub mod nuclear;

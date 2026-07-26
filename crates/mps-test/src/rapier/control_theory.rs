@@ -1,4 +1,4 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use mps_core::rapier::control_theory::*;
     use mps_core::rapier::ffi::*;
@@ -103,6 +103,3 @@ mod tests {
         assert!(report.final_cost < report.initial_cost);
     }
 }
-
-
-

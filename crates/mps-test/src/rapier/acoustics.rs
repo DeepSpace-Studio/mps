@@ -1,4 +1,4 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use mps_core::rapier::acoustics::*;
     use mps_core::rapier::ffi::*;
@@ -156,6 +156,3 @@ mod tests {
         assert!(stereo.attenuation > 0.0 && stereo.attenuation <= 1.0);
     }
 }
-
-
-

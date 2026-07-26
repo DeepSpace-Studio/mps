@@ -5,31 +5,79 @@ use topcoat::view::view;
 #[page("/formula")]
 pub async fn formula() -> topcoat::Result {
     let modules = [
-        ("88", "航天工程 (spaceflight)", "轨道力学、姿态控制、热控、推进、环境"),
+        (
+            "88",
+            "航天工程 (spaceflight)",
+            "轨道力学、姿态控制、热控、推进、环境",
+        ),
         ("23", "核物理 (nuclear)", "衰变、结合能、裂变/聚变、中子学"),
-        ("26", "材料力学 (material_mechanics)", "弹性、塑性、断裂、疲劳、梁理论"),
-        ("19", "天体物理 (astrophysics)", "N体、Barnes-Hut、FMM、Lane-Emden、Eddington"),
-        ("23", "相对论 (relativity)", "Lorentz、Schwarzschild、Kerr、ISCO、引力红移"),
+        (
+            "26",
+            "材料力学 (material_mechanics)",
+            "弹性、塑性、断裂、疲劳、梁理论",
+        ),
+        (
+            "19",
+            "天体物理 (astrophysics)",
+            "N体、Barnes-Hut、FMM、Lane-Emden、Eddington",
+        ),
+        (
+            "23",
+            "相对论 (relativity)",
+            "Lorentz、Schwarzschild、Kerr、ISCO、引力红移",
+        ),
         ("20", "量子力学 (quantum)", "波函数、隧穿、谐振子、氢原子"),
-        ("16", "电磁学 (electromagnetism)", "Lorentz、Faraday、Maxwell、Biot-Savart"),
-        ("18", "流体力学 (fluid)", "浮力/阻力、SPH、Navier-Stokes、Bernoulli、湍流"),
+        (
+            "16",
+            "电磁学 (electromagnetism)",
+            "Lorentz、Faraday、Maxwell、Biot-Savart",
+        ),
+        (
+            "18",
+            "流体力学 (fluid)",
+            "浮力/阻力、SPH、Navier-Stokes、Bernoulli、湍流",
+        ),
         ("7", "声学 (acoustics)", "模态分析、波动方程、共振、空间化"),
-        ("8", "分子动力学 (molecular)", "Lennard-Jones、Coulomb、对势相互作用"),
+        (
+            "8",
+            "分子动力学 (molecular)",
+            "Lennard-Jones、Coulomb、对势相互作用",
+        ),
         ("5", "空气动力学 (aerodynamics)", "表面力、体素气动、力估算"),
         ("4", "生物力学 (biomechanics)", "Hill 肌肉模型、关节约束"),
-        ("6", "混沌理论 (chaos)", "Lorenz 吸引子、双摆、Lyapunov 指数"),
+        (
+            "6",
+            "混沌理论 (chaos)",
+            "Lorenz 吸引子、双摆、Lyapunov 指数",
+        ),
         ("5", "连续介质力学 (continuum)", "FEM 形函数、应变/应力张量"),
         ("7", "控制理论 (control_theory)", "PID、状态空间、MPC、LQR"),
-        ("6", "引力模型 (gravitational_models)", "球谐展开、椭球、多面体"),
-        ("7", "积分器 (integrators)", "Leapfrog、Yoshida 4、Forest-Ruth 8、后牛顿"),
+        (
+            "6",
+            "引力模型 (gravitational_models)",
+            "球谐展开、椭球、多面体",
+        ),
+        (
+            "7",
+            "积分器 (integrators)",
+            "Leapfrog、Yoshida 4、Forest-Ruth 8、后牛顿",
+        ),
         ("4", "物理化学 (physchem)", "Gray-Scott 反应扩散、催化"),
         ("7", "等离子体物理 (plasma)", "Debye 屏蔽、Vlasov、PIC、MHD"),
         ("5", "软体 (softbody)", "XPBD 约束、超弹性本构模型"),
-        ("4", "超流 (superfluidity)", "Gross-Pitaevskii、涡旋晶格、量子化环流"),
+        (
+            "4",
+            "超流 (superfluidity)",
+            "Gross-Pitaevskii、涡旋晶格、量子化环流",
+        ),
         ("3", "拓扑学 (topology)", "持续同调、Betti 数"),
         ("6", "弹道学 (trajectory)", "6DOF 弹道/滑翔轨迹、RK4 积分"),
         ("3", "传动 (transmission)", "齿轮比、扭矩分配"),
-        ("5", "波动光学 (wave_optics)", "Kirchhoff 衍射、Fresnel 传播、干涉"),
+        (
+            "5",
+            "波动光学 (wave_optics)",
+            "Kirchhoff 衍射、Fresnel 传播、干涉",
+        ),
     ];
 
     view! {

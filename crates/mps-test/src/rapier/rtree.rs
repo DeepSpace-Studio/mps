@@ -1,7 +1,7 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use mps_core::rapier::rtree::*;
     use mps_core::rapier::ffi::*;
+    use mps_core::rapier::rtree::*;
 
     fn aabb(min: f64, max: f64) -> AabbDesc {
         AabbDesc {
@@ -79,6 +79,3 @@ mod tests {
         rtree_destroy(tree);
     }
 }
-
-
-

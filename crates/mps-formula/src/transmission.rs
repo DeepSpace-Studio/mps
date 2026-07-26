@@ -1,4 +1,4 @@
-﻿use crate::error::{ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error};
+use crate::error::{ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error};
 use crate::ffi::{
     Bool, CamConstraintDesc, CamConstraintReport, GearConstraintDesc, GearConstraintReport,
     ScrewConstraintDesc, ScrewConstraintReport, SpiralConstraintDesc, SpiralConstraintReport, Vec3,
@@ -271,7 +271,3 @@ pub extern "C" fn transmission_archimedean_spiral_radius(
     let radius = initial_radius + radial_pitch * (angle - phase);
     if radius >= 0.0 { radius } else { f64::NAN }
 }
-
-
-
-

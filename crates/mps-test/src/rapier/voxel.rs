@@ -1,8 +1,8 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use mps_core::rapier::voxel::*;
     use mps_core::rapier::ffi::*;
     use mps_core::rapier::ffi::{Bool, Quat};
+    use mps_core::rapier::voxel::*;
 
     fn options(mode: VoxelColliderMode) -> VoxelColliderOptions {
         VoxelColliderOptions {
@@ -62,8 +62,13 @@ mod tests {
                 z: 1.0,
             },
         };
-        let aabb_builder =
-            collider_builder_create_voxel_aabb(aabb, 0.5, 0.5, 0.5, options(VoxelColliderMode::Auto));
+        let aabb_builder = collider_builder_create_voxel_aabb(
+            aabb,
+            0.5,
+            0.5,
+            0.5,
+            options(VoxelColliderMode::Auto),
+        );
         assert!(!aabb_builder.is_null());
         mps_core::rapier::collider::collider_builder_destroy(aabb_builder);
 
@@ -87,6 +92,3 @@ mod tests {
         mps_core::rapier::collider::collider_builder_destroy(obb_builder);
     }
 }
-
-
-

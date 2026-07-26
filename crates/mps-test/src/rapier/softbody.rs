@@ -1,7 +1,7 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use mps_core::rapier::softbody::*;
     use mps_core::rapier::ffi::*;
+    use mps_core::rapier::softbody::*;
 
     fn v3(x: f64, y: f64, z: f64) -> Vec3 {
         Vec3 { x, y, z }
@@ -153,6 +153,3 @@ mod tests {
         assert!(vec3_to_rapier(velocities[0]).length() > 0.0);
     }
 }
-
-
-

@@ -1,7 +1,7 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use mps_core::rapier::thermodynamics::*;
     use mps_core::rapier::ffi::*;
+    use mps_core::rapier::thermodynamics::*;
 
     fn material() -> MaterialProperties {
         MaterialProperties {
@@ -85,6 +85,3 @@ mod tests {
         assert_eq!(report.edge_count, 1);
     }
 }
-
-
-

@@ -20,7 +20,7 @@ pub async fn MpsHeader(current_path: &str) -> topcoat::Result {
             </a>
             <nav style="display:flex; gap:2px; flex-wrap:wrap;">
                 for (href, zh, en) in nav_items {
-                    if current_path == href || (current_path == "" && href == "./") {
+                    if current_path == href || (current_path.is_empty() && href == "./") {
                         <a href=(href) style="background:#4a9eff; color:#fff; padding:8px 14px; font-size:13px; border-radius:4px; text-decoration:none;">
                             <span data-lang="zh">(zh)</span>
                             <span data-lang="en">(en)</span>

@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use mps_core::rapier::shared_arena::*;
     use mps_core::rapier::ffi::*;
+    use mps_core::rapier::shared_arena::*;
 
     // Header offsets (bytes) — must match the layout doc in shared_arena.rs
     const OFF_BODY_COUNT: usize = 32;
@@ -28,8 +28,13 @@ mod tests {
             + FORCE_SUMMARY_SIZE
             + 128 * CMD_SLOT_STRIDE as usize
             + 64 * EVENT_SLOT_STRIDE as usize;
-        assert_eq!(arena.size(), expected_size,
-            "expected {} got {}", expected_size, arena.size());
+        assert_eq!(
+            arena.size(),
+            expected_size,
+            "expected {} got {}",
+            expected_size,
+            arena.size()
+        );
 
         // Check header magic
         let magic = arena.header_u64(0);
@@ -139,8 +144,16 @@ mod tests {
         arena.flush_integration_params(1.0 / 60.0, 4, 2, &gravity);
         arena.flush_force_report(
             123.5,
-            &Vec3 { x: 10.0, y: 20.0, z: 30.0 },
-            &Vec3 { x: -1.0, y: -2.0, z: -3.0 },
+            &Vec3 {
+                x: 10.0,
+                y: 20.0,
+                z: 30.0,
+            },
+            &Vec3 {
+                x: -1.0,
+                y: -2.0,
+                z: -3.0,
+            },
             7,
             9,
         );
@@ -198,8 +211,9 @@ mod tests {
     // -----------------------------------------------------------------------
 
     use mps_core::rapier::rigid_body::{
-        rigid_body_builder_build, rigid_body_builder_create, rigid_body_builder_set_additional_mass,
-        rigid_body_builder_set_translation, world_insert_rigid_body,
+        rigid_body_builder_build, rigid_body_builder_create,
+        rigid_body_builder_set_additional_mass, rigid_body_builder_set_translation,
+        world_insert_rigid_body,
     };
     use mps_core::rapier::world::{
         world_create, world_create_shared_arena, world_destroy, world_destroy_shared_arena,
@@ -237,7 +251,11 @@ mod tests {
     /// carries sane generation/position data.
     #[test]
     fn world_step_preserves_arena_layout() {
-        let world = world_create(Vec3 { x: 0.0, y: -9.81, z: 0.0 });
+        let world = world_create(Vec3 {
+            x: 0.0,
+            y: -9.81,
+            z: 0.0,
+        });
         assert!(!world.is_null());
 
         let mut addr = 0u64;
@@ -247,7 +265,9 @@ mod tests {
             Bool::TRUE
         );
         assert!(addr != 0 && size != 0);
-        let arena = ArenaView { ptr: addr as *mut u8 };
+        let arena = ArenaView {
+            ptr: addr as *mut u8,
+        };
 
         // Snapshot the layout fields written by `new()`.
         let handle_map = arena.u64_at(OFF_BODY_HANDLE_MAP);
@@ -259,7 +279,14 @@ mod tests {
         assert!(integration != 0 && summary != 0 && cmd_ring != 0);
 
         let builder = rigid_body_builder_create(BodyStatus::Dynamic as u32);
-        rigid_body_builder_set_translation(builder, Vec3 { x: 1.0, y: 2.0, z: 3.0 });
+        rigid_body_builder_set_translation(
+            builder,
+            Vec3 {
+                x: 1.0,
+                y: 2.0,
+                z: 3.0,
+            },
+        );
         // A collider-less body has zero mass; give it mass so gravity acts.
         rigid_body_builder_set_additional_mass(builder, 5.0);
         let body = rigid_body_builder_build(builder);
@@ -283,10 +310,19 @@ mod tests {
         assert_eq!(arena.u32_at(OFF_BODY_COUNT), 1);
         let slot = arena.body_slot(0);
         let generation = arena.u64_at(slot);
-        assert!(generation > 0 && generation & 1 == 0, "generation {generation} not stable");
+        assert!(
+            generation > 0 && generation & 1 == 0,
+            "generation {generation} not stable"
+        );
         assert!((arena.f64_at(slot + 8) - 1.0).abs() < 1e-9, "pos_x drifted");
-        assert!(arena.f64_at(slot + 16) < 2.0, "gravity should have pulled pos_y down");
-        assert!((arena.f64_at(slot + 24) - 3.0).abs() < 1e-9, "pos_z drifted");
+        assert!(
+            arena.f64_at(slot + 16) < 2.0,
+            "gravity should have pulled pos_y down"
+        );
+        assert!(
+            (arena.f64_at(slot + 24) - 3.0).abs() < 1e-9,
+            "pos_z drifted"
+        );
 
         // Integration params region carries the current dt/gravity.
         let ip = integration as usize;
@@ -302,7 +338,11 @@ mod tests {
     /// command was consumed and applied.
     #[test]
     fn world_step_applies_shared_memory_command() {
-        let world = world_create(Vec3 { x: 0.0, y: 0.0, z: 0.0 });
+        let world = world_create(Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        });
         assert!(!world.is_null());
 
         let mut addr = 0u64;
@@ -311,10 +351,19 @@ mod tests {
             world_create_shared_arena(world, 8, 8, 64, 64, &mut addr, &mut size),
             Bool::TRUE
         );
-        let arena = ArenaView { ptr: addr as *mut u8 };
+        let arena = ArenaView {
+            ptr: addr as *mut u8,
+        };
 
         let builder = rigid_body_builder_create(BodyStatus::Dynamic as u32);
-        rigid_body_builder_set_translation(builder, Vec3 { x: 0.0, y: 0.0, z: 0.0 });
+        rigid_body_builder_set_translation(
+            builder,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
         let body = rigid_body_builder_build(builder);
         assert_ne!(world_insert_rigid_body(world, body), 0);
 
@@ -333,9 +382,18 @@ mod tests {
         // Command consumed: write index reset, velocity applied to body slot 0.
         assert_eq!(arena.u32_at(OFF_CMD_WRITE), 0);
         let slot = arena.body_slot(0);
-        assert!((arena.f64_at(slot + 32) - 5.0).abs() < 1e-9, "vel_x not applied");
-        assert!((arena.f64_at(slot + 40) - 6.0).abs() < 1e-9, "vel_y not applied");
-        assert!((arena.f64_at(slot + 48) - 7.0).abs() < 1e-9, "vel_z not applied");
+        assert!(
+            (arena.f64_at(slot + 32) - 5.0).abs() < 1e-9,
+            "vel_x not applied"
+        );
+        assert!(
+            (arena.f64_at(slot + 40) - 6.0).abs() < 1e-9,
+            "vel_y not applied"
+        );
+        assert!(
+            (arena.f64_at(slot + 48) - 7.0).abs() < 1e-9,
+            "vel_z not applied"
+        );
 
         world_destroy_shared_arena(world);
         world_destroy(world);
@@ -343,7 +401,11 @@ mod tests {
 
     #[test]
     fn world_create_shared_arena_rejects_invalid_capacities() {
-        let world = world_create(Vec3 { x: 0.0, y: -9.81, z: 0.0 });
+        let world = world_create(Vec3 {
+            x: 0.0,
+            y: -9.81,
+            z: 0.0,
+        });
         assert!(!world.is_null());
 
         let mut addr = 0u64;

@@ -1,4 +1,4 @@
-﻿//! Body-body interactions: Newtonian gravity, Coulomb friction, and air drag.
+//! Body-body interactions: Newtonian gravity, Coulomb friction, and air drag.
 //!
 //! This module bridges the existing formula layer (aerodynamics, trajectory,
 //! spaceflight) to Rapier rigid bodies.  Callers configure laws once via the
@@ -22,9 +22,7 @@
 
 use rapier3d::prelude::Vector;
 
-use crate::rapier::ffi::{
-    AirDragLaw, CustomPhysicsReport, vec3_from_rapier, vec3_to_rapier,
-};
+use crate::rapier::ffi::{AirDragLaw, CustomPhysicsReport, vec3_from_rapier, vec3_to_rapier};
 use crate::rapier::math::KahanVec3;
 
 // ---------------------------------------------------------------------------
@@ -75,11 +73,10 @@ pub fn pairwise_gravity(
         let (hi, mi, pi) = (bodies[i].0, bodies[i].1, bodies[i].2);
         let mut net_force = Vector::ZERO;
 
-        for j in 0..bodies.len() {
+        for (j, &(_, mj, pj)) in bodies.iter().enumerate() {
             if i == j {
                 continue;
             }
-            let (_, mj, pj) = (bodies[j].0, bodies[j].1, bodies[j].2);
             let offset = pj - pi;
             let dist_sq = offset.length_squared();
             let dist = dist_sq.sqrt().max(MIN_GRAVITY_DISTANCE);
@@ -88,12 +85,12 @@ pub fn pairwise_gravity(
             net_force += offset * force_mag;
         }
 
-        if net_force != Vector::ZERO {
-            if let Some(body) = world.bodies.get_mut(hi) {
-                body.add_force(net_force, true);
-                total_force.add(vec3_from_rapier(net_force));
-                gravity_body_count += 1;
-            }
+        if net_force != Vector::ZERO
+            && let Some(body) = world.bodies.get_mut(hi)
+        {
+            body.add_force(net_force, true);
+            total_force.add(vec3_from_rapier(net_force));
+            gravity_body_count += 1;
         }
     }
 
@@ -122,102 +119,6 @@ impl Default for CoulombFrictionParams {
             dynamic_coefficient: 0.4,
             velocity_threshold: 0.01,
             enabled: false,
-        }
-    }
-}
-
-/// Apply Coulomb friction forces based on relative tangential velocity at
-/// contact points.  This is a **force event** — it reads contact data from
-/// the previous frame's narrow-phase and applies corrective friction forces
-/// to sliding bodies.
-///
-/// Unlike the `modify_solver_contacts` hook (which changes friction
-/// coefficients inside the solver), this applies an **explicit friction force**
-/// outside the solver, which is useful for:
-/// - Bodies that are not in persistent contact (one-off sliding events)
-/// - Applying friction as a post-step force for game-logic purposes
-/// - Debug visualisation of friction force vectors
-pub(crate) fn apply_coulomb_friction_forces(
-    world: &mut crate::rapier::world::PhysicsWorld,
-    params: CoulombFrictionParams,
-) {
-    if !params.enabled {
-        return;
-    }
-
-    let static_mu = params.static_coefficient.max(0.0);
-    let dynamic_mu = params.dynamic_coefficient.max(0.0);
-    let threshold = params.velocity_threshold.max(0.0);
-
-    // Iterate all contact pairs from the narrow-phase.
-    // Collect (rb_handle1, rb_handle2, friction_force) tuples first
-    // to avoid borrowing world.bodies both immutably and mutably.
-    let mut friction_work: Vec<(_, _, Vector)> = Vec::new();
-
-    for contact_pair in world.narrow_phase.contact_pairs() {
-        let ch1 = contact_pair.collider1;
-        let ch2 = contact_pair.collider2;
-        let Some(collider1) = world.colliders.get(ch1) else {
-            continue;
-        };
-        let Some(collider2) = world.colliders.get(ch2) else {
-            continue;
-        };
-        let Some(rb_handle1) = collider1.parent() else { continue };
-        let Some(rb_handle2) = collider2.parent() else { continue };
-        let Some(body1) = world.bodies.get(rb_handle1) else { continue };
-        let Some(body2) = world.bodies.get(rb_handle2) else { continue };
-        if !body1.is_dynamic() && !body2.is_dynamic() {
-            continue;
-        }
-
-        for manifold in &contact_pair.manifolds {
-            let normal = manifold.data.normal;
-            for contact in &manifold.points {
-                // Compute world-space contact point from local points
-                let p1_world = body1.position() * contact.local_p1;
-                let p2_world = body2.position() * contact.local_p2;
-                let point = (p1_world + p2_world) * 0.5;
-                let r1 = point - body1.translation();
-                let r2 = point - body2.translation();
-                let v1 = body1.linvel() + body1.angvel().cross(r1);
-                let v2 = body2.linvel() + body2.angvel().cross(r2);
-                let rel_vel = v1 - v2;
-
-                let normal_speed = rel_vel.dot(normal);
-                let tangential_vel = rel_vel - normal * normal_speed;
-                let tangential_speed = tangential_vel.length();
-
-                if tangential_speed < 1.0e-12 {
-                    continue;
-                }
-
-                let mu = if tangential_speed <= threshold {
-                    static_mu
-                } else {
-                    dynamic_mu
-                };
-
-                let normal_force_mag = contact.data.impulse;
-                let friction_mag = mu * normal_force_mag;
-                let friction_force = -tangential_vel / tangential_speed * friction_mag;
-
-                friction_work.push((rb_handle1, rb_handle2, friction_force));
-            }
-        }
-    }
-
-    // Apply collected forces (now mutable borrow is fine — no immutable refs live)
-    for (rb1, rb2, force) in &friction_work {
-        if let Some(b1) = world.bodies.get_mut(*rb1) {
-            if b1.is_dynamic() {
-                b1.add_force(*force, true);
-            }
-        }
-        if let Some(b2) = world.bodies.get_mut(*rb2) {
-            if b2.is_dynamic() {
-                b2.add_force(-*force, true);
-            }
         }
     }
 }
@@ -289,60 +190,11 @@ pub fn per_body_air_drag(
 // Unified interaction step — called from world_step
 // ---------------------------------------------------------------------------
 
-/// Apply all body-body interactions during a physics step.
-///
-/// Called from `world_step` after the custom-physics read and before the
-/// Rapier pipeline step.  This is the single entry point that dispatches to
-/// all interaction sub-systems.
-///
-/// The `custom` state is passed by reference to avoid a second clone.
-/// Results are merged into the existing report (from external forces).
-pub(crate) fn apply_body_interactions(
-    world: &mut crate::rapier::world::PhysicsWorld,
-    custom: &crate::rapier::events::CustomPhysicsState,
-) {
-    // Merge into existing report rather than overwriting
-    let mut report = world.events.custom_physics().last_report;
-
-    // 1. Newtonian pairwise gravity
-    if let Some(gravity_law) = custom.newton_gravity {
-        if gravity_law.enabled.0 != 0 {
-            pairwise_gravity(world, &mut report);
-        }
-    }
-
-    // 2. Coulomb friction from contact data
-    if let Some(friction_law) = custom.coulomb_friction {
-        if friction_law.enabled.0 != 0 {
-            apply_coulomb_friction_forces(
-                world,
-                CoulombFrictionParams {
-                    static_coefficient: friction_law.static_coefficient,
-                    dynamic_coefficient: friction_law.dynamic_coefficient,
-                    velocity_threshold: friction_law.velocity_threshold,
-                    enabled: true,
-                },
-            );
-        }
-    }
-
-    // 3. Per-body air drag (accumulates into report)
-    if let Some(drag_law) = custom.air_drag {
-        if drag_law.enabled.0 != 0 {
-            per_body_air_drag(world, drag_law, &mut report);
-        }
-    }
-
-    world
-        .events
-        .set_last_custom_physics_report(report);
-}
-
 /// Facade-based wrapper: applies legacy unregistered body interactions through
 /// the facade so the frame-log captures them with correct ForceLawType tags.
 ///
 /// This is a temporary shim — once all force sources are registered as ForceLaw
-/// impls, this function and `apply_body_interactions` will be removed.
+/// impls, this function will be removed.
 pub(crate) fn apply_body_interactions_with_facade(
     force_registry: &ForceRegistry,
     custom: &crate::rapier::events::CustomPhysicsState,
@@ -351,64 +203,64 @@ pub(crate) fn apply_body_interactions_with_facade(
     use crate::rapier::forces::ForceLawType;
 
     // 1. Newtonian pairwise gravity
-    if let Some(gravity_law) = custom.newton_gravity {
-        if gravity_law.enabled.0 != 0 {
-            let registered = !force_registry
-                .find_by_type(ForceLawType::NewtonianGravity)
-                .is_empty();
-            if !registered {
-                // Use a temporary ForceLaw instance
-                let law = NewtonianGravityForceLaw {
-                    gravitational_constant: gravity_law.gravitational_constant,
-                    min_distance: gravity_law.min_distance,
-                    max_distance: gravity_law.max_distance,
-                    enabled: true,
-                };
-                law.apply(facade);
-            }
+    if let Some(gravity_law) = custom.newton_gravity
+        && gravity_law.enabled.0 != 0
+    {
+        let registered = !force_registry
+            .find_by_type(ForceLawType::NewtonianGravity)
+            .is_empty();
+        if !registered {
+            // Use a temporary ForceLaw instance
+            let law = NewtonianGravityForceLaw {
+                gravitational_constant: gravity_law.gravitational_constant,
+                min_distance: gravity_law.min_distance,
+                max_distance: gravity_law.max_distance,
+                enabled: true,
+            };
+            law.apply(facade);
         }
     }
 
     // 2. Coulomb friction from contact data
-    if let Some(friction_law) = custom.coulomb_friction {
-        if friction_law.enabled.0 != 0 {
-            let registered = !force_registry
-                    .find_by_type(ForceLawType::CoulombFriction)
-                    .is_empty();
-            if !registered {
-                apply_coulomb_friction_forces_with_facade(
-                    facade.narrow_phase,
-                    CoulombFrictionParams {
-                        static_coefficient: friction_law.static_coefficient,
-                        dynamic_coefficient: friction_law.dynamic_coefficient,
-                        velocity_threshold: friction_law.velocity_threshold,
-                        enabled: true,
-                    },
-                    facade,
-                );
-            }
+    if let Some(friction_law) = custom.coulomb_friction
+        && friction_law.enabled.0 != 0
+    {
+        let registered = !force_registry
+            .find_by_type(ForceLawType::CoulombFriction)
+            .is_empty();
+        if !registered {
+            apply_coulomb_friction_forces_with_facade(
+                facade.narrow_phase,
+                CoulombFrictionParams {
+                    static_coefficient: friction_law.static_coefficient,
+                    dynamic_coefficient: friction_law.dynamic_coefficient,
+                    velocity_threshold: friction_law.velocity_threshold,
+                    enabled: true,
+                },
+                facade,
+            );
         }
     }
 
     // 3. Per-body air drag
-    if let Some(drag_law) = custom.air_drag {
-        if drag_law.enabled.0 != 0 {
-            let registered = !force_registry
-                .find_by_type(ForceLawType::AirDrag)
-                .is_empty();
-            if !registered {
-                let law = AirDragForceLaw {
-                    fluid_velocity: vec3_to_rapier(drag_law.fluid_velocity),
-                    density: drag_law.density,
-                    dynamic_viscosity: drag_law.dynamic_viscosity,
-                    characteristic_length: drag_law.characteristic_length,
-                    reference_area: drag_law.reference_area,
-                    drag_coefficient: drag_law.drag_coefficient,
-                    reynolds_stokes_limit: drag_law.reynolds_stokes_limit,
-                    enabled: true,
-                };
-                law.apply(facade);
-            }
+    if let Some(drag_law) = custom.air_drag
+        && drag_law.enabled.0 != 0
+    {
+        let registered = !force_registry
+            .find_by_type(ForceLawType::AirDrag)
+            .is_empty();
+        if !registered {
+            let law = AirDragForceLaw {
+                fluid_velocity: vec3_to_rapier(drag_law.fluid_velocity),
+                density: drag_law.density,
+                dynamic_viscosity: drag_law.dynamic_viscosity,
+                characteristic_length: drag_law.characteristic_length,
+                reference_area: drag_law.reference_area,
+                drag_coefficient: drag_law.drag_coefficient,
+                reynolds_stokes_limit: drag_law.reynolds_stokes_limit,
+                enabled: true,
+            };
+            law.apply(facade);
         }
     }
 }
@@ -438,10 +290,18 @@ fn apply_coulomb_friction_forces_with_facade(
         let Some(collider2) = facade.colliders.get(ch2) else {
             continue;
         };
-        let Some(rb_handle1) = collider1.parent() else { continue };
-        let Some(rb_handle2) = collider2.parent() else { continue };
-        let Some(body1) = facade.bodies.get(rb_handle1) else { continue };
-        let Some(body2) = facade.bodies.get(rb_handle2) else { continue };
+        let Some(rb_handle1) = collider1.parent() else {
+            continue;
+        };
+        let Some(rb_handle2) = collider2.parent() else {
+            continue;
+        };
+        let Some(body1) = facade.bodies.get(rb_handle1) else {
+            continue;
+        };
+        let Some(body2) = facade.bodies.get(rb_handle2) else {
+            continue;
+        };
         if !body1.is_dynamic() && !body2.is_dynamic() {
             continue;
         }
@@ -493,7 +353,7 @@ fn apply_coulomb_friction_forces_with_facade(
 // ---------------------------------------------------------------------------
 
 use crate::rapier::forces::{ForceFacade, ForceLaw, ForceLawType, ForceRegistry};
-use rapier3d::prelude::{ColliderSet, NarrowPhase, RigidBodyHandle, RigidBodySet};
+use rapier3d::prelude::{NarrowPhase, RigidBodyHandle};
 use smallvec::SmallVec;
 
 /// Newtonian pairwise gravity as a registered force law.
@@ -553,7 +413,7 @@ impl ForceLaw for NewtonianGravityForceLaw {
         for i in 0..n {
             let (_hi, mi, pi) = (body_data[i].0, body_data[i].1, body_data[i].2);
             for j in (i + 1)..n {
-                let (hj, mj, pj) = (body_data[j].0, body_data[j].1, body_data[j].2);
+                let (_hj, mj, pj) = (body_data[j].0, body_data[j].1, body_data[j].2);
                 let offset = pj - pi;
                 let dist_sq = offset.length_squared();
                 if dist_sq > max_dist_sq {
@@ -623,11 +483,15 @@ impl ForceLaw for AirDragForceLaw {
                 continue;
             }
 
-            let reynolds = self.density * speed * self.characteristic_length / self.dynamic_viscosity;
+            let reynolds =
+                self.density * speed * self.characteristic_length / self.dynamic_viscosity;
             max_re = max_re.max(reynolds);
 
             let drag_magnitude = if reynolds <= self.reynolds_stokes_limit {
-                3.0 * std::f64::consts::PI * self.dynamic_viscosity * self.characteristic_length * speed
+                3.0 * std::f64::consts::PI
+                    * self.dynamic_viscosity
+                    * self.characteristic_length
+                    * speed
             } else {
                 0.5 * self.density * speed * speed * self.drag_coefficient * self.reference_area
             };
@@ -708,17 +572,31 @@ impl ForceLaw for CelestialGravityForceLaw {
             let accel = if normalized_altitude < 2.0 && self.body.flattening > 0.0 {
                 // Near surface of oblate body → ellipsoid model
                 crate::rapier::gravitational_models::ellipsoid_gravity(pos, self.body)
-            } else if normalized_altitude < 10.0 && self.max_sh_degree >= 2 && !self.body.c_coeffs.is_empty() {
+            } else if normalized_altitude < 10.0
+                && self.max_sh_degree >= 2
+                && !self.body.c_coeffs.is_empty()
+            {
                 // Medium orbit → spherical harmonics
                 crate::rapier::gravitational_models::spherical_harmonics_acceleration(
-                    pos, self.body, self.max_sh_degree.min(self.body.max_degree),
+                    pos,
+                    self.body,
+                    self.max_sh_degree.min(self.body.max_degree),
                 )
             } else if normalized_altitude < 100.0 {
                 // High orbit → J2–J6 zonal harmonics (fast)
-                let jn: [f64; 5] = [self.body.j2, self.body.j3, self.body.j4, self.body.j5, self.body.j6];
+                let jn: [f64; 5] = [
+                    self.body.j2,
+                    self.body.j3,
+                    self.body.j4,
+                    self.body.j5,
+                    self.body.j6,
+                ];
                 let jn_filtered: Vec<f64> = jn.iter().copied().filter(|&j| j != 0.0).collect();
                 crate::rapier::gravitational_models::zonal_harmonics_acceleration(
-                    pos, gm, r_eq, &jn_filtered,
+                    pos,
+                    gm,
+                    r_eq,
+                    &jn_filtered,
                 )
             } else {
                 // Far away → point mass with J2 (minimal overhead)
@@ -738,13 +616,7 @@ impl ForceLaw for CelestialGravityForceLaw {
                 let mass = body.mass();
                 if mass > 0.0 {
                     let force = force * mass;
-                    ForceFacade::push_force(
-                        facade.body_log,
-                        body,
-                        *handle,
-                        force,
-                        self.law_type(),
-                    );
+                    ForceFacade::push_force(facade.body_log, body, *handle, force, self.law_type());
                 }
             }
         }
@@ -762,10 +634,3 @@ impl ForceLaw for CelestialGravityForceLaw {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
-
-
-
-
-
-
-

@@ -1,7 +1,7 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use mps_core::rapier::math::*;
     use mps_core::rapier::ffi::*;
+    use mps_core::rapier::math::*;
 
     #[test]
     fn kahan_sum_beats_naive_on_many_small_values() {
@@ -52,7 +52,10 @@ mod tests {
             naive.y += small.y;
             naive.z += small.z;
         }
-        assert!((naive.x - big.x).abs() < 0.5, "naive vec3 x lost small terms");
+        assert!(
+            (naive.x - big.x).abs() < 0.5,
+            "naive vec3 x lost small terms"
+        );
 
         // Kahan: small components are preserved.
         let mut kahan = KahanVec3::new(big);
@@ -124,6 +127,3 @@ mod tests {
         assert!((naive - 2.0).abs() <= (fused - 2.0).abs() + 1e-15);
     }
 }
-
-
-

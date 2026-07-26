@@ -1,8 +1,8 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use mps_core::rapier::aerodynamics::*;
-    use mps_core::rapier::ffi::*;
     use mps_core::rapier::ffi::BodyStatus;
+    use mps_core::rapier::ffi::*;
 
     #[test]
     fn estimates_drag_force_from_exposed_surface() {
@@ -90,6 +90,3 @@ mod tests {
         mps_core::rapier::world::world_destroy(world);
     }
 }
-
-
-

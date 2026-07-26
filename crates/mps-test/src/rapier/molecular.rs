@@ -1,8 +1,8 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use mps_core::rapier::molecular::*;
-    use mps_core::rapier::ffi::*;
     use mps_core::rapier::ffi::BodyStatus;
+    use mps_core::rapier::ffi::*;
+    use mps_core::rapier::molecular::*;
 
     fn particle(x: f64, charge: f64) -> MolecularParticle {
         MolecularParticle {
@@ -116,6 +116,3 @@ mod tests {
         mps_core::rapier::world::world_destroy(world);
     }
 }
-
-
-

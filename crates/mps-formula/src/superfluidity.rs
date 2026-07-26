@@ -8,9 +8,7 @@
 //!
 //! All functions are FFI-exported with C-compatible types.
 
-use crate::error::{
-    ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error,
-};
+use crate::error::{ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error};
 use crate::ffi::{
     BiotSavartVelocity, Bool, GpEnergyDensity, GpGridPoint, GpOrderParameter,
     GpTimeEvolutionParams, QuantisedCirculation, Vec3, VortexReconnectionReport, VortexRing,
@@ -148,7 +146,10 @@ pub extern "C" fn sf_biot_savart_velocity(
 
     if r1_len < EPSILON || r2_len < EPSILON {
         // Field point coincides with an endpoint → near-singular
-        set_error(ERR_INVALID_ARGUMENT, "field point coincides with segment endpoint");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "field point coincides with segment endpoint",
+        );
         return Bool::FALSE;
     }
     if seg_len < EPSILON {
@@ -173,7 +174,10 @@ pub extern "C" fn sf_biot_savart_velocity(
         let dot2 = vec3_dot(r2, seg_vec);
         let on_segment = (dot1 >= 0.0) != (dot2 >= 0.0);
         if on_segment {
-            set_error(ERR_INVALID_ARGUMENT, "field point lies on the vortex segment");
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "field point lies on the vortex segment",
+            );
             return Bool::FALSE;
         }
         return write_out(
@@ -223,12 +227,12 @@ pub extern "C" fn sf_biot_savart_velocity(
 ///
 /// where κ = h/m is the circulation quantum and ξ is the healing length.
 #[unsafe(no_mangle)]
-pub extern "C" fn sf_vortex_ring_velocity(
-    ring: VortexRing,
-    out_velocity: *mut Vec3,
-) -> Bool {
+pub extern "C" fn sf_vortex_ring_velocity(ring: VortexRing, out_velocity: *mut Vec3) -> Bool {
     if !ring_valid(&ring) {
-        set_error(ERR_INVALID_ARGUMENT, "ring parameters must be finite and positive");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "ring parameters must be finite and positive",
+        );
         return Bool::FALSE;
     }
 
@@ -237,7 +241,10 @@ pub extern "C" fn sf_vortex_ring_velocity(
     let xi = 1.0e-10; // default healing length ~ 0.1 nm for ⁴He
 
     if r <= xi {
-        set_error(ERR_INVALID_ARGUMENT, "ring radius must exceed healing length");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "ring radius must exceed healing length",
+        );
         return Bool::FALSE;
     }
 
@@ -348,7 +355,10 @@ pub extern "C" fn sf_quantum_number_estimate(
         return Bool::FALSE;
     }
     if !finite_positive(loop_radius) {
-        set_error(ERR_INVALID_ARGUMENT, "loop_radius must be positive and finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "loop_radius must be positive and finite",
+        );
         return Bool::FALSE;
     }
     if sample_count < 3 {
@@ -389,11 +399,17 @@ pub extern "C" fn sf_gp_order_parameter(
     out_param: *mut GpOrderParameter,
 ) -> Bool {
     if !vec3_finite(vortex_center) || !vec3_finite(vortex_axis) {
-        set_error(ERR_INVALID_ARGUMENT, "vortex_center and vortex_axis must be finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "vortex_center and vortex_axis must be finite",
+        );
         return Bool::FALSE;
     }
     if !finite_positive(healing_length) {
-        set_error(ERR_INVALID_ARGUMENT, "healing_length must be positive and finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "healing_length must be positive and finite",
+        );
         return Bool::FALSE;
     }
     if !finite_positive(background_density) {
@@ -425,9 +441,23 @@ pub extern "C" fn sf_gp_order_parameter(
     // Phase: φ = n * arctan2(y', x') where (x', y') are in the plane orthogonal to axis
     // Build a local 2D coordinate system in the plane perpendicular to the axis
     let ref_dir = if axis.x.abs() < 0.9 {
-        vec3_normalize(vec3_cross(axis, Vec3 { x: 1.0, y: 0.0, z: 0.0 }))
+        vec3_normalize(vec3_cross(
+            axis,
+            Vec3 {
+                x: 1.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        ))
     } else {
-        vec3_normalize(vec3_cross(axis, Vec3 { x: 0.0, y: 1.0, z: 0.0 }))
+        vec3_normalize(vec3_cross(
+            axis,
+            Vec3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            },
+        ))
     };
     let ref_dir2 = vec3_cross(axis, ref_dir);
 
@@ -463,7 +493,10 @@ pub extern "C" fn sf_gp_energy_density(
     out_energy: *mut GpEnergyDensity,
 ) -> Bool {
     if !finite_non_negative(density) {
-        set_error(ERR_INVALID_ARGUMENT, "density must be finite and non-negative");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "density must be finite and non-negative",
+        );
         return Bool::FALSE;
     }
     if !finite_non_negative(trapping_frequency) {
@@ -478,7 +511,10 @@ pub extern "C" fn sf_gp_energy_density(
         return Bool::FALSE;
     }
     if !finite_positive(coupling_constant) {
-        set_error(ERR_INVALID_ARGUMENT, "coupling_constant must be positive and finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "coupling_constant must be positive and finite",
+        );
         return Bool::FALSE;
     }
     if !finite_non_negative(radius_from_center) {
@@ -507,7 +543,11 @@ pub extern "C" fn sf_gp_energy_density(
 
     // Trapping potential energy density: V(r) n, V(r) = ½ m ω² r²
     let trapping_density = if trapping_frequency > EPSILON {
-        0.5 * mass * trapping_frequency * trapping_frequency * radius_from_center * radius_from_center
+        0.5 * mass
+            * trapping_frequency
+            * trapping_frequency
+            * radius_from_center
+            * radius_from_center
             * density
     } else {
         0.0
@@ -517,7 +557,11 @@ pub extern "C" fn sf_gp_energy_density(
 
     // Chemical potential: μ = gn + V_trap (local density approximation)
     let chemical_potential = coupling_constant * density
-        + 0.5 * mass * trapping_frequency * trapping_frequency * radius_from_center
+        + 0.5
+            * mass
+            * trapping_frequency
+            * trapping_frequency
+            * radius_from_center
             * radius_from_center;
 
     write_out(
@@ -550,11 +594,17 @@ pub extern "C" fn sf_gp_amplitude_evolution(
     out_next_amplitude: *mut f64,
 ) -> Bool {
     if !finite_non_negative(amplitude) {
-        set_error(ERR_INVALID_ARGUMENT, "amplitude must be finite and non-negative");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "amplitude must be finite and non-negative",
+        );
         return Bool::FALSE;
     }
     if !finite_non_negative(density) {
-        set_error(ERR_INVALID_ARGUMENT, "density must be finite and non-negative");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "density must be finite and non-negative",
+        );
         return Bool::FALSE;
     }
     if !finite_positive(params.healing_length)
@@ -619,7 +669,10 @@ pub extern "C" fn sf_vortex_reconnection(
         return Bool::FALSE;
     }
     if !finite_positive(healing_length) {
-        set_error(ERR_INVALID_ARGUMENT, "healing_length must be positive and finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "healing_length must be positive and finite",
+        );
         return Bool::FALSE;
     }
 
@@ -723,13 +776,13 @@ pub extern "C" fn sf_vortex_tangle_stats(
     out_stats: *mut VortexTangleStats,
 ) -> Bool {
     if segments.is_null() || segment_count == 0 {
-        return write_out(
-            out_stats,
-            VortexTangleStats::default(),
-        );
+        return write_out(out_stats, VortexTangleStats::default());
     }
     if !finite_non_negative(box_volume) {
-        set_error(ERR_INVALID_ARGUMENT, "box_volume must be finite and non-negative");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "box_volume must be finite and non-negative",
+        );
         return Bool::FALSE;
     }
 
@@ -871,9 +924,23 @@ pub extern "C" fn sf_gp_grid_sample(
     // Build local frame in the plane
     let axis = vec3_normalize(plane_axis);
     let ref_dir = if axis.x.abs() < 0.9 {
-        vec3_normalize(vec3_cross(axis, Vec3 { x: 1.0, y: 0.0, z: 0.0 }))
+        vec3_normalize(vec3_cross(
+            axis,
+            Vec3 {
+                x: 1.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        ))
     } else {
-        vec3_normalize(vec3_cross(axis, Vec3 { x: 0.0, y: 1.0, z: 0.0 }))
+        vec3_normalize(vec3_cross(
+            axis,
+            Vec3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            },
+        ))
     };
     let ref_dir2 = vec3_cross(axis, ref_dir);
 
@@ -891,10 +958,14 @@ pub extern "C" fn sf_gp_grid_sample(
 
             let mut param = GpOrderParameter::default();
             let _ = sf_gp_order_parameter(
-                px, py, pz,
-                vortex_center, vortex_axis,
+                px,
+                py,
+                pz,
+                vortex_center,
+                vortex_axis,
                 circulation_quantum,
-                healing_length, background_density,
+                healing_length,
+                background_density,
                 &mut param,
             );
 
@@ -929,7 +1000,10 @@ pub extern "C" fn sf_healing_length(
         || !finite_positive(mass)
         || !finite_positive(background_density)
     {
-        set_error(ERR_INVALID_ARGUMENT, "all parameters must be positive and finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "all parameters must be positive and finite",
+        );
         return f64::NAN;
     }
     clear_error();
@@ -948,7 +1022,10 @@ pub extern "C" fn sf_sound_speed(
         || !finite_positive(mass)
         || !finite_positive(background_density)
     {
-        set_error(ERR_INVALID_ARGUMENT, "all parameters must be positive and finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "all parameters must be positive and finite",
+        );
         return f64::NAN;
     }
     clear_error();
@@ -970,10 +1047,3 @@ pub extern "C" fn sf_helium_scattering_length() -> f64 {
 // ===========================================================================
 // Tests
 // ===========================================================================
-
-
-
-
-
-
-

@@ -1,7 +1,4 @@
-use topcoat::{
-    router::page,
-    view::view,
-};
+use topcoat::{router::page, view::view};
 
 /// Home page — MPS Physics System overview
 #[page("/")]

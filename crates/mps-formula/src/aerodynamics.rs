@@ -3,10 +3,8 @@
 //! Pure computation only — no access to `WorldHandle`, `RigidBody`, or Rapier state.
 
 use crate::ffi::{
-    AeroForceReport, AeroSurface, Vec3,
-    vec3_finite, vec3_to_rapier, vec3_from_rapier,
+    AeroForceReport, AeroSurface, Vec3, vec3_finite, vec3_from_rapier, vec3_to_rapier,
 };
-use rapier3d::prelude::Vector;
 
 fn aero_surface_valid(surface: &AeroSurface) -> bool {
     vec3_finite(surface.point)
@@ -34,9 +32,7 @@ pub fn compute_surface_force(
 
     let point = vec3_to_rapier(surface.point);
     let normal = vec3_to_rapier(surface.normal);
-    let Some(unit_normal) = normal.try_normalize() else {
-        return None;
-    };
+    let unit_normal = normal.try_normalize()?;
 
     let body_center = vec3_to_rapier(body_center);
     let body_linvel = vec3_to_rapier(body_linvel);

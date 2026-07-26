@@ -1,4 +1,4 @@
-﻿//! Chaos theory and nonlinear dynamics:
+//! Chaos theory and nonlinear dynamics:
 //! - Lorenz attractor (integration & visualisation)
 //! - Lyapunov exponent estimation (largest exponent via orbit divergence)
 //! - Bifurcation diagrams (scan parameter vs. sampled state)
@@ -11,9 +11,7 @@
 
 use core::f64;
 
-use crate::error::{
-    ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error,
-};
+use crate::error::{ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error};
 use crate::ffi::{
     BifurcationPoint, Bool, ChaosDetectionParams, ChaosDetectionReport, DoublePendulumAccel,
     DoublePendulumParams, DoublePendulumState, LogisticMapState, LorenzParams, LorenzState,
@@ -49,12 +47,7 @@ fn lorenz_deriv(state: LorenzState, params: LorenzParams) -> LorenzStepReport {
     let dx = params.sigma * (state.y - state.x);
     let dy = state.x * (params.rho - state.z) - state.y;
     let dz = state.x * state.y - params.beta * state.z;
-    LorenzStepReport {
-        state,
-        dx,
-        dy,
-        dz,
-    }
+    LorenzStepReport { state, dx, dy, dz }
 }
 
 /// Perform one RK4 step of the Lorenz system.
@@ -244,7 +237,10 @@ pub extern "C" fn chaos_lyapunov_lorenz(
         return Bool::FALSE;
     }
     if renorm_every == 0 || total_steps == 0 {
-        set_error(ERR_INVALID_ARGUMENT, "renorm_every and total_steps must be > 0");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "renorm_every and total_steps must be > 0",
+        );
         return Bool::FALSE;
     }
 
@@ -514,7 +510,10 @@ pub extern "C" fn chaos_bifurcation_lorenz(
         return 0;
     }
     if param_steps == 0 || samples_per_value == 0 {
-        set_error(ERR_INVALID_ARGUMENT, "param_steps and samples_per_value must be > 0");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "param_steps and samples_per_value must be > 0",
+        );
         return 0;
     }
     if !finite(param_min) || !finite(param_max) || param_min > param_max {
@@ -525,7 +524,10 @@ pub extern "C" fn chaos_bifurcation_lorenz(
         return 0;
     }
     if vary > 2 {
-        set_error(ERR_INVALID_ARGUMENT, "vary must be 0 (sigma), 1 (rho), or 2 (beta)");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "vary must be 0 (sigma), 1 (rho), or 2 (beta)",
+        );
         return 0;
     }
 
@@ -538,7 +540,10 @@ pub extern "C" fn chaos_bifurcation_lorenz(
 
     let dt = base_params.dt;
     if !finite(dt) || dt <= 0.0 {
-        set_error(ERR_INVALID_ARGUMENT, "base_params.dt must be positive and finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "base_params.dt must be positive and finite",
+        );
         return 0;
     }
 
@@ -693,7 +698,10 @@ pub extern "C" fn chaos_double_pendulum_accel(
     let denom = 2.0 * m1 + m2 - m2 * (2.0 * delta).cos();
 
     if denom.abs() < EPSILON {
-        set_error(ERR_INVALID_ARGUMENT, "singular denominator in double pendulum equations");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "singular denominator in double pendulum equations",
+        );
         return Bool::FALSE;
     }
 
@@ -702,8 +710,10 @@ pub extern "C" fn chaos_double_pendulum_accel(
         - 2.0 * sin_delta * m2 * (omega2 * omega2 * l2 + omega1 * omega1 * l1 * cos_delta))
         / (l1 * denom);
 
-    let alpha2 = (2.0 * sin_delta
-        * (omega1 * omega1 * l1 * (m1 + m2) + g * (m1 + m2) * theta1.cos()
+    let alpha2 = (2.0
+        * sin_delta
+        * (omega1 * omega1 * l1 * (m1 + m2)
+            + g * (m1 + m2) * theta1.cos()
             + omega2 * omega2 * l2 * m2 * cos_delta))
         / (l2 * denom);
 
@@ -749,11 +759,15 @@ pub extern "C" fn chaos_double_pendulum_step(
 
         let alpha1 = (-g * (2.0 * m1 + m2) * s.theta1.sin()
             - m2 * g * (s.theta1 - 2.0 * s.theta2).sin()
-            - 2.0 * sin_delta * m2
+            - 2.0
+                * sin_delta
+                * m2
                 * (s.omega2 * s.omega2 * l2 + s.omega1 * s.omega1 * l1 * cos_delta))
             / (l1 * denom);
-        let alpha2 = (2.0 * sin_delta
-            * (s.omega1 * s.omega1 * l1 * (m1 + m2) + g * (m1 + m2) * s.theta1.cos()
+        let alpha2 = (2.0
+            * sin_delta
+            * (s.omega1 * s.omega1 * l1 * (m1 + m2)
+                + g * (m1 + m2) * s.theta1.cos()
                 + s.omega2 * s.omega2 * l2 * m2 * cos_delta))
             / (l2 * denom);
 
@@ -855,10 +869,13 @@ pub extern "C" fn chaos_double_pendulum_integrate(
             }
             let alpha1 = (-g * (2.0 * m1 + m2) * st.theta1.sin()
                 - m2 * g * (st.theta1 - 2.0 * st.theta2).sin()
-                - 2.0 * sin_delta * m2
+                - 2.0
+                    * sin_delta
+                    * m2
                     * (st.omega2 * st.omega2 * l2 + st.omega1 * st.omega1 * l1 * cos_delta))
                 / (l1 * denom);
-            let alpha2 = (2.0 * sin_delta
+            let alpha2 = (2.0
+                * sin_delta
                 * (st.omega1 * st.omega1 * l1 * (m1 + m2)
                     + g * (m1 + m2) * st.theta1.cos()
                     + st.omega2 * st.omega2 * l2 * m2 * cos_delta))
@@ -931,10 +948,7 @@ fn double_pendulum_params_valid(params: &DoublePendulumParams) -> bool {
 }
 
 fn double_pendulum_state_finite(s: DoublePendulumState) -> bool {
-    finite(s.theta1)
-        && finite(s.theta2)
-        && finite(s.omega1)
-        && finite(s.omega2)
+    finite(s.theta1) && finite(s.theta2) && finite(s.omega1) && finite(s.omega2)
 }
 
 // ===========================================================================
@@ -1120,11 +1134,7 @@ pub extern "C" fn chaos_detect(
 
 /// Perform one iteration of the logistic map: x_{n+1} = r * x_n * (1 - x_n).
 #[unsafe(no_mangle)]
-pub extern "C" fn chaos_logistic_step(
-    x: f64,
-    r: f64,
-    out_next: *mut LogisticMapState,
-) -> Bool {
+pub extern "C" fn chaos_logistic_step(x: f64, r: f64, out_next: *mut LogisticMapState) -> Bool {
     if !finite(x) || !finite(r) {
         set_error(ERR_INVALID_ARGUMENT, "x and r must be finite");
         return Bool::FALSE;
@@ -1139,13 +1149,7 @@ pub extern "C" fn chaos_logistic_step(
     }
 
     let next_x = r * x * (1.0 - x);
-    write_out(
-        out_next,
-        LogisticMapState {
-            x: next_x,
-            r,
-        },
-    )
+    write_out(out_next, LogisticMapState { x: next_x, r })
 }
 
 /// Run the logistic map for N steps, returning all iterates.
@@ -1210,7 +1214,10 @@ pub extern "C" fn chaos_logistic_bifurcation(
         return 0;
     }
     if r_min < 0.0 || r_max > 4.0 || r_min > r_max {
-        set_error(ERR_INVALID_ARGUMENT, "r range must be [0, 4] and r_min <= r_max");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "r range must be [0, 4] and r_min <= r_max",
+        );
         return 0;
     }
     if param_steps == 0 || transient_steps == 0 || samples_per_value == 0 {
@@ -1263,4 +1270,3 @@ pub extern "C" fn chaos_logistic_bifurcation(
 // ===========================================================================
 // Tests
 // ===========================================================================
-

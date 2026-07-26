@@ -1,4 +1,4 @@
-﻿#[cfg(all(test, feature = "anvilkit-bridge"))]
+#[cfg(all(test, feature = "anvilkit-bridge"))]
 mod tests {
     use mps_core::rapier::anvilkit::*;
     use mps_core::rapier::ffi::*;
@@ -40,6 +40,3 @@ mod tests {
         assert!(hertz.total_force > hertz.normal_force);
     }
 }
-
-
-

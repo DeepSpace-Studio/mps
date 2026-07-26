@@ -1,8 +1,8 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use mps_core::rapier::world::*;
-    use mps_core::rapier::ffi::*;
     use mps_core::rapier::ffi::BodyStatus;
+    use mps_core::rapier::ffi::*;
+    use mps_core::rapier::world::*;
 
     #[test]
     fn integration_parameters_and_body_batch_updates_work() {
@@ -68,6 +68,3 @@ mod tests {
         world_destroy(world);
     }
 }
-
-
-

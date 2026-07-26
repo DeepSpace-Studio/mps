@@ -253,5 +253,5 @@ pub extern "C" fn molecular_apply_pair_forces_flag(
 
 #[unsafe(no_mangle)]
 pub extern "C" fn molecular_vacuum_coulomb_constant() -> f64 {
-    ffi_guard(0.0, || mps_formula::molecular::vacuum_coulomb_constant())
+    ffi_guard(0.0, mps_formula::molecular::vacuum_coulomb_constant)
 }

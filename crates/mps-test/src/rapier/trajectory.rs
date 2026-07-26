@@ -1,8 +1,8 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use mps_core::rapier::trajectory::*;
-    use mps_core::rapier::ffi::*;
     use mps_core::rapier::ffi::Vec3;
+    use mps_core::rapier::ffi::*;
+    use mps_core::rapier::trajectory::*;
 
     fn env() -> TrajectoryEnvironment {
         TrajectoryEnvironment {
@@ -124,6 +124,3 @@ mod tests {
         assert!(out.downrange > 0.0);
     }
 }
-
-
-

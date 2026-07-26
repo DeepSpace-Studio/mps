@@ -1,4 +1,4 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use mps_core::rapier::crbtree::*;
     use mps_core::rapier::ffi::*;
@@ -71,6 +71,3 @@ mod tests {
         crb_tree_destroy(tree);
     }
 }
-
-
-

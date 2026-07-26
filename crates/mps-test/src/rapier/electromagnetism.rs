@@ -1,4 +1,4 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use mps_core::rapier::electromagnetism::*;
     use mps_core::rapier::ffi::*;
@@ -90,6 +90,3 @@ mod tests {
         assert_eq!(report.cell_count, 1);
     }
 }
-
-
-

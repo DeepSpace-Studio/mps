@@ -1,4 +1,4 @@
-﻿//! Plasma physics:
+//! Plasma physics:
 //! - Debye shielding & plasma parameters (Debye length, plasma frequency, thermal velocity)
 //! - Particle-in-cell (PIC) building blocks: Boris pusher, charge deposition, field interpolation
 //! - Vlasov equation moment computation (density, bulk velocity, temperature, heat flux)
@@ -7,9 +7,7 @@
 //!
 //! All functions are FFI-exported with C-compatible types.
 
-use crate::error::{
-    ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error,
-};
+use crate::error::{ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error};
 use crate::ffi::{
     Bool, BorisPusherParams, ChargeDensityCell, GridField, MagneticXPoint, PicParticle,
     PicStepReport, PlasmaParamsReport, VlasovMomentReport,
@@ -103,16 +101,24 @@ pub extern "C" fn pl_plasma_params(
         return Bool::FALSE;
     }
     if !finite_non_negative(ion_density) {
-        set_error(ERR_INVALID_ARGUMENT, "ion_density must be non-negative and finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "ion_density must be non-negative and finite",
+        );
         return Bool::FALSE;
     }
-    if ion_density > 0.0 && (!finite_positive(ion_mass) || !finite_non_negative(ion_charge_state))
-    {
-        set_error(ERR_INVALID_ARGUMENT, "ion mass must be positive when ion density > 0");
+    if ion_density > 0.0 && (!finite_positive(ion_mass) || !finite_non_negative(ion_charge_state)) {
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "ion mass must be positive when ion density > 0",
+        );
         return Bool::FALSE;
     }
     if !finite_non_negative(ion_charge_state) {
-        set_error(ERR_INVALID_ARGUMENT, "ion_charge_state must be non-negative and finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "ion_charge_state must be non-negative and finite",
+        );
         return Bool::FALSE;
     }
 
@@ -136,7 +142,8 @@ pub extern "C" fn pl_plasma_params(
     };
 
     // Ion plasma frequency
-    let omega_pi = if ion_density > EPSILON && ion_mass > MASS_EPSILON && ion_charge_state > EPSILON {
+    let omega_pi = if ion_density > EPSILON && ion_mass > MASS_EPSILON && ion_charge_state > EPSILON
+    {
         let z = ion_charge_state;
         (ion_density * z * z * e * e / (eps0 * ion_mass)).sqrt()
     } else {
@@ -173,7 +180,10 @@ pub extern "C" fn pl_plasma_params(
 #[unsafe(no_mangle)]
 pub extern "C" fn pl_debye_length(density: f64, temperature: f64) -> f64 {
     if !finite_positive(density) || !finite_positive(temperature) {
-        set_error(ERR_INVALID_ARGUMENT, "density and temperature must be positive");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "density and temperature must be positive",
+        );
         return f64::NAN;
     }
     clear_error();
@@ -313,21 +323,32 @@ pub extern "C" fn pl_interpolate_field(
         return Bool::FALSE;
     }
     if nx < 2 || ny < 2 || nz < 2 {
-        set_error(ERR_INVALID_ARGUMENT, "grid must have at least 2 cells in each dimension");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "grid must have at least 2 cells in each dimension",
+        );
         return Bool::FALSE;
     }
     if !finite_positive(cell_size) {
-        set_error(ERR_INVALID_ARGUMENT, "cell_size must be positive and finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "cell_size must be positive and finite",
+        );
         return Bool::FALSE;
     }
-    if !finite(origin_x) || !finite(origin_y) || !finite(origin_z)
-        || !finite(particle_x) || !finite(particle_y) || !finite(particle_z)
+    if !finite(origin_x)
+        || !finite(origin_y)
+        || !finite(origin_z)
+        || !finite(particle_x)
+        || !finite(particle_y)
+        || !finite(particle_z)
     {
         set_error(ERR_INVALID_ARGUMENT, "all coordinates must be finite");
         return Bool::FALSE;
     }
 
-    let cells = unsafe { std::slice::from_raw_parts(grid, (nx as usize) * (ny as usize) * (nz as usize)) };
+    let cells =
+        unsafe { std::slice::from_raw_parts(grid, (nx as usize) * (ny as usize) * (nz as usize)) };
 
     // Compute grid indices (cell-centre coordinates)
     let ix_f = (particle_x - origin_x) / cell_size;
@@ -419,7 +440,10 @@ pub extern "C" fn pl_deposit_particle(
         return Bool::FALSE;
     }
     if !finite_positive(cell_size) || !finite_positive(cell_volume) {
-        set_error(ERR_INVALID_ARGUMENT, "cell_size and cell_volume must be positive");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "cell_size and cell_volume must be positive",
+        );
         return Bool::FALSE;
     }
 
@@ -428,15 +452,7 @@ pub extern "C" fn pl_deposit_particle(
     let jy = rho * particle.vy;
     let jz = rho * particle.vz;
 
-    write_out(
-        out_density,
-        ChargeDensityCell {
-            rho,
-            jx,
-            jy,
-            jz,
-        },
-    )
+    write_out(out_density, ChargeDensityCell { rho, jx, jy, jz })
 }
 
 // ===========================================================================
@@ -702,8 +718,7 @@ pub extern "C" fn pl_find_xpoint(
     // Scan interior cells for B ≈ 0
     for iy in 1..(ny as usize - 1) {
         for ix in 1..(nx as usize - 1) {
-            let b_mag_sq = bx[idx(ix, iy)] * bx[idx(ix, iy)]
-                + by[idx(ix, iy)] * by[idx(ix, iy)];
+            let b_mag_sq = bx[idx(ix, iy)] * bx[idx(ix, iy)] + by[idx(ix, iy)] * by[idx(ix, iy)];
 
             if b_mag_sq > threshold * threshold {
                 continue;
@@ -770,7 +785,10 @@ pub extern "C" fn pl_find_xpoint(
 #[unsafe(no_mangle)]
 pub extern "C" fn pl_sweet_parker_rate(lundquist_number: f64) -> f64 {
     if !finite_positive(lundquist_number) {
-        set_error(ERR_INVALID_ARGUMENT, "Lundquist number must be positive and finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "Lundquist number must be positive and finite",
+        );
         return f64::NAN;
     }
     clear_error();
@@ -785,10 +803,7 @@ pub extern "C" fn pl_sweet_parker_rate(lundquist_number: f64) -> f64 {
 #[unsafe(no_mangle)]
 pub extern "C" fn pl_petschek_rate(lundquist_number: f64) -> f64 {
     if !finite_positive(lundquist_number) || lundquist_number <= 1.0 {
-        set_error(
-            ERR_INVALID_ARGUMENT,
-            "Lundquist number must be > 1",
-        );
+        set_error(ERR_INVALID_ARGUMENT, "Lundquist number must be > 1");
         return f64::NAN;
     }
     clear_error();
@@ -797,17 +812,16 @@ pub extern "C" fn pl_petschek_rate(lundquist_number: f64) -> f64 {
 
 /// Compute the Alfvén speed v_A = B / √(μ₀ n m_i).
 #[unsafe(no_mangle)]
-pub extern "C" fn pl_alfven_speed(
-    magnetic_field: f64,
-    density: f64,
-    ion_mass: f64,
-) -> f64 {
+pub extern "C" fn pl_alfven_speed(magnetic_field: f64, density: f64, ion_mass: f64) -> f64 {
     if !finite_non_negative(magnetic_field) {
         set_error(ERR_INVALID_ARGUMENT, "magnetic_field must be non-negative");
         return f64::NAN;
     }
     if !finite_positive(density) || !finite_positive(ion_mass) {
-        set_error(ERR_INVALID_ARGUMENT, "density and ion_mass must be positive");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "density and ion_mass must be positive",
+        );
         return f64::NAN;
     }
     clear_error();
@@ -821,10 +835,14 @@ pub extern "C" fn pl_lundquist_number(
     alfven_speed: f64,
     resistivity: f64,
 ) -> f64 {
-    if !finite_positive(length_scale) || !finite_positive(alfven_speed)
+    if !finite_positive(length_scale)
+        || !finite_positive(alfven_speed)
         || !finite_positive(resistivity)
     {
-        set_error(ERR_INVALID_ARGUMENT, "all parameters must be positive and finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "all parameters must be positive and finite",
+        );
         return f64::NAN;
     }
     clear_error();
@@ -914,26 +932,67 @@ pub extern "C" fn pl_pic_step_report(
 pub fn plasma_beta(density: f64, temperature: f64, magnetic_field: f64) -> Option<f64> {
     let mu0 = 1.25663706212e-6;
     let kb = 1.380649e-23;
-    if !density.is_finite() || density < 0.0 || !temperature.is_finite() || temperature < 0.0 || !magnetic_field.is_finite() || magnetic_field <= 0.0 { return None; }
+    if !density.is_finite()
+        || density < 0.0
+        || !temperature.is_finite()
+        || temperature < 0.0
+        || !magnetic_field.is_finite()
+        || magnetic_field <= 0.0
+    {
+        return None;
+    }
     Some(2.0 * mu0 * density * kb * temperature / (magnetic_field * magnetic_field))
 }
 
 /// Cyclotron (gyro) frequency: ω_c = q·B / m
 pub fn gyrofrequency(charge: f64, magnetic_field: f64, mass: f64) -> Option<f64> {
-    if !charge.is_finite() || !magnetic_field.is_finite() || magnetic_field < 0.0 || !mass.is_finite() || mass <= 0.0 { return None; }
+    if !charge.is_finite()
+        || !magnetic_field.is_finite()
+        || magnetic_field < 0.0
+        || !mass.is_finite()
+        || mass <= 0.0
+    {
+        return None;
+    }
     Some(charge * magnetic_field / mass)
 }
 
 /// Larmor radius: r_L = m·v_⟂ / (|q|·B)
-pub fn larmor_radius(mass: f64, perpendicular_velocity: f64, charge: f64, magnetic_field: f64) -> Option<f64> {
-    if !mass.is_finite() || mass <= 0.0 || !perpendicular_velocity.is_finite() || perpendicular_velocity < 0.0 || !charge.is_finite() || charge == 0.0 || !magnetic_field.is_finite() || magnetic_field <= 0.0 { return None; }
+pub fn larmor_radius(
+    mass: f64,
+    perpendicular_velocity: f64,
+    charge: f64,
+    magnetic_field: f64,
+) -> Option<f64> {
+    if !mass.is_finite()
+        || mass <= 0.0
+        || !perpendicular_velocity.is_finite()
+        || perpendicular_velocity < 0.0
+        || !charge.is_finite()
+        || charge == 0.0
+        || !magnetic_field.is_finite()
+        || magnetic_field <= 0.0
+    {
+        return None;
+    }
     Some(mass * perpendicular_velocity / (charge.abs() * magnetic_field))
 }
 
 /// Ideal MHD wave speeds: slow, Alfven, fast
 /// Returns (v_slow, v_alfven, v_fast) in m/s.
-pub fn mhd_wave_speeds(sound_speed: f64, alfven_speed: f64, angle_to_b: f64) -> Option<(f64, f64, f64)> {
-    if !sound_speed.is_finite() || sound_speed < 0.0 || !alfven_speed.is_finite() || alfven_speed < 0.0 || !angle_to_b.is_finite() { return None; }
+pub fn mhd_wave_speeds(
+    sound_speed: f64,
+    alfven_speed: f64,
+    angle_to_b: f64,
+) -> Option<(f64, f64, f64)> {
+    if !sound_speed.is_finite()
+        || sound_speed < 0.0
+        || !alfven_speed.is_finite()
+        || alfven_speed < 0.0
+        || !angle_to_b.is_finite()
+    {
+        return None;
+    }
     let ca2 = alfven_speed * alfven_speed;
     let cs2 = sound_speed * sound_speed;
     let sum = ca2 + cs2;
@@ -946,14 +1005,38 @@ pub fn mhd_wave_speeds(sound_speed: f64, alfven_speed: f64, angle_to_b: f64) -> 
 }
 
 /// Tokamak safety factor (cylindrical approximation): q = (r·B_t) / (R·B_p)
-pub fn safety_factor(minor_radius: f64, toroidal_field: f64, major_radius: f64, poloidal_field: f64) -> Option<f64> {
-    if !finite_4(minor_radius, toroidal_field, major_radius, poloidal_field) || minor_radius <= 0.0 || toroidal_field <= 0.0 || major_radius <= 0.0 || poloidal_field <= 0.0 { return None; }
+pub fn safety_factor(
+    minor_radius: f64,
+    toroidal_field: f64,
+    major_radius: f64,
+    poloidal_field: f64,
+) -> Option<f64> {
+    if !finite_4(minor_radius, toroidal_field, major_radius, poloidal_field)
+        || minor_radius <= 0.0
+        || toroidal_field <= 0.0
+        || major_radius <= 0.0
+        || poloidal_field <= 0.0
+    {
+        return None;
+    }
     Some(minor_radius * toroidal_field / (major_radius * poloidal_field))
 }
 
 /// Landau damping rate (simplified, Maxwellian plasma): γ_L/ω = -sqrt(π/8) · (ω/|k|v_th)³ · exp(-ω²/(2k²v_th²))
-pub fn landau_damping_rate(wave_frequency: f64, wavenumber: f64, thermal_speed: f64) -> Option<f64> {
-    if !wave_frequency.is_finite() || wave_frequency <= 0.0 || !wavenumber.is_finite() || wavenumber <= 0.0 || !thermal_speed.is_finite() || thermal_speed <= 0.0 { return None; }
+pub fn landau_damping_rate(
+    wave_frequency: f64,
+    wavenumber: f64,
+    thermal_speed: f64,
+) -> Option<f64> {
+    if !wave_frequency.is_finite()
+        || wave_frequency <= 0.0
+        || !wavenumber.is_finite()
+        || wavenumber <= 0.0
+        || !thermal_speed.is_finite()
+        || thermal_speed <= 0.0
+    {
+        return None;
+    }
     let xi = wave_frequency / (wavenumber * thermal_speed);
     let gamma = -0.626657 * xi * xi * xi * (-0.5 * xi * xi).exp();
     Some(gamma * wave_frequency)
@@ -961,13 +1044,22 @@ pub fn landau_damping_rate(wave_frequency: f64, wavenumber: f64, thermal_speed: 
 
 /// Magnetic mirror ratio: R_m = B_max / B_min
 pub fn mirror_ratio(max_field: f64, min_field: f64) -> Option<f64> {
-    if !max_field.is_finite() || max_field <= 0.0 || !min_field.is_finite() || min_field <= 0.0 { return None; }
+    if !max_field.is_finite() || max_field <= 0.0 || !min_field.is_finite() || min_field <= 0.0 {
+        return None;
+    }
     Some(max_field / min_field)
 }
 
 /// Mirror loss cone angle: sin²(θ_lc) = B_min / B_max
 pub fn mirror_loss_cone_angle(max_field: f64, min_field: f64) -> Option<f64> {
-    if !max_field.is_finite() || max_field <= 0.0 || !min_field.is_finite() || min_field <= 0.0 || min_field > max_field { return None; }
+    if !max_field.is_finite()
+        || max_field <= 0.0
+        || !min_field.is_finite()
+        || min_field <= 0.0
+        || min_field > max_field
+    {
+        return None;
+    }
     Some((min_field / max_field).sqrt().asin())
 }
 
@@ -978,14 +1070,3 @@ fn finite_4(a: f64, b: f64, c: f64, d: f64) -> bool {
 // ===========================================================================
 // Tests
 // ===========================================================================
-
-
-
-
-
-
-
-
-
-
-

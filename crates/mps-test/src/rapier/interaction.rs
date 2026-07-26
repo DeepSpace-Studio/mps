@@ -1,9 +1,8 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use smallvec::SmallVec;
-    use mps_core::rapier::interaction::*;
     use mps_core::rapier::ffi::*;
     use mps_core::rapier::ffi::{BodyStatus, Bool, NewtonGravityLaw, Vec3};
+    use mps_core::rapier::interaction::*;
 
     #[test]
     fn pairwise_gravity_attracts_two_masses() {
@@ -19,8 +18,11 @@ mod tests {
         let r = r2.sqrt();
         let force_mag = G * m * m / (r2 * r);
         // F = 6.67430e-11 * 1e20 / 1000 = 6.67430e6 N
-        assert!((force_mag - 6.6743e6).abs() < 1e3,
-            "F = G*m1*m2/r³ = {}, expected ~6.6743e6", force_mag);
+        assert!(
+            (force_mag - 6.6743e6).abs() < 1e3,
+            "F = G*m1*m2/r³ = {}, expected ~6.6743e6",
+            force_mag
+        );
         let force = offset * force_mag;
         assert!(force.x > 0.0, "force should point from body1 to body2");
 
@@ -45,7 +47,7 @@ mod tests {
             },
         );
         let body = mps_core::rapier::rigid_body::rigid_body_builder_build(b);
-        let h = mps_core::rapier::rigid_body::world_insert_rigid_body(world, body);
+        let _h = mps_core::rapier::rigid_body::world_insert_rigid_body(world, body);
 
         let mut report = CustomPhysicsReport::default();
         let law = AirDragLaw {
@@ -98,8 +100,9 @@ mod tests {
         );
 
         // Create two massive bodies
-        let (h1, h2) = {
-            let b1 = mps_core::rapier::rigid_body::rigid_body_builder_create(BodyStatus::Dynamic as u32);
+        let (_h1, _h2) = {
+            let b1 =
+                mps_core::rapier::rigid_body::rigid_body_builder_create(BodyStatus::Dynamic as u32);
             mps_core::rapier::rigid_body::rigid_body_builder_set_additional_mass(b1, 100.0);
             mps_core::rapier::rigid_body::rigid_body_builder_set_translation(
                 b1,
@@ -112,7 +115,8 @@ mod tests {
             let body1 = mps_core::rapier::rigid_body::rigid_body_builder_build(b1);
             let h1 = mps_core::rapier::rigid_body::world_insert_rigid_body(world, body1);
 
-            let b2 = mps_core::rapier::rigid_body::rigid_body_builder_create(BodyStatus::Dynamic as u32);
+            let b2 =
+                mps_core::rapier::rigid_body::rigid_body_builder_create(BodyStatus::Dynamic as u32);
             mps_core::rapier::rigid_body::rigid_body_builder_set_additional_mass(b2, 200.0);
             mps_core::rapier::rigid_body::rigid_body_builder_set_translation(
                 b2,
@@ -151,10 +155,3 @@ mod tests {
         mps_core::rapier::world::world_destroy(world);
     }
 }
-
-
-
-
-
-
-

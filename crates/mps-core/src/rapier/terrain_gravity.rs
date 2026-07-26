@@ -13,8 +13,7 @@
 //! - Parker, "The JPL Lunar Gravity Field to 660th Degree", LPSC 46 (2015)
 
 use crate::rapier::error::{
-    ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, ERR_UNSUPPORTED,
-    clear_error, ffi_guard, set_error,
+    ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, clear_error, ffi_guard, set_error,
 };
 use crate::rapier::ffi::{Bool, Vec3, vec3_finite, vec3_from_rapier, vec3_to_rapier};
 
@@ -24,14 +23,6 @@ const MAX_FACES: u32 = 200_000;
 // ---------------------------------------------------------------------------
 // Polyhedron gravity — Werner & Scheeres (1997)
 // ---------------------------------------------------------------------------
-
-/// Interior of a solid angle for a face.  Used in the polyhedron gravity
-/// computation.
-#[derive(Clone, Copy, Debug)]
-struct PolyEdge {
-    r_e: rapier3d::prelude::Vector, // vector from field point to edge vertex i
-    r_ee: rapier3d::prelude::Vector, // vector from field point to edge vertex j
-}
 
 /// Compute gravitational acceleration of a constant-density polyhedron.
 ///
@@ -51,7 +42,7 @@ struct PolyEdge {
 /// * `density` — constant density (kg/m³)
 /// * `gm` — gravitational parameter GM (for scaling)
 ///
-/// Returns `(potential, acceleration_x, acceleration_y, acceleration_z)`.
+/// Returns the acceleration via `out_acceleration`.
 pub fn polyhedron_gravity(
     position: Vec3,
     vertices: &[f64], // flat xyz triplets
@@ -109,7 +100,7 @@ pub fn polyhedron_gravity(
 
         // Edge vectors
         let e01 = v1 - v0;
-        let e12 = v2 - v1;
+        let _e12 = v2 - v1;
         let e20 = v0 - v2;
 
         // Face normal (unnormalized)
@@ -132,6 +123,10 @@ pub fn polyhedron_gravity(
         accel += le * g_rho;
         potential += g_rho * (r0.dot(n_f.cross(r1)) * omega - h * h * omega);
     }
+
+    // The potential is accumulated as part of the Werner & Scheeres scheme but
+    // only the acceleration is returned through `out_acceleration`.
+    let _ = potential;
 
     // Potential term: -∇U
     *out_acceleration = vec3_from_rapier(-accel);
@@ -713,7 +708,7 @@ pub extern "C" fn terrain_lunar_mascon_gravity(
 /// Get the number of built-in lunar mascons.
 #[unsafe(no_mangle)]
 pub extern "C" fn terrain_lunar_mascon_count() -> u32 {
-    ffi_guard(0, || lunar_mascon_count())
+    ffi_guard(0, lunar_mascon_count)
 }
 
 /// Get a specific lunar mascon by index.

@@ -1,4 +1,4 @@
-﻿//! Relativistic effects: Lorentz transformations, Schwarzschild metric,
+//! Relativistic effects: Lorentz transformations, Schwarzschild metric,
 //! gravitational time dilation, length contraction, and near-light-speed particle physics.
 //!
 //! All functions are FFI-exported with C-compatible types, following the
@@ -38,11 +38,17 @@ fn write_out<T: Copy>(out: *mut T, value: T) -> Bool {
 #[unsafe(no_mangle)]
 pub extern "C" fn rel_lorentz_factor(speed: f64, out_gamma: *mut f64) -> Bool {
     if !finite_non_negative(speed) {
-        set_error(ERR_INVALID_ARGUMENT, "speed must be finite and non-negative");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "speed must be finite and non-negative",
+        );
         return Bool::FALSE;
     }
     if speed >= SPEED_OF_LIGHT - EPSILON {
-        set_error(ERR_INVALID_ARGUMENT, "speed must be less than speed of light");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "speed must be less than speed of light",
+        );
         return Bool::FALSE;
     }
     let beta = speed / SPEED_OF_LIGHT;
@@ -78,7 +84,10 @@ pub extern "C" fn rel_lorentz_boost(velocity: Vec3, out_boost: *mut LorentzBoost
         return write_out(
             out_boost,
             LorentzBoost {
-                m00: 1.0, m11: 1.0, m22: 1.0, m33: 1.0,
+                m00: 1.0,
+                m11: 1.0,
+                m22: 1.0,
+                m33: 1.0,
                 ..LorentzBoost::default()
             },
         );
@@ -104,8 +113,10 @@ pub extern "C" fn rel_lorentz_boost(velocity: Vec3, out_boost: *mut LorentzBoost
     write_out(
         out_boost,
         LorentzBoost {
-            m00:  g,
-            m01: -g * beta_x, m02: -g * beta_y, m03: -g * beta_z,
+            m00: g,
+            m01: -g * beta_x,
+            m02: -g * beta_y,
+            m03: -g * beta_z,
             m10: -g * beta_x,
             m11: 1.0 + gm1_over_b2 * beta_x * beta_x,
             m12: gm1_over_b2 * beta_x * beta_y,
@@ -144,9 +155,9 @@ pub extern "C" fn rel_transform_four_vector(
         out_transformed,
         LorentzTransformedFrame {
             ct_prime: boost.m00 * ct + boost.m01 * x + boost.m02 * y + boost.m03 * z,
-            x_prime:  boost.m10 * ct + boost.m11 * x + boost.m12 * y + boost.m13 * z,
-            y_prime:  boost.m20 * ct + boost.m21 * x + boost.m22 * y + boost.m23 * z,
-            z_prime:  boost.m30 * ct + boost.m31 * x + boost.m32 * y + boost.m33 * z,
+            x_prime: boost.m10 * ct + boost.m11 * x + boost.m12 * y + boost.m13 * z,
+            y_prime: boost.m20 * ct + boost.m21 * x + boost.m22 * y + boost.m23 * z,
+            z_prime: boost.m30 * ct + boost.m31 * x + boost.m32 * y + boost.m33 * z,
         },
     )
 }
@@ -155,11 +166,7 @@ pub extern "C" fn rel_transform_four_vector(
 ///
 /// w = (u + v_∥ + v_⊥/γ_u) / (1 + u·v/c²)
 #[unsafe(no_mangle)]
-pub extern "C" fn rel_velocity_addition(
-    u: Vec3,
-    v: Vec3,
-    out_result: *mut Vec3,
-) -> Bool {
+pub extern "C" fn rel_velocity_addition(u: Vec3, v: Vec3, out_result: *mut Vec3) -> Bool {
     if !vec3_finite(u) || !vec3_finite(v) {
         set_error(ERR_INVALID_ARGUMENT, "velocities must be finite");
         return Bool::FALSE;
@@ -169,16 +176,25 @@ pub extern "C" fn rel_velocity_addition(
     let u_len_sq = u_vec.length_squared();
     let c2 = SPEED_OF_LIGHT * SPEED_OF_LIGHT;
     if u_len_sq >= c2 - EPSILON {
-        set_error(ERR_INVALID_ARGUMENT, "velocity u magnitude must be less than c");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "velocity u magnitude must be less than c",
+        );
         return Bool::FALSE;
     }
     if v_vec.length_squared() >= c2 - EPSILON {
-        set_error(ERR_INVALID_ARGUMENT, "velocity v magnitude must be less than c");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "velocity v magnitude must be less than c",
+        );
         return Bool::FALSE;
     }
     let denom = 1.0 + u_vec.dot(v_vec) / c2;
     if denom.abs() < EPSILON {
-        set_error(ERR_INVALID_ARGUMENT, "velocity addition denominator is zero");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "velocity addition denominator is zero",
+        );
         return Bool::FALSE;
     }
     // Decompose v into parallel and perpendicular components relative to u
@@ -201,7 +217,10 @@ pub extern "C" fn rel_velocity_addition(
 #[unsafe(no_mangle)]
 pub extern "C" fn rel_rapidity(speed: f64) -> f64 {
     if !finite_non_negative(speed) {
-        set_error(ERR_INVALID_ARGUMENT, "speed must be finite and non-negative");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "speed must be finite and non-negative",
+        );
         return f64::NAN;
     }
     if speed >= SPEED_OF_LIGHT - EPSILON {
@@ -238,7 +257,10 @@ pub extern "C" fn rel_speed_of_light() -> f64 {
 #[unsafe(no_mangle)]
 pub extern "C" fn rel_schwarzschild_radius(mass: f64, gravitational_constant: f64) -> f64 {
     if !finite_positive(mass) || !finite_positive(gravitational_constant) {
-        set_error(ERR_INVALID_ARGUMENT, "mass and gravitational constant must be positive");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "mass and gravitational constant must be positive",
+        );
         return f64::NAN;
     }
     clear_error();
@@ -253,8 +275,14 @@ pub extern "C" fn rel_schwarzschild_metric(
     gravitational_constant: f64,
     out_metric: *mut SchwarzschildMetric,
 ) -> Bool {
-    if !finite_positive(radius) || !finite_positive(mass) || !finite_positive(gravitational_constant) {
-        set_error(ERR_INVALID_ARGUMENT, "radius, mass, and gravitational constant must be positive");
+    if !finite_positive(radius)
+        || !finite_positive(mass)
+        || !finite_positive(gravitational_constant)
+    {
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "radius, mass, and gravitational constant must be positive",
+        );
         return Bool::FALSE;
     }
     let rs = rel_schwarzschild_radius(mass, gravitational_constant);
@@ -293,7 +321,8 @@ pub extern "C" fn rel_light_deflection_angle(
     mass: f64,
     gravitational_constant: f64,
 ) -> f64 {
-    if !finite_positive(impact_parameter) || !finite_positive(mass)
+    if !finite_positive(impact_parameter)
+        || !finite_positive(mass)
         || !finite_positive(gravitational_constant)
     {
         set_error(
@@ -330,7 +359,10 @@ pub extern "C" fn rel_effective_potential(
     gravitational_constant: f64,
     out_potential: *mut f64,
 ) -> Bool {
-    if !finite_positive(radius) || !finite_positive(mass) || !finite_positive(gravitational_constant) {
+    if !finite_positive(radius)
+        || !finite_positive(mass)
+        || !finite_positive(gravitational_constant)
+    {
         set_error(
             ERR_INVALID_ARGUMENT,
             "radius, mass, and gravitational constant must be positive",
@@ -338,7 +370,10 @@ pub extern "C" fn rel_effective_potential(
         return Bool::FALSE;
     }
     if !finite_non_negative(angular_momentum) {
-        set_error(ERR_INVALID_ARGUMENT, "angular momentum must be finite and non-negative");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "angular momentum must be finite and non-negative",
+        );
         return Bool::FALSE;
     }
     let rs = rel_schwarzschild_radius(mass, gravitational_constant);
@@ -374,7 +409,10 @@ pub extern "C" fn rel_gravitational_time_dilation(
     gravitational_constant: f64,
     out_dilation: *mut GravitationalTimeDilation,
 ) -> Bool {
-    if !finite_positive(radius) || !finite_positive(mass) || !finite_positive(gravitational_constant) {
+    if !finite_positive(radius)
+        || !finite_positive(mass)
+        || !finite_positive(gravitational_constant)
+    {
         set_error(
             ERR_INVALID_ARGUMENT,
             "radius, mass, and gravitational constant must be positive",
@@ -448,15 +486,24 @@ pub extern "C" fn rel_length_contraction(
     out_contraction: *mut LengthContraction,
 ) -> Bool {
     if !finite_non_negative(proper_length) {
-        set_error(ERR_INVALID_ARGUMENT, "proper length must be finite and non-negative");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "proper length must be finite and non-negative",
+        );
         return Bool::FALSE;
     }
     if !finite_non_negative(speed) {
-        set_error(ERR_INVALID_ARGUMENT, "speed must be finite and non-negative");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "speed must be finite and non-negative",
+        );
         return Bool::FALSE;
     }
     if speed >= SPEED_OF_LIGHT - EPSILON {
-        set_error(ERR_INVALID_ARGUMENT, "speed must be less than speed of light");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "speed must be less than speed of light",
+        );
         return Bool::FALSE;
     }
     let beta = speed / SPEED_OF_LIGHT;
@@ -572,10 +619,7 @@ pub extern "C" fn rel_particle_properties(
 /// Returns NAN for tachyonic states (E^2 < p^2 * c^2).
 #[unsafe(no_mangle)]
 pub extern "C" fn rel_invariant_mass(energy: f64, px: f64, py: f64, pz: f64) -> f64 {
-    if !energy.is_finite() || energy < 0.0
-        || !px.is_finite()
-        || !py.is_finite()
-        || !pz.is_finite()
+    if !energy.is_finite() || energy < 0.0 || !px.is_finite() || !py.is_finite() || !pz.is_finite()
     {
         set_error(ERR_INVALID_ARGUMENT, "energy and momentum must be finite");
         return f64::NAN;
@@ -586,10 +630,7 @@ pub extern "C" fn rel_invariant_mass(energy: f64, px: f64, py: f64, pz: f64) -> 
     let p_sq_over_c2 = p_sq / c2;
     let mass_sq = e_sq_over_c4 - p_sq_over_c2;
     if mass_sq < 0.0 {
-        set_error(
-            ERR_INVALID_ARGUMENT,
-            "tachyonic state: E^2 < p^2 * c^2",
-        );
+        set_error(ERR_INVALID_ARGUMENT, "tachyonic state: E^2 < p^2 * c^2");
         return f64::NAN;
     }
     clear_error();
@@ -600,7 +641,6 @@ pub extern "C" fn rel_invariant_mass(energy: f64, px: f64, py: f64, pz: f64) -> 
 // Tests
 // ---------------------------------------------------------------------------
 
-
 // ---------------------------------------------------------------------------
 // Kerr metric basics
 // ---------------------------------------------------------------------------
@@ -609,28 +649,71 @@ pub extern "C" fn rel_invariant_mass(energy: f64, px: f64, py: f64, pz: f64) -> 
 /// Returns (r_outer, r_inner) where r = GM/c^2 +- sqrt((GM/c^2)^2 - a^2)
 pub fn kerr_horizon_radii(mass: f64, spin_parameter: f64, g: f64) -> Option<(f64, f64)> {
     let c = 299_792_458.0;
-    if !mass.is_finite() || mass <= 0.0 || !spin_parameter.is_finite() || spin_parameter < 0.0 || !g.is_finite() || g <= 0.0 { return None; }
+    if !mass.is_finite()
+        || mass <= 0.0
+        || !spin_parameter.is_finite()
+        || spin_parameter < 0.0
+        || !g.is_finite()
+        || g <= 0.0
+    {
+        return None;
+    }
     let m = g * mass / (c * c); // gravitational radius
-    if spin_parameter > m { return None; } // naked singularity
+    if spin_parameter > m {
+        return None;
+    } // naked singularity
     let r = (m * m - spin_parameter * spin_parameter).sqrt();
     Some((m + r, m - r))
 }
 
 /// Kerr ergosphere radius (outer): r_E = m + sqrt(m^2 - a^2 * cos^2(theta))
-pub fn kerr_ergosphere_radius(mass: f64, spin_parameter: f64, polar_angle: f64, g: f64) -> Option<f64> {
+pub fn kerr_ergosphere_radius(
+    mass: f64,
+    spin_parameter: f64,
+    polar_angle: f64,
+    g: f64,
+) -> Option<f64> {
     let c = 299_792_458.0;
-    if !mass.is_finite() || mass <= 0.0 || !spin_parameter.is_finite() || spin_parameter < 0.0 || !polar_angle.is_finite() || !g.is_finite() || g <= 0.0 { return None; }
+    if !mass.is_finite()
+        || mass <= 0.0
+        || !spin_parameter.is_finite()
+        || spin_parameter < 0.0
+        || !polar_angle.is_finite()
+        || !g.is_finite()
+        || g <= 0.0
+    {
+        return None;
+    }
     let m = g * mass / (c * c);
-    if spin_parameter > m { return None; }
+    if spin_parameter > m {
+        return None;
+    }
     let r = (m * m - spin_parameter * spin_parameter * polar_angle.cos().powi(2)).sqrt();
     Some(m + r)
 }
 
 /// Frame-dragging angular velocity at radius r (the Lense-Thirring effect):
 /// omega = 2 * m * a * r / Sigma^2  where Sigma = r^2 + a^2 * cos^2(theta)
-pub fn kerr_frame_dragging_frequency(mass: f64, spin_parameter: f64, r: f64, theta: f64, g: f64) -> Option<f64> {
+pub fn kerr_frame_dragging_frequency(
+    mass: f64,
+    spin_parameter: f64,
+    r: f64,
+    theta: f64,
+    g: f64,
+) -> Option<f64> {
     let c = 299_792_458.0;
-    if !mass.is_finite() || mass <= 0.0 || !spin_parameter.is_finite() || spin_parameter < 0.0 || !r.is_finite() || r <= 0.0 || !theta.is_finite() || !g.is_finite() || g <= 0.0 { return None; }
+    if !mass.is_finite()
+        || mass <= 0.0
+        || !spin_parameter.is_finite()
+        || spin_parameter < 0.0
+        || !r.is_finite()
+        || r <= 0.0
+        || !theta.is_finite()
+        || !g.is_finite()
+        || g <= 0.0
+    {
+        return None;
+    }
     let m = g * mass / (c * c);
     let cos2 = theta.cos().powi(2);
     let sigma = r * r + spin_parameter * spin_parameter * cos2;
@@ -644,7 +727,9 @@ pub fn kerr_frame_dragging_frequency(mass: f64, spin_parameter: f64, r: f64, the
 /// Innermost Stable Circular Orbit (ISCO) for Schwarzschild: 6 M (3 R_s)
 pub fn schwarzschild_isco(mass: f64, g: f64) -> Option<f64> {
     let c = 299_792_458.0;
-    if !mass.is_finite() || mass <= 0.0 || !g.is_finite() || g <= 0.0 { return None; }
+    if !mass.is_finite() || mass <= 0.0 || !g.is_finite() || g <= 0.0 {
+        return None;
+    }
     Some(6.0 * g * mass / (c * c))
 }
 
@@ -654,11 +739,29 @@ pub fn schwarzschild_isco(mass: f64, g: f64) -> Option<f64> {
 /// Z2 = sqrt(3*a^2 + Z1^2)
 pub fn kerr_isco(mass: f64, spin_parameter: f64, g: f64, prograde: bool) -> Option<f64> {
     let c = 299_792_458.0;
-    if !mass.is_finite() || mass <= 0.0 || !spin_parameter.is_finite() || spin_parameter < 0.0 || !g.is_finite() || g <= 0.0 { return None; }
+    if !mass.is_finite()
+        || mass <= 0.0
+        || !spin_parameter.is_finite()
+        || spin_parameter < 0.0
+        || !g.is_finite()
+        || g <= 0.0
+    {
+        return None;
+    }
     let m = g * mass / (c * c);
-    let a = if prograde { spin_parameter.min(m) } else { -spin_parameter.min(m) };
-    let a_norm = if m > 0.0 { a / m } else { return None; };
-    let z1 = 1.0 + (1.0 - a_norm * a_norm).powf(1.0/3.0) * ((1.0 + a_norm).powf(1.0/3.0) + (1.0 - a_norm).powf(1.0/3.0));
+    let a = if prograde {
+        spin_parameter.min(m)
+    } else {
+        -spin_parameter.min(m)
+    };
+    let a_norm = if m > 0.0 {
+        a / m
+    } else {
+        return None;
+    };
+    let z1 = 1.0
+        + (1.0 - a_norm * a_norm).powf(1.0 / 3.0)
+            * ((1.0 + a_norm).powf(1.0 / 3.0) + (1.0 - a_norm).powf(1.0 / 3.0));
     let z2 = (3.0 * a_norm * a_norm + z1 * z1).sqrt();
     let z3 = ((3.0 - z1) * (3.0 + z1 + 2.0 * z2)).sqrt();
     Some(m * (3.0 + z2 - z3))
@@ -671,9 +774,13 @@ pub fn kerr_isco(mass: f64, spin_parameter: f64, g: f64, prograde: bool) -> Opti
 /// Gravitational redshift: z = 1 / sqrt(1 - R_s / r) - 1
 pub fn gravitational_redshift(mass: f64, radius: f64, g: f64) -> Option<f64> {
     let c = 299_792_458.0;
-    if !mass.is_finite() || mass <= 0.0 || !radius.is_finite() || !g.is_finite() || g <= 0.0 { return None; }
+    if !mass.is_finite() || mass <= 0.0 || !radius.is_finite() || !g.is_finite() || g <= 0.0 {
+        return None;
+    }
     let rs = 2.0 * g * mass / (c * c);
-    if radius <= rs { return None; } // inside horizon
+    if radius <= rs {
+        return None;
+    } // inside horizon
     Some(1.0 / (1.0 - rs / radius).sqrt() - 1.0)
 }
 
@@ -685,11 +792,21 @@ pub fn gravitational_redshift(mass: f64, radius: f64, g: f64) -> Option<f64> {
 pub fn reissner_nordstrom_horizons(mass: f64, charge: f64, g: f64) -> Option<(f64, f64)> {
     let c = 299_792_458.0;
     let k = 8.9875517923e9;
-    if !mass.is_finite() || mass <= 0.0 || !charge.is_finite() || charge < 0.0 || !g.is_finite() || g <= 0.0 { return None; }
+    if !mass.is_finite()
+        || mass <= 0.0
+        || !charge.is_finite()
+        || charge < 0.0
+        || !g.is_finite()
+        || g <= 0.0
+    {
+        return None;
+    }
     let m = g * mass / (c * c);
     let q2 = k * g * charge * charge / (c * c * c * c);
     let disc = m * m - q2;
-    if disc < 0.0 { return None; }
+    if disc < 0.0 {
+        return None;
+    }
     let r = disc.sqrt();
     Some((m + r, m - r))
 }
@@ -700,10 +817,22 @@ pub fn reissner_nordstrom_horizons(mass: f64, charge: f64, g: f64) -> Option<(f6
 
 /// Characteristic GW strain amplitude from compact binary.
 /// h = (4/d) · (G M_c / c²)^(5/3) · (πf)^(2/3)
-pub fn gw_strain_amplitude(distance: f64, chirp_mass_kg: f64, orbital_frequency: f64) -> Option<f64> {
+pub fn gw_strain_amplitude(
+    distance: f64,
+    chirp_mass_kg: f64,
+    orbital_frequency: f64,
+) -> Option<f64> {
     let g = 6.67430e-11;
     let c = 299_792_458.0;
-    if !distance.is_finite() || distance <= 0.0 || !chirp_mass_kg.is_finite() || chirp_mass_kg <= 0.0 || !orbital_frequency.is_finite() || orbital_frequency <= 0.0 { return None; }
+    if !distance.is_finite()
+        || distance <= 0.0
+        || !chirp_mass_kg.is_finite()
+        || chirp_mass_kg <= 0.0
+        || !orbital_frequency.is_finite()
+        || orbital_frequency <= 0.0
+    {
+        return None;
+    }
     let pi_f = std::f64::consts::PI * orbital_frequency;
     let gm = g * chirp_mass_kg / (c * c);
     Some(4.0 / distance * gm.powf(5.0 / 3.0) * pi_f.powf(2.0 / 3.0))
@@ -711,7 +840,9 @@ pub fn gw_strain_amplitude(distance: f64, chirp_mass_kg: f64, orbital_frequency:
 
 /// Chirp mass: M_c = (m₁·m₂)^(3/5) / (m₁+m₂)^(1/5)
 pub fn chirp_mass(mass1: f64, mass2: f64) -> Option<f64> {
-    if !mass1.is_finite() || mass1 <= 0.0 || !mass2.is_finite() || mass2 <= 0.0 { return None; }
+    if !mass1.is_finite() || mass1 <= 0.0 || !mass2.is_finite() || mass2 <= 0.0 {
+        return None;
+    }
     Some((mass1 * mass2).powf(0.6) / (mass1 + mass2).powf(0.2))
 }
 
@@ -719,59 +850,133 @@ pub fn chirp_mass(mass1: f64, mass2: f64) -> Option<f64> {
 pub fn gw_frequency_derivative(frequency: f64, chirp_mass_kg: f64) -> Option<f64> {
     let g = 6.67430e-11;
     let c = 299_792_458.0;
-    if !frequency.is_finite() || frequency <= 0.0 || !chirp_mass_kg.is_finite() || chirp_mass_kg <= 0.0 { return None; }
+    if !frequency.is_finite()
+        || frequency <= 0.0
+        || !chirp_mass_kg.is_finite()
+        || chirp_mass_kg <= 0.0
+    {
+        return None;
+    }
     let mc = g * chirp_mass_kg / (c * c * c);
-    Some(96.0 / 5.0 * std::f64::consts::PI.powf(8.0 / 3.0) * mc.powf(5.0 / 3.0) * frequency.powf(11.0 / 3.0))
+    Some(
+        96.0 / 5.0
+            * std::f64::consts::PI.powf(8.0 / 3.0)
+            * mc.powf(5.0 / 3.0)
+            * frequency.powf(11.0 / 3.0),
+    )
 }
 
 /// Relativistic longitudinal Doppler shift.
-pub fn relativistic_doppler_longitudinal(source_frequency: f64, relative_velocity: f64, approaching: bool) -> Option<f64> {
+pub fn relativistic_doppler_longitudinal(
+    source_frequency: f64,
+    relative_velocity: f64,
+    approaching: bool,
+) -> Option<f64> {
     let c = 299_792_458.0;
-    if !source_frequency.is_finite() || source_frequency <= 0.0 || !relative_velocity.is_finite() || relative_velocity < 0.0 || relative_velocity >= c { return None; }
+    if !source_frequency.is_finite()
+        || source_frequency <= 0.0
+        || !relative_velocity.is_finite()
+        || relative_velocity < 0.0
+        || relative_velocity >= c
+    {
+        return None;
+    }
     let beta = relative_velocity / c;
     let shift = ((1.0 - beta) / (1.0 + beta)).sqrt();
-    Some(if approaching { source_frequency / shift } else { source_frequency * shift })
+    Some(if approaching {
+        source_frequency / shift
+    } else {
+        source_frequency * shift
+    })
 }
 
 /// Relativistic transverse Doppler: f' = f/γ
-pub fn relativistic_doppler_transverse(source_frequency: f64, relative_velocity: f64) -> Option<f64> {
+pub fn relativistic_doppler_transverse(
+    source_frequency: f64,
+    relative_velocity: f64,
+) -> Option<f64> {
     let c = 299_792_458.0;
-    if !source_frequency.is_finite() || source_frequency <= 0.0 || !relative_velocity.is_finite() || relative_velocity < 0.0 || relative_velocity >= c { return None; }
+    if !source_frequency.is_finite()
+        || source_frequency <= 0.0
+        || !relative_velocity.is_finite()
+        || relative_velocity < 0.0
+        || relative_velocity >= c
+    {
+        return None;
+    }
     let gamma = 1.0 / (1.0 - (relative_velocity / c).powi(2)).sqrt();
     Some(source_frequency / gamma)
 }
 
 /// Gravitational lensing Einstein radius for point mass.
-pub fn einstein_radius(mass_kg: f64, dist_lens: f64, dist_source: f64, dist_ls: f64) -> Option<f64> {
+pub fn einstein_radius(
+    mass_kg: f64,
+    dist_lens: f64,
+    dist_source: f64,
+    dist_ls: f64,
+) -> Option<f64> {
     let g = 6.67430e-11;
     let c = 299_792_458.0;
-    if !mass_kg.is_finite() || mass_kg <= 0.0 || !dist_lens.is_finite() || dist_lens <= 0.0 || !dist_source.is_finite() || dist_source <= 0.0 || !dist_ls.is_finite() || dist_ls <= 0.0 { return None; }
+    if !mass_kg.is_finite()
+        || mass_kg <= 0.0
+        || !dist_lens.is_finite()
+        || dist_lens <= 0.0
+        || !dist_source.is_finite()
+        || dist_source <= 0.0
+        || !dist_ls.is_finite()
+        || dist_ls <= 0.0
+    {
+        return None;
+    }
     Some((4.0 * g * mass_kg / (c * c) * dist_ls / (dist_lens * dist_source)).sqrt())
 }
 
 /// Cosmological redshift: z = 1/a - 1
 pub fn cosmological_redshift(scale_factor: f64) -> Option<f64> {
-    if !scale_factor.is_finite() || scale_factor <= 0.0 { return None; }
+    if !scale_factor.is_finite() || scale_factor <= 0.0 {
+        return None;
+    }
     Some(1.0 / scale_factor - 1.0)
 }
 
 /// Redshift from wavelengths: z = (λ_obs - λ_em) / λ_em
 pub fn redshift_from_wavelengths(observed: f64, emitted: f64) -> Option<f64> {
-    if !observed.is_finite() || !emitted.is_finite() || emitted <= 0.0 { return None; }
+    if !observed.is_finite() || !emitted.is_finite() || emitted <= 0.0 {
+        return None;
+    }
     Some(observed / emitted - 1.0)
 }
 
 /// Lense-Thirring frame dragging angular frequency at polar orbit.
-pub fn lense_thirring_angular_frequency(mass_kg: f64, spin_parameter: f64, orbital_radius: f64) -> Option<f64> {
+pub fn lense_thirring_angular_frequency(
+    mass_kg: f64,
+    spin_parameter: f64,
+    orbital_radius: f64,
+) -> Option<f64> {
     let g = 6.67430e-11;
     let c = 299_792_458.0;
-    if !mass_kg.is_finite() || mass_kg <= 0.0 || !spin_parameter.is_finite() || !orbital_radius.is_finite() || orbital_radius <= 0.0 { return None; }
+    if !mass_kg.is_finite()
+        || mass_kg <= 0.0
+        || !spin_parameter.is_finite()
+        || !orbital_radius.is_finite()
+        || orbital_radius <= 0.0
+    {
+        return None;
+    }
     let j = spin_parameter * mass_kg * c;
     Some(2.0 * g * j / (c * c * orbital_radius * orbital_radius * orbital_radius))
 }
 
 /// Schwarzschild effective potential: V_eff = (1 - r_s/r)(1 + L²/r²)
 pub fn schwarzschild_effective_potential(r: f64, rs: f64, angular_momentum: f64) -> Option<f64> {
-    if !r.is_finite() || r <= 0.0 || !rs.is_finite() || rs <= 0.0 || r <= rs || !angular_momentum.is_finite() { return None; }
+    if !r.is_finite()
+        || r <= 0.0
+        || !rs.is_finite()
+        || rs <= 0.0
+        || r <= rs
+        || !angular_momentum.is_finite()
+    {
+        return None;
+    }
     Some((1.0 - rs / r) * (1.0 + angular_momentum * angular_momentum / (r * r)))
 }

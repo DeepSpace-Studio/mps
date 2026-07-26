@@ -1,8 +1,6 @@
-﻿use std::slice;
+use std::slice;
 
-use crate::error::{
-    ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error,
-};
+use crate::error::{ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error};
 use crate::ffi::{
     Bool, FemHeatDiffusionReport, FemHeatEdge, FemHeatNode, HeatConductionReport,
     MaterialProperties, PhaseChangeReport, ThermalRadiationReport, ThermalStressReport,
@@ -367,27 +365,49 @@ pub extern "C" fn thermal_thermoelastic_stress_strain(
     Bool::TRUE
 }
 
-
-
 // ---------------------------------------------------------------------------
 // Ideal gas law
 // ---------------------------------------------------------------------------
 
 /// Ideal gas law: PV = nRT. Returns pressure (Pa).
 pub fn ideal_gas_pressure(volume: f64, moles: f64, temperature: f64) -> Option<f64> {
-    if !volume.is_finite() || volume <= 0.0 || !moles.is_finite() || moles < 0.0 || !temperature.is_finite() || temperature < 0.0 { return None; }
+    if !volume.is_finite()
+        || volume <= 0.0
+        || !moles.is_finite()
+        || moles < 0.0
+        || !temperature.is_finite()
+        || temperature < 0.0
+    {
+        return None;
+    }
     Some(moles * 8.314462618 * temperature / volume)
 }
 
 /// Returns volume from ideal gas law.
 pub fn ideal_gas_volume(pressure: f64, moles: f64, temperature: f64) -> Option<f64> {
-    if !pressure.is_finite() || pressure < 0.0 || !moles.is_finite() || moles < 0.0 || !temperature.is_finite() || temperature < 0.0 { return None; }
+    if !pressure.is_finite()
+        || pressure < 0.0
+        || !moles.is_finite()
+        || moles < 0.0
+        || !temperature.is_finite()
+        || temperature < 0.0
+    {
+        return None;
+    }
     Some(moles * 8.314462618 * temperature / pressure)
 }
 
 /// Returns temperature from ideal gas law.
 pub fn ideal_gas_temperature(pressure: f64, volume: f64, moles: f64) -> Option<f64> {
-    if !pressure.is_finite() || pressure < 0.0 || !volume.is_finite() || volume <= 0.0 || !moles.is_finite() || moles <= 0.0 { return None; }
+    if !pressure.is_finite()
+        || pressure < 0.0
+        || !volume.is_finite()
+        || volume <= 0.0
+        || !moles.is_finite()
+        || moles <= 0.0
+    {
+        return None;
+    }
     Some(pressure * volume / (moles * 8.314462618))
 }
 
@@ -397,14 +417,27 @@ pub fn ideal_gas_temperature(pressure: f64, volume: f64, moles: f64) -> Option<f
 
 /// Polytropic process: P2 = P1 * (V1/V2)^gamma
 pub fn polytropic_pressure(p1: f64, v1: f64, v2: f64, gamma: f64) -> Option<f64> {
-    if !finite_4(p1, v1, v2, gamma) || p1 < 0.0 || v1 <= 0.0 || v2 <= 0.0 || gamma <= 0.0 { return None; }
+    if !finite_4(p1, v1, v2, gamma) || p1 < 0.0 || v1 <= 0.0 || v2 <= 0.0 || gamma <= 0.0 {
+        return None;
+    }
     Some(p1 * (v1 / v2).powf(gamma))
 }
 
 /// Polytropic work: W = (P2*V2 - P1*V1) / (1 - gamma)
 pub fn polytropic_work(p1: f64, v1: f64, p2: f64, v2: f64, gamma: f64) -> Option<f64> {
-    if !finite_4(p1, v1, gamma, 0.0) || !finite_4(p2, v2, gamma, 0.0) || p1 < 0.0 || v1 <= 0.0 || p2 < 0.0 || v2 <= 0.0 || gamma <= 0.0 { return None; }
-    if (gamma - 1.0).abs() < 1.0e-12 { return None; }
+    if !finite_4(p1, v1, gamma, 0.0)
+        || !finite_4(p2, v2, gamma, 0.0)
+        || p1 < 0.0
+        || v1 <= 0.0
+        || p2 < 0.0
+        || v2 <= 0.0
+        || gamma <= 0.0
+    {
+        return None;
+    }
+    if (gamma - 1.0).abs() < 1.0e-12 {
+        return None;
+    }
     Some((p2 * v2 - p1 * v1) / (1.0 - gamma))
 }
 
@@ -414,33 +447,63 @@ pub fn polytropic_work(p1: f64, v1: f64, p2: f64, v2: f64, gamma: f64) -> Option
 
 /// Newton's law of cooling: Q = h * A * (T_surface - T_fluid)
 pub fn convective_heat_flux(h: f64, area: f64, t_surface: f64, t_fluid: f64) -> Option<f64> {
-    if !finite_4(h, area, t_surface, t_fluid) || h < 0.0 || area < 0.0 { return None; }
+    if !finite_4(h, area, t_surface, t_fluid) || h < 0.0 || area < 0.0 {
+        return None;
+    }
     Some(h * area * (t_surface - t_fluid))
 }
 
 /// Reynolds number: Re = rho * v * L / mu
-pub fn reynolds_number(density: f64, velocity: f64, char_length: f64, viscosity: f64) -> Option<f64> {
-    if !finite_4(density, velocity, char_length, viscosity) || density < 0.0 || velocity < 0.0 || char_length <= 0.0 || viscosity <= 0.0 { return None; }
+pub fn reynolds_number(
+    density: f64,
+    velocity: f64,
+    char_length: f64,
+    viscosity: f64,
+) -> Option<f64> {
+    if !finite_4(density, velocity, char_length, viscosity)
+        || density < 0.0
+        || velocity < 0.0
+        || char_length <= 0.0
+        || viscosity <= 0.0
+    {
+        return None;
+    }
     Some(density * velocity * char_length / viscosity)
 }
 
 /// Nusselt number (Dittus-Boelter): Nu = 0.023 * Re^0.8 * Pr^n
 pub fn dittus_boelter_nusselt(reynolds: f64, prandtl: f64, heating: bool) -> Option<f64> {
-    if !reynolds.is_finite() || reynolds < 0.0 || !prandtl.is_finite() || prandtl < 0.0 { return None; }
-    if reynolds < 10000.0 { return None; }
+    if !reynolds.is_finite() || reynolds < 0.0 || !prandtl.is_finite() || prandtl < 0.0 {
+        return None;
+    }
+    if reynolds < 10000.0 {
+        return None;
+    }
     let n = if heating { 0.4 } else { 0.3 };
     Some(0.023 * reynolds.powf(0.8) * prandtl.powf(n))
 }
 
 /// Prandtl number: Pr = cp * mu / k
 pub fn prandtl_number(cp: f64, viscosity: f64, conductivity: f64) -> Option<f64> {
-    if !finite_4(cp, viscosity, conductivity, 0.0) || cp <= 0.0 || viscosity <= 0.0 || conductivity <= 0.0 { return None; }
+    if !finite_4(cp, viscosity, conductivity, 0.0)
+        || cp <= 0.0
+        || viscosity <= 0.0
+        || conductivity <= 0.0
+    {
+        return None;
+    }
     Some(cp * viscosity / conductivity)
 }
 
 /// Heat transfer coefficient from Nusselt: h = Nu * k / L
 pub fn htc_from_nusselt(nusselt: f64, conductivity: f64, char_length: f64) -> Option<f64> {
-    if !finite_4(nusselt, conductivity, char_length, 0.0) || nusselt < 0.0 || conductivity <= 0.0 || char_length <= 0.0 { return None; }
+    if !finite_4(nusselt, conductivity, char_length, 0.0)
+        || nusselt < 0.0
+        || conductivity <= 0.0
+        || char_length <= 0.0
+    {
+        return None;
+    }
     Some(nusselt * conductivity / char_length)
 }
 
@@ -450,26 +513,42 @@ pub fn htc_from_nusselt(nusselt: f64, conductivity: f64, char_length: f64) -> Op
 
 /// Carnot efficiency: eta = 1 - T_cold / T_hot
 pub fn carnot_efficiency(t_hot: f64, t_cold: f64) -> Option<f64> {
-    if !finite_4(t_hot, t_cold, 0.0, 0.0) || t_hot <= 0.0 || t_cold < 0.0 || t_cold >= t_hot { return None; }
+    if !finite_4(t_hot, t_cold, 0.0, 0.0) || t_hot <= 0.0 || t_cold < 0.0 || t_cold >= t_hot {
+        return None;
+    }
     Some(1.0 - t_cold / t_hot)
 }
 
 /// Otto cycle efficiency: eta = 1 - 1 / r^(gamma-1)
 pub fn otto_efficiency(compression_ratio: f64, gamma: f64) -> Option<f64> {
-    if !compression_ratio.is_finite() || compression_ratio <= 1.0 || !gamma.is_finite() || gamma <= 1.0 { return None; }
+    if !compression_ratio.is_finite()
+        || compression_ratio <= 1.0
+        || !gamma.is_finite()
+        || gamma <= 1.0
+    {
+        return None;
+    }
     Some(1.0 - 1.0 / compression_ratio.powf(gamma - 1.0))
 }
 
 /// Diesel cycle efficiency
 pub fn diesel_efficiency(compression_ratio: f64, cutoff_ratio: f64, gamma: f64) -> Option<f64> {
-    if !finite_4(compression_ratio, cutoff_ratio, gamma, 0.0) || compression_ratio <= 1.0 || cutoff_ratio <= 1.0 || gamma <= 1.0 { return None; }
+    if !finite_4(compression_ratio, cutoff_ratio, gamma, 0.0)
+        || compression_ratio <= 1.0
+        || cutoff_ratio <= 1.0
+        || gamma <= 1.0
+    {
+        return None;
+    }
     let term = (cutoff_ratio.powf(gamma) - 1.0) / (gamma * (cutoff_ratio - 1.0));
     Some(1.0 - 1.0 / compression_ratio.powf(gamma - 1.0) * term)
 }
 
 /// Brayton cycle efficiency: eta = 1 - 1 / r_p^((gamma-1)/gamma)
 pub fn brayton_efficiency(pressure_ratio: f64, gamma: f64) -> Option<f64> {
-    if !pressure_ratio.is_finite() || pressure_ratio <= 1.0 || !gamma.is_finite() || gamma <= 1.0 { return None; }
+    if !pressure_ratio.is_finite() || pressure_ratio <= 1.0 || !gamma.is_finite() || gamma <= 1.0 {
+        return None;
+    }
     Some(1.0 - 1.0 / pressure_ratio.powf((gamma - 1.0) / gamma))
 }
 
@@ -479,7 +558,14 @@ pub fn brayton_efficiency(pressure_ratio: f64, gamma: f64) -> Option<f64> {
 
 /// Clausius-Clapeyron: ln(P2/P1) = -(L/R) * (1/T2 - 1/T1)
 pub fn clausius_clapeyron_pressure(p1: f64, t1: f64, t2: f64, latent_heat: f64) -> Option<f64> {
-    if !finite_4(p1, t1, t2, latent_heat) || p1 <= 0.0 || t1 <= 0.0 || t2 <= 0.0 || latent_heat < 0.0 { return None; }
+    if !finite_4(p1, t1, t2, latent_heat)
+        || p1 <= 0.0
+        || t1 <= 0.0
+        || t2 <= 0.0
+        || latent_heat < 0.0
+    {
+        return None;
+    }
     Some(p1 * (-latent_heat / 8.314462618 * (1.0 / t2 - 1.0 / t1)).exp())
 }
 
@@ -488,12 +574,16 @@ pub fn clausius_clapeyron_pressure(p1: f64, t1: f64, t2: f64, latent_heat: f64) 
 // ---------------------------------------------------------------------------
 
 pub fn entropy_change_constant_volume(moles: f64, cv: f64, t1: f64, t2: f64) -> Option<f64> {
-    if !finite_4(moles, cv, t1, t2) || moles < 0.0 || cv <= 0.0 || t1 <= 0.0 || t2 <= 0.0 { return None; }
+    if !finite_4(moles, cv, t1, t2) || moles < 0.0 || cv <= 0.0 || t1 <= 0.0 || t2 <= 0.0 {
+        return None;
+    }
     Some(moles * cv * (t2 / t1).ln())
 }
 
 pub fn entropy_change_constant_pressure(moles: f64, cp: f64, t1: f64, t2: f64) -> Option<f64> {
-    if !finite_4(moles, cp, t1, t2) || moles < 0.0 || cp <= 0.0 || t1 <= 0.0 || t2 <= 0.0 { return None; }
+    if !finite_4(moles, cp, t1, t2) || moles < 0.0 || cp <= 0.0 || t1 <= 0.0 || t2 <= 0.0 {
+        return None;
+    }
     Some(moles * cp * (t2 / t1).ln())
 }
 
@@ -511,14 +601,23 @@ fn finite_5(a: f64, b: f64, c: f64, d: f64, e: f64) -> bool {
 
 /// Van der Waals pressure: P = RT/(V-b) - a/V²
 pub fn van_der_waals_pressure(temperature: f64, molar_volume: f64, a: f64, b: f64) -> Option<f64> {
-    if !finite_5(temperature, molar_volume, a, b, 0.0) || temperature <= 0.0 || molar_volume <= 0.0 || a < 0.0 || b < 0.0 { return None; }
+    if !finite_5(temperature, molar_volume, a, b, 0.0)
+        || temperature <= 0.0
+        || molar_volume <= 0.0
+        || a < 0.0
+        || b < 0.0
+    {
+        return None;
+    }
     let r = 8.314462618;
     Some(r * temperature / (molar_volume - b) - a / (molar_volume * molar_volume))
 }
 
 /// Van der Waals critical point: Tc = 8a/(27Rb), Pc = a/(27b²), Vc = 3b
 pub fn van_der_waals_critical_point(a: f64, b: f64) -> Option<(f64, f64, f64)> {
-    if !finite_5(a, b, 0.0, 0.0, 0.0) || a <= 0.0 || b <= 0.0 { return None; }
+    if !finite_5(a, b, 0.0, 0.0, 0.0) || a <= 0.0 || b <= 0.0 {
+        return None;
+    }
     let r = 8.314462618;
     let tc = 8.0 * a / (27.0 * r * b);
     let pc = a / (27.0 * b * b);
@@ -531,25 +630,37 @@ pub fn van_der_waals_critical_point(a: f64, b: f64) -> Option<(f64, f64, f64)> {
 // ---------------------------------------------------------------------------
 
 /// Maxwell relation 1: (∂T/∂V)_S = -(∂P/∂S)_V
-pub fn maxwell_relation_1(temperature: f64, volume: f64, entropy: f64, pressure: f64) -> f64 {
+pub fn maxwell_relation_1(_temperature: f64, _volume: f64, _entropy: f64, _pressure: f64) -> f64 {
     0.0 // stub — analytical form depends on the specific EOS; use as reminder of the identity
 }
 
 /// Enthalpy: H = U + PV
 pub fn enthalpy(internal_energy: f64, pressure: f64, volume: f64) -> Option<f64> {
-    if !finite_5(internal_energy, pressure, volume, 0.0, 0.0) { return None; }
+    if !finite_5(internal_energy, pressure, volume, 0.0, 0.0) {
+        return None;
+    }
     Some(internal_energy + pressure * volume)
 }
 
 /// Helmholtz free energy: F = U - TS
 pub fn helmholtz_free_energy(internal_energy: f64, temperature: f64, entropy: f64) -> Option<f64> {
-    if !finite_5(internal_energy, temperature, entropy, 0.0, 0.0) || temperature < 0.0 { return None; }
+    if !finite_5(internal_energy, temperature, entropy, 0.0, 0.0) || temperature < 0.0 {
+        return None;
+    }
     Some(internal_energy - temperature * entropy)
 }
 
 /// Gibbs free energy: G = H - TS = U + PV - TS
-pub fn gibbs_free_energy(internal_energy: f64, pressure: f64, volume: f64, temperature: f64, entropy: f64) -> Option<f64> {
-    if !finite_5(internal_energy, pressure, volume, temperature, entropy) || temperature < 0.0 { return None; }
+pub fn gibbs_free_energy(
+    internal_energy: f64,
+    pressure: f64,
+    volume: f64,
+    temperature: f64,
+    entropy: f64,
+) -> Option<f64> {
+    if !finite_5(internal_energy, pressure, volume, temperature, entropy) || temperature < 0.0 {
+        return None;
+    }
     Some(internal_energy + pressure * volume - temperature * entropy)
 }
 
@@ -560,14 +671,18 @@ pub fn gibbs_free_energy(internal_energy: f64, pressure: f64, volume: f64, tempe
 /// Joule-Thomson coefficient: μ_JT = (∂T/∂P)_H
 /// For ideal gas: μ_JT = 0. For Van der Waals: μ_JT ≈ (1/Cp)(2a/RT - b)
 pub fn joule_thomson_coefficient(cp: f64, temperature: f64, a: f64, b: f64) -> Option<f64> {
-    if !finite_5(cp, temperature, a, b, 0.0) || cp <= 0.0 || temperature <= 0.0 { return None; }
+    if !finite_5(cp, temperature, a, b, 0.0) || cp <= 0.0 || temperature <= 0.0 {
+        return None;
+    }
     let r = 8.314462618;
     Some((2.0 * a / (r * temperature) - b) / cp)
 }
 
 /// Joule-Thomson inversion temperature: T_inv = 2a/(Rb)
 pub fn joule_thomson_inversion_temperature(a: f64, b: f64) -> Option<f64> {
-    if !finite_5(a, b, 0.0, 0.0, 0.0) || a <= 0.0 || b <= 0.0 { return None; }
+    if !finite_5(a, b, 0.0, 0.0, 0.0) || a <= 0.0 || b <= 0.0 {
+        return None;
+    }
     let r = 8.314462618;
     Some(2.0 * a / (r * b))
 }
@@ -578,20 +693,42 @@ pub fn joule_thomson_inversion_temperature(a: f64, b: f64) -> Option<f64> {
 
 /// Debye heat capacity: C_V = 9Nk_B (T/θ_D)³ ∫₀^{θ_D/T} x⁴ eˣ/(eˣ-1)² dx
 /// Simplified low-T limit: C_V ≈ 12π⁴/5 Nk_B (T/θ_D)³
-pub fn debye_heat_capacity_low_t(temperature: f64, debye_temperature: f64, n_atoms: f64) -> Option<f64> {
-    if !finite_5(temperature, debye_temperature, n_atoms, 0.0, 0.0) || temperature <= 0.0 || debye_temperature <= 0.0 || n_atoms <= 0.0 { return None; }
+pub fn debye_heat_capacity_low_t(
+    temperature: f64,
+    debye_temperature: f64,
+    n_atoms: f64,
+) -> Option<f64> {
+    if !finite_5(temperature, debye_temperature, n_atoms, 0.0, 0.0)
+        || temperature <= 0.0
+        || debye_temperature <= 0.0
+        || n_atoms <= 0.0
+    {
+        return None;
+    }
     let r = 8.314462618;
     let ratio = temperature / debye_temperature;
     Some(12.0 * std::f64::consts::PI.powi(4) / 5.0 * n_atoms * r * ratio.powi(3))
 }
 
 /// Einstein heat capacity: C_V = 3Nk_B (θ_E/T)² e^{θ_E/T} / (e^{θ_E/T} - 1)²
-pub fn einstein_heat_capacity(temperature: f64, einstein_temperature: f64, n_atoms: f64) -> Option<f64> {
-    if !finite_5(temperature, einstein_temperature, n_atoms, 0.0, 0.0) || temperature <= 0.0 || einstein_temperature <= 0.0 || n_atoms <= 0.0 { return None; }
+pub fn einstein_heat_capacity(
+    temperature: f64,
+    einstein_temperature: f64,
+    n_atoms: f64,
+) -> Option<f64> {
+    if !finite_5(temperature, einstein_temperature, n_atoms, 0.0, 0.0)
+        || temperature <= 0.0
+        || einstein_temperature <= 0.0
+        || n_atoms <= 0.0
+    {
+        return None;
+    }
     let r = 8.314462618;
     let x = einstein_temperature / temperature;
     let ex = x.exp();
-    if ex <= 1.0 { return None; }
+    if ex <= 1.0 {
+        return None;
+    }
     Some(3.0 * n_atoms * r * x * x * ex / (ex - 1.0).powi(2))
 }
 
@@ -601,13 +738,17 @@ pub fn einstein_heat_capacity(temperature: f64, einstein_temperature: f64, n_ato
 
 /// Carnot refrigeration coefficient of performance: COP = Tc / (Th - Tc)
 pub fn carnot_refrigeration_cop(t_cold: f64, t_hot: f64) -> Option<f64> {
-    if !finite_5(t_cold, t_hot, 0.0, 0.0, 0.0) || t_cold <= 0.0 || t_hot <= 0.0 || t_hot <= t_cold { return None; }
+    if !finite_5(t_cold, t_hot, 0.0, 0.0, 0.0) || t_cold <= 0.0 || t_hot <= 0.0 || t_hot <= t_cold {
+        return None;
+    }
     Some(t_cold / (t_hot - t_cold))
 }
 
 /// Heat pump COP: COP = Th / (Th - Tc)
 pub fn heat_pump_cop(t_cold: f64, t_hot: f64) -> Option<f64> {
-    if !finite_5(t_cold, t_hot, 0.0, 0.0, 0.0) || t_cold <= 0.0 || t_hot <= 0.0 || t_hot <= t_cold { return None; }
+    if !finite_5(t_cold, t_hot, 0.0, 0.0, 0.0) || t_cold <= 0.0 || t_hot <= 0.0 || t_hot <= t_cold {
+        return None;
+    }
     Some(t_hot / (t_hot - t_cold))
 }
 
@@ -616,26 +757,49 @@ pub fn heat_pump_cop(t_cold: f64, t_hot: f64) -> Option<f64> {
 // ---------------------------------------------------------------------------
 
 /// Log-mean temperature difference for counter-flow heat exchanger.
-pub fn lmtd_counter_flow(t_hot_in: f64, t_hot_out: f64, t_cold_in: f64, t_cold_out: f64) -> Option<f64> {
-    if !finite_5(t_hot_in, t_hot_out, t_cold_in, t_cold_out, 0.0) || t_hot_in < t_cold_out || t_hot_out < t_cold_in { return None; }
+pub fn lmtd_counter_flow(
+    t_hot_in: f64,
+    t_hot_out: f64,
+    t_cold_in: f64,
+    t_cold_out: f64,
+) -> Option<f64> {
+    if !finite_5(t_hot_in, t_hot_out, t_cold_in, t_cold_out, 0.0)
+        || t_hot_in < t_cold_out
+        || t_hot_out < t_cold_in
+    {
+        return None;
+    }
     let d1 = t_hot_in - t_cold_out;
     let d2 = t_hot_out - t_cold_in;
-    if d1 <= 0.0 || d2 <= 0.0 { return None; }
+    if d1 <= 0.0 || d2 <= 0.0 {
+        return None;
+    }
     Some((d1 - d2) / (d1 / d2).ln())
 }
 
 /// Log-mean temperature difference for parallel-flow heat exchanger.
-pub fn lmtd_parallel_flow(t_hot_in: f64, t_hot_out: f64, t_cold_in: f64, t_cold_out: f64) -> Option<f64> {
-    if !finite_5(t_hot_in, t_hot_out, t_cold_in, t_cold_out, 0.0) { return None; }
+pub fn lmtd_parallel_flow(
+    t_hot_in: f64,
+    t_hot_out: f64,
+    t_cold_in: f64,
+    t_cold_out: f64,
+) -> Option<f64> {
+    if !finite_5(t_hot_in, t_hot_out, t_cold_in, t_cold_out, 0.0) {
+        return None;
+    }
     let d1 = t_hot_in - t_cold_in;
     let d2 = t_hot_out - t_cold_out;
-    if d1 <= 0.0 || d2 <= 0.0 { return None; }
+    if d1 <= 0.0 || d2 <= 0.0 {
+        return None;
+    }
     Some((d1 - d2) / (d1 / d2).ln())
 }
 
 /// NTU-epsilon effectiveness for counter-flow heat exchanger.
 pub fn ntu_epsilon_counter_flow(ntu: f64, c_r: f64) -> Option<f64> {
-    if !finite_5(ntu, c_r, 0.0, 0.0, 0.0) || ntu < 0.0 || c_r < 0.0 { return None; }
+    if !finite_5(ntu, c_r, 0.0, 0.0, 0.0) || ntu < 0.0 || c_r < 0.0 {
+        return None;
+    }
     let epsilon = if c_r >= 1.0 {
         ntu / (1.0 + ntu) // c_r = 1 limiting case
     } else {
@@ -647,13 +811,24 @@ pub fn ntu_epsilon_counter_flow(ntu: f64, c_r: f64) -> Option<f64> {
 
 /// Number of transfer units: NTU = UA / C_min
 pub fn ntu(overall_htc: f64, area: f64, c_min: f64) -> Option<f64> {
-    if !finite_5(overall_htc, area, c_min, 0.0, 0.0) || overall_htc <= 0.0 || area <= 0.0 || c_min <= 0.0 { return None; }
+    if !finite_5(overall_htc, area, c_min, 0.0, 0.0)
+        || overall_htc <= 0.0
+        || area <= 0.0
+        || c_min <= 0.0
+    {
+        return None;
+    }
     Some(overall_htc * area / c_min)
 }
 
 /// Heat capacity rate: C = m_dot * cp
 pub fn heat_capacity_rate(mass_flow: f64, specific_heat: f64) -> Option<f64> {
-    if !finite_5(mass_flow, specific_heat, 0.0, 0.0, 0.0) || mass_flow <= 0.0 || specific_heat <= 0.0 { return None; }
+    if !finite_5(mass_flow, specific_heat, 0.0, 0.0, 0.0)
+        || mass_flow <= 0.0
+        || specific_heat <= 0.0
+    {
+        return None;
+    }
     Some(mass_flow * specific_heat)
 }
 
@@ -664,7 +839,12 @@ pub fn heat_capacity_rate(mass_flow: f64, specific_heat: f64) -> Option<f64> {
 /// View factor for two parallel coaxial disks.
 /// R1 = r1/d, R2 = r2/d where d is the separation distance.
 pub fn view_factor_coaxial_disks(radius_ratio_1: f64, radius_ratio_2: f64) -> Option<f64> {
-    if !finite_5(radius_ratio_1, radius_ratio_2, 0.0, 0.0, 0.0) || radius_ratio_1 < 0.0 || radius_ratio_2 < 0.0 { return None; }
+    if !finite_5(radius_ratio_1, radius_ratio_2, 0.0, 0.0, 0.0)
+        || radius_ratio_1 < 0.0
+        || radius_ratio_2 < 0.0
+    {
+        return None;
+    }
     let x = 1.0 + (1.0 + radius_ratio_2 * radius_ratio_2) / (radius_ratio_1 * radius_ratio_1);
     Some(0.5 * (x - (x * x - 4.0 * (radius_ratio_2 / radius_ratio_1).powi(2)).sqrt()))
 }
@@ -672,14 +852,16 @@ pub fn view_factor_coaxial_disks(radius_ratio_1: f64, radius_ratio_2: f64) -> Op
 /// View factor for two parallel, equal rectangles.
 /// X = a/d, Y = b/d where a, b are side lengths and d is the separation.
 pub fn view_factor_parallel_rectangles(x: f64, y: f64) -> Option<f64> {
-    if !finite_5(x, y, 0.0, 0.0, 0.0) || x <= 0.0 || y <= 0.0 { return None; }
-    let f = 2.0 / (std::f64::consts::PI * x * y) * (
-        (x * x * (1.0 + y * y) / (1.0 + x * x + y * y)).ln().sqrt() +
-        (y * y * (1.0 + x * x) / (1.0 + x * x + y * y)).ln().sqrt() +
-        x * (1.0 + y * y).atan() / (x * x + y * y + x * x * y * y).sqrt() +
-        y * (1.0 + x * x).atan() / (x * x + y * y + y * y * x * x).sqrt() -
-        x * x.atan() - y * y.atan()
-    );
+    if !finite_5(x, y, 0.0, 0.0, 0.0) || x <= 0.0 || y <= 0.0 {
+        return None;
+    }
+    let f = 2.0 / (std::f64::consts::PI * x * y)
+        * ((x * x * (1.0 + y * y) / (1.0 + x * x + y * y)).ln().sqrt()
+            + (y * y * (1.0 + x * x) / (1.0 + x * x + y * y)).ln().sqrt()
+            + x * (1.0 + y * y).atan() / (x * x + y * y + x * x * y * y).sqrt()
+            + y * (1.0 + x * x).atan() / (x * x + y * y + y * y * x * x).sqrt()
+            - x * x.atan()
+            - y * y.atan());
     Some(f)
 }
 
@@ -690,7 +872,13 @@ pub fn view_factor_parallel_rectangles(x: f64, y: f64) -> Option<f64> {
 /// Second virial coefficient for Lennard-Jones gas (simplified).
 /// B(T) = b₀ - a₀/RT, where b₀ = 2πN_A σ³/3, a₀ = 2πN_A² ε σ³
 pub fn virial_second_coefficient(temperature: f64, sigma: f64, epsilon: f64) -> Option<f64> {
-    if !finite_5(temperature, sigma, epsilon, 0.0, 0.0) || temperature <= 0.0 || sigma <= 0.0 || epsilon < 0.0 { return None; }
+    if !finite_5(temperature, sigma, epsilon, 0.0, 0.0)
+        || temperature <= 0.0
+        || sigma <= 0.0
+        || epsilon < 0.0
+    {
+        return None;
+    }
     let r = 8.314462618;
     let avogadro = 6.022_140_76e23;
     let b0 = 2.0 * std::f64::consts::PI * avogadro * sigma.powi(3) / 3.0;
@@ -704,15 +892,27 @@ pub fn virial_second_coefficient(temperature: f64, sigma: f64, epsilon: f64) -> 
 
 /// Quality (vapor mass fraction): x = m_vapor / (m_vapor + m_liquid)
 pub fn quality(vapor_mass: f64, liquid_mass: f64) -> Option<f64> {
-    if !finite_5(vapor_mass, liquid_mass, 0.0, 0.0, 0.0) || vapor_mass < 0.0 || liquid_mass < 0.0 { return None; }
+    if !finite_5(vapor_mass, liquid_mass, 0.0, 0.0, 0.0) || vapor_mass < 0.0 || liquid_mass < 0.0 {
+        return None;
+    }
     let total = vapor_mass + liquid_mass;
-    if total <= 0.0 { return None; }
+    if total <= 0.0 {
+        return None;
+    }
     Some(vapor_mass / total)
 }
 
 /// Homogeneous void fraction: α = 1 / (1 + (1-x)/x * ρ_v/ρ_l)
 pub fn homogeneous_void_fraction(quality: f64, rho_vapor: f64, rho_liquid: f64) -> Option<f64> {
-    if !finite_5(quality, rho_vapor, rho_liquid, 0.0, 0.0) || quality < 0.0 || quality > 1.0 || rho_vapor <= 0.0 || rho_liquid <= 0.0 { return None; }
-    if quality <= 0.0 || quality >= 1.0 { return Some(quality); }
+    if !finite_5(quality, rho_vapor, rho_liquid, 0.0, 0.0)
+        || !(0.0..=1.0).contains(&quality)
+        || rho_vapor <= 0.0
+        || rho_liquid <= 0.0
+    {
+        return None;
+    }
+    if quality <= 0.0 || quality >= 1.0 {
+        return Some(quality);
+    }
     Some(1.0 / (1.0 + (1.0 - quality) / quality * rho_vapor / rho_liquid))
 }

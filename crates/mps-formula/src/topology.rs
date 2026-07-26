@@ -1,8 +1,6 @@
-﻿use std::slice;
+use std::slice;
 
-use crate::error::{
-    ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error,
-};
+use crate::error::{ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error};
 use crate::ffi::{
     Bool, DensityFieldStats, SimpMaterialReport, TopologyOptimizationParams,
     TopologyOptimizationReport,
@@ -393,5 +391,3 @@ pub extern "C" fn topology_runtime_shape_density_step(
     clear_error();
     Bool::TRUE
 }
-
-

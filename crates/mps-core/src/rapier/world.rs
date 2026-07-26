@@ -14,7 +14,6 @@ use crate::rapier::ffi::{
     quat_from_rapier, unpack_rigid_body_handle, vec3_finite, vec3_from_rapier, vec3_to_rapier,
 };
 use crate::rapier::forces::{BodyForceLog, ForceFacade, ForceRegistry};
-use hashbrown::HashMap;
 
 const MAX_STEP_SECONDS: f64 = 1.0;
 
@@ -43,33 +42,6 @@ impl Default for FrameWorkBuffers {
             friction_work: Vec::with_capacity(512),
             pending_forces: smallvec::SmallVec::new(),
             arena_idx_map: Vec::with_capacity(256),
-        }
-    }
-}
-
-impl FrameWorkBuffers {
-    /// Clear all buffers for reuse in the next frame without deallocating.
-    fn clear(&mut self) {
-        // Clear individual log entries (keep capacity)
-        for entry in self.body_log.iter_mut() {
-            if let Some(log) = entry {
-                log.forces.clear();
-                log.torques.clear();
-                *entry = None; // mark slot as reusable
-            }
-        }
-        // Truncate to zero but keep capacity
-        self.body_log.truncate(0);
-        self.friction_work.clear();
-        self.pending_forces.clear();
-        self.arena_idx_map.clear();
-    }
-
-    /// Ensure body_log can hold at least `max_index` entries.
-    /// Called whenever a new body is inserted with a higher handle index.
-    fn ensure_body_log_capacity(&mut self, max_index: usize) {
-        if max_index >= self.body_log.len() {
-            self.body_log.resize_with(max_index + 1, || None);
         }
     }
 }
@@ -189,96 +161,84 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
                     idx.push(Some(h));
                 }
                 for (cmd_type, body_idx, a0, a1, a2) in commands {
-                    if let Some(Some(h)) = idx.get(body_idx as usize) {
-                        if let Some(body) = world.inner.bodies.get_mut(*h) {
-                            match cmd_type {
-                                0 => {
-                                    // AddForce
-                                    body.add_force(
-                                        rapier3d::prelude::Vector::new(a0, a1, a2),
-                                        true,
-                                    );
-                                }
-                                1 => {
-                                    // AddTorque
-                                    body.add_torque(
-                                        rapier3d::prelude::Vector::new(a0, a1, a2),
-                                        true,
-                                    );
-                                }
-                                2 => {
-                                    // SetPose
-                                    // a0..a2 = position, rest packed into user_data via cmd encoding
-                                    let pos = rapier3d::prelude::Pose::from_parts(
-                                        rapier3d::prelude::Vector::new(a0, a1, a2),
-                                        *body.rotation(),
-                                    );
-                                    body.set_position(pos, true);
-                                }
-                                3 => {
-                                    // SetVelocity
-                                    body.set_linvel(
-                                        rapier3d::prelude::Vector::new(a0, a1, a2),
-                                        true,
-                                    );
-                                }
-                                4 => {
-                                    // ApplyImpulse
-                                    body.apply_impulse(
-                                        rapier3d::prelude::Vector::new(a0, a1, a2),
-                                        true,
-                                    );
-                                }
-                                5 => {
-                                    // ApplyTorqueImpulse
-                                    body.apply_torque_impulse(
-                                        rapier3d::prelude::Vector::new(a0, a1, a2),
-                                        true,
-                                    );
-                                }
-                                6 => {
-                                    // WakeUp
-                                    body.wake_up(true);
-                                }
-                                7 => {
-                                    // Sleep
-                                    body.sleep();
-                                }
-                                8 => {
-                                    // SetRotation — a0..a2 = rotation vector (axis-angle)
-                                    let axis_angle = rapier3d::prelude::Vector::new(a0, a1, a2);
-                                    let angle = axis_angle.length();
-                                    if angle > 1e-12 {
-                                        let unit_axis = axis_angle / angle;
-                                        body.set_rotation(
-                                            rapier3d::prelude::Rotation::from_axis_angle(
-                                                unit_axis, angle,
-                                            ),
-                                            true,
-                                        );
-                                    }
-                                }
-                                9 => {
-                                    // SetGravityScale — a0 = scale
-                                    body.set_gravity_scale(a0, true);
-                                }
-                                10 => {
-                                    // SetLinearDamping — a0 = damping
-                                    body.set_linear_damping(a0);
-                                }
-                                11 => {
-                                    // SetAngularDamping — a0 = damping
-                                    body.set_angular_damping(a0);
-                                }
-                                12 => {
-                                    // AddForceAtPoint — a0..a2 = force, need point from next cmd or use COM
-                                    body.add_force(
-                                        rapier3d::prelude::Vector::new(a0, a1, a2),
-                                        true,
-                                    );
-                                }
-                                _ => {}
+                    if let Some(Some(h)) = idx.get(body_idx as usize)
+                        && let Some(body) = world.inner.bodies.get_mut(*h)
+                    {
+                        match cmd_type {
+                            0 => {
+                                // AddForce
+                                body.add_force(rapier3d::prelude::Vector::new(a0, a1, a2), true);
                             }
+                            1 => {
+                                // AddTorque
+                                body.add_torque(rapier3d::prelude::Vector::new(a0, a1, a2), true);
+                            }
+                            2 => {
+                                // SetPose
+                                // a0..a2 = position, rest packed into user_data via cmd encoding
+                                let pos = rapier3d::prelude::Pose::from_parts(
+                                    rapier3d::prelude::Vector::new(a0, a1, a2),
+                                    *body.rotation(),
+                                );
+                                body.set_position(pos, true);
+                            }
+                            3 => {
+                                // SetVelocity
+                                body.set_linvel(rapier3d::prelude::Vector::new(a0, a1, a2), true);
+                            }
+                            4 => {
+                                // ApplyImpulse
+                                body.apply_impulse(
+                                    rapier3d::prelude::Vector::new(a0, a1, a2),
+                                    true,
+                                );
+                            }
+                            5 => {
+                                // ApplyTorqueImpulse
+                                body.apply_torque_impulse(
+                                    rapier3d::prelude::Vector::new(a0, a1, a2),
+                                    true,
+                                );
+                            }
+                            6 => {
+                                // WakeUp
+                                body.wake_up(true);
+                            }
+                            7 => {
+                                // Sleep
+                                body.sleep();
+                            }
+                            8 => {
+                                // SetRotation — a0..a2 = rotation vector (axis-angle)
+                                let axis_angle = rapier3d::prelude::Vector::new(a0, a1, a2);
+                                let angle = axis_angle.length();
+                                if angle > 1e-12 {
+                                    let unit_axis = axis_angle / angle;
+                                    body.set_rotation(
+                                        rapier3d::prelude::Rotation::from_axis_angle(
+                                            unit_axis, angle,
+                                        ),
+                                        true,
+                                    );
+                                }
+                            }
+                            9 => {
+                                // SetGravityScale — a0 = scale
+                                body.set_gravity_scale(a0, true);
+                            }
+                            10 => {
+                                // SetLinearDamping — a0 = damping
+                                body.set_linear_damping(a0);
+                            }
+                            11 => {
+                                // SetAngularDamping — a0 = damping
+                                body.set_angular_damping(a0);
+                            }
+                            12 => {
+                                // AddForceAtPoint — a0..a2 = force, need point from next cmd or use COM
+                                body.add_force(rapier3d::prelude::Vector::new(a0, a1, a2), true);
+                            }
+                            _ => {}
                         }
                     }
                 }
@@ -911,8 +871,6 @@ pub extern "C" fn world_register_celestial_gravity(
 // ForceRegistry FFI — generic access for advanced callers
 // ---------------------------------------------------------------------------
 
-use crate::rapier::forces::ForceLawType;
-
 /// Opaque handle for a force law registered in the world's ForceRegistry.
 /// Maps to `ForceLawHandle` in Rust.
 pub type ForceLawHandleRaw = u64;
@@ -1024,10 +982,10 @@ pub extern "C" fn world_create_shared_arena(
 
         world.inner.shared_arena = Some(Box::new(arena));
 
-        if let Some(p) = (unsafe { out_address.as_mut() }) {
+        if let Some(p) = unsafe { out_address.as_mut() } {
             *p = addr;
         }
-        if let Some(p) = (unsafe { out_size.as_mut() }) {
+        if let Some(p) = unsafe { out_size.as_mut() } {
             *p = sz;
         }
         clear_error();
@@ -1043,7 +1001,7 @@ pub extern "C" fn world_create_shared_arena(
 #[unsafe(no_mangle)]
 pub extern "C" fn world_destroy_shared_arena(world: *mut WorldHandle) {
     ffi_guard((), || {
-        if let Some(world) = (unsafe { world.as_mut() }) {
+        if let Some(world) = unsafe { world.as_mut() } {
             world.inner.shared_arena = None;
         }
     })

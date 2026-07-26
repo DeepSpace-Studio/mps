@@ -1,6 +1,5 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use smallvec::SmallVec;
     use mps_core::rapier::events::*;
     use mps_core::rapier::ffi::*;
     use mps_core::rapier::ffi::{BodyStatus, ShapeDesc, Vec3};
@@ -220,14 +219,8 @@ mod tests {
     fn event_ring_buffer_produces_and_drains_events() {
         let world = mps_core::rapier::world::world_create(Vec3::default());
         // Init ring buffer
-        assert_eq!(
-            world_init_collision_event_ring(world, 64),
-            Bool::TRUE
-        );
-        assert_eq!(
-            world_init_contact_force_event_ring(world, 64),
-            Bool::TRUE
-        );
+        assert_eq!(world_init_collision_event_ring(world, 64), Bool::TRUE);
+        assert_eq!(world_init_contact_force_event_ring(world, 64), Bool::TRUE);
         // Set dispatch mode to Both so ring buffer gets filled
         assert_eq!(world_set_event_dispatch_mode(world, 2), Bool::TRUE);
 
@@ -245,13 +238,13 @@ mod tests {
         });
         // Enable collision events so the ring buffer receives them
         mps_core::rapier::collider::collider_builder_set_active_events(
-            gc_builder,
-            1, // COLLISION_EVENTS = 1
+            gc_builder, 1, // COLLISION_EVENTS = 1
         );
         let gc = mps_core::rapier::collider::collider_builder_build(gc_builder);
         mps_core::rapier::collider::world_insert_collider_with_parent(world, gc, ground_handle);
 
-        let body_b = mps_core::rapier::rigid_body::rigid_body_builder_create(BodyStatus::Dynamic as u32);
+        let body_b =
+            mps_core::rapier::rigid_body::rigid_body_builder_create(BodyStatus::Dynamic as u32);
         mps_core::rapier::rigid_body::rigid_body_builder_set_translation(
             body_b,
             Vec3 {
@@ -325,10 +318,3 @@ mod tests {
         mps_core::rapier::world::world_destroy(world);
     }
 }
-
-
-
-
-
-
-

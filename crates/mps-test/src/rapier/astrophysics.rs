@@ -1,4 +1,4 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use mps_core::rapier::astrophysics::*;
     use mps_core::rapier::ffi::*;
@@ -93,6 +93,3 @@ mod tests {
         assert!(report.correction_acceleration.x.is_finite());
     }
 }
-
-
-

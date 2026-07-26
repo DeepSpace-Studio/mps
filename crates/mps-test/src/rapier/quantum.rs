@@ -1,7 +1,7 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use mps_core::rapier::quantum::*;
     use mps_core::rapier::ffi::*;
+    use mps_core::rapier::quantum::*;
 
     #[test]
     fn wave_probability_and_normalization_work() {
@@ -53,6 +53,3 @@ mod tests {
         assert_eq!(report.level_spacing, 8.0);
     }
 }
-
-
-

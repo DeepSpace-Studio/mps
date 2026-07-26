@@ -250,10 +250,7 @@ pub fn bulk_body_snapshot_to_direct_buffer(
 ///
 /// Must not call any JNI function that could trigger GC while the array
 /// is pinned.  Only pointer arithmetic and memcpy are allowed.
-pub fn get_double_array_critical(
-    address: i64,
-    length: i32,
-) -> Option<(*const f64, usize)> {
+pub fn get_double_array_critical(address: i64, length: i32) -> Option<(*const f64, usize)> {
     if address == 0 || length <= 0 {
         return None;
     }
@@ -261,10 +258,7 @@ pub fn get_double_array_critical(
 }
 
 /// Get a pointer to a Java byte[] without copying (Critical section).
-pub fn get_byte_array_critical(
-    address: i64,
-    length: i32,
-) -> Option<(*const u8, usize)> {
+pub fn get_byte_array_critical(address: i64, length: i32) -> Option<(*const u8, usize)> {
     if address == 0 || length <= 0 {
         return None;
     }
@@ -282,6 +276,7 @@ const MAX_VOXEL_CELLS: usize = 16_777_216;
 
 /// Copy Minecraft chunk voxel data from a DirectByteBuffer into a collider
 /// builder, zero-copy.
+#[allow(clippy::too_many_arguments)] // JNI-facing signature is frozen
 pub fn voxel_collider_from_direct_buffer(
     _world: *mut crate::rapier::ffi::WorldHandle,
     voxel_address: i64,
@@ -314,7 +309,9 @@ pub fn voxel_collider_from_direct_buffer(
         };
         // SAFETY: `voxel_address` comes from a Java DirectByteBuffer that the
         // Java caller keeps alive and unmodified for the duration of this call.
-        let Some(voxels) = (unsafe { direct_byte_buffer_as_slice(voxel_address, voxel_count as i32) }) else {
+        let Some(voxels) =
+            (unsafe { direct_byte_buffer_as_slice(voxel_address, voxel_count as i32) })
+        else {
             return 0i64;
         };
 
@@ -351,4 +348,3 @@ pub fn voxel_collider_from_direct_buffer(
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
-

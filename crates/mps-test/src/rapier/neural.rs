@@ -1,9 +1,9 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use mps_core::rapier::neural::*;
-    use mps_core::rapier::ffi::*;
     use mps_core::rapier::collider::{collider_builder_destroy, world_insert_collider};
+    use mps_core::rapier::ffi::*;
     use mps_core::rapier::ffi::{Bool, Quat, Vec3};
+    use mps_core::rapier::neural::*;
 
     fn identity_rotation() -> Quat {
         Quat {
@@ -81,6 +81,3 @@ mod tests {
         mps_core::rapier::world::world_destroy(world);
     }
 }
-
-
-

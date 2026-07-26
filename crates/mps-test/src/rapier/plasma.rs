@@ -1,8 +1,8 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use mps_core::rapier::plasma::*;
-    use mps_core::rapier::ffi::*;
     use mps_core::rapier::ffi::GridField;
+    use mps_core::rapier::ffi::*;
+    use mps_core::rapier::plasma::*;
 
     #[test]
     fn debye_length_positive() {
@@ -41,15 +41,23 @@ mod tests {
     fn boris_push_conserves_energy_in_b_field() {
         // Pure B-field: kinetic energy should be conserved
         let particle = PicParticle {
-            x: 0.0, y: 0.0, z: 0.0,
-            vx: 1e6, vy: 0.0, vz: 0.0,
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+            vx: 1e6,
+            vy: 0.0,
+            vz: 0.0,
             charge: -ELECTRON_CHARGE,
             mass: ELECTRON_MASS,
             weight: 1.0,
         };
         let field = GridField {
-            ex: 0.0, ey: 0.0, ez: 0.0,
-            bx: 0.0, by: 0.0, bz: 1.0, // 1 T along z
+            ex: 0.0,
+            ey: 0.0,
+            ez: 0.0,
+            bx: 0.0,
+            by: 0.0,
+            bz: 1.0, // 1 T along z
         };
         let params = BorisPusherParams {
             dt: 1e-11,
@@ -65,7 +73,8 @@ mod tests {
         let mut p = particle;
         for _ in 0..100 {
             assert_eq!(pl_boris_push(p, field, params, &mut next), Bool::TRUE);
-            let ke = 0.5 * ELECTRON_MASS * (next.vx * next.vx + next.vy * next.vy + next.vz * next.vz);
+            let ke =
+                0.5 * ELECTRON_MASS * (next.vx * next.vx + next.vy * next.vy + next.vz * next.vz);
             if ke < ke_min {
                 ke_min = ke;
             }
@@ -86,15 +95,23 @@ mod tests {
         const STEPS: u32 = 10;
 
         let particle = PicParticle {
-            x: 0.0, y: 0.0, z: 0.0,
-            vx: 0.0, vy: 0.0, vz: 0.0,
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+            vx: 0.0,
+            vy: 0.0,
+            vz: 0.0,
             charge: -ELECTRON_CHARGE,
             mass: ELECTRON_MASS,
             weight: 1.0,
         };
         let field = GridField {
-            ex: E_FIELD, ey: 0.0, ez: 0.0,
-            bx: 0.0, by: 0.0, bz: 0.0,
+            ex: E_FIELD,
+            ey: 0.0,
+            ez: 0.0,
+            bx: 0.0,
+            by: 0.0,
+            bz: 0.0,
         };
         let params = BorisPusherParams {
             dt: DT,
@@ -126,9 +143,17 @@ mod tests {
         let mut out = GridField::default();
         assert_eq!(
             pl_interpolate_field(
-                grid.as_ptr(), 3, 3, 3, 1.0,
-                0.0, 0.0, 0.0,
-                0.5, 0.5, 0.5,
+                grid.as_ptr(),
+                3,
+                3,
+                3,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.5,
+                0.5,
+                0.5,
                 &mut out,
             ),
             Bool::TRUE
@@ -139,8 +164,12 @@ mod tests {
     #[test]
     fn deposit_particle_charge_conserved() {
         let particle = PicParticle {
-            x: 0.0, y: 0.0, z: 0.0,
-            vx: 1e5, vy: 0.0, vz: 0.0,
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+            vx: 1e5,
+            vy: 0.0,
+            vz: 0.0,
             charge: ELECTRON_CHARGE,
             mass: ELECTRON_MASS,
             weight: 1e10,
@@ -159,17 +188,18 @@ mod tests {
     fn vlasov_moments_single_particle() {
         // Single particle has zero temperature in its own bulk frame
         let particle = PicParticle {
-            x: 0.0, y: 0.0, z: 0.0,
-            vx: 1e5, vy: 2e5, vz: -1e5,
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+            vx: 1e5,
+            vy: 2e5,
+            vz: -1e5,
             charge: ELECTRON_CHARGE,
             mass: ELECTRON_MASS,
             weight: 1.0,
         };
         let mut moments = VlasovMomentReport::default();
-        assert_eq!(
-            pl_vlasov_moments(&particle, 1, &mut moments),
-            Bool::TRUE
-        );
+        assert_eq!(pl_vlasov_moments(&particle, 1, &mut moments), Bool::TRUE);
         assert!((moments.density - 1.0).abs() < 1e-12);
         assert!((moments.ux - 1e5).abs() < 1.0);
         assert!((moments.uy - 2e5).abs() < 1.0);
@@ -180,11 +210,15 @@ mod tests {
         // With multiple particles having different velocities, T > 0
         let particles = [
             PicParticle {
-                vx: 1e5, vy: 0.0, vz: 0.0,
+                vx: 1e5,
+                vy: 0.0,
+                vz: 0.0,
                 ..particle
             },
             PicParticle {
-                vx: -1e5, vy: 0.0, vz: 0.0,
+                vx: -1e5,
+                vy: 0.0,
+                vz: 0.0,
                 ..particle
             },
         ];
@@ -245,9 +279,13 @@ mod tests {
         let mut xpoint = MagneticXPoint::default();
         assert_eq!(
             pl_find_xpoint(
-                bx.as_ptr(), by.as_ptr(),
-                nx, ny, cell,
-                -(nx as f64 / 2.0), -(ny as f64 / 2.0),
+                bx.as_ptr(),
+                by.as_ptr(),
+                nx,
+                ny,
+                cell,
+                -(nx as f64 / 2.0),
+                -(ny as f64 / 2.0),
                 1.0,
                 &mut xpoint,
             ),
@@ -280,24 +318,28 @@ mod tests {
 
     #[test]
     fn pic_step_report_generates_stats() {
-        let particles = [
-            PicParticle {
-                x: 0.0, y: 0.0, z: 0.0,
-                vx: 1e5, vy: 0.0, vz: 0.0,
-                charge: ELECTRON_CHARGE, mass: ELECTRON_MASS, weight: 1.0,
-            },
-        ];
+        let particles = [PicParticle {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+            vx: 1e5,
+            vy: 0.0,
+            vz: 0.0,
+            charge: ELECTRON_CHARGE,
+            mass: ELECTRON_MASS,
+            weight: 1.0,
+        }];
         let cells = [GridField {
-            ex: 1e4, ey: 0.0, ez: 0.0,
-            bx: 1.0, by: 0.0, bz: 0.0,
+            ex: 1e4,
+            ey: 0.0,
+            ez: 0.0,
+            bx: 1.0,
+            by: 0.0,
+            bz: 0.0,
         }];
         let mut report = PicStepReport::default();
         assert_eq!(
-            pl_pic_step_report(
-                particles.as_ptr(), 1,
-                cells.as_ptr(), 1,
-                &mut report,
-            ),
+            pl_pic_step_report(particles.as_ptr(), 1, cells.as_ptr(), 1, &mut report,),
             Bool::TRUE
         );
         assert_eq!(report.particle_count, 1);
@@ -311,12 +353,6 @@ mod tests {
         let p = PicParticle::default();
         let f = GridField::default();
         let bp = BorisPusherParams::default();
-        assert_eq!(
-            pl_boris_push(p, f, bp, std::ptr::null_mut()),
-            Bool::FALSE
-        );
+        assert_eq!(pl_boris_push(p, f, bp, std::ptr::null_mut()), Bool::FALSE);
     }
 }
-
-
-

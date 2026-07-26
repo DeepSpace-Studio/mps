@@ -1,10 +1,10 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use mps_core::rapier::fracture::*;
-    use mps_core::rapier::ffi::*;
     use mps_core::rapier::ffi::Vec3;
-    use rapier3d::prelude::{RigidBodyBuilder, ColliderBuilder};
+    use mps_core::rapier::ffi::*;
+    use mps_core::rapier::fracture::*;
     use mps_core::rapier::world::world_create;
+    use rapier3d::prelude::{ColliderBuilder, RigidBodyBuilder};
 
     fn v3(x: f64, y: f64, z: f64) -> Vec3 {
         Vec3 { x, y, z }
@@ -133,6 +133,3 @@ mod tests {
         assert_eq!(world.inner.bodies.len(), 2);
     }
 }
-
-
-

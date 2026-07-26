@@ -4,7 +4,7 @@ use crate::rapier::error::{
 use crate::rapier::ffi::{
     Bool, RigidBodyHandleRaw, TrajectoryEnvironment, TrajectoryForceReport,
     TrajectoryGlideEnvironment, TrajectoryGlideReport, TrajectoryGlideState, TrajectoryState,
-    WorldHandle, unpack_rigid_body_handle, vec3_finite, vec3_from_rapier, vec3_to_rapier,
+    WorldHandle, unpack_rigid_body_handle, vec3_from_rapier, vec3_to_rapier,
 };
 
 /// Estimate the aerodynamic/gravity forces acting on a trajectory state.

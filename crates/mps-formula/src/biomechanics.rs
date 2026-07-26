@@ -1,4 +1,4 @@
-﻿use crate::error::{ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error};
+use crate::error::{ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error};
 use crate::ffi::{
     Bool, HillMuscleDesc, HillMuscleReport, HillMuscleState, SkeletalConstraintReport,
     SkeletalJointLimit,
@@ -180,5 +180,3 @@ pub extern "C" fn biomechanics_muscle_joint_torque(muscle_force: f64, moment_arm
     }
     muscle_force * moment_arm
 }
-
-

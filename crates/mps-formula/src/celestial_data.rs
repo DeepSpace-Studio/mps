@@ -117,67 +117,60 @@ static EARTH_C: &[f64] = &[
     // Row n has n+1 entries (m=0..n)
 
     // n=2 (m=0..2) — quadrupole
-    -0.484165371736e-3,  // C̄₂₀ — Earth's oblateness (largest term after GM/r)
-    -0.186987635955e-9,  // C̄₂₁ — offset of figure axis from rotation axis
-    0.243914352398e-5,   // C̄₂₂ — equatorial ellipticity
-
+    -0.484165371736e-3, // C̄₂₀ — Earth's oblateness (largest term after GM/r)
+    -0.186987635955e-9, // C̄₂₁ — offset of figure axis from rotation axis
+    0.243914352398e-5,  // C̄₂₂ — equatorial ellipticity
     // n=3 (m=0..3) — pear-shape (southern hemisphere wider)
-    0.957161207093e-6,   // C̄₃₀
-    0.203046370047e-5,   // C̄₃₁
-    0.904787894809e-6,   // C̄₃₂
-    0.721145563610e-6,   // C̄₃₃
-
+    0.957161207093e-6, // C̄₃₀
+    0.203046370047e-5, // C̄₃₁
+    0.904787894809e-6, // C̄₃₂
+    0.721145563610e-6, // C̄₃₃
     // n=4 (m=0..4)
-    0.539965866638e-6,   // C̄₄₀
-    -0.536157389388e-6,  // C̄₄₁
-    0.350501623960e-6,   // C̄₄₂
-    0.990856766672e-6,   // C̄₄₃
-    -0.188560802735e-6,  // C̄₄₄
-
+    0.539965866638e-6,  // C̄₄₀
+    -0.536157389388e-6, // C̄₄₁
+    0.350501623960e-6,  // C̄₄₂
+    0.990856766672e-6,  // C̄₄₃
+    -0.188560802735e-6, // C̄₄₄
     // n=5 (m=0..5)
-    0.685323475630e-7,   // C̄₅₀
-    -0.621961686860e-7,  // C̄₅₁
-    0.652560676220e-6,   // C̄₅₂
-    -0.451961963230e-6,  // C̄₅₃
-    -0.295301647660e-6,  // C̄₅₄
-    0.174971983200e-6,   // C̄₅₅
-
+    0.685323475630e-7,  // C̄₅₀
+    -0.621961686860e-7, // C̄₅₁
+    0.652560676220e-6,  // C̄₅₂
+    -0.451961963230e-6, // C̄₅₃
+    -0.295301647660e-6, // C̄₅₄
+    0.174971983200e-6,  // C̄₅₅
     // n=6 (m=0..6)
-    0.149837544770e-6,   // C̄₆₀
-    -0.643534460108e-7,  // C̄₆₁
-    0.481701299910e-7,   // C̄₆₂
-    0.571806550690e-7,   // C̄₆₃
-    -0.860047924280e-7,  // C̄₆₄
-    -0.267104285480e-6,  // C̄₆₅
-    0.953019525160e-8,   // C̄₆₆
-
+    0.149837544770e-6,  // C̄₆₀
+    -0.643534460108e-7, // C̄₆₁
+    0.481701299910e-7,  // C̄₆₂
+    0.571806550690e-7,  // C̄₆₃
+    -0.860047924280e-7, // C̄₆₄
+    -0.267104285480e-6, // C̄₆₅
+    0.953019525160e-8,  // C̄₆₆
     // n=7 (m=0..7)
-    0.905392187530e-7,   // C̄₇₀
-    0.279463044790e-6,   // C̄₇₁
-    0.330016563120e-6,   // C̄₇₂
-    0.250431748030e-6,   // C̄₇₃
-    -0.120410003560e-6,  // C̄₇₄
-    0.171010984840e-7,   // C̄₇₅
-    -0.151646710310e-6,  // C̄₇₆
-    0.204962220200e-8,   // C̄₇₇
-
+    0.905392187530e-7,  // C̄₇₀
+    0.279463044790e-6,  // C̄₇₁
+    0.330016563120e-6,  // C̄₇₂
+    0.250431748030e-6,  // C̄₇₃
+    -0.120410003560e-6, // C̄₇₄
+    0.171010984840e-7,  // C̄₇₅
+    -0.151646710310e-6, // C̄₇₆
+    0.204962220200e-8,  // C̄₇₇
     // n=8 (m=0..8)
-    0.496200040420e-7,   // C̄₈₀
-    0.232885176830e-7,   // C̄₈₁
-    0.802931486830e-7,   // C̄₈₂
-    -0.192408232230e-7,  // C̄₈₃
-    -0.244186670760e-6,  // C̄₈₄
-    -0.255714750010e-7,  // C̄₈₅
-    -0.651060001540e-7,  // C̄₈₆
-    0.671610680030e-7,   // C̄₈₇
-    0.124003863830e-6,   // C̄₈₈
+    0.496200040420e-7,  // C̄₈₀
+    0.232885176830e-7,  // C̄₈₁
+    0.802931486830e-7,  // C̄₈₂
+    -0.192408232230e-7, // C̄₈₃
+    -0.244186670760e-6, // C̄₈₄
+    -0.255714750010e-7, // C̄₈₅
+    -0.651060001540e-7, // C̄₈₆
+    0.671610680030e-7,  // C̄₈₇
+    0.124003863830e-6,  // C̄₈₈
 ];
 
 /// EGM2008 S̄ₙₘ (normalized), degree 2–8, packed
 static EARTH_S: &[f64] = &[
     // n=2 (m=0..2) — S₂₀=0 by definition
-    0.0,  // S̄₂₀=0
-
+    0.0, // S̄₂₀=0
     // Row-major packed starting from n=2,m=0:
     // n=2: S20(missing), S21, S22
     // n=3: S30(missing), S31, S32, S33
@@ -190,57 +183,51 @@ static EARTH_S: &[f64] = &[
     0.119528012031e-8,
     // S̄₂₂
     -0.140016683654e-5,
-
     // n=3
-    0.248131151178e-5,   // S̄₃₁
-    -0.618954181980e-6,  // S̄₃₂
-    0.141424658150e-5,   // S̄₃₃
-
+    0.248131151178e-5,  // S̄₃₁
+    -0.618954181980e-6, // S̄₃₂
+    0.141424658150e-5,  // S̄₃₃
     // n=4
-    -0.473567346518e-6,  // S̄₄₁
-    0.662480026275e-6,   // S̄₄₂
-    -0.200956723174e-6,  // S̄₄₃
-    0.308842122930e-6,   // S̄₄₄
-
+    -0.473567346518e-6, // S̄₄₁
+    0.662480026275e-6,  // S̄₄₂
+    -0.200956723174e-6, // S̄₄₃
+    0.308842122930e-6,  // S̄₄₄
     // n=5
-    -0.944023767490e-7,  // S̄₅₁
-    -0.323342465440e-6,  // S̄₅₂
-    -0.214858255130e-6,  // S̄₅₃
-    0.496604264150e-7,   // S̄₅₄
-    -0.669250301080e-6,  // S̄₅₅
-
+    -0.944023767490e-7, // S̄₅₁
+    -0.323342465440e-6, // S̄₅₂
+    -0.214858255130e-6, // S̄₅₃
+    0.496604264150e-7,  // S̄₅₄
+    -0.669250301080e-6, // S̄₅₅
     // n=6
-    0.166949386352e-6,   // S̄₆₁
-    -0.373828465810e-6,  // S̄₆₂
-    0.903833650960e-7,   // S̄₆₃
-    0.471469239470e-6,   // S̄₆₄
-    -0.536488432810e-6,  // S̄₆₅
-    0.237346636410e-6,   // S̄₆₆
-
+    0.166949386352e-6,  // S̄₆₁
+    -0.373828465810e-6, // S̄₆₂
+    0.903833650960e-7,  // S̄₆₃
+    0.471469239470e-6,  // S̄₆₄
+    -0.536488432810e-6, // S̄₆₅
+    0.237346636410e-6,  // S̄₆₆
     // n=7
-    0.956639264400e-7,   // S̄₇₁
-    0.928973017490e-7,   // S̄₇₂
-    0.217046688950e-6,   // S̄₇₃
-    -0.589855817090e-7,  // S̄₇₄
-    0.586048085220e-7,   // S̄₇₅
-    0.165222862630e-6,   // S̄₇₆
-    -0.993975314290e-7,  // S̄₇₇
-
+    0.956639264400e-7,  // S̄₇₁
+    0.928973017490e-7,  // S̄₇₂
+    0.217046688950e-6,  // S̄₇₃
+    -0.589855817090e-7, // S̄₇₄
+    0.586048085220e-7,  // S̄₇₅
+    0.165222862630e-6,  // S̄₇₆
+    -0.993975314290e-7, // S̄₇₇
     // n=8
-    0.586875657760e-7,   // S̄₈₁
-    0.653133976450e-7,   // S̄₈₂
-    -0.859303011180e-7,  // S̄₈₃
-    -0.708973069480e-7,  // S̄₈₄
-    0.893621588270e-7,   // S̄₈₅
-    0.309678712820e-6,   // S̄₈₆
-    0.748217893620e-7,   // S̄₈₇
-    0.120334437960e-6,   // S̄₈₈
+    0.586875657760e-7,  // S̄₈₁
+    0.653133976450e-7,  // S̄₈₂
+    -0.859303011180e-7, // S̄₈₃
+    -0.708973069480e-7, // S̄₈₄
+    0.893621588270e-7,  // S̄₈₅
+    0.309678712820e-6,  // S̄₈₆
+    0.748217893620e-7,  // S̄₈₇
+    0.120334437960e-6,  // S̄₈₈
 ];
 
 /// IERS 2010 / DE441
 pub const EARTH_GM: f64 = 3.986004415e14;
-pub const EARTH_EQ_RADIUS: f64 = 6_378_136.3;        // m
-pub const EARTH_POLAR_RADIUS: f64 = 6_356_751.9;     // m
+pub const EARTH_EQ_RADIUS: f64 = 6_378_136.3; // m
+pub const EARTH_POLAR_RADIUS: f64 = 6_356_751.9; // m
 pub const EARTH_FLATTENING: f64 = 1.0 / 298.257_222_101;
 pub const EARTH_ROTATION_RATE: f64 = 7.292_115_0e-5; // rad/s
 pub const EARTH_J2: f64 = 0.001_082_626_683_55;
@@ -264,47 +251,40 @@ pub const SOLAR_PRESSURE_AT_1AU: f64 = 4.5605e-6; // N/m²
 /// LP165P C̄ₙₘ degree 2–4, packed
 static MOON_C: &[f64] = &[
     // n=2
-    -0.908698e-4,  // C̄₂₀
-    0.970e-11,     // C̄₂₁
-    0.346561e-4,   // C̄₂₂
-
+    -0.908698e-4, // C̄₂₀
+    0.970e-11,    // C̄₂₁
+    0.346561e-4,  // C̄₂₂
     // n=3
-    -0.142e-5,     // C̄₃₀
-    0.269e-4,      // C̄₃₁
-    0.142e-4,      // C̄₃₂
-    0.126e-4,      // C̄₃₃
-
+    -0.142e-5, // C̄₃₀
+    0.269e-4,  // C̄₃₁
+    0.142e-4,  // C̄₃₂
+    0.126e-4,  // C̄₃₃
     // n=4
-    0.640e-5,      // C̄₄₀
-    -0.587e-5,     // C̄₄₁
-    0.102e-5,      // C̄₄₂
-    0.778e-5,      // C̄₄₃
-    -0.431e-5,     // C̄₄₄
+    0.640e-5,  // C̄₄₀
+    -0.587e-5, // C̄₄₁
+    0.102e-5,  // C̄₄₂
+    0.778e-5,  // C̄₄₃
+    -0.431e-5, // C̄₄₄
 ];
 
 static MOON_S: &[f64] = &[
     // n=2
-    0.0,
-    0.279e-10,     // S̄₂₁
-    -0.815e-12,    // S̄₂₂
-
+    0.0, 0.279e-10,  // S̄₂₁
+    -0.815e-12, // S̄₂₂
     // n=3
-    0.0,
-    0.505e-5,      // S̄₃₁
-    0.519e-5,      // S̄₃₂
-    -0.287e-5,     // S̄₃₃
-
+    0.0, 0.505e-5,  // S̄₃₁
+    0.519e-5,  // S̄₃₂
+    -0.287e-5, // S̄₃₃
     // n=4
-    0.0,
-    0.158e-4,      // S̄₄₁
-    -0.625e-6,     // S̄₄₂
-    0.125e-5,      // S̄₄₃
-    0.107e-6,      // S̄₄₄
+    0.0, 0.158e-4,  // S̄₄₁
+    -0.625e-6, // S̄₄₂
+    0.125e-5,  // S̄₄₃
+    0.107e-6,  // S̄₄₄
 ];
 
 pub const MOON_GM: f64 = 4.902_800_118e12;
 pub const MOON_EQ_RADIUS: f64 = 1_737_400.0;
-pub const MOON_FLATTENING: f64 = 1.0 / 400.0;  // approximately
+pub const MOON_FLATTENING: f64 = 1.0 / 400.0; // approximately
 pub const MOON_ROTATION_RATE: f64 = 2.661_699_5e-6; // rad/s
 pub const MOON_J2: f64 = 2.033_0e-4;
 pub const MOON_J3: f64 = -1.00e-5;
@@ -315,25 +295,24 @@ pub const MOON_J3: f64 = -1.00e-5;
 
 static MARS_C: &[f64] = &[
     // n=2
-    -0.874_576_407e-3,  // C̄₂₀
-    -0.20e-9,           // C̄₂₁
-    -0.844_906_405e-4,  // C̄₂₂
-
+    -0.874_576_407e-3, // C̄₂₀
+    -0.20e-9,          // C̄₂₁
+    -0.844_906_405e-4, // C̄₂₂
     // n=3
-    0.114_979_620e-4,   // C̄₃₀
-    0.367_0471e-5,      // C̄₃₁
-    -0.168_7834e-4,     // C̄₃₂
-    0.395_614e-5,       // C̄₃₃
+    0.114_979_620e-4, // C̄₃₀
+    0.367_047_1e-5,   // C̄₃₁
+    -0.168_783_4e-4,  // C̄₃₂
+    0.395_614e-5,     // C̄₃₃
 ];
 
 static MARS_S: &[f64] = &[
     0.0,
-    0.37e-9,            // S̄₂₁
-    0.483_091_169e-4,   // S̄₂₂
+    0.37e-9,          // S̄₂₁
+    0.483_091_169e-4, // S̄₂₂
     0.0,
-    0.264_2107e-5,      // S̄₃₁
-    -0.142_3258e-4,     // S̄₃₂
-    0.135_685e-5,       // S̄₃₃
+    0.264_210_7e-5,  // S̄₃₁
+    -0.142_325_8e-4, // S̄₃₂
+    0.135_685e-5,    // S̄₃₃
 ];
 
 pub const MARS_GM: f64 = 4.282_837_362e13;
@@ -551,38 +530,82 @@ pub static SATURN: CelestialBody = CelestialBody {
 
 // Smaller planets with basic parameters
 pub static MERCURY: CelestialBody = CelestialBody {
-    name: "Mercury", gm: 2.203_178e13, equatorial_radius: 2_439_700.0,
-    flattening: 0.0, rotation_rate: 1.240_0e-6,
-    j2: 6.0e-5, j3: 0.0, j4: 0.0, j5: 0.0, j6: 0.0,
-    max_degree: 2, c_coeffs: &[], s_coeffs: &[], ref_radius: 2_439_700.0,
-    surface_density: 0.0, scale_height: 0.0,
+    name: "Mercury",
+    gm: 2.203_178e13,
+    equatorial_radius: 2_439_700.0,
+    flattening: 0.0,
+    rotation_rate: 1.240_0e-6,
+    j2: 6.0e-5,
+    j3: 0.0,
+    j4: 0.0,
+    j5: 0.0,
+    j6: 0.0,
+    max_degree: 2,
+    c_coeffs: &[],
+    s_coeffs: &[],
+    ref_radius: 2_439_700.0,
+    surface_density: 0.0,
+    scale_height: 0.0,
     solar_pressure_constant: SOLAR_PRESSURE_AT_1AU / (0.387 * 0.387),
 };
 
 pub static VENUS: CelestialBody = CelestialBody {
-    name: "Venus", gm: 3.248_585_920e14, equatorial_radius: 6_051_800.0,
-    flattening: 0.0, rotation_rate: -2.992_5e-7,
-    j2: 4.458e-6, j3: 0.0, j4: 0.0, j5: 0.0, j6: 0.0,
-    max_degree: 2, c_coeffs: &[], s_coeffs: &[], ref_radius: 6_051_800.0,
-    surface_density: 65.0, scale_height: 15_900.0,
+    name: "Venus",
+    gm: 3.248_585_920e14,
+    equatorial_radius: 6_051_800.0,
+    flattening: 0.0,
+    rotation_rate: -2.992_5e-7,
+    j2: 4.458e-6,
+    j3: 0.0,
+    j4: 0.0,
+    j5: 0.0,
+    j6: 0.0,
+    max_degree: 2,
+    c_coeffs: &[],
+    s_coeffs: &[],
+    ref_radius: 6_051_800.0,
+    surface_density: 65.0,
+    scale_height: 15_900.0,
     solar_pressure_constant: SOLAR_PRESSURE_AT_1AU / (0.723 * 0.723),
 };
 
 pub static URANUS: CelestialBody = CelestialBody {
-    name: "Uranus", gm: 5.793_951_322e15, equatorial_radius: 25_559_000.0,
-    flattening: 1.0 / 43.6, rotation_rate: -1.012_37e-4,
-    j2: 3.343_43e-3, j3: 0.0, j4: -2.88e-4, j5: 0.0, j6: 0.0,
-    max_degree: 4, c_coeffs: &[], s_coeffs: &[], ref_radius: 25_559_000.0,
-    surface_density: 0.0, scale_height: 0.0,
+    name: "Uranus",
+    gm: 5.793_951_322e15,
+    equatorial_radius: 25_559_000.0,
+    flattening: 1.0 / 43.6,
+    rotation_rate: -1.012_37e-4,
+    j2: 3.343_43e-3,
+    j3: 0.0,
+    j4: -2.88e-4,
+    j5: 0.0,
+    j6: 0.0,
+    max_degree: 4,
+    c_coeffs: &[],
+    s_coeffs: &[],
+    ref_radius: 25_559_000.0,
+    surface_density: 0.0,
+    scale_height: 0.0,
     solar_pressure_constant: SOLAR_PRESSURE_AT_1AU / (19.2 * 19.2),
 };
 
 pub static NEPTUNE: CelestialBody = CelestialBody {
-    name: "Neptune", gm: 6.835_099_97e15, equatorial_radius: 24_764_000.0,
-    flattening: 1.0 / 58.5, rotation_rate: 1.083_4e-4,
-    j2: 3.408e-3, j3: 0.0, j4: -3.34e-4, j5: 0.0, j6: 0.0,
-    max_degree: 4, c_coeffs: &[], s_coeffs: &[], ref_radius: 24_764_000.0,
-    surface_density: 0.0, scale_height: 0.0,
+    name: "Neptune",
+    gm: 6.835_099_97e15,
+    equatorial_radius: 24_764_000.0,
+    flattening: 1.0 / 58.5,
+    rotation_rate: 1.083_4e-4,
+    j2: 3.408e-3,
+    j3: 0.0,
+    j4: -3.34e-4,
+    j5: 0.0,
+    j6: 0.0,
+    max_degree: 4,
+    c_coeffs: &[],
+    s_coeffs: &[],
+    ref_radius: 24_764_000.0,
+    surface_density: 0.0,
+    scale_height: 0.0,
     solar_pressure_constant: SOLAR_PRESSURE_AT_1AU / (30.1 * 30.1),
 };
 
@@ -635,19 +658,38 @@ pub extern "C" fn celestial_get_body(
     };
 
     let body = get_celestial_body(id);
-    if let Some(p) = (unsafe { out_gm.as_mut() }) { *p = body.gm; }
-    if let Some(p) = (unsafe { out_eq_radius.as_mut() }) { *p = body.equatorial_radius; }
-    if let Some(p) = (unsafe { out_flattening.as_mut() }) { *p = body.flattening; }
-    if let Some(p) = (unsafe { out_rotation_rate.as_mut() }) { *p = body.rotation_rate; }
-    if let Some(p) = (unsafe { out_j2_j6.as_mut() }) {
-        let arr = unsafe { std::slice::from_raw_parts_mut(p, 5) };
-        arr[0] = body.j2; arr[1] = body.j3; arr[2] = body.j4;
-        arr[3] = body.j5; arr[4] = body.j6;
+    if let Some(p) = unsafe { out_gm.as_mut() } {
+        *p = body.gm;
     }
-    if let Some(p) = (unsafe { out_max_degree.as_mut() }) { *p = body.max_degree; }
-    if let Some(p) = (unsafe { out_ref_radius.as_mut() }) { *p = body.ref_radius; }
-    if let Some(p) = (unsafe { out_surface_density.as_mut() }) { *p = body.surface_density; }
-    if let Some(p) = (unsafe { out_scale_height.as_mut() }) { *p = body.scale_height; }
+    if let Some(p) = unsafe { out_eq_radius.as_mut() } {
+        *p = body.equatorial_radius;
+    }
+    if let Some(p) = unsafe { out_flattening.as_mut() } {
+        *p = body.flattening;
+    }
+    if let Some(p) = unsafe { out_rotation_rate.as_mut() } {
+        *p = body.rotation_rate;
+    }
+    if let Some(p) = unsafe { out_j2_j6.as_mut() } {
+        let arr = unsafe { std::slice::from_raw_parts_mut(p, 5) };
+        arr[0] = body.j2;
+        arr[1] = body.j3;
+        arr[2] = body.j4;
+        arr[3] = body.j5;
+        arr[4] = body.j6;
+    }
+    if let Some(p) = unsafe { out_max_degree.as_mut() } {
+        *p = body.max_degree;
+    }
+    if let Some(p) = unsafe { out_ref_radius.as_mut() } {
+        *p = body.ref_radius;
+    }
+    if let Some(p) = unsafe { out_surface_density.as_mut() } {
+        *p = body.surface_density;
+    }
+    if let Some(p) = unsafe { out_scale_height.as_mut() } {
+        *p = body.scale_height;
+    }
 
     crate::error::clear_error();
     Bool::TRUE
@@ -695,7 +737,3 @@ pub extern "C" fn celestial_get_sh_coeff_count(body_id: u32) -> u32 {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
-
-
-
-

@@ -214,8 +214,6 @@ use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 use rapier3d::prelude::RigidBodyType;
 
-use crate::rapier::ffi::Vec3;
-
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -225,11 +223,6 @@ pub const ARENA_MAGIC: u64 = 0x4D50535F4152454E;
 
 /// Current arena layout version — increment when layout changes
 pub const ARENA_VERSION: u32 = 2;
-
-/// Arena flags
-const FLAG_DIRTY_BODIES: u32 = 1 << 0;
-const FLAG_DIRTY_EVENTS: u32 = 1 << 1;
-const FLAG_STEP_IN_PROGRESS: u32 = 1 << 2;
 
 /// Strides (must match Java side exactly)
 pub const BODY_SLOT_STRIDE: u32 = 96;
@@ -263,12 +256,6 @@ const OFF_CMD_RING: usize = 96;
 const OFF_EVENT_RING: usize = 104;
 const OFF_COLLIDER_SLOTS: usize = 112;
 const OFF_FORCE_LAW_COUNT: usize = 120;
-
-/// Default arena sizes
-const DEFAULT_MAX_BODIES: u32 = 1024;
-const DEFAULT_MAX_COLLIDERS: u32 = 2048;
-const DEFAULT_MAX_EVENTS: u32 = 4096;
-const DEFAULT_MAX_COMMANDS: u32 = 4096;
 
 // ---------------------------------------------------------------------------
 // Command types
@@ -495,6 +482,7 @@ impl SharedPhysicsArena {
     /// Flush a single body's state to its arena slot.
     ///
     /// Called after `world_step` for each active body.
+    #[allow(clippy::too_many_arguments)] // layout-frozen slot writer
     pub fn flush_body(
         &self,
         index: u32,
@@ -724,7 +712,7 @@ impl SharedPhysicsArena {
         total_force_mag: f64,
         max_force_x: f64,
         max_force_y: f64,
-        max_force_z: f64,
+        _max_force_z: f64,
     ) {
         let write = self.event_write.load(Ordering::Relaxed);
         let read = self.event_read.load(Ordering::Acquire);
@@ -829,6 +817,7 @@ impl SharedPhysicsArena {
     ///   offset 56: density (f64)
     ///   offset 64: sensor (u32), active_events (u32)
     ///   offset 72: collision_groups_memberships (u32), filter (u32)
+    #[allow(clippy::too_many_arguments)] // layout-frozen slot writer
     pub fn flush_collider(
         &self,
         index: u32,
@@ -887,9 +876,7 @@ impl SharedPhysicsArena {
                 break;
             }
             let pos = collider.translation();
-            let parent = collider
-                .parent()
-                .map_or(u32::MAX, |h| (h.into_raw_parts().0 & 0xFFFF_FFFF) as u32);
+            let parent = collider.parent().map_or(u32::MAX, |h| h.into_raw_parts().0);
             self.flush_collider(
                 index,
                 parent,
@@ -961,7 +948,7 @@ impl SharedPhysicsArena {
     /// Flush collision and contact-force events from the event handler to the arena event ring.
     ///
     /// Called after `world_step` so Java can read events zero-JNI.
-    pub fn flush_events_from_handler(
+    pub(crate) fn flush_events_from_handler(
         &self,
         events: &std::sync::Arc<crate::rapier::events::CollectingEventHandler>,
     ) {

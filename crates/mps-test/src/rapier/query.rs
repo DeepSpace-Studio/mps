@@ -1,8 +1,8 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use mps_core::rapier::query::*;
     use mps_core::rapier::ffi::*;
     use mps_core::rapier::ffi::{Quat, Sphere, Vec3};
+    use mps_core::rapier::query::*;
 
     #[test]
     fn obb_query_hits_inserted_obb_collider() {
@@ -282,6 +282,3 @@ mod tests {
         mps_core::rapier::world::world_destroy(world);
     }
 }
-
-
-

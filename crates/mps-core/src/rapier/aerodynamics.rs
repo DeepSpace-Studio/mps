@@ -10,17 +10,6 @@ use crate::rapier::ffi::{
 };
 use crate::rapier::math::KahanVec3;
 
-fn aero_surface_valid(surface: AeroSurface) -> bool {
-    vec3_finite(surface.point)
-        && vec3_finite(surface.normal)
-        && surface.area.is_finite()
-        && surface.drag_coefficient.is_finite()
-        && surface.lift_coefficient.is_finite()
-        && surface.area > 0.0
-        && surface.drag_coefficient >= 0.0
-        && surface.lift_coefficient >= 0.0
-}
-
 fn voxel_index(size_x: usize, size_y: usize, x: usize, y: usize, z: usize) -> Option<usize> {
     z.checked_mul(size_x.checked_mul(size_y)?)?
         .checked_add(y.checked_mul(size_x)?)?

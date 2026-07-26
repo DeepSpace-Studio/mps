@@ -18,7 +18,6 @@ use crate::rapier::ffi::{
     NewtonGravityLaw, WorldHandle, pack_collider_handle, vec3_finite, vec3_from_rapier,
     vec3_to_rapier,
 };
-use crate::rapier::math::KahanVec3;
 
 const MAX_EVENT_RECORDS: usize = 16_384;
 
@@ -155,7 +154,7 @@ impl<T: Copy + Default> std::fmt::Debug for EventRing<T> {
 
 impl<T: Copy + Default> EventRing<T> {
     fn new(capacity: u32) -> Self {
-        let cap = capacity.max(1).min(MAX_OUTPUT_CAPACITY) as usize;
+        let cap = capacity.clamp(1, MAX_OUTPUT_CAPACITY) as usize;
         Self {
             buf: UnsafeCell::new(vec![T::default(); cap].into_boxed_slice()),
             write: AtomicU32::new(0),
@@ -357,10 +356,10 @@ impl ProducerCache {
                 }
             }
         }
-        if event_dispatch_has_poll(mode) {
-            if let Some(ref ring) = self.collisions {
-                ring.push(record);
-            }
+        if event_dispatch_has_poll(mode)
+            && let Some(ref ring) = self.collisions
+        {
+            ring.push(record);
         }
     }
 
@@ -386,10 +385,10 @@ impl ProducerCache {
                 }
             }
         }
-        if event_dispatch_has_poll(mode) {
-            if let Some(ref ring) = self.contact_forces {
-                ring.push(record);
-            }
+        if event_dispatch_has_poll(mode)
+            && let Some(ref ring) = self.contact_forces
+        {
+            ring.push(record);
         }
     }
 }
@@ -575,116 +574,18 @@ fn external_force_law_valid(law: ExternalForceLaw) -> bool {
         && law.gravitational_parameter >= 0.0
 }
 
-/// Apply custom external forces (buoyancy, EM, spring, point gravity) using
-/// the already-read physics state.  Air drag is now handled by
-/// `interaction::apply_body_interactions`.
-pub(crate) fn apply_custom_external_forces_with_custom(
-    world: &mut crate::rapier::world::PhysicsWorld,
-    custom: CustomPhysicsState,
-) {
-    let external_force = custom
-        .external_force
-        .filter(|law| law.enabled.0 != 0 && external_force_law_valid(*law));
-
-    if external_force.is_none() {
-        return;
-    }
-
-    // Pre-compute constant parts of external forces outside the body loop
-    let buoyancy_force_vec = external_force
-        .filter(|law| law.buoyancy_enabled.0 != 0)
-        .map(|law| {
-            -vec3_to_rapier(law.buoyancy_gravity) * (law.fluid_density * law.displaced_volume)
-        });
-    let em_electric_vec = external_force
-        .filter(|law| law.electromagnetic_enabled.0 != 0)
-        .map(|law| vec3_to_rapier(law.electric_field) * law.charge);
-    let em_magnetic_vec = external_force
-        .filter(|law| law.electromagnetic_enabled.0 != 0)
-        .map(|law| vec3_to_rapier(law.magnetic_field));
-    let em_charge = external_force
-        .filter(|law| law.electromagnetic_enabled.0 != 0)
-        .map(|law| law.charge);
-    let spring_anchor = external_force
-        .filter(|law| law.elastic_enabled.0 != 0)
-        .map(|law| vec3_to_rapier(law.spring_anchor));
-    let spring_k = external_force
-        .filter(|law| law.elastic_enabled.0 != 0)
-        .map(|law| law.spring_stiffness);
-    let spring_d = external_force
-        .filter(|law| law.elastic_enabled.0 != 0)
-        .map(|law| law.spring_damping);
-    let gravity_source = external_force
-        .filter(|law| law.gravity_enabled.0 != 0)
-        .map(|law| vec3_to_rapier(law.gravity_source));
-    let grav_param = external_force
-        .filter(|law| law.gravity_enabled.0 != 0)
-        .map(|law| law.gravitational_parameter);
-
-    let mut report = CustomPhysicsReport::default();
-    let mut total_external = KahanVec3::default();
-
-    for (_, body) in world.bodies.iter_mut() {
-        report.body_count += 1;
-        if !body.is_dynamic() {
-            continue;
-        }
-
-        // --- External force (pre-computed constant parts) ---
-        let mut force = Vector::ZERO;
-
-        // Buoyancy: constant force per body
-        if let Some(bf) = buoyancy_force_vec {
-            force += bf;
-        }
-
-        // Electromagnetic: E-field constant, B-field × v per body
-        if let (Some(ef), Some(bf), Some(q)) = (em_electric_vec, em_magnetic_vec, em_charge) {
-            let magnetic = body.linvel().cross(bf);
-            force += ef + magnetic * q;
-        }
-
-        // Elastic spring
-        if let (Some(anchor), Some(k), Some(d)) = (spring_anchor, spring_k, spring_d) {
-            let displacement = body.translation() - anchor;
-            let damping = body.linvel() * d;
-            force += -displacement * k - damping;
-        }
-
-        // Gravity point-mass
-        if let (Some(src), Some(gp)) = (gravity_source, grav_param) {
-            let offset = src - body.translation();
-            let distance_squared = offset.length_squared();
-            if distance_squared > 1.0e-12 {
-                let mass = body.mass();
-                if mass > 0.0 {
-                    force += offset / distance_squared.sqrt() * (gp * mass / distance_squared);
-                }
-            }
-        }
-
-        if force != Vector::ZERO {
-            body.add_force(force, true);
-            total_external.add(vec3_from_rapier(force));
-            report.external_force_body_count += 1;
-        }
-    }
-
-    report.total_external_force = total_external.value();
-    world.events.set_last_custom_physics_report(report);
-}
-
 pub struct PendingForce {
     pub(crate) handle: rapier3d::prelude::RigidBodyHandle,
     pub(crate) force: Vector,
     pub(crate) source: crate::rapier::forces::ForceLawType,
 }
 
-/// Facade-based wrapper: calls the original function and replays its forces
-/// through the facade so the frame-log captures them with correct ForceLawType tags.
+/// Facade-based wrapper: applies custom external forces (buoyancy, EM, spring,
+/// point gravity) through the facade so the frame-log captures them with
+/// correct ForceLawType tags.
 ///
 /// This is a temporary shim — once all force sources are registered as ForceLaw
-/// impls, this function and `apply_custom_external_forces_with_custom` will be removed.
+/// impls, this function will be removed.
 pub(crate) fn apply_custom_external_forces_with_facade(
     custom: &CustomPhysicsState,
     facade: &mut crate::rapier::forces::ForceFacade<'_>,
@@ -717,7 +618,7 @@ pub(crate) fn apply_custom_external_forces_with_facade(
         .electromagnetic_enabled
         .0
         .ne(&0)
-        .then(|| external_force.charge);
+        .then_some(external_force.charge);
     let spring_anchor = external_force
         .elastic_enabled
         .0
@@ -727,12 +628,12 @@ pub(crate) fn apply_custom_external_forces_with_facade(
         .elastic_enabled
         .0
         .ne(&0)
-        .then(|| external_force.spring_stiffness);
+        .then_some(external_force.spring_stiffness);
     let spring_d = external_force
         .elastic_enabled
         .0
         .ne(&0)
-        .then(|| external_force.spring_damping);
+        .then_some(external_force.spring_damping);
     let gravity_source = external_force
         .gravity_enabled
         .0
@@ -742,7 +643,7 @@ pub(crate) fn apply_custom_external_forces_with_facade(
         .gravity_enabled
         .0
         .ne(&0)
-        .then(|| external_force.gravitational_parameter);
+        .then_some(external_force.gravitational_parameter);
 
     // Phase 1: compute forces (immutable body read) — use persistent buffer (P5)
     let pending = &mut facade.pending_forces;

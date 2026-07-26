@@ -1,8 +1,8 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use mps_core::rapier::fluid::*;
-    use mps_core::rapier::ffi::*;
     use mps_core::rapier::ffi::BodyStatus;
+    use mps_core::rapier::ffi::*;
+    use mps_core::rapier::fluid::*;
 
     fn water() -> FluidVolume {
         FluidVolume {
@@ -188,6 +188,3 @@ mod tests {
         assert!(bernoulli.total_head > 0.0);
     }
 }
-
-
-

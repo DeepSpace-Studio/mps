@@ -1,4 +1,4 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use mps_core::rapier::chaos::*;
     use mps_core::rapier::ffi::*;
@@ -23,7 +23,10 @@ mod tests {
     fn lorenz_step_null_pointer() {
         let state = LorenzState::default();
         let params = LorenzParams::default();
-        assert_eq!(chaos_lorenz_step(state, params, std::ptr::null_mut()), Bool::FALSE);
+        assert_eq!(
+            chaos_lorenz_step(state, params, std::ptr::null_mut()),
+            Bool::FALSE
+        );
     }
 
     #[test]
@@ -86,13 +89,7 @@ mod tests {
             *item = x;
         }
         let mut report = LyapunovReport::default();
-        let result = chaos_lyapunov_rosenstein(
-            data.as_ptr(),
-            n as u32,
-            2,
-            1,
-            &mut report,
-        );
+        let result = chaos_lyapunov_rosenstein(data.as_ptr(), n as u32, 2, 1, &mut report);
         assert_eq!(result, Bool::TRUE, "rosenstein returned FALSE");
         // Logistic map at r=4 has Lyapunov exponent = ln(2) ≈ 0.693
         assert!(
@@ -122,12 +119,16 @@ mod tests {
         let base = LorenzParams::default();
         let mut buf = [BifurcationPoint::default(); 500];
         let count = chaos_bifurcation_lorenz(
-            initial, base, 1, // vary rho
-            10.0, 50.0, // rho from 10 to 50 (avoid fixed-point regime near 0)
-            3, // param steps
-            50, // transient
-            3, // samples per value
-            buf.as_mut_ptr(), 500,
+            initial,
+            base,
+            1, // vary rho
+            10.0,
+            50.0, // rho from 10 to 50 (avoid fixed-point regime near 0)
+            3,    // param steps
+            50,   // transient
+            3,    // samples per value
+            buf.as_mut_ptr(),
+            500,
         );
         assert!(count > 0, "bifurcation should produce some points");
     }
@@ -151,26 +152,26 @@ mod tests {
         };
 
         // Initial energy: potential only
-        let initial_pe = params.g
-            * (params.m1 + params.m2) * params.l1 * (1.0 - state.theta1.cos())
-            + params.g * params.m2 * params.l2 * (1.0 - state.theta2.cos());
+        let initial_pe =
+            params.g * (params.m1 + params.m2) * params.l1 * (1.0 - state.theta1.cos())
+                + params.g * params.m2 * params.l2 * (1.0 - state.theta2.cos());
 
         let mut s = state;
         let mut max_deviation = 0.0;
         for _ in 0..100 {
             let mut next = DoublePendulumState::default();
-            assert_eq!(
-                chaos_double_pendulum_step(s, params, &mut next),
-                Bool::TRUE
-            );
+            assert_eq!(chaos_double_pendulum_step(s, params, &mut next), Bool::TRUE);
 
             // Compute total energy
             let ke = 0.5 * (params.m1 + params.m2) * params.l1.powi(2) * next.omega1.powi(2)
                 + 0.5 * params.m2 * params.l2.powi(2) * next.omega2.powi(2)
-                + params.m2 * params.l1 * params.l2 * next.omega1 * next.omega2
+                + params.m2
+                    * params.l1
+                    * params.l2
+                    * next.omega1
+                    * next.omega2
                     * (next.theta1 - next.theta2).cos();
-            let pe = params.g
-                * (params.m1 + params.m2) * params.l1 * (1.0 - next.theta1.cos())
+            let pe = params.g * (params.m1 + params.m2) * params.l1 * (1.0 - next.theta1.cos())
                 + params.g * params.m2 * params.l2 * (1.0 - next.theta2.cos());
             let total = ke + pe;
             let deviation = (total - initial_pe).abs() / initial_pe.abs().max(1.0);
@@ -180,7 +181,10 @@ mod tests {
             s = next;
         }
         // With RK4 and small dt, energy drift should be small over 100 steps
-        assert!(max_deviation < 0.01, "energy drift {max_deviation} exceeds 1%");
+        assert!(
+            max_deviation < 0.01,
+            "energy drift {max_deviation} exceeds 1%"
+        );
     }
 
     #[test]
@@ -231,10 +235,7 @@ mod tests {
             assert!(report.confidence > 0.3);
         }
         // At minimum the detection should not crash or report NAN
-        assert!(
-            report.lyapunov_exponent.is_finite(),
-            "LE must be finite"
-        );
+        assert!(report.lyapunov_exponent.is_finite(), "LE must be finite");
     }
 
     #[test]
@@ -291,11 +292,13 @@ mod tests {
         let mut buf = [BifurcationPoint::default(); 200];
         let count = chaos_logistic_bifurcation(
             0.5,
-            2.5, 4.0,
+            2.5,
+            4.0,
             5,   // param steps
             100, // transient
             10,  // samples per value
-            buf.as_mut_ptr(), 200,
+            buf.as_mut_ptr(),
+            200,
         );
         assert_eq!(count, 50); // 5 * 10
         // With 5 param steps from 2.5 to 4.0
@@ -331,6 +334,3 @@ mod tests {
         assert!(accel.alpha2.is_finite());
     }
 }
-
-
-

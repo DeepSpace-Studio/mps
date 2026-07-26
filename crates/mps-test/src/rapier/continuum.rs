@@ -1,4 +1,4 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use mps_core::rapier::continuum::*;
     use mps_core::rapier::ffi::*;
@@ -132,6 +132,3 @@ mod tests {
         assert!(report.residual_norm < 1.0e-10);
     }
 }
-
-
-

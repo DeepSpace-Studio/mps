@@ -53,7 +53,7 @@ pub fn ffi_guard<R>(default: R, f: impl FnOnce() -> R) -> R {
 /// Current thread's last error code (`ERR_OK` when no error).
 #[unsafe(no_mangle)]
 pub extern "C" fn last_error_code() -> u32 {
-    ffi_guard(ERR_OK, || mps_formula::error::error_code())
+    ffi_guard(ERR_OK, mps_formula::error::error_code)
 }
 
 /// Current thread's last error message ("ok" when no error).
@@ -63,13 +63,13 @@ pub extern "C" fn last_error_code() -> u32 {
 /// must not be freed or stored.
 #[unsafe(no_mangle)]
 pub extern "C" fn last_error_message() -> *const c_char {
-    ffi_guard(std::ptr::null(), || mps_formula::error::error_message())
+    ffi_guard(std::ptr::null(), mps_formula::error::error_message)
 }
 
 /// Reset the current thread's error slot to `ERR_OK` / "ok".
 #[unsafe(no_mangle)]
 pub extern "C" fn last_error_clear() {
-    ffi_guard((), || clear_error());
+    ffi_guard((), clear_error);
 }
 
 /// Static name of an error code ("ERR_OK", "ERR_NULL_POINTER", ...).

@@ -1,8 +1,7 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use smallvec::SmallVec;
-    use mps_core::rapier::rigid_body::*;
     use mps_core::rapier::ffi::*;
+    use mps_core::rapier::rigid_body::*;
     use mps_core::rapier::world::world_create;
     use mps_core::rapier::world::world_destroy;
 
@@ -63,21 +62,42 @@ mod tests {
     #[test]
     fn builder_set_translation_works() {
         let b = rigid_body_builder_create(BodyStatus::Dynamic as u32);
-        rigid_body_builder_set_translation(b, Vec3 { x: 1.0, y: 2.0, z: 3.0 });
+        rigid_body_builder_set_translation(
+            b,
+            Vec3 {
+                x: 1.0,
+                y: 2.0,
+                z: 3.0,
+            },
+        );
         rigid_body_builder_destroy(b);
     }
 
     #[test]
     fn builder_set_translation_rejects_nan() {
         let b = rigid_body_builder_create(BodyStatus::Dynamic as u32);
-        rigid_body_builder_set_translation(b, Vec3 { x: f64::NAN, y: 0.0, z: 0.0 });
+        rigid_body_builder_set_translation(
+            b,
+            Vec3 {
+                x: f64::NAN,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
         rigid_body_builder_destroy(b);
     }
 
     #[test]
     fn builder_set_rotation_rejects_nan() {
         let b = rigid_body_builder_create(BodyStatus::Dynamic as u32);
-        rigid_body_builder_set_rotation(b, Vec3 { x: f64::NAN, y: 0.0, z: 0.0 });
+        rigid_body_builder_set_rotation(
+            b,
+            Vec3 {
+                x: f64::NAN,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
         rigid_body_builder_destroy(b);
     }
 
@@ -86,8 +106,17 @@ mod tests {
         let b = rigid_body_builder_create(BodyStatus::Dynamic as u32);
         rigid_body_builder_set_pose(
             b,
-            Vec3 { x: 1.0, y: 0.0, z: 0.0 },
-            Quat { i: 0.0, j: 0.0, k: 0.0, w: 1.0 },
+            Vec3 {
+                x: 1.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            Quat {
+                i: 0.0,
+                j: 0.0,
+                k: 0.0,
+                w: 1.0,
+            },
         );
         rigid_body_builder_destroy(b);
     }
@@ -99,7 +128,11 @@ mod tests {
             b,
             Vec3::default(),
             -1.0,
-            Vec3 { x: 1.0, y: 1.0, z: 1.0 },
+            Vec3 {
+                x: 1.0,
+                y: 1.0,
+                z: 1.0,
+            },
         );
         rigid_body_builder_destroy(b);
     }
@@ -107,14 +140,28 @@ mod tests {
     #[test]
     fn builder_set_linvel_works() {
         let b = rigid_body_builder_create(BodyStatus::Dynamic as u32);
-        rigid_body_builder_set_linvel(b, Vec3 { x: 10.0, y: 0.0, z: 0.0 });
+        rigid_body_builder_set_linvel(
+            b,
+            Vec3 {
+                x: 10.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
         rigid_body_builder_destroy(b);
     }
 
     #[test]
     fn builder_set_angvel_works() {
         let b = rigid_body_builder_create(BodyStatus::Dynamic as u32);
-        rigid_body_builder_set_angvel(b, Vec3 { x: 0.0, y: 1.0, z: 0.0 });
+        rigid_body_builder_set_angvel(
+            b,
+            Vec3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            },
+        );
         rigid_body_builder_destroy(b);
     }
 
@@ -188,8 +235,14 @@ mod tests {
     fn world_insert_and_remove() {
         let world = make_world();
         let handle = make_dynamic_body(world);
-        assert_eq!(world_remove_rigid_body(world, handle, Bool::FALSE), Bool::TRUE);
-        assert_eq!(world_remove_rigid_body(world, handle, Bool::FALSE), Bool::FALSE);
+        assert_eq!(
+            world_remove_rigid_body(world, handle, Bool::FALSE),
+            Bool::TRUE
+        );
+        assert_eq!(
+            world_remove_rigid_body(world, handle, Bool::FALSE),
+            Bool::FALSE
+        );
         world_destroy(world);
     }
 
@@ -221,7 +274,10 @@ mod tests {
     fn get_status_returns_dynamic() {
         let world = make_world();
         let handle = make_dynamic_body(world);
-        assert_eq!(rigid_body_get_status(world, handle), BodyStatus::Dynamic as u32);
+        assert_eq!(
+            rigid_body_get_status(world, handle),
+            BodyStatus::Dynamic as u32
+        );
         world_destroy(world);
     }
 
@@ -245,7 +301,12 @@ mod tests {
         let world = make_world();
         let handle = make_dynamic_body(world);
         assert_eq!(
-            rigid_body_set_status(world, handle, BodyStatus::KinematicVelocityBased as u32, Bool::TRUE),
+            rigid_body_set_status(
+                world,
+                handle,
+                BodyStatus::KinematicVelocityBased as u32,
+                Bool::TRUE
+            ),
             Bool::TRUE
         );
         assert_eq!(
@@ -258,7 +319,12 @@ mod tests {
     #[test]
     fn set_status_rejects_null_world() {
         assert_eq!(
-            rigid_body_set_status(std::ptr::null_mut(), 1, BodyStatus::Dynamic as u32, Bool::TRUE),
+            rigid_body_set_status(
+                std::ptr::null_mut(),
+                1,
+                BodyStatus::Dynamic as u32,
+                Bool::TRUE
+            ),
             Bool::FALSE
         );
     }
@@ -324,7 +390,16 @@ mod tests {
         let world = make_world();
         let handle = make_dynamic_body(world);
         assert_eq!(
-            rigid_body_set_translation(world, handle, Vec3 { x: 5.0, y: 10.0, z: 15.0 }, Bool::TRUE),
+            rigid_body_set_translation(
+                world,
+                handle,
+                Vec3 {
+                    x: 5.0,
+                    y: 10.0,
+                    z: 15.0
+                },
+                Bool::TRUE
+            ),
             Bool::TRUE
         );
         let t = rigid_body_get_translation(world, handle);
@@ -347,7 +422,16 @@ mod tests {
         let world = make_world();
         let handle = make_dynamic_body(world);
         assert_eq!(
-            rigid_body_set_translation(world, handle, Vec3 { x: f64::NAN, y: 0.0, z: 0.0 }, Bool::TRUE),
+            rigid_body_set_translation(
+                world,
+                handle,
+                Vec3 {
+                    x: f64::NAN,
+                    y: 0.0,
+                    z: 0.0
+                },
+                Bool::TRUE
+            ),
             Bool::FALSE
         );
         world_destroy(world);
@@ -359,8 +443,16 @@ mod tests {
         let handle = make_dynamic_body(world);
         let angle = std::f64::consts::FRAC_PI_2;
         let half = angle * 0.5;
-        let q = Quat { i: 0.0, j: 0.0, k: half.sin(), w: half.cos() };
-        assert_eq!(rigid_body_set_rotation(world, handle, q, Bool::TRUE), Bool::TRUE);
+        let q = Quat {
+            i: 0.0,
+            j: 0.0,
+            k: half.sin(),
+            w: half.cos(),
+        };
+        assert_eq!(
+            rigid_body_set_rotation(world, handle, q, Bool::TRUE),
+            Bool::TRUE
+        );
         world_destroy(world);
     }
 
@@ -369,7 +461,17 @@ mod tests {
         let world = make_world();
         let handle = make_dynamic_body(world);
         assert_eq!(
-            rigid_body_set_rotation(world, handle, Quat { i: f64::NAN, j: 0.0, k: 0.0, w: 1.0 }, Bool::TRUE),
+            rigid_body_set_rotation(
+                world,
+                handle,
+                Quat {
+                    i: f64::NAN,
+                    j: 0.0,
+                    k: 0.0,
+                    w: 1.0
+                },
+                Bool::TRUE
+            ),
             Bool::FALSE
         );
         world_destroy(world);
@@ -383,8 +485,17 @@ mod tests {
             rigid_body_set_pose(
                 world,
                 handle,
-                Vec3 { x: 1.0, y: 2.0, z: 3.0 },
-                Quat { i: 0.0, j: 0.0, k: 0.0, w: 1.0 },
+                Vec3 {
+                    x: 1.0,
+                    y: 2.0,
+                    z: 3.0
+                },
+                Quat {
+                    i: 0.0,
+                    j: 0.0,
+                    k: 0.0,
+                    w: 1.0
+                },
                 Bool::TRUE
             ),
             Bool::TRUE
@@ -412,7 +523,16 @@ mod tests {
         let world = make_world();
         let handle = make_dynamic_body(world);
         assert_eq!(
-            rigid_body_set_linvel(world, handle, Vec3 { x: 1.0, y: 2.0, z: 3.0 }, Bool::TRUE),
+            rigid_body_set_linvel(
+                world,
+                handle,
+                Vec3 {
+                    x: 1.0,
+                    y: 2.0,
+                    z: 3.0
+                },
+                Bool::TRUE
+            ),
             Bool::TRUE
         );
         let v = rigid_body_get_linvel(world, handle);
@@ -427,7 +547,16 @@ mod tests {
         let world = make_world();
         let handle = make_dynamic_body(world);
         assert_eq!(
-            rigid_body_set_linvel(world, handle, Vec3 { x: f64::NAN, y: 0.0, z: 0.0 }, Bool::TRUE),
+            rigid_body_set_linvel(
+                world,
+                handle,
+                Vec3 {
+                    x: f64::NAN,
+                    y: 0.0,
+                    z: 0.0
+                },
+                Bool::TRUE
+            ),
             Bool::FALSE
         );
         world_destroy(world);
@@ -447,7 +576,16 @@ mod tests {
         let world = make_world();
         let handle = make_dynamic_body(world);
         assert_eq!(
-            rigid_body_set_angvel(world, handle, Vec3 { x: 0.0, y: 1.0, z: 0.0 }, Bool::TRUE),
+            rigid_body_set_angvel(
+                world,
+                handle,
+                Vec3 {
+                    x: 0.0,
+                    y: 1.0,
+                    z: 0.0
+                },
+                Bool::TRUE
+            ),
             Bool::TRUE
         );
         let v = rigid_body_get_angvel(world, handle);
@@ -461,7 +599,16 @@ mod tests {
     fn add_force_on_body() {
         let world = make_world();
         let handle = make_dynamic_body(world);
-        rigid_body_add_force(world, handle, Vec3 { x: 0.0, y: 100.0, z: 0.0 }, Bool::TRUE);
+        rigid_body_add_force(
+            world,
+            handle,
+            Vec3 {
+                x: 0.0,
+                y: 100.0,
+                z: 0.0,
+            },
+            Bool::TRUE,
+        );
         world_destroy(world);
     }
 
@@ -474,7 +621,16 @@ mod tests {
     fn add_force_rejects_nan() {
         let world = make_world();
         let handle = make_dynamic_body(world);
-        rigid_body_add_force(world, handle, Vec3 { x: f64::NAN, y: 0.0, z: 0.0 }, Bool::TRUE);
+        rigid_body_add_force(
+            world,
+            handle,
+            Vec3 {
+                x: f64::NAN,
+                y: 0.0,
+                z: 0.0,
+            },
+            Bool::TRUE,
+        );
         world_destroy(world);
     }
 
@@ -482,7 +638,16 @@ mod tests {
     fn add_torque_on_body() {
         let world = make_world();
         let handle = make_dynamic_body(world);
-        rigid_body_add_torque(world, handle, Vec3 { x: 0.0, y: 0.0, z: 10.0 }, Bool::TRUE);
+        rigid_body_add_torque(
+            world,
+            handle,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 10.0,
+            },
+            Bool::TRUE,
+        );
         world_destroy(world);
     }
 
@@ -490,7 +655,16 @@ mod tests {
     fn apply_impulse_on_body() {
         let world = make_world();
         let handle = make_dynamic_body(world);
-        rigid_body_apply_impulse(world, handle, Vec3 { x: 5.0, y: 0.0, z: 0.0 }, Bool::TRUE);
+        rigid_body_apply_impulse(
+            world,
+            handle,
+            Vec3 {
+                x: 5.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            Bool::TRUE,
+        );
         world_destroy(world);
     }
 
@@ -498,7 +672,16 @@ mod tests {
     fn apply_torque_impulse_on_body() {
         let world = make_world();
         let handle = make_dynamic_body(world);
-        rigid_body_apply_torque_impulse(world, handle, Vec3 { x: 0.0, y: 1.0, z: 0.0 }, Bool::TRUE);
+        rigid_body_apply_torque_impulse(
+            world,
+            handle,
+            Vec3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            },
+            Bool::TRUE,
+        );
         world_destroy(world);
     }
 
@@ -545,10 +728,3 @@ mod tests {
         world_destroy(std::ptr::null_mut());
     }
 }
-
-
-
-
-
-
-

@@ -1,7 +1,7 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use mps_core::rapier::topology::*;
     use mps_core::rapier::ffi::*;
+    use mps_core::rapier::topology::*;
 
     fn params() -> TopologyOptimizationParams {
         TopologyOptimizationParams {
@@ -77,6 +77,3 @@ mod tests {
         assert_eq!(stats.cell_count, 4);
     }
 }
-
-
-

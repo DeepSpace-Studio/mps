@@ -1,4 +1,4 @@
-﻿//! Wave optics and diffraction:
+//! Wave optics and diffraction:
 //! - Huygens–Fresnel principle (point-source superposition)
 //! - Fresnel diffraction (near-field scalar diffraction)
 //! - Fraunhofer diffraction (far-field, Fourier transform regime)
@@ -11,13 +11,11 @@
 //!
 //! All functions are FFI-exported with C-compatible types.
 
-use crate::error::{
-    ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error,
-};
+use crate::error::{ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error};
 use crate::ffi::{
     ApertureDesc, Bool, ComplexAmplitude, DiffractionPoint, FresnelZoneReport,
-    KirchhoffDiffractionPoint, PlaneWaveParams, PointSource, SphericalWavePoint, ThinFilmInterferenceReport,
-    ThinFilmParams, YoungSlitPoint,
+    KirchhoffDiffractionPoint, PlaneWaveParams, PointSource, SphericalWavePoint,
+    ThinFilmInterferenceReport, ThinFilmParams, YoungSlitPoint,
 };
 
 use crate::math::{finite, finite_non_negative, finite_positive};
@@ -75,7 +73,10 @@ fn wave_params_valid(params: &PlaneWaveParams) -> bool {
 #[unsafe(no_mangle)]
 pub extern "C" fn wo_wavenumber(wavelength: f64) -> f64 {
     if !finite_positive(wavelength) {
-        set_error(ERR_INVALID_ARGUMENT, "wavelength must be positive and finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "wavelength must be positive and finite",
+        );
         return f64::NAN;
     }
     clear_error();
@@ -86,7 +87,10 @@ pub extern "C" fn wo_wavenumber(wavelength: f64) -> f64 {
 #[unsafe(no_mangle)]
 pub extern "C" fn wo_wavelength(wavenumber: f64) -> f64 {
     if !finite_positive(wavenumber) {
-        set_error(ERR_INVALID_ARGUMENT, "wavenumber must be positive and finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "wavenumber must be positive and finite",
+        );
         return f64::NAN;
     }
     clear_error();
@@ -113,7 +117,10 @@ pub extern "C" fn wo_plane_wave(
         return Bool::FALSE;
     }
     if !finite(x) || !finite(y) || !finite(z) || !finite(kx) || !finite(ky) || !finite(kz) {
-        set_error(ERR_INVALID_ARGUMENT, "all coordinates and k components must be finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "all coordinates and k components must be finite",
+        );
         return Bool::FALSE;
     }
 
@@ -144,18 +151,28 @@ pub extern "C" fn wo_spherical_wave(
     amplitude: f64,
     out_wave: *mut SphericalWavePoint,
 ) -> Bool {
-    if !finite(source_x) || !finite(source_y) || !finite(source_z)
-        || !finite(obs_x) || !finite(obs_y) || !finite(obs_z)
+    if !finite(source_x)
+        || !finite(source_y)
+        || !finite(source_z)
+        || !finite(obs_x)
+        || !finite(obs_y)
+        || !finite(obs_z)
     {
         set_error(ERR_INVALID_ARGUMENT, "all coordinates must be finite");
         return Bool::FALSE;
     }
     if !finite_positive(wavenumber) {
-        set_error(ERR_INVALID_ARGUMENT, "wavenumber must be positive and finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "wavenumber must be positive and finite",
+        );
         return Bool::FALSE;
     }
     if !finite_non_negative(amplitude) {
-        set_error(ERR_INVALID_ARGUMENT, "amplitude must be finite and non-negative");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "amplitude must be finite and non-negative",
+        );
         return Bool::FALSE;
     }
 
@@ -165,7 +182,10 @@ pub extern "C" fn wo_spherical_wave(
     let r = (dx * dx + dy * dy + dz * dz).sqrt();
 
     if r < EPSILON {
-        set_error(ERR_INVALID_ARGUMENT, "observation point coincides with source");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "observation point coincides with source",
+        );
         return Bool::FALSE;
     }
 
@@ -210,11 +230,17 @@ pub extern "C" fn wo_huygens_fresnel(
         return Bool::FALSE;
     }
     if !finite(obs_x) || !finite(obs_y) || !finite(obs_z) {
-        set_error(ERR_INVALID_ARGUMENT, "observation coordinates must be finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "observation coordinates must be finite",
+        );
         return Bool::FALSE;
     }
     if !finite_positive(wavenumber) {
-        set_error(ERR_INVALID_ARGUMENT, "wavenumber must be positive and finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "wavenumber must be positive and finite",
+        );
         return Bool::FALSE;
     }
 
@@ -267,19 +293,29 @@ pub extern "C" fn wo_fresnel_diffraction_point(
     out_point: *mut DiffractionPoint,
 ) -> Bool {
     if aperture.half_width_x <= 0.0 || aperture.half_width_y <= 0.0 {
-        set_error(ERR_INVALID_ARGUMENT, "aperture half-widths must be positive");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "aperture half-widths must be positive",
+        );
         return Bool::FALSE;
     }
-    if !finite(aperture.transmission) || aperture.transmission < 0.0 || aperture.transmission > 1.0 {
+    if !finite(aperture.transmission) || aperture.transmission < 0.0 || aperture.transmission > 1.0
+    {
         set_error(ERR_INVALID_ARGUMENT, "transmission must be in [0, 1]");
         return Bool::FALSE;
     }
     if !finite(obs_x) || !finite(obs_y) || !finite(obs_z) {
-        set_error(ERR_INVALID_ARGUMENT, "observation coordinates must be finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "observation coordinates must be finite",
+        );
         return Bool::FALSE;
     }
     if !finite_positive(wavenumber) {
-        set_error(ERR_INVALID_ARGUMENT, "wavenumber must be positive and finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "wavenumber must be positive and finite",
+        );
         return Bool::FALSE;
     }
     if obs_z <= 0.0 {
@@ -353,15 +389,24 @@ pub extern "C" fn wo_kirchhoff_diffraction_point(
     out_point: *mut KirchhoffDiffractionPoint,
 ) -> Bool {
     if aperture.half_width_x <= 0.0 || aperture.half_width_y <= 0.0 {
-        set_error(ERR_INVALID_ARGUMENT, "aperture half-widths must be positive");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "aperture half-widths must be positive",
+        );
         return Bool::FALSE;
     }
     if !finite(obs_x) || !finite(obs_y) || !finite(obs_z) {
-        set_error(ERR_INVALID_ARGUMENT, "observation coordinates must be finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "observation coordinates must be finite",
+        );
         return Bool::FALSE;
     }
     if !finite_positive(wavenumber) {
-        set_error(ERR_INVALID_ARGUMENT, "wavenumber must be positive and finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "wavenumber must be positive and finite",
+        );
         return Bool::FALSE;
     }
     if obs_z <= 0.0 {
@@ -424,7 +469,10 @@ pub extern "C" fn wo_kirchhoff_diffraction_point(
     }
 
     // Compute the average obliquity factor
-    let avg_cos_theta = obs_z / (obs_x * obs_x + obs_y * obs_y + obs_z * obs_z).sqrt().max(EPSILON);
+    let avg_cos_theta = obs_z
+        / (obs_x * obs_x + obs_y * obs_y + obs_z * obs_z)
+            .sqrt()
+            .max(EPSILON);
 
     write_out(
         out_point,
@@ -460,23 +508,38 @@ pub extern "C" fn wo_young_slit_point(
     out_point: *mut YoungSlitPoint,
 ) -> Bool {
     if !finite_positive(slit_separation) {
-        set_error(ERR_INVALID_ARGUMENT, "slit_separation must be positive and finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "slit_separation must be positive and finite",
+        );
         return Bool::FALSE;
     }
     if !finite_non_negative(slit_width) {
-        set_error(ERR_INVALID_ARGUMENT, "slit_width must be non-negative and finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "slit_width must be non-negative and finite",
+        );
         return Bool::FALSE;
     }
     if !finite_positive(screen_distance) {
-        set_error(ERR_INVALID_ARGUMENT, "screen_distance must be positive and finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "screen_distance must be positive and finite",
+        );
         return Bool::FALSE;
     }
     if !finite_positive(wavelength) {
-        set_error(ERR_INVALID_ARGUMENT, "wavelength must be positive and finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "wavelength must be positive and finite",
+        );
         return Bool::FALSE;
     }
     if !finite(obs_x) || !finite(obs_y) {
-        set_error(ERR_INVALID_ARGUMENT, "observation coordinates must be finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "observation coordinates must be finite",
+        );
         return Bool::FALSE;
     }
 
@@ -561,8 +624,13 @@ pub extern "C" fn wo_young_slit_pattern(
         let x = x_min + frac * (x_max - x_min);
         let mut point = YoungSlitPoint::default();
         let _ = wo_young_slit_point(
-            slit_separation, slit_width, screen_distance, wavelength,
-            x, 0.0, &mut point,
+            slit_separation,
+            slit_width,
+            screen_distance,
+            wavelength,
+            x,
+            0.0,
+            &mut point,
         );
         *buf_item = point.intensity;
     }
@@ -608,7 +676,10 @@ pub extern "C" fn wo_thin_film_interference(
         return Bool::FALSE;
     }
     if !finite_positive(wavelength) {
-        set_error(ERR_INVALID_ARGUMENT, "wavelength must be positive and finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "wavelength must be positive and finite",
+        );
         return Bool::FALSE;
     }
 
@@ -679,8 +750,10 @@ pub extern "C" fn wo_thin_film_spectrum(
         clear_error();
         return 0;
     }
-    if !finite_positive(params.thickness) || !finite_positive(params.n_film)
-        || !finite_positive(params.n_incident) || !finite_positive(params.n_substrate)
+    if !finite_positive(params.thickness)
+        || !finite_positive(params.n_film)
+        || !finite_positive(params.n_incident)
+        || !finite_positive(params.n_substrate)
     {
         set_error(ERR_INVALID_ARGUMENT, "thin-film params must be positive");
         return 0;
@@ -735,7 +808,10 @@ pub extern "C" fn wo_fresnel_zone(
         return Bool::FALSE;
     }
     if !finite_positive(wavelength) {
-        set_error(ERR_INVALID_ARGUMENT, "wavelength must be positive and finite");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "wavelength must be positive and finite",
+        );
         return Bool::FALSE;
     }
 
@@ -772,7 +848,10 @@ pub extern "C" fn wo_fresnel_zone_sum(
         return Bool::FALSE;
     }
     if !finite_positive(distance) || !finite_positive(wavelength) {
-        set_error(ERR_INVALID_ARGUMENT, "distance and wavelength must be positive");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "distance and wavelength must be positive",
+        );
         return Bool::FALSE;
     }
 
@@ -847,8 +926,14 @@ pub extern "C" fn wo_fresnel_grid(
 
             let mut point = DiffractionPoint::default();
             let _ = wo_fresnel_diffraction_point(
-                aperture, obs_x, obs_y, screen_distance, wavenumber,
-                samples_x, samples_y, &mut point,
+                aperture,
+                obs_x,
+                obs_y,
+                screen_distance,
+                wavenumber,
+                samples_x,
+                samples_y,
+                &mut point,
             );
             buf[idx] = point;
             idx += 1;
@@ -858,4 +943,3 @@ pub extern "C" fn wo_fresnel_grid(
     clear_error();
     idx as u32
 }
-

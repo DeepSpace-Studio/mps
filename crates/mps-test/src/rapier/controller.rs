@@ -1,4 +1,4 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use mps_core::rapier::controller::*;
     use mps_core::rapier::ffi::*;
@@ -52,13 +52,27 @@ mod tests {
 
     #[test]
     fn set_up_rejects_null() {
-        character_controller_set_up(std::ptr::null_mut(), Vec3 { x: 0.0, y: 1.0, z: 0.0 });
+        character_controller_set_up(
+            std::ptr::null_mut(),
+            Vec3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            },
+        );
     }
 
     #[test]
     fn set_up_rejects_nan() {
         let c = character_controller_create();
-        character_controller_set_up(c, Vec3 { x: f64::NAN, y: 0.0, z: 0.0 });
+        character_controller_set_up(
+            c,
+            Vec3 {
+                x: f64::NAN,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
         character_controller_destroy(c);
     }
 
@@ -169,9 +183,22 @@ mod tests {
             c,
             1.0 / 60.0,
             shape,
-            Vec3 { x: 0.0, y: 1.0, z: 0.0 },
-            Quat { i: 0.0, j: 0.0, k: 0.0, w: 1.0 },
-            Vec3 { x: 0.0, y: 0.0, z: 1.0 },
+            Vec3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            },
+            Quat {
+                i: 0.0,
+                j: 0.0,
+                k: 0.0,
+                w: 1.0,
+            },
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 1.0,
+            },
         );
         assert_eq!(result.translation.x, 0.0);
         character_controller_destroy(c);
@@ -186,9 +213,22 @@ mod tests {
             std::ptr::null_mut(),
             1.0 / 60.0,
             shape,
-            Vec3 { x: 0.0, y: 1.0, z: 0.0 },
-            Quat { i: 0.0, j: 0.0, k: 0.0, w: 1.0 },
-            Vec3 { x: 0.0, y: 0.0, z: 1.0 },
+            Vec3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            },
+            Quat {
+                i: 0.0,
+                j: 0.0,
+                k: 0.0,
+                w: 1.0,
+            },
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 1.0,
+            },
         );
         assert_eq!(result.translation.x, 0.0);
         world_destroy(world);
@@ -199,16 +239,36 @@ mod tests {
         let world = make_world();
         make_dynamic_body(world); // ensure world is non-empty but no colliders
         let c = character_controller_create();
-        character_controller_set_up(c, Vec3 { x: 0.0, y: 1.0, z: 0.0 });
+        character_controller_set_up(
+            c,
+            Vec3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            },
+        );
         let shape = cuboid_shape(0.5, 1.0, 0.5);
         let result = character_controller_move_shape(
             world,
             c,
             1.0 / 60.0,
             shape,
-            Vec3 { x: 0.0, y: 1.0, z: 0.0 },
-            Quat { i: 0.0, j: 0.0, k: 0.0, w: 1.0 },
-            Vec3 { x: 1.0, y: 0.0, z: 0.0 },
+            Vec3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            },
+            Quat {
+                i: 0.0,
+                j: 0.0,
+                k: 0.0,
+                w: 1.0,
+            },
+            Vec3 {
+                x: 1.0,
+                y: 0.0,
+                z: 0.0,
+            },
         );
         // translation applied should be close to desired (no obstacles)
         assert!((result.translation.x - 1.0).abs() < 0.1);
@@ -227,8 +287,17 @@ mod tests {
             0.0, // invalid dt
             shape,
             Vec3::default(),
-            Quat { i: 0.0, j: 0.0, k: 0.0, w: 1.0 },
-            Vec3 { x: 1.0, y: 0.0, z: 0.0 },
+            Quat {
+                i: 0.0,
+                j: 0.0,
+                k: 0.0,
+                w: 1.0,
+            },
+            Vec3 {
+                x: 1.0,
+                y: 0.0,
+                z: 0.0,
+            },
         );
         assert_eq!(result.translation.x, 0.0);
         character_controller_destroy(c);
@@ -289,6 +358,3 @@ mod tests {
         world_destroy(world);
     }
 }
-
-
-

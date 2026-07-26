@@ -1,7 +1,7 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use mps_core::rapier::relativity::*;
     use mps_core::rapier::ffi::*;
+    use mps_core::rapier::relativity::*;
 
     const C: f64 = SPEED_OF_LIGHT;
     const G: f64 = 6.674_30e-11;
@@ -27,10 +27,7 @@ mod tests {
     #[test]
     fn lorentz_boost_is_identity_for_zero() {
         let mut boost = LorentzBoost::default();
-        assert_eq!(
-            rel_lorentz_boost(Vec3::default(), &mut boost),
-            Bool::TRUE
-        );
+        assert_eq!(rel_lorentz_boost(Vec3::default(), &mut boost), Bool::TRUE);
         assert!((boost.m00 - 1.0).abs() < 1.0e-12);
         assert!((boost.m11 - 1.0).abs() < 1.0e-12);
         assert!((boost.m22 - 1.0).abs() < 1.0e-12);
@@ -168,18 +165,11 @@ mod tests {
             y: 0.0,
             z: 0.0,
         };
-        assert_eq!(
-            rel_particle_properties(2.0, v, &mut particle),
-            Bool::TRUE
-        );
+        assert_eq!(rel_particle_properties(2.0, v, &mut particle), Bool::TRUE);
         let expected_gamma = 1.0 / (1.0 - 0.6_f64.powi(2)).sqrt();
         assert!((particle.lorentz_factor - expected_gamma).abs() < 1.0e-10);
-        assert!(
-            (particle.total_energy - expected_gamma * 2.0 * C * C).abs() < 1.0
-        );
-        assert!(
-            (particle.kinetic_energy - (expected_gamma - 1.0) * 2.0 * C * C).abs() < 1.0
-        );
+        assert!((particle.total_energy - expected_gamma * 2.0 * C * C).abs() < 1.0);
+        assert!((particle.kinetic_energy - (expected_gamma - 1.0) * 2.0 * C * C).abs() < 1.0);
         assert!((particle.momentum_magnitude - expected_gamma * 2.0 * speed).abs() < 1.0);
     }
 
@@ -259,10 +249,7 @@ mod tests {
     #[test]
     fn error_on_superspeed() {
         let mut gamma = 0.0;
-        assert_eq!(
-            rel_lorentz_factor(C * 1.1, &mut gamma),
-            Bool::FALSE
-        );
+        assert_eq!(rel_lorentz_factor(C * 1.1, &mut gamma), Bool::FALSE);
         let mut contraction = LengthContraction::default();
         assert_eq!(
             rel_length_contraction(1.0, C * 1.1, &mut contraction),
@@ -272,10 +259,7 @@ mod tests {
 
     #[test]
     fn error_on_null_pointer() {
-        assert_eq!(
-            rel_lorentz_factor(0.0, std::ptr::null_mut()),
-            Bool::FALSE
-        );
+        assert_eq!(rel_lorentz_factor(0.0, std::ptr::null_mut()), Bool::FALSE);
     }
 
     #[test]
@@ -366,6 +350,3 @@ mod tests {
         );
     }
 }
-
-
-

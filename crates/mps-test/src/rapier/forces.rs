@@ -1,8 +1,10 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use smallvec::SmallVec;
-    use rapier3d::prelude::{RigidBodySet, ColliderSet, NarrowPhase, RigidBodyHandle, RigidBodyBuilder, Vector};
     use mps_core::rapier::forces::*;
+    use rapier3d::prelude::{
+        ColliderSet, NarrowPhase, RigidBodyBuilder, RigidBodyHandle, RigidBodySet, Vector,
+    };
+    use smallvec::SmallVec;
 
     /// A trivial test law that just records that it was called.
     struct TestLaw {
@@ -73,7 +75,14 @@ mod tests {
         let mut log: Vec<Option<BodyForceLog>> = Vec::new();
         let mut pending = SmallVec::new();
         let mut friction = Vec::new();
-        let mut facade = make_facade(&mut bodies, &mut colliders, &narrow_phase, &mut log, &mut pending, &mut friction);
+        let mut facade = make_facade(
+            &mut bodies,
+            &mut colliders,
+            &narrow_phase,
+            &mut log,
+            &mut pending,
+            &mut friction,
+        );
         let report_before = facade.drain_report();
         assert_eq!(report_before.max_reynolds_number, 0.0);
 
@@ -99,7 +108,14 @@ mod tests {
         let mut log: Vec<Option<BodyForceLog>> = Vec::new();
         let mut pending = SmallVec::new();
         let mut friction = Vec::new();
-        let mut facade = make_facade(&mut bodies, &mut colliders, &narrow_phase, &mut log, &mut pending, &mut friction);
+        let mut facade = make_facade(
+            &mut bodies,
+            &mut colliders,
+            &narrow_phase,
+            &mut log,
+            &mut pending,
+            &mut friction,
+        );
 
         reg.apply_at(0, &mut facade);
         let report = facade.drain_report();
@@ -164,18 +180,32 @@ mod tests {
 
         let mut pending = SmallVec::new();
         let mut friction = Vec::new();
-        let mut facade = make_facade(&mut bodies, &mut colliders, &narrow_phase, &mut log, &mut pending, &mut friction);
+        let mut facade = make_facade(
+            &mut bodies,
+            &mut colliders,
+            &narrow_phase,
+            &mut log,
+            &mut pending,
+            &mut friction,
+        );
 
         let force = Vector::new(10.0, 0.0, 0.0);
         assert!(facade.add_force(handle, force, ForceLawType::AirDrag));
-        assert!(facade.add_force(handle, Vector::new(0.0, -50.0, 0.0), ForceLawType::PointGravity));
+        assert!(facade.add_force(
+            handle,
+            Vector::new(0.0, -50.0, 0.0),
+            ForceLawType::PointGravity
+        ));
 
         let report = facade.drain_report();
         let drag = report.contributions.get(&ForceLawType::AirDrag).unwrap();
         assert_eq!(drag.body_count, 1);
         assert!((drag.total_force.x - 10.0).abs() < 1e-12);
 
-        let grav = report.contributions.get(&ForceLawType::PointGravity).unwrap();
+        let grav = report
+            .contributions
+            .get(&ForceLawType::PointGravity)
+            .unwrap();
         assert_eq!(grav.body_count, 1);
 
         // Log should be empty after drain
@@ -194,7 +224,14 @@ mod tests {
 
         let mut pending = SmallVec::new();
         let mut friction = Vec::new();
-        let mut facade = make_facade(&mut bodies, &mut colliders, &narrow_phase, &mut log, &mut pending, &mut friction);
+        let mut facade = make_facade(
+            &mut bodies,
+            &mut colliders,
+            &narrow_phase,
+            &mut log,
+            &mut pending,
+            &mut friction,
+        );
         assert!(facade.add_force(handle, Vector::new(10.0, 0.0, 0.0), ForceLawType::AirDrag));
 
         let report = facade.drain_report();
@@ -229,10 +266,3 @@ mod tests {
         assert!(legacy.total_external_force.x == -10.0);
     }
 }
-
-
-
-
-
-
-

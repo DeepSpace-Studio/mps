@@ -1,4 +1,4 @@
-﻿//! Force registry — type-erased force-law registration with per-step dispatch.
+//! Force registry — type-erased force-law registration with per-step dispatch.
 //!
 //! ## Motivation
 //!
@@ -36,14 +36,12 @@
 //! 1. Add a variant to [`ForceLawType`].
 //! 2. Implement [`ForceLaw`] and register it into [`ForceRegistry`].
 //! 3. In the `apply()` implementation, use the `facade` to push forces.
+//!
 //! The report is collected automatically.
 
 use std::collections::BTreeMap;
 
-use hashbrown::HashMap;
-use rapier3d::prelude::{
-    ColliderSet, NarrowPhase, RigidBodyHandle, RigidBodySet, Vector,
-};
+use rapier3d::prelude::{ColliderSet, NarrowPhase, RigidBodyHandle, RigidBodySet, Vector};
 use smallvec::SmallVec;
 
 use crate::rapier::ffi::CustomPhysicsReport;
@@ -176,7 +174,12 @@ pub struct ForceReport {
 }
 
 impl ForceReport {
-    pub fn add(&mut self, law_type: ForceLawType, force: rapier3d::prelude::Vector, body_count: u32) {
+    pub fn add(
+        &mut self,
+        law_type: ForceLawType,
+        force: rapier3d::prelude::Vector,
+        body_count: u32,
+    ) {
         let entry = self.contributions.entry(law_type).or_default();
         let existing = crate::rapier::ffi::vec3_from_rapier(force);
         entry.total_force = crate::rapier::ffi::Vec3 {
@@ -189,14 +192,16 @@ impl ForceReport {
 
     /// Convert to the legacy flat `CustomPhysicsReport` struct for FFI.
     pub fn to_legacy_report(&self) -> CustomPhysicsReport {
-        let total_external = self.contributions.iter().fold(
-            crate::rapier::ffi::Vec3::default(),
-            |acc, (_, c)| crate::rapier::ffi::Vec3 {
-                x: acc.x + c.total_force.x,
-                y: acc.y + c.total_force.y,
-                z: acc.z + c.total_force.z,
-            },
-        );
+        let total_external =
+            self.contributions
+                .iter()
+                .fold(crate::rapier::ffi::Vec3::default(), |acc, (_, c)| {
+                    crate::rapier::ffi::Vec3 {
+                        x: acc.x + c.total_force.x,
+                        y: acc.y + c.total_force.y,
+                        z: acc.z + c.total_force.z,
+                    }
+                });
         let drag_contrib = self
             .contributions
             .get(&ForceLawType::AirDrag)
@@ -210,9 +215,7 @@ impl ForceReport {
             .filter(|(ty, _)| {
                 !matches!(
                     ty,
-                    ForceLawType::WorldGravity
-                        | ForceLawType::UserForce
-                        | ForceLawType::AirDrag
+                    ForceLawType::WorldGravity | ForceLawType::UserForce | ForceLawType::AirDrag
                 )
             })
             .map(|(_, c)| c.body_count)
@@ -449,8 +452,13 @@ impl<'a> ForceFacade<'a> {
         }
         body.add_force(force, true);
         let idx = handle.into_raw_parts().0 as usize;
-        if idx >= log.len() { log.resize_with(idx + 1, || None); }
-        log[idx].get_or_insert_with(BodyForceLog::default).forces.push((source, force));
+        if idx >= log.len() {
+            log.resize_with(idx + 1, || None);
+        }
+        log[idx]
+            .get_or_insert_with(BodyForceLog::default)
+            .forces
+            .push((source, force));
     }
 
     /// Apply typed torque directly to an already-referenced body.
@@ -466,8 +474,13 @@ impl<'a> ForceFacade<'a> {
         }
         body.add_torque(torque, true);
         let idx = handle.into_raw_parts().0 as usize;
-        if idx >= log.len() { log.resize_with(idx + 1, || None); }
-        log[idx].get_or_insert_with(BodyForceLog::default).torques.push((source, torque));
+        if idx >= log.len() {
+            log.resize_with(idx + 1, || None);
+        }
+        log[idx]
+            .get_or_insert_with(BodyForceLog::default)
+            .torques
+            .push((source, torque));
     }
 
     // ---- Reynolds number ----
@@ -488,32 +501,38 @@ impl<'a> ForceFacade<'a> {
 
         const NUM_FORCE_TYPES: usize = 32;
         let mut drained = std::mem::take(self.body_log);
-        for log_opt in drained.iter_mut() {
-            if let Some(log) = log_opt {
-                let mut body_totals: [Option<KahanVec3>; NUM_FORCE_TYPES] = [None; NUM_FORCE_TYPES];
-                for (source, f) in &log.forces {
-                    let idx = force_law_type_idx(*source);
-                    body_totals[idx].get_or_insert_with(KahanVec3::default).add(
-                        crate::rapier::ffi::Vec3 { x: f.x, y: f.y, z: f.z },
-                    );
-                }
-                for (source, f) in &log.torques {
-                    let idx = force_law_type_idx(*source);
-                    body_totals[idx].get_or_insert_with(KahanVec3::default).add(
-                        crate::rapier::ffi::Vec3 { x: f.x, y: f.y, z: f.z },
-                    );
-                }
-                for (tag, maybe_kahan) in body_totals.iter().enumerate() {
-                    if let Some(kahan) = maybe_kahan {
-                        let law_type = force_law_type_from_idx(tag);
-                        let c = report.contributions.entry(law_type).or_default();
-                        c.total_force = crate::rapier::ffi::Vec3 {
-                            x: c.total_force.x + kahan.value().x,
-                            y: c.total_force.y + kahan.value().y,
-                            z: c.total_force.z + kahan.value().z,
-                        };
-                        c.body_count += 1;
-                    }
+        for log in drained.iter_mut().flatten() {
+            let mut body_totals: [Option<KahanVec3>; NUM_FORCE_TYPES] = [None; NUM_FORCE_TYPES];
+            for (source, f) in &log.forces {
+                let idx = force_law_type_idx(*source);
+                body_totals[idx].get_or_insert_with(KahanVec3::default).add(
+                    crate::rapier::ffi::Vec3 {
+                        x: f.x,
+                        y: f.y,
+                        z: f.z,
+                    },
+                );
+            }
+            for (source, f) in &log.torques {
+                let idx = force_law_type_idx(*source);
+                body_totals[idx].get_or_insert_with(KahanVec3::default).add(
+                    crate::rapier::ffi::Vec3 {
+                        x: f.x,
+                        y: f.y,
+                        z: f.z,
+                    },
+                );
+            }
+            for (tag, maybe_kahan) in body_totals.iter().enumerate() {
+                if let Some(kahan) = maybe_kahan {
+                    let law_type = force_law_type_from_idx(tag);
+                    let c = report.contributions.entry(law_type).or_default();
+                    c.total_force = crate::rapier::ffi::Vec3 {
+                        x: c.total_force.x + kahan.value().x,
+                        y: c.total_force.y + kahan.value().y,
+                        z: c.total_force.z + kahan.value().z,
+                    };
+                    c.body_count += 1;
                 }
             }
         }
@@ -615,12 +634,12 @@ impl ForceRegistry {
     /// Returns `true` if the law was found and removed.
     pub fn unregister(&mut self, handle: ForceLawHandle) -> bool {
         for (i, slot) in self.laws.iter_mut().enumerate() {
-            if let Some(entry) = slot {
-                if entry.handle == handle {
-                    *slot = None;
-                    self.free_slots.push(i);
-                    return true;
-                }
+            if let Some(entry) = slot
+                && entry.handle == handle
+            {
+                *slot = None;
+                self.free_slots.push(i);
+                return true;
             }
         }
         false
@@ -646,31 +665,32 @@ impl ForceRegistry {
     /// (previously caller did find_by_type + per-handle unregister = 2 traversals).
     pub fn unregister_by_type(&mut self, law_type: ForceLawType) {
         for slot in self.laws.iter_mut() {
-            if let Some(entry) = slot {
-                if entry.law.law_type() == law_type {
-                    *slot = None;
-                    // free_slots tracking is handled by existing unregister() pattern;
-                    // for unregister_by_type we don't track individual slots since
-                    // the next register will reuse any None slot via push.
-                }
+            if let Some(entry) = slot
+                && entry.law.law_type() == law_type
+            {
+                *slot = None;
+                // free_slots tracking is handled by existing unregister() pattern;
+                // for unregister_by_type we don't track individual slots since
+                // the next register will reuse any None slot via push.
             }
         }
     }
 
     /// Get a reference to a law by handle.
     pub fn get(&self, handle: ForceLawHandle) -> Option<&dyn ForceLaw> {
-        self.laws
-            .iter()
-            .find_map(|slot| slot.as_ref().and_then(|e| (e.handle == handle).then(|| &*e.law)))
+        self.laws.iter().find_map(|slot| {
+            slot.as_ref()
+                .and_then(|e| (e.handle == handle).then_some(&*e.law))
+        })
     }
 
     /// Get a mutable reference to a law by handle (for config updates).
     pub fn get_mut(&mut self, handle: ForceLawHandle) -> Option<&mut (dyn ForceLaw + '_)> {
         for slot in self.laws.iter_mut() {
-            if let Some(entry) = slot {
-                if entry.handle == handle {
-                    return Some(&mut *entry.law);
-                }
+            if let Some(entry) = slot
+                && entry.handle == handle
+            {
+                return Some(&mut *entry.law);
             }
         }
         None
@@ -692,10 +712,10 @@ impl ForceRegistry {
     /// # Panics
     /// Panics if `idx` is out of bounds or the slot is empty.
     pub fn apply_at(&self, idx: usize, facade: &mut ForceFacade<'_>) {
-        if let Some(entry) = &self.laws[idx] {
-            if entry.law.enabled() {
-                entry.law.apply(facade);
-            }
+        if let Some(entry) = &self.laws[idx]
+            && entry.law.enabled()
+        {
+            entry.law.apply(facade);
         }
     }
 
@@ -728,5 +748,3 @@ impl Default for ForceRegistry {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
-
-

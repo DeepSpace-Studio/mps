@@ -4,11 +4,10 @@
 
 use crate::ffi::{
     TrajectoryEnvironment, TrajectoryForceReport, TrajectoryGlideEnvironment,
-    TrajectoryGlideReport, TrajectoryGlideState, TrajectoryState, Vec3,
-    vec3_finite, vec3_to_rapier, vec3_from_rapier,
+    TrajectoryGlideReport, TrajectoryGlideState, TrajectoryState, vec3_finite, vec3_from_rapier,
+    vec3_to_rapier,
 };
 use crate::math::mul_add;
-use rapier3d::prelude::Vector;
 
 const MAX_STEP_SECONDS: f64 = 10.0;
 const MIN_GLIDE_SPEED: f64 = 1.0e-6;

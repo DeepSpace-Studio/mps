@@ -11,7 +11,11 @@ pub fn vec3_finite(value: Vec3) -> bool {
 }
 
 pub fn vec3_from_rapier(value: Vector) -> Vec3 {
-    Vec3 { x: value.x, y: value.y, z: value.z }
+    Vec3 {
+        x: value.x,
+        y: value.y,
+        z: value.z,
+    }
 }
 
 pub fn clamp01(value: f64) -> f64 {

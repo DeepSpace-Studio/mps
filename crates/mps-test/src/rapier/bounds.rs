@@ -1,8 +1,8 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use mps_core::rapier::bounds::*;
-    use mps_core::rapier::ffi::*;
     use mps_core::rapier::collider::{collider_builder_build, world_insert_collider};
+    use mps_core::rapier::ffi::*;
     use mps_core::rapier::ffi::{Quat, Vec3};
     use rapier3d::prelude::Collider;
 
@@ -103,6 +103,3 @@ mod tests {
         );
     }
 }
-
-
-

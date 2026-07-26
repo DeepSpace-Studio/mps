@@ -1,8 +1,8 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use mps_core::rapier::wave_optics::*;
-    use mps_core::rapier::ffi::*;
     use mps_core::rapier::ffi::ComplexAmplitude;
+    use mps_core::rapier::ffi::*;
+    use mps_core::rapier::wave_optics::*;
 
     const VISIBLE_RED: f64 = 700e-9;
     const VISIBLE_GREEN: f64 = 550e-9;
@@ -46,7 +46,10 @@ mod tests {
 
         // Intensity should be ~4× smaller at 2× distance (1/r² decay)
         let ratio = wave1.amplitude.intensity / wave2.amplitude.intensity;
-        assert!((ratio - 4.0).abs() < 0.01, "intensity ratio should be ~4, got {ratio}");
+        assert!(
+            (ratio - 4.0).abs() < 0.01,
+            "intensity ratio should be ~4, got {ratio}"
+        );
     }
 
     #[test]
@@ -83,11 +86,11 @@ mod tests {
         let mut point = YoungSlitPoint::default();
         assert_eq!(
             wo_young_slit_point(
-                1e-3,  // d = 1 mm
-                5e-5,  // a = 0.05 mm
-                1.0,   // D = 1 m
+                1e-3, // d = 1 mm
+                5e-5, // a = 0.05 mm
+                1.0,  // D = 1 m
                 VISIBLE_GREEN,
-                0.0,   // on-axis
+                0.0, // on-axis
                 0.0,
                 &mut point,
             ),
@@ -118,16 +121,26 @@ mod tests {
             point.phase_difference
         );
         // Intensity should be near zero
-        assert!(point.intensity < 0.01, "intensity at first minimum should be ~0, got {}", point.intensity);
+        assert!(
+            point.intensity < 0.01,
+            "intensity at first minimum should be ~0, got {}",
+            point.intensity
+        );
     }
 
     #[test]
     fn young_slit_pattern_fills_buffer() {
         let mut intensities = [0.0_f64; 51];
         let count = wo_young_slit_pattern(
-            1e-3, 0.0, 1.0, VISIBLE_GREEN,
-            -0.01, 0.01, 51,
-            intensities.as_mut_ptr(), 51,
+            1e-3,
+            0.0,
+            1.0,
+            VISIBLE_GREEN,
+            -0.01,
+            0.01,
+            51,
+            intensities.as_mut_ptr(),
+            51,
         );
         assert_eq!(count, 51);
         // Central point (at x=0 with odd number of points) should be brightest
@@ -163,7 +176,11 @@ mod tests {
             Bool::TRUE
         );
         // For m=0, 2nt = λ/2 → δ = π + π = 2π → constructive
-        assert!(report.intensity > 0.99, "constructive intensity should be near 1, got {}", report.intensity);
+        assert!(
+            report.intensity > 0.99,
+            "constructive intensity should be near 1, got {}",
+            report.intensity
+        );
         assert_eq!(report.half_wave_loss, Bool::TRUE);
     }
 
@@ -188,7 +205,11 @@ mod tests {
             Bool::TRUE
         );
         // 2nt = λ → δ = 2π + π = 3π → destructive (cos(3π) = -1, so I = 0)
-        assert!(report.intensity < 0.01, "destructive intensity should be near 0, got {}", report.intensity);
+        assert!(
+            report.intensity < 0.01,
+            "destructive intensity should be near 0, got {}",
+            report.intensity
+        );
     }
 
     #[test]
@@ -202,12 +223,7 @@ mod tests {
         };
         let waves = [VISIBLE_RED, VISIBLE_GREEN, VISIBLE_BLUE];
         let mut intensities = [0.0_f64; 3];
-        let count = wo_thin_film_spectrum(
-            params,
-            waves.as_ptr(),
-            intensities.as_mut_ptr(),
-            3,
-        );
+        let count = wo_thin_film_spectrum(params, waves.as_ptr(), intensities.as_mut_ptr(), 3);
         assert_eq!(count, 3);
         for &i in intensities.iter() {
             assert!((0.0..=1.0).contains(&i));
@@ -242,9 +258,7 @@ mod tests {
         let k = wo_wavenumber(VISIBLE_GREEN);
         let mut point = DiffractionPoint::default();
         assert_eq!(
-            wo_fresnel_diffraction_point(
-                aperture, 0.0, 0.0, 1.0, k, 8, 8, &mut point,
-            ),
+            wo_fresnel_diffraction_point(aperture, 0.0, 0.0, 1.0, k, 8, 8, &mut point,),
             Bool::TRUE
         );
         assert!(point.amplitude.intensity >= 0.0);
@@ -263,9 +277,7 @@ mod tests {
         let k = wo_wavenumber(VISIBLE_GREEN);
         let mut point = KirchhoffDiffractionPoint::default();
         assert_eq!(
-            wo_kirchhoff_diffraction_point(
-                aperture, 0.0, 0.0, 1.0, k, 8, 8, &mut point,
-            ),
+            wo_kirchhoff_diffraction_point(aperture, 0.0, 0.0, 1.0, k, 8, 8, &mut point,),
             Bool::TRUE
         );
         // Obliquity factor should be positive and ≤ 1
@@ -334,11 +346,17 @@ mod tests {
         let k = wo_wavenumber(VISIBLE_GREEN);
         let mut grid = [DiffractionPoint::default(); 16];
         let count = wo_fresnel_grid(
-            aperture, 1.0, k,
-            4, 4,
-            1e-3, 1e-3,
-            4, 4,
-            grid.as_mut_ptr(), 16,
+            aperture,
+            1.0,
+            k,
+            4,
+            4,
+            1e-3,
+            1e-3,
+            4,
+            4,
+            grid.as_mut_ptr(),
+            16,
         );
         assert_eq!(count, 16);
         // Centre point should have non-zero intensity
@@ -355,6 +373,3 @@ mod tests {
         );
     }
 }
-
-
-

@@ -1,4 +1,4 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use mps_core::rapier::celestial_data::*;
     use mps_core::rapier::ffi::*;
@@ -37,13 +37,27 @@ mod tests {
 
     #[test]
     fn c_ffi_roundtrip_earth() {
-        let mut gm = 0.0; let mut er = 0.0; let mut f = 0.0;
-        let mut rr = 0.0; let mut j2 = [0.0; 5]; let mut md = 0u32;
-        let mut rref = 0.0; let mut sd = 0.0; let mut sh = 0.0;
+        let mut gm = 0.0;
+        let mut er = 0.0;
+        let mut f = 0.0;
+        let mut rr = 0.0;
+        let mut j2 = [0.0; 5];
+        let mut md = 0u32;
+        let mut rref = 0.0;
+        let mut sd = 0.0;
+        let mut sh = 0.0;
 
         let ok = celestial_get_body(
-            3, &mut gm, &mut er, &mut f, &mut rr,
-            j2.as_mut_ptr(), &mut md, &mut rref, &mut sd, &mut sh,
+            3,
+            &mut gm,
+            &mut er,
+            &mut f,
+            &mut rr,
+            j2.as_mut_ptr(),
+            &mut md,
+            &mut rref,
+            &mut sd,
+            &mut sh,
         );
         assert_eq!(ok, Bool::TRUE);
         assert!((gm - EARTH_GM).abs() < 1.0);
@@ -52,6 +66,3 @@ mod tests {
         assert_eq!(md, 8);
     }
 }
-
-
-

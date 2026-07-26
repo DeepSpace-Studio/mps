@@ -25,7 +25,7 @@ pub async fn quickstart() -> topcoat::Result {
                 <div style="padding-left:44px;">
                     <p style="color:#aaa; line-height:1.7; margin:0 0 8px;">"使用 world_create 函数创建物理世界，设置重力向量。返回世界指针，所有后续操作均基于此指针。"</p>
                     <pre><code class="language-rust">
-"let world = world_create(Vec3 { x: 0.0, y: -9.81, z: 0.0 });"
+    "let world = world_create(Vec3 { x: 0.0, y: -9.81, z: 0.0 });"
                     </code></pre>
                 </div>
             </div>
@@ -38,7 +38,7 @@ pub async fn quickstart() -> topcoat::Result {
                 <div style="padding-left:44px;">
                     <p style="color:#aaa; line-height:1.7; margin:0 0 8px;">"设置时间步长、求解器迭代次数和 CCD 子步数，平衡精度与性能。"</p>
                     <pre><code class="language-rust">
-"world_set_integration_parameters(world, 1.0 / 120.0, 8, 2);"
+    "world_set_integration_parameters(world, 1.0 / 120.0, 8, 2);"
                     </code></pre>
                 </div>
             </div>

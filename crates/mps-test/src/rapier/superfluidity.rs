@@ -1,15 +1,23 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use mps_core::rapier::superfluidity::*;
-    use mps_core::rapier::ffi::*;
     use mps_core::rapier::ffi::Vec3;
+    use mps_core::rapier::ffi::*;
+    use mps_core::rapier::superfluidity::*;
 
     const VORTEX_CORE: f64 = 1.0e-10;
 
     fn make_seg(x1: f64, y1: f64, z1: f64, x2: f64, y2: f64, z2: f64) -> VortexSegment {
         VortexSegment {
-            start: Vec3 { x: x1, y: y1, z: z1 },
-            end: Vec3 { x: x2, y: y2, z: z2 },
+            start: Vec3 {
+                x: x1,
+                y: y1,
+                z: z1,
+            },
+            end: Vec3 {
+                x: x2,
+                y: y2,
+                z: z2,
+            },
             circulation_quantum: 1,
             core_radius: VORTEX_CORE,
         }
@@ -25,10 +33,7 @@ mod tests {
             z: 0.0,
         };
         let mut vel = BiotSavartVelocity::default();
-        assert_eq!(
-            sf_biot_savart_velocity(seg, field, &mut vel),
-            Bool::TRUE
-        );
+        assert_eq!(sf_biot_savart_velocity(seg, field, &mut vel), Bool::TRUE);
         // Velocity should be in the z-direction (for a segment on x-axis and point in xy-plane)
         // Direction of r1×r2 near the segment midpoint should be ±z
         assert!(vel.velocity.z != 0.0 || vel.magnitude.abs() < 1e-20);
@@ -45,10 +50,7 @@ mod tests {
             z: 0.0,
         };
         let mut vel = BiotSavartVelocity::default();
-        assert_eq!(
-            sf_biot_savart_velocity(seg, field, &mut vel),
-            Bool::TRUE
-        );
+        assert_eq!(sf_biot_savart_velocity(seg, field, &mut vel), Bool::TRUE);
         assert_eq!(vel.velocity.x, 0.0);
         assert_eq!(vel.velocity.y, 0.0);
         assert_eq!(vel.velocity.z, 0.0);
@@ -63,10 +65,7 @@ mod tests {
             z: 0.0,
         }; // on the segment
         let mut vel = BiotSavartVelocity::default();
-        assert_eq!(
-            sf_biot_savart_velocity(seg, field, &mut vel),
-            Bool::FALSE
-        );
+        assert_eq!(sf_biot_savart_velocity(seg, field, &mut vel), Bool::FALSE);
     }
 
     #[test]
@@ -83,10 +82,7 @@ mod tests {
             velocity: Vec3::default(),
         };
         let mut vel = Vec3::default();
-        assert_eq!(
-            sf_vortex_ring_velocity(ring, &mut vel),
-            Bool::TRUE
-        );
+        assert_eq!(sf_vortex_ring_velocity(ring, &mut vel), Bool::TRUE);
         // Ring should move along its axis
         assert!(vel.z != 0.0);
         assert!(vel.x == 0.0 && vel.y == 0.0);
@@ -139,9 +135,11 @@ mod tests {
         let mut energy = GpEnergyDensity::default();
         assert_eq!(
             sf_gp_energy_density(
-                1.0, 100.0, // trap frequency
-                HELIUM_MASS, 1.0e-10, // coupling
-                1.0e-6, // radius from center
+                1.0,
+                100.0, // trap frequency
+                HELIUM_MASS,
+                1.0e-10, // coupling
+                1.0e-6,  // radius from center
                 &mut energy,
             ),
             Bool::TRUE
@@ -172,7 +170,10 @@ mod tests {
             amp = next;
         }
         // Should approach √n₀ = 1.0
-        assert!((amp - 1.0).abs() < 0.05, "amplitude should approach 1, got {amp}");
+        assert!(
+            (amp - 1.0).abs() < 0.05,
+            "amplitude should approach 1, got {amp}"
+        );
     }
 
     #[test]
@@ -207,10 +208,7 @@ mod tests {
     fn tangle_stats_with_single_segment() {
         let seg = make_seg(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
         let mut stats = VortexTangleStats::default();
-        assert_eq!(
-            sf_vortex_tangle_stats(&seg, 1, 1.0, &mut stats),
-            Bool::TRUE
-        );
+        assert_eq!(sf_vortex_tangle_stats(&seg, 1, 1.0, &mut stats), Bool::TRUE);
         assert_eq!(stats.segment_count, 1);
         assert!((stats.total_length - 1.0).abs() < 1e-12);
         assert!(stats.total_kinetic_energy > 0.0);
@@ -242,8 +240,10 @@ mod tests {
 
         // Consistency: c = ħ / (√2 m ξ)
         let c_from_xi = HBAR / (2.0f64.sqrt() * m * xi);
-        assert!((c - c_from_xi).abs() / c < 0.01,
-            "sound speed inconsistent with healing length: c={c}, c_from_xi={c_from_xi}");
+        assert!(
+            (c - c_from_xi).abs() / c < 0.01,
+            "sound speed inconsistent with healing length: c={c}, c_from_xi={c_from_xi}"
+        );
     }
 
     #[test]
@@ -251,22 +251,32 @@ mod tests {
         let mut grid = [GpGridPoint::default(); 100];
         let count = sf_gp_grid_sample(
             Vec3::default(), // plane center
-            Vec3 { x: 0.0, y: 0.0, z: 1.0 }, // plane axis
-            10, 10,
-            5.0, 5.0,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 1.0,
+            }, // plane axis
+            10,
+            10,
+            5.0,
+            5.0,
             Vec3::default(), // vortex center
-            Vec3 { x: 0.0, y: 0.0, z: 1.0 }, // vortex axis
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 1.0,
+            }, // vortex axis
             1,
-            1.0, 1.0,
-            grid.as_mut_ptr(), 100,
+            1.0,
+            1.0,
+            grid.as_mut_ptr(),
+            100,
         );
         assert_eq!(count, 100);
         // Center point (core): density ≈ 0
         assert!(grid[45].density < 1.0 || grid[55].density < 1.0);
         // Corner points: density ≈ 1
-        assert!(
-            (grid[0].density - 1.0).abs() < 0.5 || (grid[99].density - 1.0).abs() < 0.5
-        );
+        assert!((grid[0].density - 1.0).abs() < 0.5 || (grid[99].density - 1.0).abs() < 0.5);
     }
 
     #[test]
@@ -288,17 +298,9 @@ mod tests {
         let samples = [tangential_v; 36];
         let mut quantum = 0_i32;
         assert_eq!(
-            sf_quantum_number_estimate(
-                samples.as_ptr(),
-                radius,
-                36,
-                &mut quantum,
-            ),
+            sf_quantum_number_estimate(samples.as_ptr(), radius, 36, &mut quantum,),
             Bool::TRUE
         );
         assert_eq!(quantum, n);
     }
 }
-
-
-

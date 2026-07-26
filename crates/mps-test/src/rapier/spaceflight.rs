@@ -1,7 +1,7 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use mps_core::rapier::spaceflight::*;
     use mps_core::rapier::ffi::*;
+    use mps_core::rapier::spaceflight::*;
 
     #[test]
     fn kepler_period_round_trips_semi_major_axis() {
@@ -354,6 +354,3 @@ mod tests {
         mps_core::rapier::world::world_destroy(world);
     }
 }
-
-
-

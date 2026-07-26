@@ -1,4 +1,4 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use rapier3d::prelude::{
         ColliderHandle, ImpulseJointHandle as RapierImpulseJointHandle, RigidBodyHandle,
@@ -33,4 +33,3 @@ mod tests {
         );
     }
 }
-

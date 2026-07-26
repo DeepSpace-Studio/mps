@@ -1,10 +1,8 @@
-﻿use std::slice;
+use std::slice;
 
 use rapier3d::prelude::Vector;
 
-use crate::error::{
-    ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error,
-};
+use crate::error::{ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error};
 use crate::ffi::{
     Bool, SoftBendingConstraint, SoftBodyStepReport, SoftDistanceConstraint, SoftSphereCollision,
     SoftSpring, SoftVolumeConstraint, Vec3, vec3_finite, vec3_from_rapier, vec3_to_rapier,
@@ -104,8 +102,7 @@ pub extern "C" fn softbody_predict_positions(
     let velocities = unsafe { slice::from_raw_parts(velocities, count) };
     let inverse_masses = unsafe { slice::from_raw_parts(inverse_masses, count) };
     let write_count = count.min(capacity as usize);
-    let out_positions =
-        unsafe { slice::from_raw_parts_mut(out_predicted_positions, write_count) };
+    let out_positions = unsafe { slice::from_raw_parts_mut(out_predicted_positions, write_count) };
     let gravity = vec3_to_rapier(gravity);
     let velocity_scale = (1.0 - damping * dt).max(0.0);
     let mut active_particles = 0;
@@ -579,7 +576,3 @@ pub extern "C" fn softbody_update_velocities(
     clear_error();
     Bool::TRUE
 }
-
-
-
-

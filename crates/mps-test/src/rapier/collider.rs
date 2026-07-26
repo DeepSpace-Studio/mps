@@ -1,6 +1,5 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use smallvec::SmallVec;
     use mps_core::rapier::collider::*;
     use mps_core::rapier::ffi::*;
 
@@ -111,10 +110,3 @@ mod tests {
         assert_builder(collider_builder_create_medial_spheres(spheres.as_ptr(), 2));
     }
 }
-
-
-
-
-
-
-

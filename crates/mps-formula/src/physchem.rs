@@ -1,8 +1,6 @@
-﻿use std::slice;
+use std::slice;
 
-use crate::error::{
-    ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error,
-};
+use crate::error::{ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error};
 use crate::ffi::{
     Bool, CatalystEffect, CatalystReport, ConcentrationBuoyancyReport, GrayScottParams,
     GrayScottReactionReport, ReactionDiffusionReport, Vec3, vec3_finite, vec3_from_rapier,
@@ -280,5 +278,3 @@ pub extern "C" fn physchem_concentration_buoyancy(
     clear_error();
     Bool::TRUE
 }
-
-

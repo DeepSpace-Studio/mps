@@ -1,4 +1,4 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use mps_core::rapier::biomechanics::*;
     use mps_core::rapier::ffi::*;
@@ -70,6 +70,3 @@ mod tests {
         assert!(report.corrective_torque < 0.0);
     }
 }
-
-
-

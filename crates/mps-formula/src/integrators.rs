@@ -1,4 +1,4 @@
-﻿//! High-precision numerical integrators for orbital mechanics.
+//! High-precision numerical integrators for orbital mechanics.
 //!
 //! Rapier's default semi-implicit Euler integrator is suitable for game physics
 //! but lacks long-term energy/momentum conservation.  This module provides
@@ -39,7 +39,7 @@
 
 use crate::error::{ERR_INVALID_ARGUMENT, clear_error, set_error};
 use crate::ffi::{Bool, Vec3, vec3_finite, vec3_from_rapier, vec3_to_rapier};
-use crate::math::{KahanSum, KahanVec3};
+use crate::math::KahanVec3;
 
 /// Physical constants needed for relativistic corrections
 const SPEED_OF_LIGHT: f64 = 299_792_458.0; // m/s
@@ -138,8 +138,8 @@ pub fn yoshida4_step(
     dt: f64,
     acceleration_fn: impl Fn(Vec3) -> Vec3,
 ) {
-    let w1: f64 = 1.0 / (2.0 - 2.0_f64.cbrt());      // ≈ 1.3512
-    let w0: f64 = 1.0 - 2.0 * w1;                      // ≈ -1.7024
+    let w1: f64 = 1.0 / (2.0 - 2.0_f64.cbrt()); // ≈ 1.3512
+    let w0: f64 = 1.0 - 2.0 * w1; // ≈ -1.7024
     let ws = [w1, w0, w1];
 
     for &w in &ws {
@@ -182,21 +182,21 @@ pub fn forest_ruth8_step(
 ) {
     // Forest-Ruth 8th-order coefficients (McLachlan 1995, Table 2)
     const W: [f64; 15] = [
-        0.7416703643506129534e-1,
-        -0.4091008258000315940e-1,
-        0.1907547102962383800e-1,
-        -0.5738624711160822667e-1,
-        0.2990641813036559238e-1,
-        0.3346249182452981838e-1,
-        0.3152930923967665966e-1,
-        -0.7968879393529163540e-2,
-        0.3152930923967665966e-1,
-        0.3346249182452981838e-1,
-        0.2990641813036559238e-1,
-        -0.5738624711160822667e-1,
-        0.1907547102962383800e-1,
-        -0.4091008258000315940e-1,
-        0.7416703643506129534e-1,
+        7.416_703_643_506_13e-2,
+        -4.091_008_258_000_316e-2,
+        1.907_547_102_962_383_8e-2,
+        -5.738_624_711_160_822_4e-2,
+        2.990_641_813_036_559_4e-2,
+        3.346_249_182_452_981_6e-2,
+        3.152_930_923_967_666e-2,
+        -7.968_879_393_529_164e-3,
+        3.152_930_923_967_666e-2,
+        3.346_249_182_452_981_6e-2,
+        2.990_641_813_036_559_4e-2,
+        -5.738_624_711_160_822_4e-2,
+        1.907_547_102_962_383_8e-2,
+        -4.091_008_258_000_316e-2,
+        7.416_703_643_506_13e-2,
     ];
 
     for &w in &W {
@@ -212,14 +212,21 @@ pub fn forest_ruth8_step_kahan(
     acceleration_fn: impl Fn(Vec3) -> Vec3,
 ) {
     const W: [f64; 15] = [
-        0.7416703643506129534e-1, -0.4091008258000315940e-1,
-        0.1907547102962383800e-1, -0.5738624711160822667e-1,
-        0.2990641813036559238e-1, 0.3346249182452981838e-1,
-        0.3152930923967665966e-1, -0.7968879393529163540e-2,
-        0.3152930923967665966e-1, 0.3346249182452981838e-1,
-        0.2990641813036559238e-1, -0.5738624711160822667e-1,
-        0.1907547102962383800e-1, -0.4091008258000315940e-1,
-        0.7416703643506129534e-1,
+        7.416_703_643_506_13e-2,
+        -4.091_008_258_000_316e-2,
+        1.907_547_102_962_383_8e-2,
+        -5.738_624_711_160_822_4e-2,
+        2.990_641_813_036_559_4e-2,
+        3.346_249_182_452_981_6e-2,
+        3.152_930_923_967_666e-2,
+        -7.968_879_393_529_164e-3,
+        3.152_930_923_967_666e-2,
+        3.346_249_182_452_981_6e-2,
+        2.990_641_813_036_559_4e-2,
+        -5.738_624_711_160_822_4e-2,
+        1.907_547_102_962_383_8e-2,
+        -4.091_008_258_000_316e-2,
+        7.416_703_643_506_13e-2,
     ];
 
     for &w in &W {
@@ -271,10 +278,7 @@ pub fn post_newtonian_1pn(
 
     let newtonian = -gm_r3;
 
-    let correction = newtonian * (
-        (4.0 - 2.0 * eta) * gm_rc2
-        - (1.0 + 3.0 * eta) * v2_c2
-    );
+    let correction = newtonian * ((4.0 - 2.0 * eta) * gm_rc2 - (1.0 + 3.0 * eta) * v2_c2);
 
     vec3_from_rapier(r_vec * (newtonian + correction))
 }
@@ -283,11 +287,7 @@ pub fn post_newtonian_1pn(
 ///
 /// Adds O(1/c⁴) terms.  Required for precision better than ~1m in
 /// Earth orbit over years.
-pub fn post_newtonian_2pn(
-    position: Vec3,
-    velocity: Vec3,
-    gm: f64,
-) -> Vec3 {
+pub fn post_newtonian_2pn(position: Vec3, velocity: Vec3, gm: f64) -> Vec3 {
     let r_vec = vec3_to_rapier(position);
     let v_vec = vec3_to_rapier(velocity);
     let r = r_vec.length();
@@ -307,20 +307,13 @@ pub fn post_newtonian_2pn(
     let newtonian = -gm_r2 / r;
 
     // 2PN radial coefficient from Blanchet (2014)
-    let a_2pn_radial = -2.0 * gm_r2 * (
-        gm_rc2 * (2.0 * gm_rc2 - v2_c2)
-        + v2_c2 * v2_c2
-    );
+    let a_2pn_radial = -2.0 * gm_r2 * (gm_rc2 * (2.0 * gm_rc2 - v2_c2) + v2_c2 * v2_c2);
 
     vec3_from_rapier(r_vec * (newtonian + a_2pn_radial / r))
 }
 
 /// Combined 1PN + 2PN correction (PN-only, without the Newtonian part).
-pub fn post_newtonian_full(
-    position: Vec3,
-    velocity: Vec3,
-    gm: f64,
-) -> Vec3 {
+pub fn post_newtonian_full(position: Vec3, velocity: Vec3, gm: f64) -> Vec3 {
     let r_vec = vec3_to_rapier(position);
     let v_vec = vec3_to_rapier(velocity);
     let r = r_vec.length();
@@ -333,15 +326,17 @@ pub fn post_newtonian_full(
     let gm_rc2 = gm_r / C2;
     let v2_c2 = v2 / C2;
     let r_dot_v = r_vec.x * v_vec.x + r_vec.y * v_vec.y + r_vec.z * v_vec.z;
-    let r_dot_v_c2 = r_dot_v / (r * C2);
+    let _r_dot_v_c2 = r_dot_v / (r * C2);
 
     // 1PN correction factor
-    let factor_1pn = newtonian_mag * (
-        (4.0 * gm_rc2 - v2_c2) + 0.0 // simplified: only radial term for LEO
-    );
+    let _factor_1pn = newtonian_mag
+        * (
+            (4.0 * gm_rc2 - v2_c2) + 0.0
+            // simplified: only radial term for LEO
+        );
 
     // Total PN correction (small additive to Newtonian)
-    let pn_mag = newtonian_mag * (4.0 * gm_rc2 - v2_c2).abs().min(1e-8).max(1e-12);
+    let pn_mag = newtonian_mag * (4.0 * gm_rc2 - v2_c2).abs().clamp(1e-12, 1e-8);
 
     Vec3 {
         x: -r_vec.x / r * pn_mag,
@@ -364,12 +359,7 @@ pub fn post_newtonian_full(
 ///
 /// The PID gains `kI`, `kP`, `kD` are pre-tuned for orbital mechanics:
 ///   kI = 0.3/order, kP = 0.6/order, kD = 0.0/order
-pub fn adaptive_step_size(
-    dt: f64,
-    err: f64,
-    tolerance: f64,
-    order: u32,
-) -> f64 {
+pub fn adaptive_step_size(dt: f64, err: f64, tolerance: f64, order: u32) -> f64 {
     if err <= 0.0 || tolerance <= 0.0 {
         return dt;
     }
@@ -536,7 +526,7 @@ pub extern "C" fn integrator_leapfrog_step(
     pos.y += vel.y * dt;
     pos.z += vel.z * dt;
 
-    if let Some(out) = (unsafe { accel_next_out.as_mut() }) {
+    if let Some(out) = unsafe { accel_next_out.as_mut() } {
         // Caller must compute a1 at new position and write it
         // We just leave the door open; actual acceleration comes from caller
         *out = Vec3::default();
@@ -555,9 +545,7 @@ pub extern "C" fn integrator_post_newtonian(
     order: u32,
     out_acceleration: *mut Vec3,
 ) -> Bool {
-    if !vec3_finite(position) || !vec3_finite(velocity)
-        || gm <= 0.0 || out_acceleration.is_null()
-    {
+    if !vec3_finite(position) || !vec3_finite(velocity) || gm <= 0.0 || out_acceleration.is_null() {
         set_error(ERR_INVALID_ARGUMENT, "invalid parameters");
         return Bool::FALSE;
     }
@@ -568,7 +556,9 @@ pub extern "C" fn integrator_post_newtonian(
         _ => post_newtonian_full(position, velocity, gm),
     };
 
-    unsafe { *out_acceleration = accel; }
+    unsafe {
+        *out_acceleration = accel;
+    }
     clear_error();
     Bool::TRUE
 }
@@ -585,7 +575,9 @@ pub extern "C" fn integrator_specific_energy(
         set_error(ERR_INVALID_ARGUMENT, "invalid parameters");
         return Bool::FALSE;
     }
-    unsafe { *out_energy = specific_energy(position, velocity, gm); }
+    unsafe {
+        *out_energy = specific_energy(position, velocity, gm);
+    }
     clear_error();
     Bool::TRUE
 }
@@ -598,17 +590,19 @@ pub extern "C" fn integrator_keplerian_elements(
     gm: f64,
     out_elements: *mut f64, // [a, e, i, RAAN, argp, nu] — 6 f64s
 ) -> Bool {
-    if !vec3_finite(position) || !vec3_finite(velocity)
-        || gm <= 0.0 || out_elements.is_null()
-    {
+    if !vec3_finite(position) || !vec3_finite(velocity) || gm <= 0.0 || out_elements.is_null() {
         set_error(ERR_INVALID_ARGUMENT, "invalid parameters");
         return Bool::FALSE;
     }
 
     let (a, e, i, raan, argp, nu) = keplerian_elements(position, velocity, gm);
     let arr = unsafe { std::slice::from_raw_parts_mut(out_elements, 6) };
-    arr[0] = a; arr[1] = e; arr[2] = i;
-    arr[3] = raan; arr[4] = argp; arr[5] = nu;
+    arr[0] = a;
+    arr[1] = e;
+    arr[2] = i;
+    arr[3] = raan;
+    arr[4] = argp;
+    arr[5] = nu;
 
     clear_error();
     Bool::TRUE
@@ -617,4 +611,3 @@ pub extern "C" fn integrator_keplerian_elements(
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
-

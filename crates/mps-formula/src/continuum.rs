@@ -1,10 +1,8 @@
-﻿use std::slice;
+use std::slice;
 
 use rapier3d::prelude::{Matrix3, Vector};
 
-use crate::error::{
-    ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error,
-};
+use crate::error::{ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error};
 use crate::ffi::{
     Bool, FemConstitutiveReport, FemShapeFunctionReport, FemTetrahedron, MaterialProperties,
     NewmarkBetaParameters, NewmarkBetaReport, Vec3, vec3_finite, vec3_from_rapier, vec3_to_rapier,
@@ -86,7 +84,12 @@ fn dense_mat_vec_out(matrix: &[f64], vector: &[f64], n: usize, out: &mut [f64]) 
     }
 }
 
-fn solve_dense_system_in_place(matrix: &mut [f64], rhs: &mut [f64], x: &mut [f64], n: usize) -> bool {
+fn solve_dense_system_in_place(
+    matrix: &mut [f64],
+    rhs: &mut [f64],
+    x: &mut [f64],
+    n: usize,
+) -> bool {
     for pivot in 0..n {
         let mut pivot_row = pivot;
         let mut pivot_abs = matrix[pivot * n + pivot].abs();
@@ -355,7 +358,12 @@ pub extern "C" fn continuum_newmark_beta_solve(
     // Solve in-place to avoid the clone() / second allocation for `delta`.
     // effective_stiffness is consumed (modified in-place), effective_force too.
     let mut delta = vec![0.0; n];
-    if !solve_dense_system_in_place(&mut effective_stiffness, &mut effective_force, &mut delta, n) {
+    if !solve_dense_system_in_place(
+        &mut effective_stiffness,
+        &mut effective_force,
+        &mut delta,
+        n,
+    ) {
         set_error(
             ERR_INVALID_ARGUMENT,
             "Newmark-beta effective stiffness is singular",
@@ -515,5 +523,3 @@ pub extern "C" fn continuum_deformation_gradient(
     clear_error();
     Bool::TRUE
 }
-
-

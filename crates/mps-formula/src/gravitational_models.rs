@@ -28,7 +28,7 @@
 use crate::celestial_data::CelestialBody;
 use crate::error::{ERR_INVALID_ARGUMENT, clear_error, set_error};
 use crate::ffi::{Bool, Vec3, vec3_finite, vec3_from_rapier, vec3_to_rapier};
-use crate::math::{KahanSum, KahanVec3};
+use crate::math::KahanSum;
 
 // ---------------------------------------------------------------------------
 // Legendre polynomials & associated Legendre functions
@@ -87,7 +87,8 @@ pub fn normalized_legendre(sin_phi: f64, max_degree: u32) -> Vec<f64> {
 
             if n == 1 {
                 // P̄₁₀ = √3 · sin φ
-                pnm[1 * 2 / 2 + 0] = (3.0_f64).sqrt() * sin_phi;
+                // index = n(n+1)/2 + m = 1 for P̄₁₀
+                pnm[1] = (3.0_f64).sqrt() * sin_phi;
                 continue;
             }
 
@@ -105,7 +106,7 @@ pub fn normalized_legendre(sin_phi: f64, max_degree: u32) -> Vec<f64> {
 
             // b_{n,m}
             let b = if n >= 2 && m < n - 1 {
-                let nm2_idx = (n - 2) * (n - 1) / 2 + m;
+                let _nm2_idx = (n - 2) * (n - 1) / 2 + m;
                 let denom = (2.0 * nf - 3.0) * (nf - mf) * (nf + mf);
                 if denom <= 0.0 {
                     0.0
@@ -168,7 +169,7 @@ pub fn spherical_harmonics_acceleration(
     }
 
     let sin_phi = r_vec.z / radius;
-    let cos_phi = (r_vec.x * r_vec.x + r_vec.y * r_vec.y).sqrt() / radius;
+    let _cos_phi = (r_vec.x * r_vec.x + r_vec.y * r_vec.y).sqrt() / radius;
     let lambda = r_vec.y.atan2(r_vec.x); // longitude
 
     // Precompute P̄ₙₘ
@@ -189,16 +190,15 @@ pub fn spherical_harmonics_acceleration(
             let idx = n * (n + 1) / 2 + m;
 
             // C̄ₙₘ, S̄ₙₘ from coefficient arrays
+            // (n starts at 2, so idx >= 3 and the offset never underflows)
             let c_idx = idx - 3; // offset: skip n=0,1 (monopole + dipole)
-            let c_nm = if c_idx >= 0 {
-                let cu = c_idx as usize;
-                if cu < body.c_coeffs.len() { body.c_coeffs[cu] } else { 0.0 }
+            let c_nm = if c_idx < body.c_coeffs.len() {
+                body.c_coeffs[c_idx]
             } else {
                 0.0
             };
-            let s_nm = if c_idx >= 0 {
-                let cu = c_idx as usize;
-                if cu < body.s_coeffs.len() { body.s_coeffs[cu] } else { 0.0 }
+            let s_nm = if c_idx < body.s_coeffs.len() {
+                body.s_coeffs[c_idx]
             } else {
                 0.0
             };
@@ -240,8 +240,7 @@ pub fn spherical_harmonics_acceleration(
     let ax = x_r * dr
         - r_vec.x * r_vec.z / (radius * radius * r_xy) * dphi
         - r_vec.y / (r_xy * r_xy) * dlambda;
-    let ay = y_r * dr
-        - r_vec.y * r_vec.z / (radius * radius * r_xy) * dphi
+    let ay = y_r * dr - r_vec.y * r_vec.z / (radius * radius * r_xy) * dphi
         + r_vec.x / (r_xy * r_xy) * dlambda;
     let az = z_r * dr + r_xy / (radius * radius) * dphi;
 
@@ -283,7 +282,7 @@ pub fn carlson_rf(x: f64, y: f64, z: f64) -> f64 {
 }
 
 /// Evaluate Carlson's symmetric elliptic integral R_D(x, y, z).
-fn carlson_rd(x: f64, y: f64, z: f64) -> f64 {
+pub fn carlson_rd(x: f64, y: f64, z: f64) -> f64 {
     let mut x = x;
     let mut y = y;
     let mut z = z;
@@ -345,7 +344,7 @@ pub fn ellipsoid_gravity(position: Vec3, body: &CelestialBody) -> Vec3 {
 
     // Eccentricity
     let e2 = (a2 - c2) / a2; // e² for oblate spheroid
-    let e = e2.sqrt();
+    let _e = e2.sqrt();
 
     // The MacCullagh formula with J2 term is the correct approximation
     // for external gravity of an oblate spheroid:
@@ -358,7 +357,7 @@ pub fn ellipsoid_gravity(position: Vec3, body: &CelestialBody) -> Vec3 {
     // Radial distance from center, and sin(latitude)
     let r = r2.sqrt();
     let sin_phi = z / r;
-    let cos_phi = rho / r;
+    let _cos_phi = rho / r;
 
     // J2 from flattening: J2 = (2/3) · f · (1 - f/5 + ...)
     // More precisely: J2 = (a²-c²) / (5a²)
@@ -401,11 +400,7 @@ pub fn ellipsoid_gravity(position: Vec3, body: &CelestialBody) -> Vec3 {
 ///
 /// The tensor Q is stored as [q11, q12, q13, q21, q22, q23, q31, q32, q33]
 /// in row-major order.  Only q11..q33 matter (symmetric, traceless).
-pub fn quadrupole_tensor_acceleration(
-    position: Vec3,
-    gm: f64,
-    quadrupole: &[f64; 9],
-) -> Vec3 {
+pub fn quadrupole_tensor_acceleration(position: Vec3, gm: f64, quadrupole: &[f64; 9]) -> Vec3 {
     let r = vec3_to_rapier(position);
     let radius = r.length();
 
@@ -415,7 +410,7 @@ pub fn quadrupole_tensor_acceleration(
 
     let r2 = radius * radius;
     let r5 = r2 * r2 * radius;
-    let r7 = r5 * r2;
+    let _r7 = r5 * r2;
 
     // Q·r = Σⱼ Qᵢⱼ · xⱼ
     let qr = [
@@ -449,9 +444,15 @@ pub fn quadrupole_from_j2(gm: f64, equatorial_radius: f64, j2: f64) -> [f64; 9] 
     let q_scale = j2 * mass * equatorial_radius * equatorial_radius;
 
     [
-        -0.5 * q_scale, 0.0, 0.0,
-        0.0, -0.5 * q_scale, 0.0,
-        0.0, 0.0, q_scale,
+        -0.5 * q_scale,
+        0.0,
+        0.0,
+        0.0,
+        -0.5 * q_scale,
+        0.0,
+        0.0,
+        0.0,
+        q_scale,
     ]
 }
 
@@ -544,7 +545,9 @@ pub extern "C" fn gravity_spherical_harmonics(
     let body = crate::celestial_data::get_celestial_body(id);
     let accel = spherical_harmonics_acceleration(position, body, max_degree);
 
-    unsafe { *out_acceleration = accel; }
+    unsafe {
+        *out_acceleration = accel;
+    }
     clear_error();
     Bool::TRUE
 }
@@ -570,7 +573,9 @@ pub extern "C" fn gravity_ellipsoid(
     let body = crate::celestial_data::get_celestial_body(id);
     let accel = ellipsoid_gravity(position, body);
 
-    unsafe { *out_acceleration = accel; }
+    unsafe {
+        *out_acceleration = accel;
+    }
     clear_error();
     Bool::TRUE
 }
@@ -600,7 +605,9 @@ pub extern "C" fn gravity_zonal_harmonics(
     let jn_slice = unsafe { std::slice::from_raw_parts(jn, jn_count as usize) };
     let accel = zonal_harmonics_acceleration(position, gm, equatorial_radius, jn_slice);
 
-    unsafe { *out_acceleration = accel; }
+    unsafe {
+        *out_acceleration = accel;
+    }
     clear_error();
     Bool::TRUE
 }
@@ -622,7 +629,9 @@ pub extern "C" fn gravity_quadrupole_tensor(
     q_arr.copy_from_slice(q);
     let accel = quadrupole_tensor_acceleration(position, gm, &q_arr);
 
-    unsafe { *out_acceleration = accel; }
+    unsafe {
+        *out_acceleration = accel;
+    }
     clear_error();
     Bool::TRUE
 }
@@ -630,8 +639,3 @@ pub extern "C" fn gravity_quadrupole_tensor(
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
-
-
-
-
-

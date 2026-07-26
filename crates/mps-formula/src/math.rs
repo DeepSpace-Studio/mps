@@ -1,4 +1,4 @@
-﻿//! Common math utilities shared across rapier modules.
+//! Common math utilities shared across rapier modules.
 //!
 //! These functions replace the per-module copies of `finite`, `finite_positive`,
 //! `finite_non_negative`, `write_out`, `vec3_*`, and `clamp` that were
@@ -213,7 +213,11 @@ impl KahanVec3 {
     /// Add a rapier Vector using Kahan compensation.
     #[inline]
     pub fn add_vec(&mut self, value: rapier3d::prelude::Vector) {
-        self.add(Vec3 { x: value.x, y: value.y, z: value.z });
+        self.add(Vec3 {
+            x: value.x,
+            y: value.y,
+            z: value.z,
+        });
     }
 
     /// Reset the accumulator to zero.
@@ -307,7 +311,3 @@ pub fn vec3_normalize(v: Vec3) -> Vec3 {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
-
-
-
-

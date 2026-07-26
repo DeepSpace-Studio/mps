@@ -1,7 +1,8 @@
 mod helper;
 
-use mps_ffm as abi;
 use crate::helper::jbytearray_to_array;
+use ljni::JNIEnv;
+use ljni::sys::{jbyte, jbyteArray, jclass, jdouble, jdoubleArray, jint, jlong, jstring};
 #[cfg(feature = "anvilkit-bridge")]
 use mps_core::rapier::anvilkit as ak;
 use mps_core::rapier::ffi::{
@@ -21,14 +22,12 @@ use mps_core::rapier::ffi::{
     TrajectoryEnvironment, TrajectoryForceReport,
 };
 use mps_core::rapier::{
-    bounds as bo, collider as col, compat as com, controller as cc,
-    crbtree as crt, dop, error as er, events as ev, joints as jo,
-    neural as neu, query as qu, rigid_body as rb, rtree as rt, spaceflight as sf,
-    voxel as vx, world as wo,
+    bounds as bo, collider as col, compat as com, controller as cc, crbtree as crt, dop,
+    error as er, events as ev, joints as jo, neural as neu, query as qu, rigid_body as rb,
+    rtree as rt, spaceflight as sf, voxel as vx, world as wo,
 };
-use ljni::JNIEnv;
-use ljni::sys::{jbyte, jbyteArray, jclass, jdouble, jdoubleArray, jint, jlong, jstring};
 use mps_core::rapier3d::prelude::{Collider as CB, RigidBody as RB};
+use mps_ffm as abi;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 fn to_jlong<T>(value: *mut T) -> jlong {
@@ -907,7 +906,11 @@ jni!(long worldGetSharedArenaSize(long world) { wo::world_get_shared_arena_size(
 /// zero-JNI reads/writes from pure `java.nio.ByteBuffer` / `java.nio.DoubleBuffer`.
 #[unsafe(export_name = "Java_org_polaris2023_mps_1rigid_1body_RigidBodyNative_worldGetArenaDirectByteBuffer")]
 #[allow(non_snake_case)]
-pub extern "system" fn worldGetArenaDirectByteBuffer(env: JNIEnv, _class: jclass, world: jlong) -> ljni::sys::jobject {
+pub extern "system" fn worldGetArenaDirectByteBuffer(
+    env: JNIEnv,
+    _class: jclass,
+    world: jlong,
+) -> ljni::sys::jobject {
     catch_unwind(AssertUnwindSafe(|| {
         let world = world as *mut WH;
         let addr = wo::world_get_shared_arena_address(world);

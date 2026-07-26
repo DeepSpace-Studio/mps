@@ -1,8 +1,8 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use mps_core::rapier::joints::*;
     use mps_core::rapier::ffi::*;
     use mps_core::rapier::ffi::{BodyStatus, JointTypeDesc};
+    use mps_core::rapier::joints::*;
     use mps_core::rapier::rigid_body::{
         rigid_body_builder_build, rigid_body_builder_create, world_insert_rigid_body,
     };
@@ -37,7 +37,11 @@ mod tests {
     fn create_revolute_joint() {
         let b = joint_builder_create(
             JointTypeDesc::Revolute as u32,
-            Vec3 { x: 0.0, y: 1.0, z: 0.0 },
+            Vec3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            },
             0.0,
             0.0,
         );
@@ -55,7 +59,11 @@ mod tests {
     fn create_prismatic_joint() {
         let b = joint_builder_create(
             JointTypeDesc::Prismatic as u32,
-            Vec3 { x: 1.0, y: 0.0, z: 0.0 },
+            Vec3 {
+                x: 1.0,
+                y: 0.0,
+                z: 0.0,
+            },
             0.0,
             0.0,
         );
@@ -80,7 +88,11 @@ mod tests {
     fn create_spring_joint() {
         let b = joint_builder_create(
             JointTypeDesc::Spring as u32,
-            Vec3 { x: 10.0, y: 0.0, z: 0.0 },
+            Vec3 {
+                x: 10.0,
+                y: 0.0,
+                z: 0.0,
+            },
             1.0,
             0.5,
         );
@@ -90,12 +102,7 @@ mod tests {
 
     #[test]
     fn create_spring_rejects_negative_params() {
-        let b = joint_builder_create(
-            JointTypeDesc::Spring as u32,
-            Vec3::default(),
-            -1.0,
-            0.5,
-        );
+        let b = joint_builder_create(JointTypeDesc::Spring as u32, Vec3::default(), -1.0, 0.5);
         assert!(b.is_null());
     }
 
@@ -124,15 +131,36 @@ mod tests {
     #[test]
     fn set_local_anchors() {
         let b = joint_builder_create(JointTypeDesc::Fixed as u32, Vec3::default(), 0.0, 0.0);
-        joint_builder_set_local_anchor1(b, Vec3 { x: 0.0, y: 0.5, z: 0.0 });
-        joint_builder_set_local_anchor2(b, Vec3 { x: 0.0, y: -0.5, z: 0.0 });
+        joint_builder_set_local_anchor1(
+            b,
+            Vec3 {
+                x: 0.0,
+                y: 0.5,
+                z: 0.0,
+            },
+        );
+        joint_builder_set_local_anchor2(
+            b,
+            Vec3 {
+                x: 0.0,
+                y: -0.5,
+                z: 0.0,
+            },
+        );
         joint_builder_destroy(b);
     }
 
     #[test]
     fn set_local_anchor1_rejects_nan() {
         let b = joint_builder_create(JointTypeDesc::Fixed as u32, Vec3::default(), 0.0, 0.0);
-        joint_builder_set_local_anchor1(b, Vec3 { x: f64::NAN, y: 0.0, z: 0.0 });
+        joint_builder_set_local_anchor1(
+            b,
+            Vec3 {
+                x: f64::NAN,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
         joint_builder_destroy(b);
     }
 
@@ -140,7 +168,11 @@ mod tests {
     fn set_limits() {
         let b = joint_builder_create(
             JointTypeDesc::Revolute as u32,
-            Vec3 { x: 0.0, y: 1.0, z: 0.0 },
+            Vec3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            },
             0.0,
             0.0,
         );
@@ -159,7 +191,11 @@ mod tests {
     fn set_motor_velocity() {
         let b = joint_builder_create(
             JointTypeDesc::Revolute as u32,
-            Vec3 { x: 0.0, y: 1.0, z: 0.0 },
+            Vec3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            },
             0.0,
             0.0,
         );
@@ -178,7 +214,11 @@ mod tests {
     fn set_motor_position() {
         let b = joint_builder_create(
             JointTypeDesc::Revolute as u32,
-            Vec3 { x: 0.0, y: 1.0, z: 0.0 },
+            Vec3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            },
             0.0,
             0.0,
         );
@@ -203,7 +243,10 @@ mod tests {
         let builder = joint_builder_create(JointTypeDesc::Fixed as u32, Vec3::default(), 0.0, 0.0);
         let handle = world_insert_impulse_joint(world, b1, b2, builder, Bool::TRUE);
         assert_ne!(handle, 0);
-        assert_eq!(world_remove_impulse_joint(world, handle, Bool::TRUE), Bool::TRUE);
+        assert_eq!(
+            world_remove_impulse_joint(world, handle, Bool::TRUE),
+            Bool::TRUE
+        );
         world_destroy(world);
     }
 
@@ -215,9 +258,15 @@ mod tests {
         let builder = joint_builder_create(JointTypeDesc::Rope as u32, Vec3::default(), 2.0, 0.0);
         let handle = world_insert_impulse_joint(world, b1, b2, builder, Bool::TRUE);
         assert_ne!(handle, 0);
-        assert_eq!(world_remove_impulse_joint(world, handle, Bool::FALSE), Bool::TRUE);
+        assert_eq!(
+            world_remove_impulse_joint(world, handle, Bool::FALSE),
+            Bool::TRUE
+        );
         // second remove fails
-        assert_eq!(world_remove_impulse_joint(world, handle, Bool::FALSE), Bool::FALSE);
+        assert_eq!(
+            world_remove_impulse_joint(world, handle, Bool::FALSE),
+            Bool::FALSE
+        );
         world_destroy(world);
     }
 
@@ -245,13 +294,19 @@ mod tests {
 
     #[test]
     fn remove_rejects_null_world() {
-        assert_eq!(world_remove_impulse_joint(std::ptr::null_mut(), 1, Bool::TRUE), Bool::FALSE);
+        assert_eq!(
+            world_remove_impulse_joint(std::ptr::null_mut(), 1, Bool::TRUE),
+            Bool::FALSE
+        );
     }
 
     #[test]
     fn remove_rejects_invalid_handle() {
         let world = make_world();
-        assert_eq!(world_remove_impulse_joint(world, 0, Bool::TRUE), Bool::FALSE);
+        assert_eq!(
+            world_remove_impulse_joint(world, 0, Bool::TRUE),
+            Bool::FALSE
+        );
         world_destroy(world);
     }
 
@@ -264,15 +319,36 @@ mod tests {
         let b2 = make_dynamic_body(world);
         let builder = joint_builder_create(
             JointTypeDesc::Revolute as u32,
-            Vec3 { x: 0.0, y: 1.0, z: 0.0 },
+            Vec3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            },
             0.0,
             0.0,
         );
-        joint_builder_set_local_anchor1(builder, Vec3 { x: 0.0, y: 0.5, z: 0.0 });
-        joint_builder_set_local_anchor2(builder, Vec3 { x: 0.0, y: -0.5, z: 0.0 });
+        joint_builder_set_local_anchor1(
+            builder,
+            Vec3 {
+                x: 0.0,
+                y: 0.5,
+                z: 0.0,
+            },
+        );
+        joint_builder_set_local_anchor2(
+            builder,
+            Vec3 {
+                x: 0.0,
+                y: -0.5,
+                z: 0.0,
+            },
+        );
         let handle = world_insert_impulse_joint(world, b1, b2, builder, Bool::TRUE);
         assert_ne!(handle, 0);
-        assert_eq!(world_remove_impulse_joint(world, handle, Bool::TRUE), Bool::TRUE);
+        assert_eq!(
+            world_remove_impulse_joint(world, handle, Bool::TRUE),
+            Bool::TRUE
+        );
         world_destroy(world);
     }
 
@@ -283,13 +359,20 @@ mod tests {
         let b2 = make_dynamic_body(world);
         let builder = joint_builder_create(
             JointTypeDesc::Prismatic as u32,
-            Vec3 { x: 1.0, y: 0.0, z: 0.0 },
+            Vec3 {
+                x: 1.0,
+                y: 0.0,
+                z: 0.0,
+            },
             0.0,
             0.0,
         );
         let handle = world_insert_impulse_joint(world, b1, b2, builder, Bool::TRUE);
         assert_ne!(handle, 0);
-        assert_eq!(world_remove_impulse_joint(world, handle, Bool::TRUE), Bool::TRUE);
+        assert_eq!(
+            world_remove_impulse_joint(world, handle, Bool::TRUE),
+            Bool::TRUE
+        );
         world_destroy(world);
     }
 
@@ -298,10 +381,14 @@ mod tests {
         let world = make_world();
         let b1 = make_dynamic_body(world);
         let b2 = make_dynamic_body(world);
-        let builder = joint_builder_create(JointTypeDesc::Spherical as u32, Vec3::default(), 0.0, 0.0);
+        let builder =
+            joint_builder_create(JointTypeDesc::Spherical as u32, Vec3::default(), 0.0, 0.0);
         let handle = world_insert_impulse_joint(world, b1, b2, builder, Bool::TRUE);
         assert_ne!(handle, 0);
-        assert_eq!(world_remove_impulse_joint(world, handle, Bool::TRUE), Bool::TRUE);
+        assert_eq!(
+            world_remove_impulse_joint(world, handle, Bool::TRUE),
+            Bool::TRUE
+        );
         world_destroy(world);
     }
 
@@ -312,16 +399,20 @@ mod tests {
         let b2 = make_dynamic_body(world);
         let builder = joint_builder_create(
             JointTypeDesc::Spring as u32,
-            Vec3 { x: 0.0, y: 50.0, z: 0.0 },
+            Vec3 {
+                x: 0.0,
+                y: 50.0,
+                z: 0.0,
+            },
             0.5,
             0.1,
         );
         let handle = world_insert_impulse_joint(world, b1, b2, builder, Bool::TRUE);
         assert_ne!(handle, 0);
-        assert_eq!(world_remove_impulse_joint(world, handle, Bool::TRUE), Bool::TRUE);
+        assert_eq!(
+            world_remove_impulse_joint(world, handle, Bool::TRUE),
+            Bool::TRUE
+        );
         world_destroy(world);
     }
 }
-
-
-

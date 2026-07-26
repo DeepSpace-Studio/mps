@@ -1,7 +1,7 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use mps_core::rapier::physchem::*;
     use mps_core::rapier::ffi::*;
+    use mps_core::rapier::physchem::*;
 
     fn params() -> GrayScottParams {
         GrayScottParams {
@@ -89,6 +89,3 @@ mod tests {
         assert!(report.buoyancy_force.y < 0.0);
     }
 }
-
-
-

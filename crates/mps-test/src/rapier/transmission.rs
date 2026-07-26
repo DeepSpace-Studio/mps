@@ -1,7 +1,7 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use mps_core::rapier::transmission::*;
     use mps_core::rapier::ffi::*;
+    use mps_core::rapier::transmission::*;
 
     #[test]
     fn gear_constraint_supports_opposite_rotation() {
@@ -90,6 +90,3 @@ mod tests {
         assert!(spiral.radial_velocity > 0.0);
     }
 }
-
-
-

@@ -1,9 +1,9 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use smallvec::SmallVec;
-    use rapier3d::prelude::Vector;
     use mps_core::rapier::dop::*;
     use mps_core::rapier::ffi::*;
+    use rapier3d::prelude::Vector;
+    use smallvec::SmallVec;
 
     fn cube_points() -> SmallVec<[Vector; 8]> {
         let mut points = SmallVec::new();
@@ -34,10 +34,3 @@ mod tests {
         assert!(hull.build(&cube_points()).is_some());
     }
 }
-
-
-
-
-
-
-

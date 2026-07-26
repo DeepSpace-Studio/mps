@@ -1,8 +1,8 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use mps_core::rapier::celestial_data::CelestialBody;
-    use mps_core::rapier::gravitational_models::*;
     use mps_core::rapier::ffi::*;
+    use mps_core::rapier::gravitational_models::*;
 
     #[test]
     fn legendre_p00_is_one() {
@@ -19,8 +19,12 @@ mod tests {
         // n=2,m=0 index: 2*3/2 + 0 = 3
         let idx = 2 * 3 / 2;
         let expected = -0.5 * 5.0_f64.sqrt();
-        assert!((p[idx] - expected).abs() < 1e-10,
-            "P20 at equator: got {}, expected {}", p[idx], expected);
+        assert!(
+            (p[idx] - expected).abs() < 1e-10,
+            "P20 at equator: got {}, expected {}",
+            p[idx],
+            expected
+        );
     }
 
     #[test]
@@ -31,7 +35,11 @@ mod tests {
             equatorial_radius: 1.0,
             flattening: 0.0,
             rotation_rate: 0.0,
-            j2: 0.0, j3: 0.0, j4: 0.0, j5: 0.0, j6: 0.0,
+            j2: 0.0,
+            j3: 0.0,
+            j4: 0.0,
+            j5: 0.0,
+            j6: 0.0,
             max_degree: 0,
             c_coeffs: &[],
             s_coeffs: &[],
@@ -41,7 +49,11 @@ mod tests {
             solar_pressure_constant: 0.0,
         };
 
-        let pos = Vec3 { x: 10.0, y: 0.0, z: 0.0 };
+        let pos = Vec3 {
+            x: 10.0,
+            y: 0.0,
+            z: 0.0,
+        };
         let accel = spherical_harmonics_acceleration(pos, &body, 8);
         // Point mass: a = -GM/r² in radial direction
         let expected = -1.0 / 100.0; // GM=1, r=10, r²=100
@@ -54,7 +66,11 @@ mod tests {
     fn earth_j2_dominates_leo_orbit() {
         // At LEO (r ≈ 6778 km), J2 acceleration perturbation ≈ 5e-5 m/s²
         // Point mass ≈ 8.7 m/s²
-        let pos = Vec3 { x: 6.778e6, y: 0.0, z: 1.0e6 };
+        let pos = Vec3 {
+            x: 6.778e6,
+            y: 0.0,
+            z: 1.0e6,
+        };
         let accel_with_j2 = zonal_harmonics_acceleration(
             pos,
             mps_core::rapier::celestial_data::EARTH_GM,
@@ -71,11 +87,16 @@ mod tests {
         // Difference between J2 and pure point-mass should be small but nonzero
         let diff = ((accel_with_j2.x - accel_pm.x).powi(2)
             + (accel_with_j2.y - accel_pm.y).powi(2)
-            + (accel_with_j2.z - accel_pm.z).powi(2)).sqrt();
+            + (accel_with_j2.z - accel_pm.z).powi(2))
+        .sqrt();
         let central_mag = (accel_pm.x.powi(2) + accel_pm.y.powi(2) + accel_pm.z.powi(2)).sqrt();
         let ratio = diff / central_mag;
         assert!(ratio > 1e-6, "J2 perturbation should be nonzero");
-        assert!(ratio < 0.01, "J2 perturbation ratio {} should be <1%", ratio);
+        assert!(
+            ratio < 0.01,
+            "J2 perturbation ratio {} should be <1%",
+            ratio
+        );
     }
 
     #[test]
@@ -86,13 +107,21 @@ mod tests {
 
         // Test ellipsoid at equator where NR is robust
         let body = &mps_core::rapier::celestial_data::EARTH;
-        let pos_near = Vec3 { x: body.equatorial_radius * 2.0, y: 0.0, z: 0.0 };
+        let pos_near = Vec3 {
+            x: body.equatorial_radius * 2.0,
+            y: 0.0,
+            z: 0.0,
+        };
         let accel_ellip = ellipsoid_gravity(pos_near, body);
         // At equator, ~ GM/r²
         let r = pos_near.x;
         let accel_pm_near = body.gm / (r * r);
         let error_near = (accel_ellip.x.abs() - accel_pm_near).abs() / accel_pm_near;
-        assert!(error_near < 0.05, "Ellipsoid at 2*Re: error {} should be <5%", error_near);
+        assert!(
+            error_near < 0.05,
+            "Ellipsoid at 2*Re: error {} should be <5%",
+            error_near
+        );
     }
 
     #[test]
@@ -102,8 +131,3 @@ mod tests {
         assert!(trace.abs() < 1e-15, "Quadrupole tensor must be traceless");
     }
 }
-
-
-
-
-

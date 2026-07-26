@@ -1,11 +1,9 @@
-﻿use std::slice;
+use std::slice;
 
-use std::f64::consts::PI;
 use rapier3d::prelude::Vector;
+use std::f64::consts::PI;
 
-use crate::error::{
-    ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error,
-};
+use crate::error::{ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error};
 use crate::ffi::{
     Bool, NBodyForceReport, NBodyParticle, NBodySolverParams, OrbitalResonanceReport,
     RelativisticOrbitReport, RocheLimitReport, Vec3, vec3_finite, vec3_from_rapier, vec3_to_rapier,
@@ -514,8 +512,6 @@ pub extern "C" fn astro_barnes_hut_should_open(
     Bool::from(node_width / distance >= opening_angle)
 }
 
-
-
 // ---------------------------------------------------------------------------
 // Stellar structure
 // ---------------------------------------------------------------------------
@@ -523,11 +519,21 @@ pub extern "C" fn astro_barnes_hut_should_open(
 /// Lane-Emden equation (polytropic): dimensionless central density for polytropic index n.
 /// Returns the dimensionless radius xi_1 where theta becomes zero (surface).
 pub fn lane_emden_first_zero(polytropic_index: f64) -> Option<f64> {
-    if !polytropic_index.is_finite() || polytropic_index < 0.0 || polytropic_index > 5.0 { return None; }
-    if (polytropic_index - 0.0).abs() < 1e-6 { return Some(2.449_489_742_783_178_f64); }
-    if (polytropic_index - 1.0).abs() < 1e-6 { return Some(3.141_592_653_589_793_f64); }
-    if (polytropic_index - 1.5).abs() < 1e-6 { return Some(3.653_753_735_236_717_f64); }
-    if (polytropic_index - 3.0).abs() < 1e-6 { return Some(6.896_848_624_348_534_f64); }
+    if !polytropic_index.is_finite() || !(0.0..=5.0).contains(&polytropic_index) {
+        return None;
+    }
+    if (polytropic_index - 0.0).abs() < 1e-6 {
+        return Some(2.449_489_742_783_178_f64);
+    }
+    if (polytropic_index - 1.0).abs() < 1e-6 {
+        return Some(std::f64::consts::PI);
+    }
+    if (polytropic_index - 1.5).abs() < 1e-6 {
+        return Some(3.653_753_735_236_717_f64);
+    }
+    if (polytropic_index - 3.0).abs() < 1e-6 {
+        return Some(6.896_848_624_348_534_f64);
+    }
     // n=4: xi_1 ~ 14.97, n=4.5: xi_1 ~ 31.84, n=5: infinite
     None
 }
@@ -535,7 +541,9 @@ pub fn lane_emden_first_zero(polytropic_index: f64) -> Option<f64> {
 /// Mass-luminosity relation for main sequence stars: L ~ M^alpha
 /// alpha ~ 3.5 for solar-type stars
 pub fn mass_luminosity_relation(mass_solar: f64, exponent: f64) -> Option<f64> {
-    if !mass_solar.is_finite() || mass_solar <= 0.0 || !exponent.is_finite() || exponent <= 0.0 { return None; }
+    if !mass_solar.is_finite() || mass_solar <= 0.0 || !exponent.is_finite() || exponent <= 0.0 {
+        return None;
+    }
     Some(mass_solar.powf(exponent))
 }
 
@@ -543,7 +551,9 @@ pub fn mass_luminosity_relation(mass_solar: f64, exponent: f64) -> Option<f64> {
 pub fn eddington_luminosity(mass: f64, opacity: f64) -> Option<f64> {
     let g = 6.67430e-11;
     let c = 299_792_458.0;
-    if !mass.is_finite() || mass <= 0.0 || !opacity.is_finite() || opacity <= 0.0 { return None; }
+    if !mass.is_finite() || mass <= 0.0 || !opacity.is_finite() || opacity <= 0.0 {
+        return None;
+    }
     Some(4.0 * PI * g * mass * c / opacity)
 }
 
@@ -561,13 +571,25 @@ pub fn eddington_luminosity_solar(mass_solar: f64, opacity: f64) -> Option<f64> 
 
 /// Hubble's law: v = H0 * d
 pub fn hubble_velocity(hubble_constant: f64, distance: f64) -> Option<f64> {
-    if !hubble_constant.is_finite() || hubble_constant <= 0.0 || !distance.is_finite() || distance < 0.0 { return None; }
+    if !hubble_constant.is_finite()
+        || hubble_constant <= 0.0
+        || !distance.is_finite()
+        || distance < 0.0
+    {
+        return None;
+    }
     Some(hubble_constant * distance)
 }
 
 /// Hubble distance: d = v / H0
 pub fn hubble_distance(velocity: f64, hubble_constant: f64) -> Option<f64> {
-    if !velocity.is_finite() || velocity < 0.0 || !hubble_constant.is_finite() || hubble_constant <= 0.0 { return None; }
+    if !velocity.is_finite()
+        || velocity < 0.0
+        || !hubble_constant.is_finite()
+        || hubble_constant <= 0.0
+    {
+        return None;
+    }
     Some(velocity / hubble_constant)
 }
 
@@ -577,15 +599,31 @@ pub fn hubble_distance(velocity: f64, hubble_constant: f64) -> Option<f64> {
 
 /// NFW dark matter density profile: rho(r) = rho_0 / (r/r_s * (1 + r/r_s)^2)
 pub fn nfw_density(radius: f64, scale_radius: f64, characteristic_density: f64) -> Option<f64> {
-    if !finite_4(radius, scale_radius, characteristic_density, 0.0) || scale_radius <= 0.0 || characteristic_density < 0.0 { return None; }
+    if !finite_4(radius, scale_radius, characteristic_density, 0.0)
+        || scale_radius <= 0.0
+        || characteristic_density < 0.0
+    {
+        return None;
+    }
     let x = radius / scale_radius;
-    if x <= 0.0 { return Some(characteristic_density); }
+    if x <= 0.0 {
+        return Some(characteristic_density);
+    }
     Some(characteristic_density / (x * (1.0 + x) * (1.0 + x)))
 }
 
 /// NFW enclosed mass within radius r: M(r) = 4*pi*rho_0*r_s^3 * (ln(1+r/r_s) - r/(r_s+r))
-pub fn nfw_enclosed_mass(radius: f64, scale_radius: f64, characteristic_density: f64) -> Option<f64> {
-    if !finite_4(radius, scale_radius, characteristic_density, 0.0) || scale_radius <= 0.0 || characteristic_density < 0.0 { return None; }
+pub fn nfw_enclosed_mass(
+    radius: f64,
+    scale_radius: f64,
+    characteristic_density: f64,
+) -> Option<f64> {
+    if !finite_4(radius, scale_radius, characteristic_density, 0.0)
+        || scale_radius <= 0.0
+        || characteristic_density < 0.0
+    {
+        return None;
+    }
     let x = radius / scale_radius;
     let term = (1.0 + x).ln() - x / (1.0 + x);
     Some(4.0 * PI * characteristic_density * scale_radius.powi(3) * term)
@@ -600,15 +638,25 @@ pub fn blackbody_spectral_radiance(wavelength: f64, temperature: f64) -> Option<
     let h = 6.62607015e-34;
     let c = 299_792_458.0;
     let kb = 1.380649e-23;
-    if !wavelength.is_finite() || wavelength <= 0.0 || !temperature.is_finite() || temperature <= 0.0 { return None; }
+    if !wavelength.is_finite()
+        || wavelength <= 0.0
+        || !temperature.is_finite()
+        || temperature <= 0.0
+    {
+        return None;
+    }
     let exponent = h * c / (wavelength * kb * temperature);
-    if exponent > 700.0 { return Some(0.0); }
+    if exponent > 700.0 {
+        return Some(0.0);
+    }
     Some(2.0 * h * c * c / wavelength.powi(5) / (exponent.exp() - 1.0))
 }
 
 /// Wien's displacement law: lambda_max * T = b, where b = 2.898e-3 m·K
 pub fn wien_displacement(temperature: f64) -> Option<f64> {
-    if !temperature.is_finite() || temperature <= 0.0 { return None; }
+    if !temperature.is_finite() || temperature <= 0.0 {
+        return None;
+    }
     Some(2.897771955e-3 / temperature)
 }
 
@@ -621,7 +669,13 @@ pub fn jeans_mass(temperature: f64, density: f64, mean_molecular_weight: f64) ->
     let g = 6.67430e-11;
     let kb = 1.380649e-23;
     let mh = 1.6735575e-27;
-    if !finite_4(temperature, density, mean_molecular_weight, 0.0) || temperature < 0.0 || density <= 0.0 || mean_molecular_weight <= 0.0 { return None; }
+    if !finite_4(temperature, density, mean_molecular_weight, 0.0)
+        || temperature < 0.0
+        || density <= 0.0
+        || mean_molecular_weight <= 0.0
+    {
+        return None;
+    }
     let cs2 = kb * temperature / (mean_molecular_weight * mh);
     Some((5.0 * cs2 / (2.0 * g)).powf(1.5) * (3.0 / (4.0 * PI * density)).sqrt())
 }
@@ -631,7 +685,13 @@ pub fn jeans_length(temperature: f64, density: f64, mean_molecular_weight: f64) 
     let g = 6.67430e-11;
     let kb = 1.380649e-23;
     let mh = 1.6735575e-27;
-    if !finite_4(temperature, density, mean_molecular_weight, 0.0) || temperature < 0.0 || density <= 0.0 || mean_molecular_weight <= 0.0 { return None; }
+    if !finite_4(temperature, density, mean_molecular_weight, 0.0)
+        || temperature < 0.0
+        || density <= 0.0
+        || mean_molecular_weight <= 0.0
+    {
+        return None;
+    }
     let cs = (kb * temperature / (mean_molecular_weight * mh)).sqrt();
     Some(cs * (PI / (g * density)).sqrt())
 }
@@ -646,18 +706,24 @@ fn finite_4(a: f64, b: f64, c: f64, d: f64) -> bool {
 
 /// Main sequence lifetime: τ ≈ 10¹⁰ · (M/M☉)^(-2.5) years
 pub fn main_sequence_lifetime(mass_solar: f64) -> Option<f64> {
-    if !mass_solar.is_finite() || mass_solar <= 0.0 { return None; }
+    if !mass_solar.is_finite() || mass_solar <= 0.0 {
+        return None;
+    }
     Some(1.0e10 * mass_solar.powf(-2.5))
 }
 
 /// Mass-radius relation for main sequence stars: R/R☉ ≈ (M/M☉)^0.8
 pub fn mass_radius_relation(mass_solar: f64) -> Option<f64> {
-    if !mass_solar.is_finite() || mass_solar <= 0.0 { return None; }
+    if !mass_solar.is_finite() || mass_solar <= 0.0 {
+        return None;
+    }
     Some(mass_solar.powf(0.8))
 }
 
 /// Chandrasekhar mass: M_ch = 1.44 M☉
-pub fn chandrasekhar_mass_limit() -> f64 { 1.44 }
+pub fn chandrasekhar_mass_limit() -> f64 {
+    1.44
+}
 
 // ---------------------------------------------------------------------------
 // Binary star systems
@@ -666,15 +732,26 @@ pub fn chandrasekhar_mass_limit() -> f64 { 1.44 }
 /// Binary mass function: f(m) = (m₂·sin i)³ / (m₁+m₂)² = P·K₁³/(2πG)
 pub fn mass_function(period_seconds: f64, semi_amplitude: f64) -> Option<f64> {
     let g = 6.67430e-11;
-    if !period_seconds.is_finite() || period_seconds <= 0.0 || !semi_amplitude.is_finite() || semi_amplitude <= 0.0 { return None; }
+    if !period_seconds.is_finite()
+        || period_seconds <= 0.0
+        || !semi_amplitude.is_finite()
+        || semi_amplitude <= 0.0
+    {
+        return None;
+    }
     Some(period_seconds * semi_amplitude.powi(3) / (2.0 * std::f64::consts::PI * g))
 }
 
 /// Kepler's third law for binary: a³ = G·(m₁+m₂)·P²/(4π²)
 pub fn binary_semi_major_axis(total_mass: f64, period: f64) -> Option<f64> {
     let g = 6.67430e-11;
-    if !total_mass.is_finite() || total_mass <= 0.0 || !period.is_finite() || period <= 0.0 { return None; }
-    Some((g * total_mass * period * period / (4.0 * std::f64::consts::PI * std::f64::consts::PI)).cbrt())
+    if !total_mass.is_finite() || total_mass <= 0.0 || !period.is_finite() || period <= 0.0 {
+        return None;
+    }
+    Some(
+        (g * total_mass * period * period / (4.0 * std::f64::consts::PI * std::f64::consts::PI))
+            .cbrt(),
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -684,12 +761,24 @@ pub fn binary_semi_major_axis(total_mass: f64, period: f64) -> Option<f64> {
 /// Shakura-Sunyaev effective temperature at radius:
 /// T_eff(r) = (3GM·M_dot / (8π·σ·r³))^(1/4) · (1 - (R_in/r)^(1/2))^(1/4)
 pub fn ss73_disk_temperature(
-    mass_kg: f64, accretion_rate: f64, radius: f64, inner_radius: f64,
+    mass_kg: f64,
+    accretion_rate: f64,
+    radius: f64,
+    inner_radius: f64,
 ) -> Option<f64> {
     let g = 6.67430e-11;
     let sigma = 5.670_374_419e-8;
-    if !finite_4(mass_kg, accretion_rate, radius, inner_radius) || mass_kg <= 0.0 || accretion_rate < 0.0 || radius <= 0.0 || inner_radius <= 0.0 || radius < inner_radius { return None; }
-    let factor = 3.0 * g * mass_kg * accretion_rate / (8.0 * std::f64::consts::PI * sigma * radius.powi(3));
+    if !finite_4(mass_kg, accretion_rate, radius, inner_radius)
+        || mass_kg <= 0.0
+        || accretion_rate < 0.0
+        || radius <= 0.0
+        || inner_radius <= 0.0
+        || radius < inner_radius
+    {
+        return None;
+    }
+    let factor =
+        3.0 * g * mass_kg * accretion_rate / (8.0 * std::f64::consts::PI * sigma * radius.powi(3));
     let inner = (1.0 - (inner_radius / radius).sqrt()).max(0.0);
     Some((factor * inner).powf(0.25))
 }
@@ -699,12 +788,20 @@ pub fn ss73_disk_temperature(
 // ---------------------------------------------------------------------------
 
 /// Chandrasekhar mass (alternative formulation in kg).
-pub fn chandrasekhar_mass_kg() -> f64 { 2.865e30 }
+pub fn chandrasekhar_mass_kg() -> f64 {
+    2.865e30
+}
 
 /// Nickel-56 decay contribution to SN light curve: L(t) = M_Ni · ε_Ni · exp(-t/τ_Ni)
 /// τ_Ni ≈ 8.76 days
 pub fn nickel56_decay_luminosity(nickel_mass_kg: f64, time_days: f64) -> Option<f64> {
-    if !nickel_mass_kg.is_finite() || nickel_mass_kg < 0.0 || !time_days.is_finite() || time_days < 0.0 { return None; }
+    if !nickel_mass_kg.is_finite()
+        || nickel_mass_kg < 0.0
+        || !time_days.is_finite()
+        || time_days < 0.0
+    {
+        return None;
+    }
     let tau = 8.76 * 86400.0; // 8.76 days in seconds
     let epsilon = 3.90e13; // J/kg
     Some(nickel_mass_kg * epsilon * (-time_days * 86400.0 / tau).exp())
@@ -716,14 +813,28 @@ pub fn nickel56_decay_luminosity(nickel_mass_kg: f64, time_days: f64) -> Option<
 
 /// Transit depth: δ = (R_p / R_s)²
 pub fn transit_depth(planet_radius: f64, star_radius: f64) -> Option<f64> {
-    if !finite_4(planet_radius, star_radius, 0.0, 0.0) || planet_radius < 0.0 || star_radius <= 0.0 { return None; }
+    if !finite_4(planet_radius, star_radius, 0.0, 0.0) || planet_radius < 0.0 || star_radius <= 0.0
+    {
+        return None;
+    }
     Some((planet_radius / star_radius).powi(2))
 }
 
 /// Radial velocity semi-amplitude: K = (2πG/P)^(1/3) · (m_p·sin i)/((m_s+m_p)^(2/3))
-pub fn radial_velocity_semi_amplitude(planet_mass_kg: f64, star_mass_kg: f64, period: f64, inclination: f64) -> Option<f64> {
+pub fn radial_velocity_semi_amplitude(
+    planet_mass_kg: f64,
+    star_mass_kg: f64,
+    period: f64,
+    inclination: f64,
+) -> Option<f64> {
     let g = 6.67430e-11;
-    if !finite_4(planet_mass_kg, star_mass_kg, period, inclination) || planet_mass_kg <= 0.0 || star_mass_kg <= 0.0 || period <= 0.0 { return None; }
+    if !finite_4(planet_mass_kg, star_mass_kg, period, inclination)
+        || planet_mass_kg <= 0.0
+        || star_mass_kg <= 0.0
+        || period <= 0.0
+    {
+        return None;
+    }
     let total = star_mass_kg + planet_mass_kg;
     let m_sin_i = planet_mass_kg * inclination.sin();
     Some((2.0 * std::f64::consts::PI * g / period).cbrt() * m_sin_i / total.powf(2.0 / 3.0))
@@ -731,7 +842,9 @@ pub fn radial_velocity_semi_amplitude(planet_mass_kg: f64, star_mass_kg: f64, pe
 
 /// Habitable zone inner and outer boundaries (simplified).
 pub fn habitable_zone_boundaries(star_luminosity_solar: f64) -> Option<(f64, f64)> {
-    if !star_luminosity_solar.is_finite() || star_luminosity_solar <= 0.0 { return None; }
+    if !star_luminosity_solar.is_finite() || star_luminosity_solar <= 0.0 {
+        return None;
+    }
     let inner = (star_luminosity_solar / 1.1).sqrt();
     let outer = (star_luminosity_solar / 0.53).sqrt();
     Some((inner, outer))
@@ -744,9 +857,13 @@ pub fn habitable_zone_boundaries(star_luminosity_solar: f64) -> Option<(f64, f64
 /// Circular velocity for NFW dark matter halo: V_c²(r) = V_c²_r · ln(1+cx) - cx/(1+cx) / (ln(1+c) - c/(1+c))
 /// Returns V_c in km/s at radius r in units of the scale radius.
 pub fn nfw_circular_velocity(r: f64, v_max: f64, r_scale: f64) -> Option<f64> {
-    if !finite_4(r, v_max, r_scale, 0.0) || r < 0.0 || v_max <= 0.0 || r_scale <= 0.0 { return None; }
+    if !finite_4(r, v_max, r_scale, 0.0) || r < 0.0 || v_max <= 0.0 || r_scale <= 0.0 {
+        return None;
+    }
     let x = r / r_scale;
-    if x <= 0.0 { return None; }
+    if x <= 0.0 {
+        return None;
+    }
     let ln1x = (1.0 + x).ln();
     Some(v_max * (ln1x / x - 1.0 / (1.0 + x)).sqrt() / (std::f64::consts::LN_2 - 0.5).sqrt())
 }
@@ -757,15 +874,25 @@ pub fn nfw_circular_velocity(r: f64, v_max: f64, r_scale: f64) -> Option<f64> {
 
 /// Salpeter IMF: ξ(m) ∝ m^(-2.35)
 pub fn salpeter_imf(mass_solar: f64) -> Option<f64> {
-    if !mass_solar.is_finite() || mass_solar <= 0.0 { return None; }
+    if !mass_solar.is_finite() || mass_solar <= 0.0 {
+        return None;
+    }
     Some(mass_solar.powf(-2.35))
 }
 
 /// Kroupa IMF (piecewise power-law):
 /// ξ(m) ∝ m^(-0.3) for m < 0.08, m^(-1.3) for 0.08 < m < 0.5, m^(-2.3) for m > 0.5
 pub fn kroupa_imf(mass_solar: f64) -> Option<f64> {
-    if !mass_solar.is_finite() || mass_solar <= 0.0 { return None; }
-    let slope = if mass_solar < 0.08 { -0.3 } else if mass_solar < 0.5 { -1.3 } else { -2.3 };
+    if !mass_solar.is_finite() || mass_solar <= 0.0 {
+        return None;
+    }
+    let slope = if mass_solar < 0.08 {
+        -0.3
+    } else if mass_solar < 0.5 {
+        -1.3
+    } else {
+        -2.3
+    };
     Some(mass_solar.powf(slope))
 }
 
@@ -775,28 +902,50 @@ pub fn kroupa_imf(mass_solar: f64) -> Option<f64> {
 
 /// CMB temperature at redshift z: T(z) = T_0 · (1+z) where T_0 = 2.725 K
 pub fn cmb_temperature(redshift: f64) -> Option<f64> {
-    if !redshift.is_finite() || redshift < -1.0 { return None; }
+    if !redshift.is_finite() || redshift < -1.0 {
+        return None;
+    }
     Some(2.725 * (1.0 + redshift))
 }
 
 /// Sound horizon at recombination (simplified): r_s ≈ 150 Mpc
-pub fn sound_horizon_at_recombination() -> f64 { 150.0 }
+pub fn sound_horizon_at_recombination() -> f64 {
+    150.0
+}
 
 // ---------------------------------------------------------------------------
 // Cosmology: Friedmann equation
 // ---------------------------------------------------------------------------
 
 /// Hubble parameter at redshift z: H(z) = H₀·√(Ω_m·(1+z)³ + Ω_r·(1+z)⁴ + Ω_Λ)
-pub fn hubble_parameter_z(redshift: f64, omega_m: f64, omega_r: f64, omega_l: f64, h0: f64) -> Option<f64> {
-    if !finite_4(redshift, omega_m, omega_r, omega_l) || !h0.is_finite() { return None; }
-    if omega_m < 0.0 || omega_r < 0.0 || omega_l < 0.0 || h0 <= 0.0 { return None; }
+pub fn hubble_parameter_z(
+    redshift: f64,
+    omega_m: f64,
+    omega_r: f64,
+    omega_l: f64,
+    h0: f64,
+) -> Option<f64> {
+    if !finite_4(redshift, omega_m, omega_r, omega_l) || !h0.is_finite() {
+        return None;
+    }
+    if omega_m < 0.0 || omega_r < 0.0 || omega_l < 0.0 || h0 <= 0.0 {
+        return None;
+    }
     let z1 = 1.0 + redshift;
-    Some(h0 * (omega_m * z1.powi(3) + omega_r * z1.powi(4) + omega_l + (1.0 - omega_m - omega_r - omega_l) * z1 * z1).sqrt())
+    Some(
+        h0 * (omega_m * z1.powi(3)
+            + omega_r * z1.powi(4)
+            + omega_l
+            + (1.0 - omega_m - omega_r - omega_l) * z1 * z1)
+            .sqrt(),
+    )
 }
 
 /// Comoving distance to redshift z (flat universe, matter-dominated approx for low z).
 pub fn comoving_distance_z(redshift: f64, h0: f64) -> Option<f64> {
-    if !redshift.is_finite() || redshift < 0.0 || !h0.is_finite() || h0 <= 0.0 { return None; }
+    if !redshift.is_finite() || redshift < 0.0 || !h0.is_finite() || h0 <= 0.0 {
+        return None;
+    }
     let c = 299_792.458; // km/s
     let h0_si = h0 * 3.240_779_29e-20; // convert to s⁻¹
     let integrator = |z: f64| -> f64 {
@@ -807,7 +956,13 @@ pub fn comoving_distance_z(redshift: f64, h0: f64) -> Option<f64> {
             let dz = z / n as f64;
             let zz = i as f64 * dz;
             let e = (0.3 * (1.0 + zz).powi(3) + 0.7).sqrt();
-            sum += if i == 0 || i == n { 1.0 / e } else if i % 2 == 0 { 2.0 / e } else { 4.0 / e };
+            sum += if i == 0 || i == n {
+                1.0 / e
+            } else if i % 2 == 0 {
+                2.0 / e
+            } else {
+                4.0 / e
+            };
         }
         sum * z / (3.0 * n as f64)
     };
