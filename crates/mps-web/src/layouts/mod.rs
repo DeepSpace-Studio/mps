@@ -34,6 +34,19 @@ html[data-lang="en"] [data-lang="zh"] { display: none; }
         sel.value = lang;
     });
     if(window.hljs) document.querySelectorAll('pre code').forEach(function(x){ hljs.highlightElement(x); });
+
+    // If user has set a custom base URL (e.g. https://<org>.github.io/<repo>/),
+    // rewrite all local navigation links to use it as prefix.
+    // To set it, run in browser console:
+    //   localStorage.setItem('mps-base-url', 'https://<org>.github.io/<repo>/')
+    var baseUrl = localStorage.getItem('mps-base-url');
+    if (baseUrl) {
+        if (!baseUrl.endsWith('/')) baseUrl += '/';
+        document.querySelectorAll('a[href^="./"], a[href^="quickstart"], a[href^="api"], a[href^="architecture"], a[href^="gravity"], a[href^="formula"], a[href^="arena"], a[href^="integrators"], a[href^="voxel"], a[href^="events"], a[href^="jni"], a[href^="ffm"]').forEach(function(el) {
+            var href = el.getAttribute('href');
+            el.href = baseUrl + href.replace(/^\.\//, '');
+        });
+    }
 })();
 "#;
 
