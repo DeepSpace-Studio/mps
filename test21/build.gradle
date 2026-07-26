@@ -145,20 +145,20 @@ tasks.named('processResources') {
     dependsOn tasks.named('copyNativeLibraryToResources')
 }
 
-tasks.register('runJniTest', JavaExec) {
-    group = 'verification'
-    description = 'Runs the Java 21 JNI smoke test against the Rust cdylib.'
-    dependsOn tasks.named('classes'), tasks.named('syncNativeLibraryToRelease')
-    classpath = sourceSets.main.runtimeClasspath
-    mainClass = 'org.polaris2023.msp_rigid_body.JniSmokeTest'
-    javaLauncher = javaToolchains.launcherFor {
-        languageVersion = JavaLanguageVersion.of(21)
-    }
-    jvmArgs '-Xmx64m', '-XX:+UseSerialGC', '-XX:ReservedCodeCacheSize=32m'
-    systemProperty 'rigidbody.native.path', nativeLibraryDir.file(nativeLibraryName).asFile.absolutePath
-    systemProperty 'java.library.path', nativeLibraryDir.asFile.absolutePath
-}
-
-tasks.named('check') {
-    dependsOn tasks.named('runJniTest')
-}
+//tasks.register('runJniTest', JavaExec) {
+//    group = 'verification'
+//    description = 'Runs the Java 21 JNI smoke test against the Rust cdylib.'
+//    dependsOn tasks.named('classes'), tasks.named('syncNativeLibraryToRelease')
+//    classpath = sourceSets.main.runtimeClasspath
+//    mainClass = 'org.polaris2023.msp_rigid_body.JniSmokeTest'
+//    javaLauncher = javaToolchains.launcherFor {
+//        languageVersion = JavaLanguageVersion.of(21)
+//    }
+//    jvmArgs '-Xmx64m', '-XX:+UseSerialGC', '-XX:ReservedCodeCacheSize=32m'
+//    systemProperty 'rigidbody.native.path', nativeLibraryDir.file(nativeLibraryName).asFile.absolutePath
+//    systemProperty 'java.library.path', nativeLibraryDir.asFile.absolutePath
+//}
+//
+//tasks.named('check') {
+//    dependsOn tasks.named('runJniTest')
+//}

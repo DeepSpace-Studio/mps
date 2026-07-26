@@ -142,8 +142,7 @@ tasks.withType(JavaExec).configureEach {
 
 tasks.register('cargoBuildRelease', Exec) {
     workingDir = repoRoot.asFile
-    environment 'CARGO_BUILD_JOBS', '1'
-    commandLine 'cargo', 'build', '--release'
+    commandLine 'cargo', 'build', '--release', '-p', 'mps-jni'
 }
 
 tasks.register('syncNativeLibraryToRelease') {
@@ -189,7 +188,7 @@ tasks.register('runFfmTest', JavaExec) {
     description = 'Runs the Java 25 FFM smoke test against the Rust C ABI.'
     dependsOn tasks.named('classes'), tasks.named('syncNativeLibraryToRelease')
     classpath = sourceSets.main.runtimeClasspath
-    mainClass = 'org.polaris2023.msp_rigid_body.ffm.FfmSmokeTest'
+    mainClass = 'org.polaris2023.mps_rigid_body.ffm.FfmSmokeTest'
 }
 
 tasks.named('check') {
