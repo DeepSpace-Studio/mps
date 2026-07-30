@@ -2,6 +2,7 @@
 members = [
     "crates/mps-formula",
     "crates/mps-core",
+    "crates/mps-cosmos",
     "crates/mps-jni",
     "crates/mps-ffm",
     "crates/mps-test",

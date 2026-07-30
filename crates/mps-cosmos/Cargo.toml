@@ -1,0 +1,14 @@
+[package]
+name = "mps-cosmos"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+mps-formula = { path = "../mps-formula" }
+rapier3d = { workspace = true }
+
+[features]
+default = []

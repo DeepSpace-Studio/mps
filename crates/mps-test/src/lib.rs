@@ -1,6 +1,15 @@
 // mps-test - extracted integration tests for mps-core physics engine
 // Each module mirrors a rapier submodule from mps-core
 
+pub mod cosmos {
+    pub mod bodies;
+    pub mod gravity;
+    pub mod integrator;
+    pub mod orbit;
+    pub mod perturbation;
+    pub mod world;
+}
+
 pub mod rapier {
     pub mod acoustics;
     pub mod aerodynamics;

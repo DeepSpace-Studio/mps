@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 mps-formula = { path = "../mps-formula" }
 mps-core = { path = "../mps-core" }
+mps-cosmos = { path = "../mps-cosmos" }
 rapier3d = { workspace = true }
 smallvec = { workspace = true }
 hashbrown = { workspace = true }

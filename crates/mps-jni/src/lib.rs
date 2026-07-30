@@ -945,3 +945,250 @@ jni!(boolean spaceApplySolarRadiationPressureToBody(long world, long body, doubl
 jni!(boolean spaceApplyGravityGradientTorqueToBody(long world, long body, double ix, double iy, double iz, double mu, int wake_up, long out_torque) {
     sf::space_apply_gravity_gradient_torque_to_body(m::<WH>(world), body as RRaw, v3(ix, iy, iz), mu, jb(wake_up), pm::<Vec3>(out_torque)).0 as jbyte
 });
+
+// =========================================================================
+// Cosmos — 太空刚体演算 (mps-cosmos)
+//
+// 与 `mps-core` 的 world 不同，`CosmosWorld` 是一个面向轨道演算的独立
+// 物理 world：自行持有 `RigidBodySet`/`PhysicsPipeline`，仅复用
+// `mps-formula` 的纯计算。这里把它的一组核心 `pub` API 包成 JNI export，
+// 供 Java 端做太空场景演练。
+//
+// 句柄约定：
+//   `long world`   —— `*mut CosmosWorld`
+//   `long builder` —— `*mut RigidBodyBuilder`（由 `cosmosSatelliteBuilder` /
+//                     `cosmosFixedBodyBuilder` 返回，**插入后所有权转移**
+//                     给 `CosmosWorld`；不插入则调用方用
+//                     `cosmosBuilderDestroy` 释放）
+//   `long body`    —— `RigidBodyHandle` 的 `into_raw_parts()` 打包成的单个
+//                     64 位（高 32 = index，低 32 = generation）。之所以不
+//                     拆成两个 jint，是为了和 rapier 的 `RigidBodyHandleRaw`
+//                     在 ABI 上对齐（后者也是单 u64）。
+// =========================================================================
+use mps_cosmos::gravity::CelestialSource;
+use mps_cosmos::world::{
+    CosmosWorld, CosmosWorldConfig, OrbitIntegration, StepResult, StepSkipReason,
+};
+use rapier3d::prelude::RigidBodyBuilder;
+
+/// `RigidBodyHandle` ↔ `jlong` 打包。高 32 位存 index，低 32 位存
+/// generation —— 与 `RigidBodyHandle::into_raw_parts()` 的顺序一致。
+fn pack_handle(h: rapier3d::prelude::RigidBodyHandle) -> jlong {
+    let (idx, generation) = h.into_raw_parts();
+    ((idx as u64) << 32) | (generation as u64)
+}
+
+fn unpack_handle(packed: jlong) -> rapier3d::prelude::RigidBodyHandle {
+    let idx = ((packed >> 32) & 0xFFFF_FFFF) as u32;
+    let generation = (packed & 0xFFFF_FFFF) as u32;
+    rapier3d::prelude::RigidBodyHandle::from_raw_parts(idx, generation)
+}
+
+/// 由 `CelestialBodyId`（整数 0..=9）拿 `&'static CelestialBody`；非法则
+/// `None`。对应 `mps_formula::celestial_data::celestial_body_id_from_u32`。
+fn celestial_by_id(id: jint) -> Option<&'static mps_formula::celestial_data::CelestialBody> {
+    let id = u32::try_from(id).ok()?;
+    mps_formula::celestial_data::celestial_body_id_from_u32(id)
+        .map(mps_formula::celestial_data::get_celestial_body)
+}
+
+/// 取裸指针指向的 `RigidBodyBuilder` 的可变引用（builder 链式 set 用）。
+/// `null` 则返回 `None`（与 catch_unwind 兜底一致，避免 panic）。
+fn builder_mut(builder: jlong) -> Option<&'static mut RigidBodyBuilder> {
+    if builder.is_null() {
+        return None;
+    }
+    unsafe { (builder as *mut RigidBodyBuilder).as_mut() }
+}
+
+/// 构造一个动态刚体 builder（质量 kg、初始位置/速度）。返回 `*mut` 指针
+/// 给 Java；后续交给 `cosmosInsertBody` 插入。
+jni!(long cosmosSatelliteBuilder(double mass, double px, double py, double pz, double vx, double vy, double vz, double radius) {
+    to_jlong(Box::into_raw(Box::new(
+        mps_cosmos::bodies::satellite_builder(mass, v3(px, py, pz), v3(vx, vy, vz), radius)
+    )))
+});
+/// 构造固定（静态）刚体 builder —— 适合做 n-body 引力源中心本体。
+jni!(long cosmosFixedBodyBuilder(double px, double py, double pz) {
+    to_jlong(Box::into_raw(Box::new(
+        mps_cosmos::bodies::fixed_body_builder(v3(px, py, pz))
+    )))
+});
+/// 链式设惯量/阻尼等常见 builder 属性后再交给 `cosmosInsertBody`。这里
+/// 暴露线性/角阻尼、平移锁定、`gravity_scale` 几个最常用的。
+jni!(void cosmosBuilderSetLinearDamping(long builder, double value) {
+    if let Some(b) = builder_mut(builder) { b.linear_damping(value); }
+});
+jni!(void cosmosBuilderSetAngularDamping(long builder, double value) {
+    if let Some(b) = builder_mut(builder) { b.angular_damping(value); }
+});
+jni!(void cosmosBuilderSetGravityScale(long builder, double value) {
+    if let Some(b) = builder_mut(builder) { b.gravity_scale(value); }
+});
+jni!(void cosmosBuilderLockTranslations(long builder) {
+    if let Some(b) = builder_mut(builder) { b.lock_translations(); }
+});
+/// 显式释放一个**未插入**的 builder。插入 `cosmosInsertBody` 后所有权已
+/// 转移，**不要**再调本函数（会 double-free）。
+jni!(void cosmosBuilderDestroy(long builder) {
+    if !builder.is_null() { drop(unsafe { Box::from_raw(builder as *mut RigidBodyBuilder) }); }
+});
+
+/// 创建一个 `CosmosWorld`。
+///
+/// 参数：
+/// - `dt`：积分步长（秒），合法范围 `0 < dt ≤ 30`；
+/// - `solver_iterations`、`ccd_substeps`：rapier 求解器参数；
+/// - `orbit_integration`：0 = `RapierForce`（默认），1 = `Verlet`；
+/// - `verlet_substeps`：Verlet 路径的内部子步数（≥1，仅 `Verlet` 模式生效）；
+/// - `n_body_softening_sq`：n-body 互引力软化平方项（m²），0 表示无软化。
+jni!(long cosmosWorldCreate(double dt, int solver_iterations, int ccd_substeps, int orbit_integration, int verlet_substeps, double n_body_softening_sq) {
+    let orbit_integration = match u32_from_jint(orbit_integration) {
+        1 => OrbitIntegration::Verlet,
+        _ => OrbitIntegration::RapierForce,
+    };
+    let cfg = CosmosWorldConfig {
+        gravity: rapier3d::prelude::Vector::ZERO,
+        dt,
+        solver_iterations: u32_from_jint(solver_iterations),
+        ccd_substeps: u32_from_jint(ccd_substeps),
+        n_body_softening_sq,
+        central_body: None,
+        orbit_integration,
+        verlet_substeps: u32_from_jint(verlet_substeps).max(1),
+    };
+    to_jlong(Box::into_raw(Box::new(CosmosWorld::new(cfg))))
+});
+jni!(void cosmosWorldDestroy(long world) {
+    if !world.is_null() { drop(unsafe { Box::from_raw(world as *mut CosmosWorld) }); }
+});
+
+/// 设太阳位置（光压方向参考）。
+jni!(void cosmosWorldSetSunPosition(long world, double x, double y, double z) {
+    if let Some(w) = unsafe { (world as *mut CosmosWorld).as_mut() } {
+        w.set_sun_position(v3(x, y, z));
+    }
+});
+
+/// 设 n-body 中心天体（按整数 id：0=Sun,1=Mercury,2=Venus,3=Earth,4=Moon,
+/// 5=Mars,6=Jupiter,7=Saturn,8=Uranus,9=Neptune）。`id < 0` 清除中心天体。
+jni!(boolean cosmosWorldSetCentralBody(long world, int id) {
+    let Some(w) = unsafe { (world as *mut CosmosWorld).as_mut() } else {
+        return Bool::FALSE.0 as jbyte;
+    };
+    let body = if id < 0 { None } else { celestial_by_id(id) };
+    w.set_central_body(body);
+    Bool::TRUE.0 as jbyte
+});
+
+/// 注册一个天体引力源。`celestial_id` 见 `cosmosWorldSetCentralBody`；
+/// `max_sh_degree` 限制球谐展开最高阶（受 `body.max_degree` 上限约束）。
+/// 返回注册到世界中的源索引（≥0 成功；-1 参数错）。
+jni!(int cosmosWorldAddCelestial(long world, int celestial_id, int max_sh_degree) {
+    let Some(w) = unsafe { (world as *mut CosmosWorld).as_mut() } else { return -1; };
+    let Some(body) = celestial_by_id(celestial_id) else { return -1; };
+    let src = CelestialSource::new(body, u32_from_jint(max_sh_degree));
+    w.add_celestial(src) as jint
+});
+
+/// 把已插入的刚体登记为 n-body 互引力质点源（给定质量 kg）。
+jni!(boolean cosmosWorldAddNBody(long world, long body, double mass) {
+    let Some(w) = unsafe { (world as *mut CosmosWorld).as_mut() } else { return Bool::FALSE.0 as jbyte; };
+    w.add_n_body(unpack_handle(body), mass);
+    Bool::TRUE.0 as jbyte
+});
+
+/// 一步到位：插入 builder 并把其质量登记为 n-body 源。builder 所有权转移
+/// （插入后不可再 `cosmosBuilderDestroy`）。返回打包的 body 句柄（0 = 失败）。
+jni!(long cosmosWorldInsertBodyAsGravitySource(long world, long builder, double mass) {
+    let Some(w) = unsafe { (world as *mut CosmosWorld).as_mut() } else { return 0; };
+    if builder.is_null() { return 0; }
+    let b = *unsafe { Box::from_raw(builder as *mut RigidBodyBuilder) };
+    pack_handle(w.insert_body_as_gravity_source(b, mass))
+});
+
+/// 插入 builder，返回打包的 body 句柄（0 = 失败）。builder 所有权转移。
+jni!(long cosmosWorldInsertBody(long world, long builder) {
+    let Some(w) = unsafe { (world as *mut CosmosWorld).as_mut() } else { return 0; };
+    if builder.is_null() { return 0; }
+    let b = *unsafe { Box::from_raw(builder as *mut RigidBodyBuilder) };
+    pack_handle(w.insert_body(b))
+});
+
+/// 设置某刚体的环境扰动配置（大气阻力 + 太阳光压）。
+jni!(boolean cosmosWorldSetPerturbation(
+    long world, long body,
+    double drag_coefficient, double area, int enable_drag,
+    double reflectivity, double optical_area, int enable_solar
+) {
+    let Some(w) = unsafe { (world as *mut CosmosWorld).as_mut() } else { return Bool::FALSE.0 as jbyte; };
+    w.set_perturbation(unpack_handle(body), mps_cosmos::world::PerturbationConfig {
+        drag_coefficient, area, enable_drag: jb(enable_drag),
+        reflectivity, optical_area, enable_solar: jb(enable_solar),
+    });
+    Bool::TRUE.0 as jbyte
+});
+
+/// 推进一步，返回一个 `int` 编码的 `StepResult`：
+/// - `>0`：`Stepped(n)` —— 实际推进的秒数 ×1000（即 n_millisec）；
+/// - `-1`：`Substepped`（拆子步完成；具体子步数/子步 dt 不便塞进单 int，
+///   如需细节用 `cosmosWorldStepDetailed`）；
+/// - `-2`：`Skipped(NonFinite)`（dt 为 NaN/Inf）；
+/// - `-3`：`Skipped(NonPositive)`（dt ≤ 0）；
+/// - `-4`：`Skipped(TooLarge)`（dt 超过 30s 硬上限）。
+///
+/// 这个"压成单 int"的设计是为了让 Java 端的常见 `if (r > 0)` 判断简单。
+jni!(int cosmosWorldStep(long world, double dt) {
+    let Some(w) = unsafe { (world as *mut CosmosWorld).as_mut() } else { return -2; };
+    match w.step(dt) {
+        StepResult::Stepped(n) => ((n * 1000.0).round() as i64).max(1) as jint,
+        StepResult::Substepped { .. } => -1,
+        StepResult::Skipped(StepSkipReason::NonFinite) => -2,
+        StepResult::Skipped(StepSkipReason::NonPositive) => -3,
+        StepResult::Skipped(StepSkipReason::TooLarge) => -4,
+    }
+});
+
+/// `step_n`：循环 `n` 次推进 `dt`，任一步非法整批拒。
+/// 返回 0 = 成功；1 = NonFinite；2 = NonPositive；3 = TooLarge。
+jni!(int cosmosWorldStepN(long world, double dt, int n) {
+    let Some(w) = unsafe { (world as *mut CosmosWorld).as_mut() } else { return 1; };
+    match w.step_n(dt, u32_from_jint(n)) {
+        Ok(()) => 0,
+        Err(StepSkipReason::NonFinite) => 1,
+        Err(StepSkipReason::NonPositive) => 2,
+        Err(StepSkipReason::TooLarge) => 3,
+    }
+});
+
+/// 取刚体当前位置（3×f64）。`out_translation` 指向 24 字节 native 缓冲。
+/// 返回 1 成功 / 0 句柄无效或 world 为 null。
+jni!(int cosmosBodyTranslationOut(long world, long body, long out_translation) {
+    let Some(w) = unsafe { (world as *const CosmosWorld).as_ref() } else { return 0; };
+    let Some(p) = w.body_translation(unpack_handle(body)) else { return 0; };
+    if let Some(out) = unsafe { pm::<Vec3>(out_translation).as_mut() } { *out = p; }
+    1
+});
+
+/// 取刚体当前线速度（3×f64）。
+jni!(int cosmosBodyLinvelOut(long world, long body, long out_linvel) {
+    let Some(w) = unsafe { (world as *const CosmosWorld).as_ref() } else { return 0; };
+    let Some(v) = w.body_linvel(unpack_handle(body)) else { return 0; };
+    if let Some(out) = unsafe { pm::<Vec3>(out_linvel).as_mut() } { *out = v; }
+    1
+});
+
+/// 取刚体质量（kg）。`NaN` 表示句柄无效。
+jni!(double cosmosBodyMass(long world, long body) {
+    let Some(w) = unsafe { (world as *const CosmosWorld).as_ref() } else { return f64::NAN; };
+    w.body_mass(unpack_handle(body)).unwrap_or(f64::NAN)
+});
+
+/// 当前动态刚体数量。
+jni!(int cosmosWorldDynamicBodyCount(long world) {
+    let Some(w) = unsafe { (world as *const CosmosWorld).as_ref() } else { return 0; };
+    w.dynamic_body_count() as jint
+});
+
+
+

@@ -2541,6 +2541,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "mps-cosmos"
+version = "0.1.4"
+dependencies = [
+ "mps-formula",
+ "rapier3d-f64",
+]
+
+[[package]]
 name = "mps-ffm"
 version = "0.1.4"
 dependencies = [
@@ -2560,6 +2568,7 @@ version = "0.1.4"
 dependencies = [
  "jni 0.21.1",
  "mps-core",
+ "mps-cosmos",
  "mps-ffm",
  "mps-formula",
 ]
@@ -2570,6 +2579,7 @@ version = "0.1.4"
 dependencies = [
  "hashbrown 0.17.1",
  "mps-core",
+ "mps-cosmos",
  "mps-formula",
  "rapier3d-f64",
  "smallvec",
