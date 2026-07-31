@@ -32,6 +32,12 @@ pub async fn integrators() -> topcoat::Result {
                 <h2 style="color:#fff;font-size:20px;font-weight:400;margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid #333;">"后牛顿修正"</h2>
                 <p style="color:#aaa;line-height:1.7;">"支持 1PN 和 2PN 后牛顿相对论修正，适用于水星轨道进动等强引力场场景。"</p>
             </div>
+            <div style="background:#16213e;border:1px solid #333;border-radius:8px;padding:24px;margin-bottom:20px;">
+                <h2 style="color:#fff;font-size:20px;font-weight:400;margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid #333;">"太空场景：mps-cosmos 的 velocity-Verlet"</h2>
+                <p style="color:#aaa;line-height:1.7;">
+                    "上面 Leapfrog 即 velocity-Verlet 在纯函数层面的实现。" <a href="./cosmos" style="color:#4a9eff;">"mps-cosmos"</a> " 把它接进了独立物理 world：" <code>"CosmosWorld::step"</code> " 在 " <code>"orbit_integration = Verlet"</code> " 下，对天体引力 + n-body 互引力用二阶辛 velocity-Verlet 直接写回 " <code>"translation"</code> " / " <code>"linvel"</code> "，rapier 只跑碰撞 / 姿态。阻力 / 光压并入 Verlet 的加速度函数。1s 步长一圈 LEO 闭合误差 < 0.1% r，远优于 rapier " <code>"add_force"</code> " 路径的 semi-implicit Euler（漂数百公里）。"
+                </p>
+            </div>
         </div>
     }
 }

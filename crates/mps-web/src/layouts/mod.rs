@@ -42,7 +42,7 @@ html[data-lang="en"] [data-lang="zh"] { display: none; }
     var baseUrl = localStorage.getItem('mps-base-url');
     if (baseUrl) {
         if (!baseUrl.endsWith('/')) baseUrl += '/';
-        document.querySelectorAll('a[href^="./"], a[href^="quickstart"], a[href^="api"], a[href^="architecture"], a[href^="gravity"], a[href^="formula"], a[href^="arena"], a[href^="integrators"], a[href^="voxel"], a[href^="events"], a[href^="jni"], a[href^="ffm"]').forEach(function(el) {
+        document.querySelectorAll('a[href^="./"], a[href^="quickstart"], a[href^="api"], a[href^="architecture"], a[href^="gravity"], a[href^="cosmos"], a[href^="formula"], a[href^="arena"], a[href^="integrators"], a[href^="voxel"], a[href^="events"], a[href^="jni"], a[href^="ffm"]').forEach(function(el) {
             var href = el.getAttribute('href');
             el.href = baseUrl + href.replace(/^\.\//, '');
         });
@@ -87,6 +87,7 @@ html[data-lang="en"] [data-lang="zh"] { display: none; }
                         <a href="./quickstart" style="color:#bbb; padding:8px 14px; font-size:13px; border-radius:4px; text-decoration:none;"><span data-lang="zh">"快速入门"</span><span data-lang="en">"QUICKSTART"</span></a>
                         <a href="./architecture" style="color:#bbb; padding:8px 14px; font-size:13px; border-radius:4px; text-decoration:none;"><span data-lang="zh">"架构"</span><span data-lang="en">"ARCHITECTURE"</span></a>
                         <a href="./gravity" style="color:#bbb; padding:8px 14px; font-size:13px; border-radius:4px; text-decoration:none;"><span data-lang="zh">"引力模型"</span><span data-lang="en">"GRAVITY"</span></a>
+                        <a href="./cosmos" style="color:#bbb; padding:8px 14px; font-size:13px; border-radius:4px; text-decoration:none;"><span data-lang="zh">"太空演算"</span><span data-lang="en">"COSMOS"</span></a>
                         <a href="./formula" style="color:#bbb; padding:8px 14px; font-size:13px; border-radius:4px; text-decoration:none;"><span data-lang="zh">"公式模块"</span><span data-lang="en">"FORMULA"</span></a>
                         <a href="./api" style="color:#bbb; padding:8px 14px; font-size:13px; border-radius:4px; text-decoration:none;"><span data-lang="zh">"API"</span><span data-lang="en">"API"</span></a>
                     </nav>

@@ -53,17 +53,20 @@ pub async fn gravity() -> topcoat::Result {
             </div>
 
             <div style="background:#16213e; border:1px solid #333; border-radius:8px; padding:24px; margin-bottom:20px;">
-                <h2 style="color:#fff;font-size:20px;font-weight:400;margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid #333;">"API"</h2>
+                <h2 style="color:#fff;font-size:20px;font-weight:400;margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid #333;">"在太空场景的使用"</h2>
+                <p style="color:#aaa; line-height:1.7;">{ "这些自适应引力模型由 " }<a href="./cosmos" style="color:#4a9eff;">"mps-cosmos"</a>{ " 的 " }<code>"CelestialSource"</code>{ " 直接消费：注册一组天体源，" }<code>"CosmosWorld::step"</code>{ " 会在每个物理子步前对全体动态刚体累加 天体引力 + n-body 互引力 + 环境扰动，再交 rapier 或 velocity-Verlet 积分。配合 per-body " }<code>"PerturbationConfig"</code>{ " 可逐体开大气阻力 / 光压。" }</p>
                 <pre><code class="language-rust">
-"// 注册天体引力到 ForceRegistry
-world_register_celestial_gravity(world, CelestialBody::Earth,
-    GravityModel::SphericalHarmonics { degree: 8, order: 8 });
+"use mps_cosmos::{CosmosWorld, CosmosWorldConfig};
+use mps_cosmos::gravity::CelestialSource;
+use mps_formula::celestial_data::{CelestialBodyId, get_celestial_body};
 
-// 设置引力参数
-world_set_gravity(world, &Vec3 { x: 0.0, y: -9.81, z: 0.0 });
-
-// 设置积分参数
-world_set_integration_parameters(world, 1.0/60.0, 4, 1);"
+let earth = get_celestial_body(CelestialBodyId::Earth);
+let mut world = CosmosWorld::new(CosmosWorldConfig {
+    central_body: Some(earth),
+    ..Default::default()
+});
+// 球谐 8×8 自动在 <10R 段生效，>100R 退化为点质量 + J2
+world.add_celestial(CelestialSource::new(earth, 8));"
                 </code></pre>
             </div>
         </div>

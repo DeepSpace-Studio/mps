@@ -12,6 +12,7 @@ use layouts::root_layout;
 use pages::api::api;
 use pages::architecture::architecture;
 use pages::arena::arena;
+use pages::cosmos::cosmos;
 use pages::events::events;
 use pages::ffm::ffm;
 use pages::formula::formula;
@@ -35,6 +36,7 @@ pub fn app() -> Router {
         .page(voxel)
         .page(events)
         .page(arena)
+        .page(cosmos)
         .page(jni)
         .page(ffm)
         .page(api)

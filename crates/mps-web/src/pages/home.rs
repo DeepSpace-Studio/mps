@@ -53,6 +53,12 @@ pub async fn home() -> topcoat::Result {
                     <small style="font-size:13px; color:#888; line-height:1.5;">"World、刚体、碰撞体、关节、查询、控制器"</small>
                     <em style="font-style:normal; font-size:18px; color:#4a9eff; text-align:right; margin-top:auto;">"↗"</em>
                 </a>
+                <a href="cosmos" style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px; text-decoration:none; color:#ccc; display:flex; flex-direction:column; gap:8px;">
+                    <span style="font-family:monospace; font-size:12px; color:#4a9eff;">"06"</span>
+                    <strong style="font-size:16px; color:#fff;">"太空刚体演算"</strong>
+                    <small style="font-size:13px; color:#888; line-height:1.5;">"CosmosWorld、Verlet 轨道积分、n-body 互引力、环境扰动"</small>
+                    <em style="font-style:normal; font-size:18px; color:#4a9eff; text-align:right; margin-top:auto;">"↗"</em>
+                </a>
                 <a href="gravity" style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px; text-decoration:none; color:#ccc; display:flex; flex-direction:column; gap:8px;">
                     <span style="font-family:monospace; font-size:12px; color:#4a9eff;">"02"</span>
                     <strong style="font-size:16px; color:#fff;">"物理系统"</strong>
@@ -131,7 +137,7 @@ pub async fn home() -> topcoat::Result {
                 </div>
                 <div style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px;">
                     <h3 style="font-size:16px; color:#fff; margin:0 0 8px;">"辛积分器"</h3>
-                    <p style="font-size:14px; color:#999; line-height:1.6; margin:0;">"Leapfrog、Yoshida 4 阶、Forest-Ruth 8 阶。Kahan 补偿精度从 15 位→30 位有效数字。后牛顿 1PN+2PN 相对论修正。"</p>
+                    <p style="font-size:14px; color:#999; line-height:1.6; margin:0;">"Leapfrog、Yoshida 4 阶、Forest-Ruth 8 阶。Kahan 补偿精度从 15 位→30 位有效数字。后牛顿 1PN+2PN 相对论修正。" <a href="./cosmos" style="color:#4a9eff;">"mps-cosmos"</a> " 另提供 velocity-Verlet 轨道积分，长弧相位误差随 dt² 收敛。"</p>
                 </div>
                 <div style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px;">
                     <h3 style="font-size:16px; color:#fff; margin:0 0 8px;">"内置天体"</h3>
@@ -160,9 +166,10 @@ pub async fn home() -> topcoat::Result {
   └─ Rust C ABI (~480 函数)
        ├─ mps-formula  — 28 纯公式模块 (300+ 函数)
        ├─ mps-core     — 物理引擎 + Rapier 封装 (World, 刚体, 碰撞体, 查询, 事件)
-       ├─ mps-jni      — JNI 绑定 (~280 方法)
+       ├─ mps-cosmos   — 太空刚体演算 (独立 world, Verlet 轨道积分)
+       ├─ mps-jni      — JNI 绑定 (~280 方法, 含 cosmos 一批)
        ├─ mps-ffm      — FFM 元数据
-       └─ mps-test     — 332 集成测试"
+       └─ mps-test     — 集成测试 (含 cosmos 19)"
                 </code>
             </pre>
         </div>

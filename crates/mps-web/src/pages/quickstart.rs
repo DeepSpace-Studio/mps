@@ -80,7 +80,7 @@ let handle = world_insert_rigid_body(world, body, collider);"
             </div>
 
             <div class="callout" style="background:#0f1a2e; border-left:4px solid #4a9eff; padding:14px 18px; border-radius:4px; margin:20px 0;">
-                <p><strong>"提示："</strong> "所有 API 均通过 C FFI 暴露，Java 开发者可通过 JNI 或 FFM 调用。Java 代码中可使用 " <span class="hi" style="color:#4a9eff; font-family:monospace;">"RigidBodyNative"</span> " 或 " <span class="hi" style="color:#4a9eff; font-family:monospace;">"RigidBodyFfm"</span> " 类。"</p>
+                <p><strong>"提示："</strong> "所有 API 均通过 C FFI 暴露，Java 开发者可通过 JNI 或 FFM 调用。Java 代码中可使用 " <span class="hi" style="color:#4a9eff; font-family:monospace;">"RigidBodyNative"</span> " 或 " <span class="hi" style="color:#4a9eff; font-family:monospace;">"RigidBodyFfm"</span> " 类。" "太空轨道场景用 " <a href="./cosmos" style="color:#4a9eff;">"mps-cosmos"</a> "，提供 " <span class="hi" style="color:#4a9eff; font-family:monospace;">"CosmosWorld"</span> " 与 Verlet 轨道积分，JNI 端见 " <span class="hi" style="color:#4a9eff; font-family:monospace;">"cosmos*"</span> " 系列。"</p>
             </div>
 
             <div style="margin:20px 0;">
