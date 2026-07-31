@@ -80,6 +80,7 @@ jobs:
             "/voxel"
             "/events"
             "/arena"
+            "/cosmos"
             "/jni"
             "/ffm"
             "/api"
