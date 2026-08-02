@@ -47,6 +47,9 @@ pub struct NBodySource {
     pub gm: f64,
 }
 
+/// 硬上限：带谐展开最多 J2..J6 五项，存栈上即可，避免每子步每体每源 `vec!`。
+const MAX_ZONAL: usize = 5;
+
 /// 自适应选择最匹配的引力模型并返回在该 `position` 处的引力加速度。
 ///
 /// 选择规则（[`mps-core`] 的 `CelestialGravityForceLaw` 参考）：
@@ -57,6 +60,7 @@ pub struct NBodySource {
 /// | 2–10 | max_sh≥2 且有 SH 系数 | 球谐 `spherical_harmonics_acceleration` |
 /// | 10–100 | 任意       | J2–J6 带谐 `zonal_harmonics_acceleration` |
 /// | >100 | 任意         | 点质量 + J2 |
+#[inline]
 pub fn celestial_acceleration(position: Vector, source: &CelestialSource) -> Vector {
     if !source.enabled {
         return Vector::ZERO;
@@ -89,28 +93,37 @@ pub fn celestial_acceleration(position: Vector, source: &CelestialSource) -> Vec
     {
         spherical_harmonics_acceleration(pos, source.body, source.max_sh_degree)
     } else if normalized_altitude < 100.0 {
-        let jn: [f64; 5] = [
+        // J2..J6：原实现 `vec!` 逐项 filter 分配，本路径在 FR8 每子步 9 leapfrog
+        // ×天体数×体数都会触发，改为栈上数组 + 计数，无堆分配。
+        let raw = [
             source.body.j2,
             source.body.j3,
             source.body.j4,
             source.body.j5,
             source.body.j6,
         ];
-        let jn_filtered: Vec<f64> = jn.iter().copied().filter(|&j| j != 0.0).collect();
-        zonal_harmonics_acceleration(pos, gm, r_eq, &jn_filtered)
+        let mut buf = [0.0_f64; MAX_ZONAL];
+        let mut n = 0;
+        for j in raw.iter().copied() {
+            if j != 0.0 {
+                buf[n] = j;
+                n += 1;
+            }
+        }
+        zonal_harmonics_acceleration(pos, gm, r_eq, &buf[..n])
     } else {
-        let jn = if source.body.j2 != 0.0 {
-            vec![source.body.j2]
-        } else {
-            vec![]
-        };
-        zonal_harmonics_acceleration(pos, gm, r_eq, &jn)
+        // >100R：点质量 + J2。同样避免 `vec![]` / `vec![j2]` 分配。
+        let j2 = source.body.j2;
+        let buf = [j2];
+        let slice = if j2 != 0.0 { &buf[..] } else { &[][..] };
+        zonal_harmonics_acceleration(pos, gm, r_eq, slice)
     };
 
     Vector::new(accel.x, accel.y, accel.z)
 }
 
 /// 点质量引力加速度 `a = -GM · r̂ / r²`。
+#[inline]
 pub fn point_mass_acceleration(position: Vector, gm: f64) -> Vector {
     let r2 = position.length_squared();
     if r2 < 1.0 {
@@ -125,6 +138,11 @@ pub fn point_mass_acceleration(position: Vector, gm: f64) -> Vector {
 /// 跳过 `exclude_handle`（通常是质点自身对应的刚体），以避免自吸引奇点。
 /// `softening` 平方项加在分母上防止两体无限接近时发散（典型取几公里量级
 /// 的平方，0 表示不加 soften）。
+///
+/// `source_positions` 是一张以 arena index 为下标的位置快照表（由
+/// `integrator::snapshot_source_positions` 构造），按 `RigidBodyHandle` 取
+/// 对应源位置；保留闭包形态以便内部 `O(1)` 索引并避免重复传参。
+#[inline]
 pub fn n_body_acceleration(
     position: Vector,
     sources: &[NBodySource],
@@ -151,7 +169,7 @@ pub fn n_body_acceleration(
 }
 
 /// 由质量恢复引力参数 `gm = G · mass`（与 `mps_formula::celestial_data::G` 一致）。
+#[inline]
 pub fn gm_from_mass(mass: f64) -> f64 {
     G * mass
 }
-

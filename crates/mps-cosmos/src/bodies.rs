@@ -5,8 +5,6 @@
 //! 与平移/线速度。返回 `RigidBodyBuilder` 仍可链式进一步配置后交给
 //! [`crate::CosmosWorld::insert_body`]。
 
-#[cfg(test)]
-use rapier3d::prelude::ColliderSet;
 use rapier3d::prelude::{MassProperties, RigidBodyBuilder, Vector};
 
 /// 构造一个动态刚体 builder，给定质量（kg）、初始位置与速度（SI 单位）。

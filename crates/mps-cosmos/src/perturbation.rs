@@ -29,6 +29,10 @@ pub fn atmospheric_drag_force(
     area: f64,
     mass: f64,
 ) -> Option<Vector> {
+    // 早退：密度/面积/质量非正直接返回，避免 FFI 调用 + Vec3 装箱。
+    if density <= 0.0 || area <= 0.0 || mass <= 0.0 {
+        return None;
+    }
     let accel = spaceflight::atmospheric_drag_acceleration(
         to_ffi(body_velocity),
         to_ffi(atmosphere_velocity),
@@ -45,6 +49,7 @@ pub fn atmospheric_drag_force(
 /// 使用天体的 `surface_density`（参考高度处密度）与 `scale_height`，
 /// 调用 [`spaceflight::atmospheric_density_scale_height`]。若天体无大气
 ///（`surface_density==0` 或 `scale_height==0`）则返回 0。
+#[inline]
 pub fn atmosphere_density_at(body: &CelestialBody, altitude_above_surface: f64) -> f64 {
     if body.surface_density <= 0.0 || body.scale_height <= 0.0 {
         return 0.0;
@@ -76,20 +81,27 @@ pub fn solar_pressure_force(
     reflectivity: f64,
     au: f64,
 ) -> Vector {
-    let dir = if sun_direction.length() > 1e-12 {
-        sun_direction.normalize()
-    } else {
-        return Vector::ZERO;
-    };
-    let r = sun_to_body.length();
-    if r < 1.0 || au <= 0.0 {
+    // 早退：area/reflectivity 无意义时直接零，避免 normalize + length 的两次 sqrt。
+    if area <= 0.0 || reflectivity <= 0.0 || au <= 0.0 {
         return Vector::ZERO;
     }
-    // 距离平方反比衰减：实际光压 = P · (1AU / r)²
-    let pressure = SOLAR_PRESSURE_AT_1AU * (au * au) / (r * r);
+    let dir_len = sun_direction.length();
+    if dir_len <= 1e-12 {
+        return Vector::ZERO;
+    }
+    // sun_direction 在上游已是 `-sun_to_body/r`，这里再 normalize 容错
+    // 非单位输入；用 length_squared 比再次 .length() 省一次 sqrt。
+    let dir = sun_direction / dir_len;
+    let r2 = sun_to_body.length_squared();
+    if r2 < 1.0 {
+        return Vector::ZERO;
+    }
+    // 距离平方反比衰减：实际光压 = P · (1AU / r)²；用 r2 省一次 sqrt。
+    let pressure = SOLAR_PRESSURE_AT_1AU * (au * au) / r2;
     -dir * (pressure * area * reflectivity)
 }
 
+#[inline]
 fn to_ffi(v: Vector) -> Vec3 {
     Vec3 {
         x: v.x,
@@ -98,6 +110,7 @@ fn to_ffi(v: Vector) -> Vec3 {
     }
 }
 
+#[inline]
 fn scale(v: Vec3, s: f64) -> Vector {
     Vector::new(v.x * s, v.y * s, v.z * s)
 }

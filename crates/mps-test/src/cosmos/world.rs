@@ -43,6 +43,9 @@ fn circular_leo_orbit_period_matches_kepler() {
             central_body: None,
             orbit_integration: OrbitIntegration::default(),
             verlet_substeps: 1,
+            adaptive_substeps: false,
+            adaptive_tolerance: 1e-9,
+            relativistic_correction: mps_cosmos::world::RelativisticCorrection::None,
         };
         // 让默认 softening 不污染本测试：显式归零，直接测点质量积分精度。
         cfg.n_body_softening_sq = 0.0;
@@ -105,6 +108,9 @@ fn circular_leo_verlet_path_closes_tighter_than_rapier() {
         central_body: None,
         orbit_integration: OrbitIntegration::Verlet,
         verlet_substeps: 1,
+        adaptive_substeps: false,
+        adaptive_tolerance: 1e-9,
+        relativistic_correction: mps_cosmos::world::RelativisticCorrection::None,
     });
     // 用"假地球"刚体作 n-body 源（点质量互引力），替代 celestial 源 ——
     // 后者在 r=7000km 处会落 ellipsoid 分支（含非保守离心项），让圆轨道
@@ -151,7 +157,12 @@ fn world_inserts_dynamic_body() {
 /// 核心收益：调用方现在能区分"没推进"的三种原因。
 #[test]
 fn step_reports_skipped_reasons() {
-    let mut world = CosmosWorld::new(CosmosWorldConfig::default());
+    // RapierForce 路径才有 dt > MAX_STEP_DT 的子步拆分；显式积子路径由
+    // verlet_substeps / adaptive 控制子步，单 int 不出 Substepped。
+    let mut world = CosmosWorld::new(CosmosWorldConfig {
+        orbit_integration: OrbitIntegration::RapierForce,
+        ..CosmosWorldConfig::default()
+    });
 
     assert_eq!(
         world.step(f64::NAN),
@@ -353,6 +364,7 @@ fn default_softening_bounds_close_encounter() {
         softening_sq: world.n_body_softening_sq(),
         central_body: None,
         sun_position: Vector::ZERO,
+        relativistic: mps_cosmos::world::RelativisticCorrection::None,
     };
     let acc = total_acceleration(
         Vector::new(1.0, 0.0, 0.0),

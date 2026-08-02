@@ -47,6 +47,7 @@ fn verlet_circle_orbit_closes_tight() {
         softening_sq: 0.0,
         central_body: None,
         sun_position: Vector::ZERO,
+        relativistic: mps_cosmos::world::RelativisticCorrection::None,
     };
 
     let mut a = total_acceleration(

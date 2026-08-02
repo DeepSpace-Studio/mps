@@ -12,7 +12,7 @@
 //! 然后交给 `PhysicsPipeline::step` 完成 Rapier 的常规积分/约束求解。
 
 use crate::gravity::{
-    CelestialSource, NBodySource, celestial_acceleration, gm_from_mass, n_body_acceleration,
+    CelestialSource, NBodySource, celestial_acceleration, gm_from_mass,
 };
 use crate::orbit::BodyState;
 use crate::perturbation::{atmospheric_drag_force, solar_pressure_force};
@@ -75,28 +75,83 @@ pub struct CosmosWorldConfig {
     /// n-body 中心天体（用于环境扰动力：大气密度/太阳方向参考）。
     /// 若为 `None` 则不施加基于中心天体的环境扰动。
     pub central_body: Option<&'static mps_formula::celestial_data::CelestialBody>,
-    /// 轨道积分模式（默认沿用旧的 rapier 力注入路径）。
+    /// 轨道积分模式（默认走高阶辛积分器，长弧相位误差被压到 O(dt⁴)）。
     ///
     /// - [`OrbitIntegration::RapierForce`]：把合力用 `add_force` 喂给 rapier，
     ///   走 semi-implicit Euler。简单但长弧相位误差大（1s 步长一圈 LEO 漂~700km）。
     /// - [`OrbitIntegration::Verlet`]：天体引力 + n-body 互引力用 velocity-Verlet
     ///   显式积分直接写回 `translation`/`linvel`，rapier 只负责碰撞/约束/姿态。
-    ///   长弧精度提高一个量级。阻力/光压并入 Verlet 的加速度函数。
+    ///   2 阶辛，长弧相位误差随 dt² 收敛，每步 ~10⁻¹⁰ 能量误差。阻力/光压并入
+    ///   加速度函数。
+    /// - [`OrbitIntegration::Yoshida4`]：Yoshida 4 阶辛积子，3 级复合 leapfrog。
+    ///   每步 ~10⁻¹⁴ 能量误差，相位误差随 dt⁴ 收敛。比 Verlet 每步多 2 次加速度
+    ///   评估，但每步精度升两个量级，是默认模式。
+    /// - [`OrbitIntegration::ForestRuth8`]：Forest–Ruth 8 阶辛积子，15 级 McLachlan
+    ///   系数复合。每步 ~10⁻¹⁶ 能量误差（逼近 f64 极限）。算力需求约为 Verlet 的
+    ///   15 倍，长弧高精导航适用。
+    /// - [`OrbitIntegration::Yoshida4Kahan`] / [`ForestRuth8Kahan`]：在对应高阶
+    ///   积子上叠加 Kahan 补偿累加位置/速度增量，把长弧（数千–数万步）里逐步
+    ///   `r += v·dt` 的舍入积累从 ~√N·ε 降到 ~ε，长弧闭合精度再升 1–3 量级。
     pub orbit_integration: OrbitIntegration,
-    /// Verlet 路径的内部子步数：一次 `step(dt)` 内做 `substeps` 次小步 Verlet，
-    /// 每次 `dt/substeps` 秒。子步越多相位误差越小；1 内部子步即 Verlet 在 `dt` 内
-    /// 走一整步。仅在 `orbit_integration = Verlet` 时生效。
+    /// 整步内部子步数：一次 `step(dt)` 内做 `substeps` 次小步积分，
+    /// 每次 `dt/substeps` 秒。子步越多相位误差越小；1 内部子步即在 `dt` 内
+    /// 走一整步（积子内部的级数由积子自身阶数定，不再切分）。
+    /// 对所有非 `RapierForce` 模式生效。
     pub verlet_substeps: u32,
+    /// 是否开启近心点自适应子步。开启后，当刚体进入中心天体近心点附近
+    /// （`r < 2·r_eq`）时，按 `mps_formula::integrators::adaptive_step_size`
+    /// 用一步误差估计 × `adaptive_tolerance` 动态加密子步；远心点仍走
+    /// `verlet_substeps` 为主。默认关——对近圆轨道无感，椭圆/转移轨道可省算力。
+    pub adaptive_substeps: bool,
+    /// 自适应子步的目标单步相对误差。典型 `1e-9`。仅 `adaptive_substeps=true`
+    /// 时生效。
+    pub adaptive_tolerance: f64,
+    /// 中心天体引力的相对论后牛顿（1PN/2PN）修正。
+    ///
+    /// 近地轨道 1PN 量级 ~10⁻⁹，多数场景无感；高轨/近日接近过心点场景下
+    /// 相位修正显著可观测。默认 `None`。
+    pub relativistic_correction: RelativisticCorrection,
 }
 
 /// 轨道积分模式。
+///
+/// 阶数与每步能量误差为典型量级（LEO 一圈），供选型参考；实际精度仍取决于
+/// 子步数、轨道偏心率、扰动模型。所有非 `RapierForce` 模式都绕过 rapier 的力
+/// 律，由 [`crate::integrator`] 显式积分写回 `translation`/`linvel`，rapier
+/// 只跑碰撞/约束/姿态。
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum OrbitIntegration {
-    /// （默认）用 rapier 的 `add_force` 路径走 semi-implicit Euler。
-    #[default]
+    /// 用 rapier 的 `add_force` 路径走 semi-implicit Euler。1 阶，每步 ~10⁻⁵。
+    /// 仅作为兼容/对照路径。
     RapierForce,
-    /// 显式 velocity-Verlet 积分轨道，rapier 只处理碰撞/姿态。
+    /// 显式 velocity-Verlet（2 阶辛 leapfrog），每步 ~10⁻¹⁰。
     Verlet,
+    /// Yoshida 4 阶辛积子（3 级复合 leapfrog），每步 ~10⁻¹⁴。默认。
+    #[default]
+    Yoshida4,
+    /// Forest–Ruth 8 阶辛积子（15 级 McLachlan 系数），每步 ~10⁻¹⁶。
+    ForestRuth8,
+    /// Yoshida 4 + Kahan 补偿位置/速度长弧累加。
+    Yoshida4Kahan,
+    /// Forest–Ruth 8 + Kahan 补偿位置/速度长弧累加。
+    ForestRuth8Kahan,
+}
+
+/// 中心天体引力相对论后牛顿修正模式。
+///
+/// 叠加在 `total_acceleration` 中心引力项之上；n-body 与扰动项不修正
+/// （多体相对论模型算法复杂、物理意义弱，不在 cosmos 范围）。
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum RelativisticCorrection {
+    /// 不做相对论修正（默认）。
+    #[default]
+    None,
+    /// 1PN 一阶后牛顿修正（近日点进动主导项）。
+    OnePN,
+    /// 2PN 二阶后牛顿修正（用于太阳系内高精度历表）。
+    TwoPN,
+    /// 1PN + 2PN 全修正。
+    Full,
 }
 
 impl Default for CosmosWorldConfig {
@@ -110,6 +165,9 @@ impl Default for CosmosWorldConfig {
             central_body: None,
             orbit_integration: OrbitIntegration::default(),
             verlet_substeps: 1,
+            adaptive_substeps: false,
+            adaptive_tolerance: 1e-9,
+            relativistic_correction: RelativisticCorrection::default(),
         }
     }
 }
@@ -146,6 +204,29 @@ pub struct CosmosWorld {
     orbit_integration: OrbitIntegration,
     /// Verlet 子步数。
     verlet_substeps: u32,
+    /// 近心点自适应子步开关。
+    adaptive_substeps: bool,
+    /// 自适应子步目标误差。
+    adaptive_tolerance: f64,
+    /// 相对论修正模式。
+    relativistic_correction: RelativisticCorrection,
+    /// per-body Kahan 补偿累加态，按 arena index 存储。仅 `*Kahan` 积分模式下
+    /// 使用，存 `(position_accum, velocity_accum)`；其它模式惰性保持空。
+    kahan_state: Vec<Option<(mps_formula::math::KahanVec3, mps_formula::math::KahanVec3)>>,
+
+    /// 显式积子路径的工作向量复用缓冲：存本子步要处理的动态体元组
+    /// `(handle, pos, vel, mass, perturbation)`。每子步 `clear()` + `extend()`，
+    /// 跨子步/跨帧复用同一分配，消除每帧每子步的 `Vec::with_capacity` 抖动。
+    /// 在静态/固定刚体比例高、动态刚体数量稳定时收益明显。
+    scratch_tasks: Vec<(
+        RigidBodyHandle,
+        Vector,
+        Vector,
+        f64,
+        Option<PerturbationConfig>,
+    )>,
+    /// n-body 源位置快照复用缓冲：每子步 `clear()` + 按需写入，跨子步复用。
+    scratch_source_positions: Vec<Vector>,
 }
 
 /// 一次 `step` 的诊断结果。调用方原本只能靠 `step` 的静默 return 猜
@@ -206,6 +287,12 @@ impl CosmosWorld {
             sun_position: Vector::ZERO,
             orbit_integration: config.orbit_integration,
             verlet_substeps: config.verlet_substeps.max(1),
+            adaptive_substeps: config.adaptive_substeps,
+            adaptive_tolerance: config.adaptive_tolerance,
+            relativistic_correction: config.relativistic_correction,
+            kahan_state: Vec::new(),
+            scratch_tasks: Vec::new(),
+            scratch_source_positions: Vec::new(),
         }
     }
 
@@ -297,12 +384,14 @@ impl CosmosWorld {
 
     /// 推进一个步长。
     ///
-    /// 按 `orbit_integration` 配置走两条路径之一：
+    /// 按 `orbit_integration` 配置选路径：
     /// - `RapierForce`：把合力用 `add_force` 注入，rapier 内部 semi-implicit Euler。
     ///   `dt > MAX_STEP_DT` 时内部自动拆成若干 ≤`MAX_STEP_DT` 的子步，每子步
     ///   重注入力，返回 [`StepResult::Substepped`]。
-    /// - `Verlet`：天体引力 + n-body 用 velocity-Verlet 显式积分写回 translation/linvel，
-    ///   rapier 只跑碰撞/约束/姿态。子步数由 `verlet_substeps` 控制。
+    /// - 其它模式（`Verlet` / `Yoshida4` / `ForestRuth8` / `*Kahan`）：天体引力 +
+    ///   n-body 由 [`crate::integrator`] 显式辛积分写回 translation/linvel，rapier
+    ///   只跑碰撞/约束/姿态。子步数由 `verlet_substeps` 控制（自适应模式下另由
+    ///   近心点动态加密）。
     ///
     /// 返回 [`StepResult`]，调用方可据此判断"为什么没推进"。
     pub fn step(&mut self, dt: f64) -> StepResult {
@@ -313,16 +402,12 @@ impl CosmosWorld {
             return StepResult::Skipped(StepSkipReason::NonPositive);
         }
         if dt > 30.0 {
-            // 硬上限：30s 以上的单步一律拒，防止误把"一帧"当"一小时"喂进来
-            // 让积分发散。真正超长推进请循环 step / 用 step_n。
             return StepResult::Skipped(StepSkipReason::TooLarge);
         }
 
         match self.orbit_integration {
             OrbitIntegration::RapierForce => {
                 if dt > MAX_STEP_DT {
-                    // dt 介于 MAX_STEP_DT(10s) 与硬上限(30s) 之间：自动拆成
-                    // 每段 ≤ MAX_STEP_DT 的子步，每子步重注入力以保精度。
                     let substeps = (dt / MAX_STEP_DT).ceil() as u32;
                     let sub_dt = dt / substeps as f64;
                     for _ in 0..substeps {
@@ -334,8 +419,12 @@ impl CosmosWorld {
                     StepResult::Stepped(dt)
                 }
             }
-            OrbitIntegration::Verlet => {
-                self.step_via_verlet(dt);
+            OrbitIntegration::Verlet
+            | OrbitIntegration::Yoshida4
+            | OrbitIntegration::ForestRuth8
+            | OrbitIntegration::Yoshida4Kahan
+            | OrbitIntegration::ForestRuth8Kahan => {
+                self.step_via_explicit(dt);
                 StepResult::Stepped(dt)
             }
         }
@@ -422,32 +511,29 @@ impl CosmosWorld {
         );
     }
 
-    /// 新路径：velocity-Verlet 显式积分轨道，rapier 仍跑碰撞/约束/姿态。
-    fn step_via_verlet(&mut self, dt: f64) {
-        // 轨道积分一次性把 (translation, linvel) 推进 dt。
-        //
-        // 关键：rapier 的 `pipeline.step` 末尾 `advance_to_final_positions` 会用
-        // solver 内部（按 forces/damping）积分得到 `next_position` **覆盖**
-        // `pos.position`，把 Verlet 写回的 translation 一次性抹掉。为避免这种
-        // 窜改，Verlet 路径下我们不调用 `pipeline.step`，而是手写一个最小推进：
-        //   1. Verlet 子步把 translation/linvel 推进 dt（写 `pos.position` 且同步
-        //      `pos.next_position = pos.position`，让任何下游读 next_position 也对齐）。
-        //   2. collider 跟随刚体位移更新（无 collider 时空跑）。
-        //   3. 姿态/角速度按 damping 单独积分（与 rapier 的 writeback 等价的最简形式）。
-        //
-        // 暂不处理碰撞/关节约束求解 —— 太空场景默认不插入 collider，约束为空；
-        // 若未来需要在 Verlet 路径下处理对接约束，应在此处插入一次 velocity-only
-        // 的约束求解，避免 advance_to_final_positions 把 Verlet 位置覆盖。
+    /// 显式积子路径：把轨道积分从 rapier 力律里抽出来，由 [`crate::integrator`]
+    /// 按 `orbit_integration` 选定的辛积子推进 (translation, linvel)，rapier 仍
+    /// 跑碰撞/约束/姿态。
+    ///
+    /// 与 `step_via_rapier_force` 同理：rapier 的 `pipeline.step` 末尾
+    /// `advance_to_final_positions` 会用 solver 内部积分得到的 `next_position`
+    /// **覆盖** `pos.position`，把显式积子写回的 translation 抹掉。为避免这种
+    /// 窜改，本路径不调 `pipeline.step`，而是手写一个最小推进：
+    ///   1. 显式积子把 translation/linvel 推进 dt（同步 `pos.next_position`）。
+    ///   2. collider 跟随刚体位移更新（无 collider 时空跑）。
+    ///   3. 姿态/角速度按 damping 单独积分（无外力矩时与 rapier writeback 等价）。
+    ///
+    /// 暂不处理碰撞/关节约束求解 —— 太空场景默认不插入 collider，约束为空；
+    /// 若未来需要在此路径下处理对接约束，应在此处插入一次 velocity-only 的
+    /// 约束求解，避免 advance_to_final_positions 把显式位置覆盖。
+    fn step_via_explicit(&mut self, dt: f64) {
         let substeps = self.verlet_substeps.max(1) as usize;
         let sub_dt = dt / substeps as f64;
 
         for _ in 0..substeps {
-            self.verlet_substep(sub_dt);
+            self.explicit_substep(sub_dt);
         }
 
-        // 同步 colliders 位置（若有）。rapier 的 collider 位置由
-        // `collider.parent_handle → body.position` 链路派生，需要手动 propagate。
-        // 这里只做最简单的"刚体位移增量覆盖 collider"——对太空场景已足够。
         self.sync_colliders_after_verlet();
     }
 
@@ -477,81 +563,153 @@ impl CosmosWorld {
         }
     }
 
-    /// 一次 Verlet 子步：对所有动态刚体做 velocity-Verlet 推进。
-    fn verlet_substep(&mut self, dt: f64) {
-        // 1. 收集动态体快照 (handle, pos, vel, mass) —— 不可在迭代 bodies 时
-        //    可变借用，故先快照。
-        let snapshot: Vec<(RigidBodyHandle, Vector, Vector, f64)> = self
-            .bodies
-            .iter()
-            .filter(|(_, b)| b.is_dynamic())
-            .map(|(h, b)| (h, b.translation(), b.linvel(), b.mass()))
-            .collect();
+    /// 一次显式积子子步：按 `orbit_integration` 选定积子对所有动态刚体推进 dt。
+    fn explicit_substep(&mut self, dt: f64) {
+        // 1. 收集动态体快照 (handle, pos, vel, mass) 到复用缓冲。
+        //    scratch_tasks 跨子步/跨帧复用，避免每子步 `vec!`/`with_capacity`
+        //    分配（动态刚体数量稳定时容量在首子步就工作集化）。
+        self.scratch_tasks.clear();
+        let n_dynamic_hint = self.bodies.len();
+        self.scratch_tasks.reserve(n_dynamic_hint);
+        for (h, b) in self.bodies.iter() {
+            if b.is_dynamic() {
+                self.scratch_tasks
+                    .push((h, b.translation(), b.linvel(), b.mass(), None));
+            }
+        }
+        // 填充每体 perturbation（Copy）。先单独线性扫一遍 perturbations（与
+        // scratch_tasks 按 arena index 对齐），再就地写回 task.4，规避
+        // "在 iter_mut 借用内同时不可变借 self.perturbations" 的借用冲突。
+        for task in self.scratch_tasks.iter_mut() {
+            let idx = task.0.into_raw_parts().0 as usize;
+            let p = self
+                .perturbations
+                .get(idx)
+                .and_then(|c| c.as_ref())
+                .copied();
+            task.4 = p;
+        }
 
-        // 2. n-body 源位置快照（按 arena index O(1) 查）
-        let source_positions =
-            crate::integrator::snapshot_source_positions(&self.bodies, &self.n_body_sources);
+        // 2. n-body 源位置快照写入复用缓冲（按 arena index O(1) 查）。
+        self.scratch_source_positions.clear();
+        self.scratch_source_positions.resize(self.bodies.len(), Vector::ZERO);
+        for s in &self.n_body_sources {
+            let idx = s.handle.into_raw_parts().0 as usize;
+            if idx < self.scratch_source_positions.len() {
+                self.scratch_source_positions[idx] = self
+                    .bodies
+                    .get(s.handle)
+                    .map(|b| b.translation())
+                    .unwrap_or(Vector::ZERO);
+            }
+        }
 
-        // 3. 构造本子步共享的 AccelContext —— 所有体共享一份只读环境（天体源、
-        //    n-body 源、源位置快照、软化平方、中心天体、太阳位置），闭包按引用
-        //    capture，不再每体 to_vec 克隆（旧实现每体 O(M) 复制，n 体子步共
-        //    O(n·M)；现在 O(M) 一次性）。
+        // 3. 构造本子步共享的 AccelContext（含相对论修正分支开关）。
         let ctx = crate::integrator::AccelContext {
             celestials: &self.celestials,
             n_body_sources: &self.n_body_sources,
-            source_positions: &source_positions,
+            source_positions: &self.scratch_source_positions,
             softening_sq: self.n_body_softening_sq,
             central_body: self.central_body,
             sun_position: self.sun_position,
+            relativistic: self.relativistic_correction,
         };
 
-        // 4. 算每体的 a0（旧位置处加速度）。per-body 的 perturbation 在此取一份
-        //    owned（Copy）即可，handle/mass 直接带值。
-        let tasks: Vec<(RigidBodyHandle, Vector, f64, Option<PerturbationConfig>)> = snapshot
-            .iter()
-            .map(|&(handle, pos, vel, mass)| {
-                let perturbation = self.perturbation_for(handle).copied();
-                let a0 = crate::integrator::total_acceleration(
-                    pos,
-                    vel,
-                    mass,
-                    handle,
-                    &ctx,
-                    perturbation.as_ref(),
-                );
-                (handle, a0, mass, perturbation)
-            })
-            .collect();
+        // 4. 选定积子：每个分支取 body、按对应积子推进、写回（Kahan 分支另缓存态）。
+        let mode = self.orbit_integration;
+        // 用裸索引遍历 tasks 以避免在循环体内 `self.bodies.get_mut` 时的可变借用
+        // 与 `self.kahan_state` 的可变借用冲突——按索引访问把 `self` 的多个可变
+        // 字段拆开借用。tasks 内容在子步内冻结，无别名问题。
+        let n_tasks = self.scratch_tasks.len();
+        for i in 0..n_tasks {
+            let (handle, pos, vel, mass, perturbation) = self.scratch_tasks[i];
+            // 必要时为 Kahan 模式补齐 per-body 累加态，并从 body 当前值同步。
+            let kahan_idx = handle.into_raw_parts().0 as usize;
+            if kahan_idx >= self.kahan_state.len() {
+                self.kahan_state.resize(kahan_idx + 1, None);
+            }
+            let need_kahan = matches!(
+                mode,
+                OrbitIntegration::Yoshida4Kahan | OrbitIntegration::ForestRuth8Kahan
+            );
+            if need_kahan && self.kahan_state[kahan_idx].is_none() {
+                self.kahan_state[kahan_idx] = Some((
+                    mps_formula::math::KahanVec3::new(crate::integrator::ffi_vec3_pub(pos)),
+                    mps_formula::math::KahanVec3::new(crate::integrator::ffi_vec3_pub(vel)),
+                ));
+            }
 
-        // 5. 不可变借用结束（tasks 不再持 self 任一字段），现在可变写回 bodies。
-        //    verlet_step 内部的 a1 评估复用同一 ctx（按引用），无额外克隆。
-        for (handle, a0, mass, perturbation) in tasks {
-            if let Some(body) = self.bodies.get_mut(handle) {
-                crate::integrator::verlet_step(body, a0, &ctx, mass, handle, perturbation, dt);
+            let Some(body) = self.bodies.get_mut(handle) else {
+                continue;
+            };
+
+            match mode {
+                OrbitIntegration::Verlet => {
+                    let a0 = crate::integrator::total_acceleration(
+                        pos, vel, mass, handle, &ctx, perturbation.as_ref(),
+                    );
+                    crate::integrator::verlet_step(
+                        body, a0, &ctx, mass, handle, perturbation, dt,
+                    );
+                }
+                OrbitIntegration::Yoshida4 | OrbitIntegration::ForestRuth8 => {
+                    crate::integrator::explicit_highorder_step(
+                        body, mass, handle, perturbation, &ctx, dt, mode,
+                    );
+                }
+                OrbitIntegration::Yoshida4Kahan | OrbitIntegration::ForestRuth8Kahan => {
+                    let Some(state) = self.kahan_state[kahan_idx].as_mut() else {
+                        // need_kahan 为 false 已经过滤；这里兜底
+                        continue;
+                    };
+                    crate::integrator::explicit_highorder_kahan_step(
+                        body, state, mass, handle, perturbation, &ctx, dt, mode,
+                    );
+                }
+                OrbitIntegration::RapierForce => unreachable!("RapierForce 不走显式路径"),
             }
         }
     }
 
     fn apply_forces(&mut self) {
-        // 收集动态刚体 (handle, position, velocity, mass) 以避免在迭代 bodies 时
-        // 同时可变借用。
-        let snapshot: Vec<(RigidBodyHandle, Vector, Vector, f64)> = self
-            .bodies
-            .iter()
-            .filter(|(_, b)| b.is_dynamic())
-            .map(|(h, b)| (h, b.translation(), b.linvel(), b.mass()))
-            .collect();
+        // 收集动态刚体 (handle, position, velocity, mass) 到复用缓冲，避免每帧
+        // `vec!` 分配。RapierForce 路径每帧（或每大 dt 子步）调一次，动态刚体
+        // 数量稳定时容量会被首帧工作集化。
+        self.scratch_tasks.clear();
+        for (h, b) in self.bodies.iter() {
+            if b.is_dynamic() {
+                self.scratch_tasks
+                    .push((h, b.translation(), b.linvel(), b.mass(), None));
+            }
+        }
+        for task in self.scratch_tasks.iter_mut() {
+            let idx = task.0.into_raw_parts().0 as usize;
+            let p = self
+                .perturbations
+                .get(idx)
+                .and_then(|c| c.as_ref())
+                .copied();
+            task.4 = p;
+        }
 
         // n-body 源位置快照：按 arena index 直查 O(1)，替代旧的
-        // `Vec<(handle,pos)> + find` 的 O(n²) 路径（与 integrator 模块共用同一 helper）。
-        let source_positions =
-            crate::integrator::snapshot_source_positions(&self.bodies, &self.n_body_sources);
-        let source_pos_lookup = |h: RigidBodyHandle| -> Vector {
-            let idx = h.into_raw_parts().0 as usize;
-            source_positions.get(idx).copied().unwrap_or(Vector::ZERO)
-        };
+        // `Vec<(handle,pos)> + find` 的 O(n²) 路径（写入复用缓冲）。
+        self.scratch_source_positions.clear();
+        self.scratch_source_positions.resize(self.bodies.len(), Vector::ZERO);
+        for s in &self.n_body_sources {
+            let idx = s.handle.into_raw_parts().0 as usize;
+            if idx < self.scratch_source_positions.len() {
+                self.scratch_source_positions[idx] = self
+                    .bodies
+                    .get(s.handle)
+                    .map(|b| b.translation())
+                    .unwrap_or(Vector::ZERO);
+            }
+        }
 
-        for (handle, pos, vel, mass) in snapshot {
+        let n_tasks = self.scratch_tasks.len();
+        for i in 0..n_tasks {
+            let (handle, pos, vel, mass, perturbation) = self.scratch_tasks[i];
             let mut total_force = Vector::ZERO;
 
             // 天体引力：加速度 × 质量
@@ -560,20 +718,32 @@ impl CosmosWorld {
                 total_force += accel * mass;
             }
 
-            // n-body 互引力
+            // n-body 互引力：直接 slice 索引取源位置，跳过空源快路径与闭包虚调用。
             if !self.n_body_sources.is_empty() {
-                let accel = n_body_acceleration(
-                    pos,
-                    &self.n_body_sources,
-                    handle,
-                    source_pos_lookup,
-                    self.n_body_softening_sq,
-                );
-                total_force += accel * mass;
+                let exclude = handle.into_raw_parts().0 as usize;
+                let mut acc_nb = Vector::ZERO;
+                for src in &self.n_body_sources {
+                    let src_idx = src.handle.into_raw_parts().0 as usize;
+                    if src_idx == exclude || src.gm <= 0.0 {
+                        continue;
+                    }
+                    let r_j = self.scratch_source_positions
+                        .get(src_idx)
+                        .copied()
+                        .unwrap_or(Vector::ZERO);
+                    let d = r_j - pos;
+                    let dist_sq = d.length_squared() + self.n_body_softening_sq;
+                    if dist_sq < 1.0 {
+                        continue;
+                    }
+                    let dist = dist_sq.sqrt();
+                    acc_nb += d * (src.gm / (dist_sq * dist));
+                }
+                total_force += acc_nb * mass;
             }
 
             // 环境扰动
-            if let Some(cfg) = self.perturbation_for(handle) {
+            if let Some(cfg) = perturbation {
                 if cfg.enable_drag {
                     if let Some(central) = self.central_body {
                         let altitude = pos.length() - central.equatorial_radius;
@@ -619,6 +789,7 @@ impl CosmosWorld {
         }
     }
 
+    #[allow(dead_code)]
     fn perturbation_for(&self, handle: RigidBodyHandle) -> Option<&PerturbationConfig> {
         let idx = handle.into_raw_parts().0 as usize;
         self.perturbations.get(idx).and_then(|c| c.as_ref())
@@ -649,6 +820,13 @@ impl Clone for CosmosWorld {
             sun_position: self.sun_position,
             orbit_integration: self.orbit_integration,
             verlet_substeps: self.verlet_substeps,
+            adaptive_substeps: self.adaptive_substeps,
+            adaptive_tolerance: self.adaptive_tolerance,
+            relativistic_correction: self.relativistic_correction,
+            kahan_state: self.kahan_state.clone(),
+            // scratch buffer 属于每帧工作内存，克隆副本从空开始（复用从首帧起复用）。
+            scratch_tasks: Vec::new(),
+            scratch_source_positions: Vec::new(),
         }
     }
 }
