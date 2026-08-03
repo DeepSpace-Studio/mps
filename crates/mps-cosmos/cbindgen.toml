@@ -1,0 +1,14 @@
+language = "C"
+pragma_once = true
+include_version = true
+cpp_compat = true
+documentation = true
+include_guard = "COSMOS_H"
+
+[parse]
+parse_deps = false
+
+[export]
+include = [
+  "Vec3",
+]

@@ -744,22 +744,22 @@ impl CosmosWorld {
 
             // 环境扰动
             if let Some(cfg) = perturbation {
-                if cfg.enable_drag {
-                    if let Some(central) = self.central_body {
-                        let altitude = pos.length() - central.equatorial_radius;
-                        let density = crate::perturbation::atmosphere_density_at(central, altitude);
-                        if density > 0.0 {
-                            let atmosphere_vel = angular_velocity_of(central).cross3(pos);
-                            if let Some(f) = atmospheric_drag_force(
-                                vel,
-                                atmosphere_vel,
-                                density,
-                                cfg.drag_coefficient,
-                                cfg.area,
-                                mass,
-                            ) {
-                                total_force += f;
-                            }
+                if cfg.enable_drag
+                    && let Some(central) = self.central_body
+                {
+                    let altitude = pos.length() - central.equatorial_radius;
+                    let density = crate::perturbation::atmosphere_density_at(central, altitude);
+                    if density > 0.0 {
+                        let atmosphere_vel = angular_velocity_of(central).cross3(pos);
+                        if let Some(f) = atmospheric_drag_force(
+                            vel,
+                            atmosphere_vel,
+                            density,
+                            cfg.drag_coefficient,
+                            cfg.area,
+                            mass,
+                        ) {
+                            total_force += f;
                         }
                     }
                 }
@@ -781,10 +781,10 @@ impl CosmosWorld {
                 }
             }
 
-            if let Some(body) = self.bodies.get_mut(handle) {
-                if total_force != Vector::ZERO {
-                    body.add_force(total_force, true);
-                }
+            if let Some(body) = self.bodies.get_mut(handle)
+                && total_force != Vector::ZERO
+            {
+                body.add_force(total_force, true);
             }
         }
     }

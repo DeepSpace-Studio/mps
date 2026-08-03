@@ -320,6 +320,30 @@ public final class RigidBodyFfm {
     private final MethodHandle queryIntersectVoxelObb;
     private final MethodHandle queryIntersectVoxelObbCount;
 
+    // ---- mps-cosmos: 太空演练器（平行 C ABI，符号前缀 cosmos_*） ----
+    private final MethodHandle cosmosSatelliteBuilder;
+    private final MethodHandle cosmosFixedBodyBuilder;
+    private final MethodHandle cosmosBuilderSetLinearDamping;
+    private final MethodHandle cosmosBuilderSetAngularDamping;
+    private final MethodHandle cosmosBuilderSetGravityScale;
+    private final MethodHandle cosmosBuilderLockTranslations;
+    private final MethodHandle cosmosBuilderDestroy;
+    private final MethodHandle cosmosWorldCreate;
+    private final MethodHandle cosmosWorldDestroy;
+    private final MethodHandle cosmosWorldSetSunPosition;
+    private final MethodHandle cosmosWorldSetCentralBody;
+    private final MethodHandle cosmosWorldAddCelestial;
+    private final MethodHandle cosmosWorldAddNBody;
+    private final MethodHandle cosmosWorldInsertBody;
+    private final MethodHandle cosmosWorldInsertBodyAsGravitySource;
+    private final MethodHandle cosmosWorldSetPerturbation;
+    private final MethodHandle cosmosWorldStep;
+    private final MethodHandle cosmosWorldStepN;
+    private final MethodHandle cosmosBodyTranslationOut;
+    private final MethodHandle cosmosBodyLinvelOut;
+    private final MethodHandle cosmosBodyMass;
+    private final MethodHandle cosmosWorldDynamicBodyCount;
+
     public RigidBodyFfm(Path library, Arena arena) {
         this.lookup = SymbolLookup.libraryLookup(library, arena);
         this.arena = arena;
@@ -500,6 +524,38 @@ public final class RigidBodyFfm {
         queryIntersectVoxelAabbCount = downcall("query_intersect_voxel_aabb_count", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, AABB, QUERY_FILTER));
         queryIntersectVoxelObb = downcall("query_intersect_voxel_obb", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, OBB, QUERY_FILTER, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         queryIntersectVoxelObbCount = downcall("query_intersect_voxel_obb_count", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, OBB, QUERY_FILTER));
+
+        // ---- mps-cosmos downcalls（cosmos_*） ----
+        cosmosSatelliteBuilder = downcall("cosmos_satellite_builder", FunctionDescriptor.of(ValueLayout.ADDRESS,
+                ValueLayout.JAVA_DOUBLE, ValueLayout.JAVA_DOUBLE, ValueLayout.JAVA_DOUBLE, ValueLayout.JAVA_DOUBLE,
+                ValueLayout.JAVA_DOUBLE, ValueLayout.JAVA_DOUBLE, ValueLayout.JAVA_DOUBLE, ValueLayout.JAVA_DOUBLE));
+        cosmosFixedBodyBuilder = downcall("cosmos_fixed_body_builder", FunctionDescriptor.of(ValueLayout.ADDRESS,
+                ValueLayout.JAVA_DOUBLE, ValueLayout.JAVA_DOUBLE, ValueLayout.JAVA_DOUBLE));
+        cosmosBuilderSetLinearDamping = downcall("cosmos_builder_set_linear_damping", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.JAVA_DOUBLE));
+        cosmosBuilderSetAngularDamping = downcall("cosmos_builder_set_angular_damping", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.JAVA_DOUBLE));
+        cosmosBuilderSetGravityScale = downcall("cosmos_builder_set_gravity_scale", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.JAVA_DOUBLE));
+        cosmosBuilderLockTranslations = downcall("cosmos_builder_lock_translations", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+        cosmosBuilderDestroy = downcall("cosmos_builder_destroy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+        cosmosWorldCreate = downcall("cosmos_world_create", FunctionDescriptor.of(ValueLayout.ADDRESS,
+                ValueLayout.JAVA_DOUBLE, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT,
+                ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_DOUBLE));
+        cosmosWorldDestroy = downcall("cosmos_world_destroy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+        cosmosWorldSetSunPosition = downcall("cosmos_world_set_sun_position", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, VEC3));
+        cosmosWorldSetCentralBody = downcall("cosmos_world_set_central_body", FunctionDescriptor.of(ValueLayout.JAVA_BYTE, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+        cosmosWorldAddCelestial = downcall("cosmos_world_add_celestial", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
+        cosmosWorldAddNBody = downcall("cosmos_world_add_n_body", FunctionDescriptor.of(ValueLayout.JAVA_BYTE, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.JAVA_DOUBLE));
+        cosmosWorldInsertBody = downcall("cosmos_world_insert_body", FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+        cosmosWorldInsertBodyAsGravitySource = downcall("cosmos_world_insert_body_as_gravity_source", FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_DOUBLE));
+        cosmosWorldSetPerturbation = downcall("cosmos_world_set_perturbation", FunctionDescriptor.of(ValueLayout.JAVA_BYTE,
+                ValueLayout.ADDRESS, ValueLayout.JAVA_LONG,
+                ValueLayout.JAVA_DOUBLE, ValueLayout.JAVA_DOUBLE, ValueLayout.JAVA_INT,
+                ValueLayout.JAVA_DOUBLE, ValueLayout.JAVA_DOUBLE, ValueLayout.JAVA_INT));
+        cosmosWorldStep = downcall("cosmos_world_step", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_DOUBLE));
+        cosmosWorldStepN = downcall("cosmos_world_step_n", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_DOUBLE, ValueLayout.JAVA_INT));
+        cosmosBodyTranslationOut = downcall("cosmos_body_translation_out", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
+        cosmosBodyLinvelOut = downcall("cosmos_body_linvel_out", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
+        cosmosBodyMass = downcall("cosmos_body_mass", FunctionDescriptor.of(ValueLayout.JAVA_DOUBLE, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
+        cosmosWorldDynamicBodyCount = downcall("cosmos_world_dynamic_body_count", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
     }
 
     public int abiVersion() {
@@ -1580,6 +1636,11 @@ public final class RigidBodyFfm {
         return value;
     }
 
+    /** 未初始化的 3×f64 缓冲（cosmos `cosmos_body_*_out` 系列的输出接收槽）。 */
+    public MemorySegment allocateVec3() {
+        return arena.allocate(VEC3);
+    }
+
     public MemorySegment quat(double i, double j, double k, double w) {
         MemorySegment value = arena.allocate(QUAT);
         value.set(ValueLayout.JAVA_DOUBLE, QUAT.byteOffset(MemoryLayout.PathElement.groupElement("i")), i);
@@ -1795,5 +1856,195 @@ public final class RigidBodyFfm {
 
     private static IllegalStateException callFailed(String symbol, Throwable throwable) {
         return new IllegalStateException("native call failed: " + symbol, throwable);
+    }
+
+    // =========================================================================
+    // mps-cosmos: 太空演练器（cosmos_*）—— 与 world_* 平行、独立的 C ABI。
+    // =========================================================================
+
+    public MemorySegment cosmosSatelliteBuilder(double mass,
+                                                double px, double py, double pz,
+                                                double vx, double vy, double vz,
+                                                double radius) {
+        try {
+            return (MemorySegment) cosmosSatelliteBuilder.invokeExact(mass, px, py, pz, vx, vy, vz, radius);
+        } catch (Throwable throwable) {
+            throw callFailed("cosmos_satellite_builder", throwable);
+        }
+    }
+
+    public MemorySegment cosmosFixedBodyBuilder(double px, double py, double pz) {
+        try {
+            return (MemorySegment) cosmosFixedBodyBuilder.invokeExact(px, py, pz);
+        } catch (Throwable throwable) {
+            throw callFailed("cosmos_fixed_body_builder", throwable);
+        }
+    }
+
+    public void cosmosBuilderSetLinearDamping(MemorySegment builder, double value) {
+        try {
+            cosmosBuilderSetLinearDamping.invokeExact(builder, value);
+        } catch (Throwable throwable) {
+            throw callFailed("cosmos_builder_set_linear_damping", throwable);
+        }
+    }
+
+    public void cosmosBuilderSetAngularDamping(MemorySegment builder, double value) {
+        try {
+            cosmosBuilderSetAngularDamping.invokeExact(builder, value);
+        } catch (Throwable throwable) {
+            throw callFailed("cosmos_builder_set_angular_damping", throwable);
+        }
+    }
+
+    public void cosmosBuilderSetGravityScale(MemorySegment builder, double value) {
+        try {
+            cosmosBuilderSetGravityScale.invokeExact(builder, value);
+        } catch (Throwable throwable) {
+            throw callFailed("cosmos_builder_set_gravity_scale", throwable);
+        }
+    }
+
+    public void cosmosBuilderLockTranslations(MemorySegment builder) {
+        try {
+            cosmosBuilderLockTranslations.invokeExact(builder);
+        } catch (Throwable throwable) {
+            throw callFailed("cosmos_builder_lock_translations", throwable);
+        }
+    }
+
+    public void cosmosBuilderDestroy(MemorySegment builder) {
+        try {
+            cosmosBuilderDestroy.invokeExact(builder);
+        } catch (Throwable throwable) {
+            throw callFailed("cosmos_builder_destroy", throwable);
+        }
+    }
+
+    public MemorySegment cosmosWorldCreate(double dt, int solverIterations, int ccdSubsteps,
+                                           int orbitIntegration, int verletSubsteps,
+                                           double nBodySofteningSq) {
+        try {
+            return (MemorySegment) cosmosWorldCreate.invokeExact(dt, solverIterations, ccdSubsteps,
+                    orbitIntegration, verletSubsteps, nBodySofteningSq);
+        } catch (Throwable throwable) {
+            throw callFailed("cosmos_world_create", throwable);
+        }
+    }
+
+    public void cosmosWorldDestroy(MemorySegment world) {
+        try {
+            cosmosWorldDestroy.invokeExact(world);
+        } catch (Throwable throwable) {
+            throw callFailed("cosmos_world_destroy", throwable);
+        }
+    }
+
+    public void cosmosWorldSetSunPosition(MemorySegment world, double x, double y, double z) {
+        try {
+            cosmosWorldSetSunPosition.invokeExact(world, vec3(x, y, z));
+        } catch (Throwable throwable) {
+            throw callFailed("cosmos_world_set_sun_position", throwable);
+        }
+    }
+
+    public byte cosmosWorldSetCentralBody(MemorySegment world, int id) {
+        try {
+            return (byte) cosmosWorldSetCentralBody.invokeExact(world, id);
+        } catch (Throwable throwable) {
+            throw callFailed("cosmos_world_set_central_body", throwable);
+        }
+    }
+
+    public int cosmosWorldAddCelestial(MemorySegment world, int celestialId, int maxShDegree) {
+        try {
+            return (int) cosmosWorldAddCelestial.invokeExact(world, celestialId, maxShDegree);
+        } catch (Throwable throwable) {
+            throw callFailed("cosmos_world_add_celestial", throwable);
+        }
+    }
+
+    public byte cosmosWorldAddNBody(MemorySegment world, long body, double mass) {
+        try {
+            return (byte) cosmosWorldAddNBody.invokeExact(world, body, mass);
+        } catch (Throwable throwable) {
+            throw callFailed("cosmos_world_add_n_body", throwable);
+        }
+    }
+
+    public long cosmosWorldInsertBody(MemorySegment world, MemorySegment builder) {
+        try {
+            return (long) cosmosWorldInsertBody.invokeExact(world, builder);
+        } catch (Throwable throwable) {
+            throw callFailed("cosmos_world_insert_body", throwable);
+        }
+    }
+
+    public long cosmosWorldInsertBodyAsGravitySource(MemorySegment world, MemorySegment builder, double mass) {
+        try {
+            return (long) cosmosWorldInsertBodyAsGravitySource.invokeExact(world, builder, mass);
+        } catch (Throwable throwable) {
+            throw callFailed("cosmos_world_insert_body_as_gravity_source", throwable);
+        }
+    }
+
+    public byte cosmosWorldSetPerturbation(MemorySegment world, long body,
+                                            double dragCoefficient, double area, int enableDrag,
+                                            double reflectivity, double opticalArea, int enableSolar) {
+        try {
+            return (byte) cosmosWorldSetPerturbation.invokeExact(world, body,
+                    dragCoefficient, area, enableDrag,
+                    reflectivity, opticalArea, enableSolar);
+        } catch (Throwable throwable) {
+            throw callFailed("cosmos_world_set_perturbation", throwable);
+        }
+    }
+
+    public int cosmosWorldStep(MemorySegment world, double dt) {
+        try {
+            return (int) cosmosWorldStep.invokeExact(world, dt);
+        } catch (Throwable throwable) {
+            throw callFailed("cosmos_world_step", throwable);
+        }
+    }
+
+    public int cosmosWorldStepN(MemorySegment world, double dt, int n) {
+        try {
+            return (int) cosmosWorldStepN.invokeExact(world, dt, n);
+        } catch (Throwable throwable) {
+            throw callFailed("cosmos_world_step_n", throwable);
+        }
+    }
+
+    public int cosmosBodyTranslationOut(MemorySegment world, long body, MemorySegment outTranslation) {
+        try {
+            return (int) cosmosBodyTranslationOut.invokeExact(world, body, outTranslation);
+        } catch (Throwable throwable) {
+            throw callFailed("cosmos_body_translation_out", throwable);
+        }
+    }
+
+    public int cosmosBodyLinvelOut(MemorySegment world, long body, MemorySegment outLinvel) {
+        try {
+            return (int) cosmosBodyLinvelOut.invokeExact(world, body, outLinvel);
+        } catch (Throwable throwable) {
+            throw callFailed("cosmos_body_linvel_out", throwable);
+        }
+    }
+
+    public double cosmosBodyMass(MemorySegment world, long body) {
+        try {
+            return (double) cosmosBodyMass.invokeExact(world, body);
+        } catch (Throwable throwable) {
+            throw callFailed("cosmos_body_mass", throwable);
+        }
+    }
+
+    public int cosmosWorldDynamicBodyCount(MemorySegment world) {
+        try {
+            return (int) cosmosWorldDynamicBodyCount.invokeExact(world);
+        } catch (Throwable throwable) {
+            throw callFailed("cosmos_world_dynamic_body_count", throwable);
+        }
     }
 }

@@ -10,5 +10,8 @@ crate-type = ["rlib"]
 mps-formula = { path = "../mps-formula" }
 rapier3d = { workspace = true }
 
+[build-dependencies]
+cbindgen = "0.29.4"
+
 [features]
 default = []

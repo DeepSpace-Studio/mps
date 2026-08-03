@@ -8,12 +8,18 @@
 //! `RigidBodySet`/`PhysicsPipeline` 等后端，仅复用 `mps-formula` 的纯
 //! 计算函数，不介入 `mps-core` 的 C ABI / 共享 arena / 力律登记表。
 //!
-//! 首期仅提供 Rust `pub` API（`rlib`）；如需对 Java/FFM 暴露，可由
-//! `mps-ffm`/`mps-jni` 包一层 C ABI。
+//! mps-cosmos 的 C ABI 由 `ffi` 模块导出（`cosmos_*` 符号），由 cbindgen
+//! 生成 `include/cosmos.h`，被 `mps-jni`（JNI）与 `test25/RigidBodyFfm`（FFM）
+//! 共同消费。
+
+// C ABI entry points validate raw pointers at the boundary (null checks plus
+// `ffi_guard`), so the safe-fn-raw-pointer lint is noise here.
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
 
 pub extern crate rapier3d;
 
 pub mod bodies;
+pub mod ffi;
 pub mod gravity;
 pub mod integrator;
 pub mod orbit;

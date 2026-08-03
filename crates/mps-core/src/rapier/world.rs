@@ -155,10 +155,7 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
         // while an init-time event call holds the producer cache — stepping
         // would race its exclusive access.
         let Some(_step_guard) = world.inner.events.step_guard() else {
-            set_error(
-                ERR_UNSUPPORTED,
-                "world_step during event ring/callback init",
-            );
+            set_error(ERR_UNSUPPORTED, "world_step during event ring/callback init");
             return;
         };
 

@@ -71,17 +71,11 @@ pub fn total_acceleration(
         let has_relativistic = !matches!(relativistic, crate::world::RelativisticCorrection::None);
         for src in celestials {
             acc += celestial_acceleration(position, src);
-            if has_relativistic {
-                if let Some(central) = central_body {
-                    if std::ptr::eq(src.body as *const _, central as *const _) {
-                        acc += relativistic_acceleration(
-                            position,
-                            velocity,
-                            central.gm,
-                            relativistic,
-                        );
-                    }
-                }
+            if has_relativistic
+                && let Some(central) = central_body
+                && std::ptr::eq(src.body as *const _, central as *const _)
+            {
+                acc += relativistic_acceleration(position, velocity, central.gm, relativistic);
             }
         }
     }
@@ -115,44 +109,44 @@ pub fn total_acceleration(
     }
 
     // 环境扰动（阻力依赖速度，光压依赖位置）；力 → 加速度
-    if let Some(cfg) = perturbation {
-        if mass > 0.0 {
-            if cfg.enable_drag {
-                if let Some(central) = central_body {
-                    let altitude = position.length() - central.equatorial_radius;
-                    let density = crate::perturbation::atmosphere_density_at(central, altitude);
-                    if density > 0.0 {
-                        let atmosphere_vel = angular_velocity_of(central).cross(position);
-                        if let Some(f) = crate::perturbation::atmospheric_drag_force(
-                            velocity,
-                            atmosphere_vel,
-                            density,
-                            cfg.drag_coefficient,
-                            cfg.area,
-                            mass,
-                        ) {
-                            acc += f / mass;
-                        }
-                    }
+    if let Some(cfg) = perturbation
+        && mass > 0.0
+    {
+        if cfg.enable_drag
+            && let Some(central) = central_body
+        {
+            let altitude = position.length() - central.equatorial_radius;
+            let density = crate::perturbation::atmosphere_density_at(central, altitude);
+            if density > 0.0 {
+                let atmosphere_vel = angular_velocity_of(central).cross(position);
+                if let Some(f) = crate::perturbation::atmospheric_drag_force(
+                    velocity,
+                    atmosphere_vel,
+                    density,
+                    cfg.drag_coefficient,
+                    cfg.area,
+                    mass,
+                ) {
+                    acc += f / mass;
                 }
             }
-            if cfg.enable_solar && cfg.optical_area > 0.0 {
-                let sun_to_body = position - sun_position;
-                let r = sun_to_body.length();
-                let sun_dir = if r > 1e-9 {
-                    -sun_to_body / r
-                } else {
-                    Vector::ZERO
-                };
-                let f = crate::perturbation::solar_pressure_force(
-                    sun_to_body,
-                    sun_dir,
-                    cfg.optical_area,
-                    cfg.reflectivity,
-                    mps_formula::celestial_data::AU,
-                );
-                acc += f / mass;
-            }
+        }
+        if cfg.enable_solar && cfg.optical_area > 0.0 {
+            let sun_to_body = position - sun_position;
+            let r = sun_to_body.length();
+            let sun_dir = if r > 1e-9 {
+                -sun_to_body / r
+            } else {
+                Vector::ZERO
+            };
+            let f = crate::perturbation::solar_pressure_force(
+                sun_to_body,
+                sun_dir,
+                cfg.optical_area,
+                cfg.reflectivity,
+                mps_formula::celestial_data::AU,
+            );
+            acc += f / mass;
         }
     }
 

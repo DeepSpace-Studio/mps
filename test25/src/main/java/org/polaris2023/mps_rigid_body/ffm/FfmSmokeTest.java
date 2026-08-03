@@ -32,6 +32,8 @@ public final class FfmSmokeTest {
             assertSpaceFormulaWrappers(api);
             assertSharedArenaZeroFfm(api);
 
+            assertCosmosWorld(api);
+
             MemorySegment world = api.worldCreate(0.0, -9.81, 0.0);
             try {
                 MemorySegment gravity = api.worldGetGravity(world);
@@ -508,6 +510,70 @@ public final class FfmSmokeTest {
         } finally {
             api.worldDestroySharedArena(world);
             api.worldDestroy(world);
+        }
+    }
+
+    /**
+     * 太空演练器（mps-cosmos）FFM 冒烟：建世界、插入地球引力源、放一颗
+     * 卫星、推进一步后取位置/速度，确认 `cosmos_*` 路径在 Java 25 FFM 下
+     * 符号可解析、句柄往返一致。
+     */
+    private static void assertCosmosWorld(RigidBodyFfm api) {
+        // dt=1s、RapierForce 路径（orbit_integration=0）、无 n-body 软化
+        MemorySegment world = api.cosmosWorldCreate(1.0, 4, 1, 0, 1, 0.0);
+        try {
+            if (api.cosmosWorldDynamicBodyCount(world) != 0) {
+                throw new AssertionError("cosmos world should start with zero dynamic bodies");
+            }
+            // 地球（id=3）作为中心天体 + 引力源
+            if (api.cosmosWorldSetCentralBody(world, 3) == 0) {
+                throw new AssertionError("cosmos_world_set_central_body failed");
+            }
+            if (api.cosmosWorldAddCelestial(world, 3, 0) < 0) {
+                throw new AssertionError("cosmos_world_add_celestial failed");
+            }
+
+            // 7000km 圆轨道初速：sqrt(GM/r) ≈ 7546 m/s
+            double r = 7_000_000.0;
+            double v = Math.sqrt(3.986004418e14 / r);
+            MemorySegment sat = api.cosmosSatelliteBuilder(100.0, r, 0.0, 0.0, 0.0, v, 0.0, 1.0);
+            long satHandle = api.cosmosWorldInsertBody(world, sat);
+            if (satHandle == 0L) {
+                throw new AssertionError("cosmos_world_insert_body returned zero handle");
+            }
+            if (api.cosmosWorldDynamicBodyCount(world) != 1) {
+                throw new AssertionError("cosmos world should report one dynamic body");
+            }
+            if (Double.isNaN(api.cosmosBodyMass(world, satHandle)) || api.cosmosBodyMass(world, satHandle) <= 0.0) {
+                throw new AssertionError("cosmos_body_mass returned invalid mass");
+            }
+
+            // 一步推进——RapierForce 路径下 r>0 应回 >0
+            int stepResult = api.cosmosWorldStep(world, 1.0);
+            if (stepResult <= 0) {
+                throw new AssertionError("cosmos_world_step expected >0, got " + stepResult);
+            }
+
+            MemorySegment pos = api.allocateVec3();
+            if (api.cosmosBodyTranslationOut(world, satHandle, pos) != 1) {
+                throw new AssertionError("cosmos_body_translation_out failed");
+            }
+            assertClose(r, RigidBodyFfm.x(pos), "cosmos satellite posX after step");
+            MemorySegment vel = api.allocateVec3();
+            if (api.cosmosBodyLinvelOut(world, satHandle, vel) != 1) {
+                throw new AssertionError("cosmos_body_linvel_out failed");
+            }
+            assertClose(v, RigidBodyFfm.y(vel), "cosmos satellite velY after step");
+
+            // step_n 其中一步非法 → 整批拒
+            if (api.cosmosWorldStepN(world, 1.0, 5) != 0) {
+                throw new AssertionError("cosmos_world_stepN(1s × 5) should succeed");
+            }
+            if (api.cosmosWorldStepN(world, -1.0, 5) == 0) {
+                throw new AssertionError("cosmos_world_stepN with dt<=0 should be rejected");
+            }
+        } finally {
+            api.cosmosWorldDestroy(world);
         }
     }
 }

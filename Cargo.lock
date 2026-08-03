@@ -2544,6 +2544,7 @@ dependencies = [
 name = "mps-cosmos"
 version = "0.1.4"
 dependencies = [
+ "cbindgen",
  "mps-formula",
  "rapier3d-f64",
 ]

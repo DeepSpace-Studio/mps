@@ -21,7 +21,7 @@ impl BodyState {
         Self { position, velocity }
     }
 
-    fn to_ffi(&self) -> mps_formula::ffi::StateVector {
+    fn to_ffi(self) -> mps_formula::ffi::StateVector {
         mps_formula::ffi::StateVector {
             position: mps_formula::ffi::Vec3 {
                 x: self.position.x,
