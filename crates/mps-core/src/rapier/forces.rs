@@ -86,30 +86,8 @@ pub enum ForceLawType {
     MolecularLennardJones,
     /// Coulomb electrostatic force between molecules.
     MolecularCoulomb,
-    /// J2 zonal harmonic perturbation (oblateness).
-    SpaceJ2,
-    /// Control-moment-gyroscope torque.
-    SpaceCMG,
-    /// Atmospheric drag in orbital mechanics.
-    SpaceAtmosphericDrag,
-    /// Solar radiation pressure on spacecraft.
-    SpaceSolarRadiation,
-    /// Gravity-gradient torque on extended bodies.
-    SpaceGravityGradient,
-    /// Magnetic torquer attitude control.
-    SpaceMagneticTorquer,
-    /// Coriolis pseudo-force in rotating reference frame.
-    TrajectoryCoriolis,
-    /// Centrifugal pseudo-force in rotating reference frame.
-    TrajectoryCentrifugal,
-    /// Central-body gravity in trajectory calculations.
-    TrajectoryGravity,
     /// PID controller output force.
     ControlPID,
-    /// Celestial body gravity (spherical harmonics, ellipsoid, quadrupole).
-    CelestialGravity,
-    /// Terrain / irregular body gravity (polyhedron, DEM, Mascon).
-    TerrainGravity,
     /// User-defined force registered via FFI (opaque type tag in upper 32 bits).
     Custom(u64),
 }
@@ -132,18 +110,7 @@ impl ForceLawType {
             Self::FluidAABB => "FluidAABB",
             Self::MolecularLennardJones => "MolecularLennardJones",
             Self::MolecularCoulomb => "MolecularCoulomb",
-            Self::SpaceJ2 => "SpaceJ2",
-            Self::SpaceCMG => "SpaceCMG",
-            Self::SpaceAtmosphericDrag => "SpaceAtmosphericDrag",
-            Self::SpaceSolarRadiation => "SpaceSolarRadiation",
-            Self::SpaceGravityGradient => "SpaceGravityGradient",
-            Self::SpaceMagneticTorquer => "SpaceMagneticTorquer",
-            Self::TrajectoryCoriolis => "TrajectoryCoriolis",
-            Self::TrajectoryCentrifugal => "TrajectoryCentrifugal",
-            Self::TrajectoryGravity => "TrajectoryGravity",
             Self::ControlPID => "ControlPID",
-            Self::CelestialGravity => "CelestialGravity",
-            Self::TerrainGravity => "TerrainGravity",
             Self::Custom(_) => "Custom",
         }
     }
@@ -259,18 +226,11 @@ fn force_law_type_idx(ft: ForceLawType) -> usize {
         ForceLawType::FluidAABB => 11,
         ForceLawType::MolecularLennardJones => 12,
         ForceLawType::MolecularCoulomb => 13,
-        ForceLawType::SpaceJ2 => 14,
-        ForceLawType::SpaceCMG => 15,
-        ForceLawType::SpaceAtmosphericDrag => 16,
-        ForceLawType::SpaceSolarRadiation => 17,
-        ForceLawType::SpaceGravityGradient => 18,
-        ForceLawType::SpaceMagneticTorquer => 19,
-        ForceLawType::TrajectoryCoriolis => 20,
-        ForceLawType::TrajectoryCentrifugal => 21,
-        ForceLawType::TrajectoryGravity => 22,
+        // Indices 14–25 reserved for the retired space/trajectory/terrain force
+        // variants (removed after `mps-cosmos` took over celestial/n-body/drag).
+        // Do not renumber the survivors (ControlPID/Custom) below — external
+        // callers may persist the numeric tags.
         ForceLawType::ControlPID => 23,
-        ForceLawType::CelestialGravity => 24,
-        ForceLawType::TerrainGravity => 25,
         ForceLawType::Custom(_) => 26,
     }
 }
@@ -291,18 +251,8 @@ fn force_law_type_from_idx(idx: usize) -> ForceLawType {
         11 => ForceLawType::FluidAABB,
         12 => ForceLawType::MolecularLennardJones,
         13 => ForceLawType::MolecularCoulomb,
-        14 => ForceLawType::SpaceJ2,
-        15 => ForceLawType::SpaceCMG,
-        16 => ForceLawType::SpaceAtmosphericDrag,
-        17 => ForceLawType::SpaceSolarRadiation,
-        18 => ForceLawType::SpaceGravityGradient,
-        19 => ForceLawType::SpaceMagneticTorquer,
-        20 => ForceLawType::TrajectoryCoriolis,
-        21 => ForceLawType::TrajectoryCentrifugal,
-        22 => ForceLawType::TrajectoryGravity,
         23 => ForceLawType::ControlPID,
-        24 => ForceLawType::CelestialGravity,
-        25 => ForceLawType::TerrainGravity,
+        // 14–25 were retired space/trajectory/terrain variants; fall through to Custom.
         _ => ForceLawType::Custom(0),
     }
 }

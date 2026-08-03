@@ -1,9 +1,11 @@
 //! 天体重力与 n-body 互引力计算。
 //!
-//! `celestial_acceleration` 复刻 `mps-core/src/rapier/interaction.rs` 的
-//! `CelestialGravityForceLaw` 自适应模型分支（<2R 椭球、<10R 球谐、
-//! <100R J2–J6 带谐、>100R 点质量），但作为独立实现直接调用
-//! `mps_formula::gravitational_models`，不依赖 `mps-core`。
+//! `celestial_acceleration` 复刻旧 `mps-core` 里的自适应天体重力模型分支
+//! （<2R 椭球、<10R 球谐、<100R J2–J6 带谐、>100R 点质量），但作为独立实现
+//! 直接调用 `mps_formula::gravitational_models`，不依赖 `mps-core`。
+//! 原始 `CelestialGravityForceLaw` 已随 `world_register_celestial_gravity`
+//! 一并从 `mps-core` 移除——天体重力现由本 crate 的 `CosmosWorld::add_celestial`
+//! 承担。
 //!
 //! `n_body_acceleration` 实现经典 n-body 互引力，可加 softening 防奇点。
 
@@ -52,7 +54,7 @@ const MAX_ZONAL: usize = 5;
 
 /// 自适应选择最匹配的引力模型并返回在该 `position` 处的引力加速度。
 ///
-/// 选择规则（[`mps-core`] 的 `CelestialGravityForceLaw` 参考）：
+/// 选择规则（沿用旧 `mps-core` 的自适应天体重力分支）：
 ///
 /// | 归一化高度 r/R_eq | 椭率>0 且有 SH | 选用的模型 |
 /// |---|---|---|

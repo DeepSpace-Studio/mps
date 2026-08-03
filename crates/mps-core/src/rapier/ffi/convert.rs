@@ -314,18 +314,9 @@ const FORCE_LAW_TYPE_TAGS: &[(ForceLawType, u32)] = &[
     (ForceLawType::FluidAABB, 11),
     (ForceLawType::MolecularLennardJones, 12),
     (ForceLawType::MolecularCoulomb, 13),
-    (ForceLawType::SpaceJ2, 14),
-    (ForceLawType::SpaceCMG, 15),
-    (ForceLawType::SpaceAtmosphericDrag, 16),
-    (ForceLawType::SpaceSolarRadiation, 17),
-    (ForceLawType::SpaceGravityGradient, 18),
-    (ForceLawType::SpaceMagneticTorquer, 19),
-    (ForceLawType::TrajectoryCoriolis, 20),
-    (ForceLawType::TrajectoryCentrifugal, 21),
-    (ForceLawType::TrajectoryGravity, 22),
+    // Tags 14–25 retired (space/trajectory/terrain variants removed after
+    // `mps-cosmos` took over celestial/n-body/drag). ControlPID keeps 23.
     (ForceLawType::ControlPID, 23),
-    (ForceLawType::CelestialGravity, 24),
-    (ForceLawType::TerrainGravity, 25),
 ];
 
 /// Convert a u32 tag to `ForceLawType`.  Returns `None` for out-of-range tags.

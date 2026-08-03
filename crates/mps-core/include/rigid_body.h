@@ -4877,20 +4877,6 @@ uint32_t world_update_body_velocities(struct WorldHandle *world,
                                       Bool wake_up);
 
 /**
- * Register celestial body gravity as a ForceLaw in the world's registry.
- *
- * `body_id` maps to `CelestialBodyId` (0=Sun, 3=Earth, 4=Moon, 5=Mars, etc.).
- *
- * Returns handle (non-zero) on success, 0 on invalid body_id.
- *
- * # Safety
- * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
- */
-uint64_t world_register_celestial_gravity(struct WorldHandle *world,
-                                          uint32_t body_id,
-                                          uint32_t max_degree);
-
-/**
  * Number of force laws registered in the world's ForceRegistry.
  *
  * # Safety
