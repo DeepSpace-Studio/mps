@@ -1,6 +1,8 @@
 use topcoat::router::page;
 use topcoat::view::view;
 
+use crate::metrics::CORE_FFI_COUNT;
+
 /// Architecture overview
 #[page("/architecture")]
 pub async fn architecture() -> topcoat::Result {
@@ -22,7 +24,7 @@ pub async fn architecture() -> topcoat::Result {
                 <pre style="background:#0d0d2b; border:1px solid #333; border-radius:6px; padding:16px; font-size:13px; line-height:1.5;">
                     <code class="language-text">
 "Java 21 JNI / Java 25 FFM
-  └─ Rust C ABI (~380 函数, mps-core)        ┌─ mps-cosmos Rust pub API
+  └─ Rust C ABI ({ (CORE_FFI_COUNT) } 函数, mps-core)        ┌─ mps-cosmos Rust pub API
        ├─ mps-formula  — 28 纯公式模块 (300+ 函数) │   (CosmosWorld, 不经 C ABI)
        ├─ mps-core     — 物理引擎 + Rapier 封装     │
        ├─ mps-cosmos   — 太空刚体演算 (独立 world) ──┘
@@ -41,7 +43,7 @@ pub async fn architecture() -> topcoat::Result {
                         <thead><tr><th>"Crate"</th><th>"角色"</th><th>"导出形态"</th></tr></thead>
                         <tbody>
                             <tr><td><code>"mps-formula"</code></td><td>{ "28 纯公式模块 (航天/天体/核/相对论/...) + 公共印象误差/数学 + last-error 线程槽" }</td><td>{ "pub fn + 静态数据; panic-free" }</td></tr>
-                            <tr><td><code>"mps-core"</code></td><td>{ "Rapier 封装 + C ABI（~380 fns）+ ForceRegistry + SharedArena" }</td><td>{ "extern \"C\" + rigid_body.h" }</td></tr>
+                            <tr><td><code>"mps-core"</code></td><td>{ "Rapier 封装 + C ABI（" }{ (CORE_FFI_COUNT) }{ " fns）+ ForceRegistry + SharedArena" }</td><td>{ "extern \"C\" + rigid_body.h" }</td></tr>
                             <tr><td><code>"mps-cosmos"</code></td><td>{ "独立太空 world (Phase/碰撞/姿态 + 辛积子轨道/n-body/扰动)" }</td><td>{ "pub Rust API only" }</td></tr>
                             <tr><td><code>"mps-jni"</code></td><td>{ "JNI 绑定 (Java 21), panic-guard via catch_unwind, jni! 宏生成符号" }</td><td>{ ".dll/.so + .class" }</td></tr>
                             <tr><td><code>"mps-ffm"</code></td><td>{ "FFM 元数据（rigid_body.h 的 Java 25 描述）" }</td><td>{ "Linker downcall 元数据" }</td></tr>

@@ -1,0 +1,16 @@
+[package]
+name = "xtask"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+# Workspace automation helper. Currently a single subcommand:
+#   cargo run -p xtask -- dump-metrics   →  regenerates crates/mps-web/src/metrics.rs
+# See OPTIMIZATION.md §N3 for the design rationale.
+
+[[bin]]
+name = "xtask"
+path = "src/main.rs"
+
+[dependencies]
+walkdir = "2"

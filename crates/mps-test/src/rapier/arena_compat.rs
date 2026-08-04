@@ -11,9 +11,19 @@
 //! This module locks the current values with a unit test so accidental drift
 //! fails CI loudly instead of producing silent memory corruption.
 
+/// `pub` under `cfg(test)` so [`version_consistency`] (§N6) can cross-check
+/// the same canonical "current" value. The mirror constants in
+/// `version_consistency.rs::CURRENT_*` are asserted equal to these in a
+/// third cross-test, so bumping one side without the other fails CI visibly.
+#[cfg(test)]
+pub const ARENA_VERSION_PIN: u32 = 2;
+#[cfg(test)]
+pub const ABI_VERSION_PIN: u32 = 1;
+
 #[cfg(test)]
 mod tests {
     use mps_core::rapier::shared_arena::*;
+    use super::{ABI_VERSION_PIN, ARENA_VERSION_PIN};
 
     /// Asserts the 11 ABI-sensitive `shared_arena` constants keep their
     /// locked values. If this test fails, the arena ABI was changed
@@ -21,11 +31,17 @@ mod tests {
     /// version check) so foreign callers fail loudly instead of reading
     /// shifted fields.
     ///
+    /// The `*_PIN` constants immediately above (file-level, `cfg(test)`) are
+    /// re-exported to §N6's `version_consistency` test so that this file and
+    /// that file agree on the canonical "current" versions — if either side
+    /// drifts, both tests fail in their own terms AND a third cross-check
+    /// fails.
+    ///
     /// See OPTIMIZATION.md §10 for rationale and §13 for the dead-code
     /// cleanup context.
     #[test]
     fn arena_constants_are_locked() {
-        assert_eq!(ARENA_VERSION, 2,
+        assert_eq!(ARENA_VERSION, ARENA_VERSION_PIN,
             "ARENA_VERSION drifted: shared_arena ABI changed — bump mps-ffm::ABI_VERSION \
              to trigger Java-side IllegalStateException 防呆");
         assert_eq!(BODY_SLOT_STRIDE, 96,
@@ -51,7 +67,7 @@ mod tests {
 
         // Companion version lock (same direction as ARENA_VERSION):
         // if shared_arena::ARENA_VERSION changes, ABI_VERSION must change too.
-        assert_eq!(mps_ffm::ABI_VERSION, 1,
+        assert_eq!(mps_ffm::ABI_VERSION, ABI_VERSION_PIN,
             "mps-ffm::ABI_VERSION drifted — when ARENA_VERSION bumps this must bump in lockstep \
              so Java raises IllegalStateException 防呆 (OPTIMIZATION.md §10)");
     }

@@ -12,6 +12,7 @@ rapier3d = { workspace = true }
 
 [build-dependencies]
 cbindgen = "0.29.4"
+mps-build-common = { path = "../mps-build-common" }
 
 [features]
 default = []

@@ -2526,6 +2526,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "mps-build-common"
+version = "0.1.4"
+dependencies = [
+ "cbindgen",
+]
+
+[[package]]
 name = "mps-core"
 version = "0.1.4"
 dependencies = [
@@ -2533,6 +2540,7 @@ dependencies = [
  "bevy_ecs 0.19.0",
  "cbindgen",
  "hashbrown 0.17.1",
+ "mps-build-common",
  "mps-formula",
  "parking_lot",
  "rapier3d-f64",
@@ -2545,6 +2553,7 @@ name = "mps-cosmos"
 version = "0.1.4"
 dependencies = [
  "cbindgen",
+ "mps-build-common",
  "mps-formula",
  "rapier3d-f64",
 ]
@@ -5746,6 +5755,13 @@ name = "xml-rs"
 version = "0.8.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ae8337f8a065cfc972643663ea4279e04e7256de865aa66fe25cec5fb912d3f"
+
+[[package]]
+name = "xtask"
+version = "0.1.4"
+dependencies = [
+ "walkdir",
+]
 
 [[package]]
 name = "zerocopy"

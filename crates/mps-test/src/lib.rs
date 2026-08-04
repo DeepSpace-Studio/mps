@@ -68,4 +68,8 @@ pub mod rapier {
     pub mod arena_compat;
     // 跨 crate 错误码一致性 (OPTIMIZATION.md §1 可选加固)。
     pub mod error_consistency;
+    // 跨 crate 版本锁定 (ARENA_VERSION ↔ ABI_VERSION, OPTIMIZATION.md §N6)。
+    pub mod version_consistency;
+    // mps-web metrics.rs ↔ source counts 同步 (OPTIMIZATION.md §N3)。
+    pub mod verify_metrics_sync;
 }

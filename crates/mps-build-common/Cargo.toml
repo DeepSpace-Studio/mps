@@ -1,0 +1,16 @@
+[package]
+name = "mps-build-common"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+# This crate is a build-time helper shared by `mps-core` and `mps-cosmos`
+# to invoke cbindgen from a single site (OPTIMIZATION.md §7). Source is
+# `lib.rs` only — it exposes one function, `run_cbindgen`.
+
+[lib]
+name = "mps_build_common"
+path = "src/lib.rs"
+
+[dependencies]
+cbindgen = "0.29.4"

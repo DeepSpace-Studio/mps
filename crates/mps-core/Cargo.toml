@@ -22,3 +22,4 @@ anvilkit-bridge = ["dep:anvilkit", "dep:bevy_ecs"]
 
 [build-dependencies]
 cbindgen = "0.29.4"
+mps-build-common = { path = "../mps-build-common" }

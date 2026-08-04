@@ -4,6 +4,11 @@
 
 use topcoat::router::Router;
 
+/// Auto-generated metrics constants (see `xtask dump-metrics`,
+/// OPTIMIZATION.md §N3). Used by `pages/home.rs` to keep the displayed test
+/// counts/JNI method counts/FFI counts in sync with the source.
+pub mod metrics;
+
 mod components;
 mod layouts;
 mod pages;
