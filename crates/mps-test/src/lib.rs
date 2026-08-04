@@ -61,4 +61,11 @@ pub mod rapier {
     pub mod voxel;
     pub mod wave_optics;
     pub mod world;
+
+    // CI守门测试：跨 crate 模块镜像对齐 (OPTIMIZATION.md §8)。
+    pub mod verify_module_mirror;
+    // ABI 锁定测试：pin shared_arena constants (OPTIMIZATION.md §10)。
+    pub mod arena_compat;
+    // 跨 crate 错误码一致性 (OPTIMIZATION.md §1 可选加固)。
+    pub mod error_consistency;
 }

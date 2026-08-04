@@ -2581,6 +2581,7 @@ dependencies = [
  "hashbrown 0.17.1",
  "mps-core",
  "mps-cosmos",
+ "mps-ffm",
  "mps-formula",
  "rapier3d-f64",
  "smallvec",

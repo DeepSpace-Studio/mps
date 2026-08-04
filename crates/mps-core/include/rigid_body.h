@@ -3505,150 +3505,26 @@ uint32_t rtree_query_aabb(struct RTreeHandle *tree,
                           uint32_t capacity);
 
 /**
- * Computes the orbital period from the gravitational parameter and semi-major axis
- * (Kepler's third law).
- *
  * # Safety
- * This function takes no pointers and transfers no ownership; it is safe to call with
- * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ * `out_probability` must be null or point to a valid, writable `CollisionProbability`.
  */
-double space_kepler_period(double mu, double semi_major_axis);
-
-/**
- * Computes the semi-major axis from the gravitational parameter and orbital period.
- *
- * # Safety
- * This function takes no pointers and transfers no ownership; it is safe to call with
- * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
- */
-double space_kepler_semi_major_axis(double mu, double period);
+Bool space_debris_collision_probability(double miss_distance,
+                                        double combined_radius,
+                                        double sigma_radial,
+                                        double sigma_intrack,
+                                        CollisionProbability *out_probability);
 
 /**
  * # Safety
- * `out_state` must be null or point to a valid, writable `StateVector`.
+ * `out_rates` must be null or point to a valid, writable `Sgp4SecularRates`.
  */
-Bool space_elements_to_state(OrbitalElements elements, double mu, StateVector *out_state);
-
-/**
- * # Safety
- * `out_elements` must be null or point to a valid, writable `OrbitalElements`.
- */
-Bool space_state_to_elements(StateVector state, double mu, OrbitalElements *out_elements);
-
-/**
- * # Safety
- * `out_acceleration` must be null or point to a valid, writable `Vec3`.
- */
-Bool space_j2_acceleration(Vec3 position,
-                           double mu,
-                           double equatorial_radius,
-                           double j2,
-                           Vec3 *out_acceleration);
-
-/**
- * # Safety
- * `world` must be a valid pointer to a `WorldHandle` created by this library.
- * `out_acceleration` must be null or point to a valid, writable `Vec3`.
- */
-Bool space_apply_j2_force_to_body(struct WorldHandle *world,
-                                  RigidBodyHandleRaw body_handle,
-                                  double mu,
-                                  double equatorial_radius,
-                                  double j2,
-                                  double mass,
-                                  Bool wake_up,
-                                  Vec3 *out_acceleration);
-
-/**
- * # Safety
- * `world` must be a valid pointer to a `WorldHandle` created by this library.
- * `out_acceleration` must be null or point to a valid, writable `Vec3`.
- */
-uint8_t space_apply_j2_force_to_body_flag(struct WorldHandle *world,
-                                          RigidBodyHandleRaw body_handle,
-                                          double mu,
-                                          double equatorial_radius,
-                                          double j2,
-                                          double mass,
-                                          Bool wake_up,
-                                          Vec3 *out_acceleration);
-
-/**
- * # Safety
- * `out_derivative` must be null or point to a valid, writable `QuaternionDerivative`.
- */
-Bool space_quaternion_derivative(Quat attitude,
-                                 Vec3 angular_velocity,
-                                 QuaternionDerivative *out_derivative);
-
-/**
- * # Safety
- * `out_derivative` must be null or point to a valid, writable `RigidBodyEulerDerivative`.
- */
-Bool space_rigid_body_euler_derivative(Vec3 inertia_diag,
-                                       Vec3 angular_velocity,
-                                       Vec3 torque,
-                                       RigidBodyEulerDerivative *out_derivative);
-
-/**
- * # Safety
- * `out_exchange` must be null or point to a valid, writable `CmgExchange`.
- */
-Bool space_cmg_exchange(Vec3 gimbal_axis,
-                        Vec3 wheel_momentum,
-                        double gimbal_rate,
-                        CmgExchange *out_exchange);
-
-/**
- * # Safety
- * `world` must be a valid pointer to a `WorldHandle` created by this library.
- * `out_exchange` must be null or point to a valid, writable `CmgExchange`.
- */
-Bool space_apply_cmg_torque_to_body(struct WorldHandle *world,
-                                    RigidBodyHandleRaw body_handle,
-                                    Vec3 gimbal_axis,
-                                    Vec3 wheel_momentum,
-                                    double gimbal_rate,
-                                    Bool wake_up,
-                                    CmgExchange *out_exchange);
-
-/**
- * # Safety
- * `world` must be a valid pointer to a `WorldHandle` created by this library.
- * `out_exchange` must be null or point to a valid, writable `CmgExchange`.
- */
-uint8_t space_apply_cmg_torque_to_body_flag(struct WorldHandle *world,
-                                            RigidBodyHandleRaw body_handle,
-                                            Vec3 gimbal_axis,
-                                            Vec3 wheel_momentum,
-                                            double gimbal_rate,
-                                            Bool wake_up,
-                                            CmgExchange *out_exchange);
-
-/**
- * # Safety
- * `out_derivative` must be null or point to a valid, writable `CwDerivative`.
- */
-Bool space_cw_derivative(CwState state, double mean_motion, CwDerivative *out_derivative);
-
-/**
- * Computes the time of flight for an elliptic Lambert arc.
- *
- * # Safety
- * This function takes no pointers and transfers no ownership; it is safe to call with
- * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
- */
-double space_lambert_time_elliptic(double mu,
-                                   double semi_major_axis,
-                                   double alpha,
-                                   double beta,
-                                   uint32_t revolutions);
-
-/**
- * # Safety
- * `out_transform` must be null or point to a valid, writable `DhTransform`.
- */
-Bool space_dh_transform(double theta, double d, double a, double alpha, DhTransform *out_transform);
+Bool space_sgp4_j2_secular_rates(double semi_major_axis,
+                                 double eccentricity,
+                                 double inclination,
+                                 double mean_motion,
+                                 double equatorial_radius,
+                                 double j2,
+                                 Sgp4SecularRates *out_rates);
 
 /**
  * Computes the first (base) joint angle of a planar arm from the wrist position.
@@ -3674,6 +3550,74 @@ double space_arm_third_joint_angle(double planar_radius,
 
 /**
  * # Safety
+ * `out_command` must be null or point to a valid, writable `Vec3`.
+ */
+Bool space_artificial_potential_guidance(Vec3 position,
+                                         Vec3 target,
+                                         Vec3 obstacle,
+                                         double attractive_gain,
+                                         double repulsive_gain,
+                                         double influence_radius,
+                                         Vec3 *out_command);
+
+/**
+ * # Safety
+ * `out_profile` must be null or point to a valid, writable `BangOffBangProfile`.
+ */
+Bool space_bang_off_bang_profile(double angle,
+                                 double max_acceleration,
+                                 double max_rate,
+                                 BangOffBangProfile *out_profile);
+
+/**
+ * # Safety
+ * `out_derivative` must be null or point to a valid, writable `CwDerivative`.
+ */
+Bool space_cw_derivative(CwState state, double mean_motion, CwDerivative *out_derivative);
+
+/**
+ * # Safety
+ * `out_transform` must be null or point to a valid, writable `DhTransform`.
+ */
+Bool space_dh_transform(double theta, double d, double a, double alpha, DhTransform *out_transform);
+
+/**
+ * Computes the kinetic energy a docking buffer must absorb, scaled by its efficiency.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
+double space_docking_buffer_energy(double relative_speed,
+                                   double reduced_mass,
+                                   double stroke,
+                                   double efficiency);
+
+/**
+ * Computes a clamped closing-speed command for a docking glideslope.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
+double space_docking_glideslope_command(double range,
+                                        double desired_slope,
+                                        double closing_speed_limit);
+
+/**
+ * # Safety
+ * `out_derivative` must be null or point to a valid, writable `FlexibleModeDerivative`.
+ */
+Bool space_flexible_mode_derivative(double displacement,
+                                    double velocity,
+                                    double natural_frequency,
+                                    double damping_ratio,
+                                    double modal_force,
+                                    double modal_mass,
+                                    FlexibleModeDerivative *out_derivative);
+
+/**
+ * # Safety
  * `out_dynamics` must be null or point to a valid, writable `ManipulatorDynamics`.
  */
 Bool space_manipulator_dynamics_diag(Vec3 mass_matrix_diag,
@@ -3684,36 +3628,45 @@ Bool space_manipulator_dynamics_diag(Vec3 mass_matrix_diag,
 
 /**
  * # Safety
- * `out_power` must be null or point to a valid, writable `SolarPanelPower`.
+ * `out_properties` must be null or point to a valid, writable `MassProperties`.
  */
-Bool space_solar_panel_power(double solar_flux,
-                             double area,
-                             double efficiency,
-                             double incidence_angle,
-                             double degradation,
-                             SolarPanelPower *out_power);
+Bool space_mass_properties_two_body(double mass1,
+                                    Vec3 position1,
+                                    Vec3 inertia1_diag,
+                                    double mass2,
+                                    Vec3 position2,
+                                    Vec3 inertia2_diag,
+                                    MassProperties *out_properties);
+
+/**
+ * Computes the absorbed radiation dose including a quality factor.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
+double space_radiation_absorbed_dose(double energy_joules, double mass_kg, double quality_factor);
 
 /**
  * # Safety
- * `out_balance` must be null or point to a valid, writable `ThermalBalance`.
+ * `out_derivative` must be null or point to a valid, writable `SloshPendulumDerivative`.
  */
-Bool space_thermal_balance(double absorbed_power,
-                           double internal_power,
-                           double emitted_area,
-                           double emissivity,
-                           ThermalBalance *out_balance);
+Bool space_slosh_pendulum_derivative(double angle,
+                                     double angular_rate,
+                                     double length,
+                                     double damping,
+                                     double lateral_acceleration,
+                                     double gravity,
+                                     SloshPendulumDerivative *out_derivative);
 
 /**
  * # Safety
- * `out_balance` must be null or point to a valid, writable `Co2MassBalance`.
+ * `out_derivative` must be null or point to a valid, writable `VariationalState`.
  */
-Bool space_co2_mass_balance(double current_mass,
-                            double generation_rate,
-                            double removal_rate,
-                            double leakage_rate,
-                            double volume,
-                            double dt,
-                            Co2MassBalance *out_balance);
+Bool space_variational_two_body(Vec3 position,
+                                Vec3 velocity,
+                                double mu,
+                                VariationalState *out_derivative);
 
 /**
  * # Safety
@@ -3737,16 +3690,46 @@ Bool space_friis_link(double transmit_power,
 double space_friis_wavelength_from_frequency(double frequency);
 
 /**
- * Computes the Tsiolkovsky rocket equation delta-v.
+ * Computes the GNSS double-difference carrier phase observable in cycles.
  *
  * # Safety
  * This function takes no pointers and transfers no ownership; it is safe to call with
  * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
  */
-double space_tsiolkovsky_delta_v(double specific_impulse,
-                                 double standard_gravity,
-                                 double initial_mass,
-                                 double final_mass);
+double space_gnss_double_difference_carrier_phase(double range_rover_sat_a,
+                                                  double range_rover_sat_b,
+                                                  double range_base_sat_a,
+                                                  double range_base_sat_b,
+                                                  double wavelength,
+                                                  double ambiguity);
+
+/**
+ * # Safety
+ * `out_observation` must be null or point to a valid, writable `GnssObservation`.
+ */
+Bool space_gnss_pseudorange(Vec3 receiver,
+                            Vec3 satellite,
+                            double receiver_clock_bias,
+                            double satellite_clock_bias,
+                            double ionosphere_delay,
+                            double troposphere_delay,
+                            GnssObservation *out_observation);
+
+/**
+ * # Safety
+ * `out_measurement` must be null or point to a valid, writable `RadarMeasurement`.
+ */
+Bool space_radar_range_rate(Vec3 radar_position,
+                            Vec3 target_position,
+                            Vec3 radar_velocity,
+                            Vec3 target_velocity,
+                            RadarMeasurement *out_measurement);
+
+/**
+ * # Safety
+ * `out_state` must be null or point to a valid, writable `StateVector`.
+ */
+Bool space_elements_to_state(OrbitalElements elements, double mu, StateVector *out_state);
 
 /**
  * # Safety
@@ -3758,28 +3741,68 @@ Bool space_hohmann_transfer(double mu,
                             HohmannTransfer *out_transfer);
 
 /**
- * Computes atmospheric density using the exponential scale-height model.
+ * Computes the orbital period from the gravitational parameter and semi-major axis
+ * (Kepler's third law).
  *
  * # Safety
  * This function takes no pointers and transfers no ownership; it is safe to call with
  * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
  */
-double space_atmospheric_density_scale_height(double reference_density,
-                                              double altitude,
-                                              double reference_altitude,
-                                              double scale_height);
+double space_kepler_period(double mu, double semi_major_axis);
+
+/**
+ * Computes the semi-major axis from the gravitational parameter and orbital period.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
+double space_kepler_semi_major_axis(double mu, double period);
+
+/**
+ * Computes the time of flight for an elliptic Lambert arc.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
+double space_lambert_time_elliptic(double mu,
+                                   double semi_major_axis,
+                                   double alpha,
+                                   double beta,
+                                   uint32_t revolutions);
+
+/**
+ * Computes the semi-major axis decay rate due to atmospheric drag.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
+double space_semi_major_axis_decay_rate(double semi_major_axis,
+                                        double density,
+                                        double drag_coefficient,
+                                        double area,
+                                        double mass,
+                                        double mu);
 
 /**
  * # Safety
- * `out_acceleration` must be null or point to a valid, writable `Vec3`.
+ * `out_elements` must be null or point to a valid, writable `OrbitalElements`.
  */
-Bool space_atmospheric_drag_acceleration(Vec3 velocity,
-                                         Vec3 atmosphere_velocity,
-                                         double density,
-                                         double drag_coefficient,
-                                         double area,
-                                         double mass,
-                                         Vec3 *out_acceleration);
+Bool space_state_to_elements(StateVector state, double mu, OrbitalElements *out_elements);
+
+/**
+ * Computes the Tsiolkovsky rocket equation delta-v.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
+double space_tsiolkovsky_delta_v(double specific_impulse,
+                                 double standard_gravity,
+                                 double initial_mass,
+                                 double final_mass);
 
 /**
  * # Safety
@@ -3813,290 +3836,55 @@ uint8_t space_apply_atmospheric_drag_to_body_flag(struct WorldHandle *world,
 
 /**
  * # Safety
- * `out_attitude` must be null or point to a valid, writable `Quat`.
+ * `world` must be a valid pointer to a `WorldHandle` created by this library.
+ * `out_torque` must be null or point to a valid, writable `Vec3`.
  */
-Bool space_triad_attitude(Vec3 body_primary,
-                          Vec3 body_secondary,
-                          Vec3 reference_primary,
-                          Vec3 reference_secondary,
-                          Quat *out_attitude);
+Bool space_apply_gravity_gradient_torque_to_body(struct WorldHandle *world,
+                                                 RigidBodyHandleRaw body_handle,
+                                                 Vec3 inertia_diag,
+                                                 double mu,
+                                                 Bool wake_up,
+                                                 Vec3 *out_torque);
 
 /**
  * # Safety
- * `out_prediction` must be null or point to a valid, writable `ScalarKalman`.
+ * `world` must be a valid pointer to a `WorldHandle` created by this library.
+ * `out_torque` must be null or point to a valid, writable `Vec3`.
  */
-Bool space_ekf_predict_scalar(double state,
-                              double covariance,
-                              double nonlinear_delta,
-                              double jacobian,
-                              double process_noise,
-                              ScalarKalman *out_prediction);
-
-/**
- * Computes the scalar Kalman gain.
- *
- * # Safety
- * This function takes no pointers and transfers no ownership; it is safe to call with
- * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
- */
-double space_ekf_gain_scalar(double covariance,
-                             double measurement_jacobian,
-                             double measurement_noise);
+uint8_t space_apply_gravity_gradient_torque_to_body_flag(struct WorldHandle *world,
+                                                         RigidBodyHandleRaw body_handle,
+                                                         Vec3 inertia_diag,
+                                                         double mu,
+                                                         Bool wake_up,
+                                                         Vec3 *out_torque);
 
 /**
  * # Safety
- * `out_update` must be null or point to a valid, writable `ScalarKalman`.
- */
-Bool space_ekf_update_scalar(double predicted_state,
-                             double predicted_covariance,
-                             double measurement,
-                             double predicted_measurement,
-                             double kalman_gain,
-                             double measurement_jacobian,
-                             ScalarKalman *out_update);
-
-/**
- * # Safety
- * `out_attitude` must be null or point to a valid, writable `LeastSquaresAttitude`.
- */
-Bool space_least_squares_attitude_two_vector(Vec3 body_primary,
-                                             Vec3 body_secondary,
-                                             Vec3 reference_primary,
-                                             Vec3 reference_secondary,
-                                             LeastSquaresAttitude *out_attitude);
-
-/**
- * # Safety
- * `out_observation` must be null or point to a valid, writable `GnssObservation`.
- */
-Bool space_gnss_pseudorange(Vec3 receiver,
-                            Vec3 satellite,
-                            double receiver_clock_bias,
-                            double satellite_clock_bias,
-                            double ionosphere_delay,
-                            double troposphere_delay,
-                            GnssObservation *out_observation);
-
-/**
- * Computes the GNSS double-difference carrier phase observable in cycles.
- *
- * # Safety
- * This function takes no pointers and transfers no ownership; it is safe to call with
- * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
- */
-double space_gnss_double_difference_carrier_phase(double range_rover_sat_a,
-                                                  double range_rover_sat_b,
-                                                  double range_base_sat_a,
-                                                  double range_base_sat_b,
-                                                  double wavelength,
-                                                  double ambiguity);
-
-/**
- * Computes a structural natural frequency from stiffness, mass, and a mode factor.
- *
- * # Safety
- * This function takes no pointers and transfers no ownership; it is safe to call with
- * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
- */
-double space_structural_natural_frequency(double stiffness, double mass, double mode_factor);
-
-/**
- * # Safety
- * `out_force` must be null or point to a valid, writable `ContactForceModel`.
- */
-Bool space_contact_force_hunt_crossley(double penetration,
-                                       double penetration_rate,
-                                       double stiffness,
-                                       double damping,
-                                       double exponent,
-                                       ContactForceModel *out_force);
-
-/**
- * Computes the absorbed radiation dose including a quality factor.
- *
- * # Safety
- * This function takes no pointers and transfers no ownership; it is safe to call with
- * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
- */
-double space_radiation_absorbed_dose(double energy_joules, double mass_kg, double quality_factor);
-
-/**
- * Computes the semi-major axis decay rate due to atmospheric drag.
- *
- * # Safety
- * This function takes no pointers and transfers no ownership; it is safe to call with
- * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
- */
-double space_semi_major_axis_decay_rate(double semi_major_axis,
-                                        double density,
-                                        double drag_coefficient,
-                                        double area,
-                                        double mass,
-                                        double mu);
-
-/**
- * Sums the evaporator, vapor, condenser, and wick thermal resistances of a heat pipe.
- *
- * # Safety
- * This function takes no pointers and transfers no ownership; it is safe to call with
- * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
- */
-double space_heat_pipe_thermal_resistance(double evaporator_resistance,
-                                          double vapor_resistance,
-                                          double condenser_resistance,
-                                          double wick_resistance);
-
-/**
- * # Safety
- * `out_battery` must be null or point to a valid, writable `BatteryEquivalentCircuit`.
- */
-Bool space_battery_equivalent_circuit(double open_circuit_voltage,
-                                      double current,
-                                      double ohmic_resistance,
-                                      double rc_voltage,
-                                      double rc_resistance,
-                                      double rc_capacitance,
-                                      double capacity_coulombs,
-                                      BatteryEquivalentCircuit *out_battery);
-
-/**
- * # Safety
- * `out_performance` must be null or point to a valid, writable `HallThrusterPerformance`.
- */
-Bool space_hall_thruster_performance(double mass_flow_rate,
-                                     double exhaust_velocity,
-                                     double input_power,
-                                     double standard_gravity,
-                                     HallThrusterPerformance *out_performance);
-
-/**
- * # Safety
- * `out_command` must be null or point to a valid, writable `Vec3`.
- */
-Bool space_artificial_potential_guidance(Vec3 position,
-                                         Vec3 target,
-                                         Vec3 obstacle,
-                                         double attractive_gain,
-                                         double repulsive_gain,
-                                         double influence_radius,
-                                         Vec3 *out_command);
-
-/**
- * # Safety
- * `out_probability` must be null or point to a valid, writable `CollisionProbability`.
- */
-Bool space_debris_collision_probability(double miss_distance,
-                                        double combined_radius,
-                                        double sigma_radial,
-                                        double sigma_intrack,
-                                        CollisionProbability *out_probability);
-
-/**
- * # Safety
- * `out_erosion` must be null or point to a valid, writable `AtomicOxygenErosion`.
- */
-Bool space_atomic_oxygen_erosion(double fluence,
-                                 double erosion_yield,
-                                 double area,
-                                 double density,
-                                 AtomicOxygenErosion *out_erosion);
-
-/**
- * # Safety
- * `out_derivative` must be null or point to a valid, writable `FlexibleModeDerivative`.
- */
-Bool space_flexible_mode_derivative(double displacement,
-                                    double velocity,
-                                    double natural_frequency,
-                                    double damping_ratio,
-                                    double modal_force,
-                                    double modal_mass,
-                                    FlexibleModeDerivative *out_derivative);
-
-/**
- * # Safety
- * `out_derivative` must be null or point to a valid, writable `SloshPendulumDerivative`.
- */
-Bool space_slosh_pendulum_derivative(double angle,
-                                     double angular_rate,
-                                     double length,
-                                     double damping,
-                                     double lateral_acceleration,
-                                     double gravity,
-                                     SloshPendulumDerivative *out_derivative);
-
-/**
- * # Safety
- * `out_derivative` must be null or point to a valid, writable `VariationalState`.
- */
-Bool space_variational_two_body(Vec3 position,
-                                Vec3 velocity,
-                                double mu,
-                                VariationalState *out_derivative);
-
-/**
- * # Safety
- * `out_heat` must be null or point to a valid, writable `FluidLoopHeatTransfer`.
- */
-Bool space_single_phase_loop_heat_transfer(double mass_flow_rate,
-                                           double specific_heat,
-                                           double inlet_temperature,
-                                           double heat_input,
-                                           FluidLoopHeatTransfer *out_heat);
-
-/**
- * # Safety
- * `out_measurement` must be null or point to a valid, writable `RadarMeasurement`.
- */
-Bool space_radar_range_rate(Vec3 radar_position,
-                            Vec3 target_position,
-                            Vec3 radar_velocity,
-                            Vec3 target_velocity,
-                            RadarMeasurement *out_measurement);
-
-/**
- * # Safety
- * `out_properties` must be null or point to a valid, writable `MassProperties`.
- */
-Bool space_mass_properties_two_body(double mass1,
-                                    Vec3 position1,
-                                    Vec3 inertia1_diag,
-                                    double mass2,
-                                    Vec3 position2,
-                                    Vec3 inertia2_diag,
-                                    MassProperties *out_properties);
-
-/**
- * Computes the kinetic energy a docking buffer must absorb, scaled by its efficiency.
- *
- * # Safety
- * This function takes no pointers and transfers no ownership; it is safe to call with
- * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
- */
-double space_docking_buffer_energy(double relative_speed,
-                                   double reduced_mass,
-                                   double stroke,
-                                   double efficiency);
-
-/**
- * # Safety
- * `out_profile` must be null or point to a valid, writable `BangOffBangProfile`.
- */
-Bool space_bang_off_bang_profile(double angle,
-                                 double max_acceleration,
-                                 double max_rate,
-                                 BangOffBangProfile *out_profile);
-
-/**
- * # Safety
+ * `world` must be a valid pointer to a `WorldHandle` created by this library.
  * `out_acceleration` must be null or point to a valid, writable `Vec3`.
  */
-Bool space_solar_radiation_pressure_acceleration(Vec3 sun_direction,
-                                                 double solar_flux,
-                                                 double reflectivity,
-                                                 double area,
-                                                 double mass,
-                                                 Vec3 *out_acceleration);
+Bool space_apply_j2_force_to_body(struct WorldHandle *world,
+                                  RigidBodyHandleRaw body_handle,
+                                  double mu,
+                                  double equatorial_radius,
+                                  double j2,
+                                  double mass,
+                                  Bool wake_up,
+                                  Vec3 *out_acceleration);
+
+/**
+ * # Safety
+ * `world` must be a valid pointer to a `WorldHandle` created by this library.
+ * `out_acceleration` must be null or point to a valid, writable `Vec3`.
+ */
+uint8_t space_apply_j2_force_to_body_flag(struct WorldHandle *world,
+                                          RigidBodyHandleRaw body_handle,
+                                          double mu,
+                                          double equatorial_radius,
+                                          double j2,
+                                          double mass,
+                                          Bool wake_up,
+                                          Vec3 *out_acceleration);
 
 /**
  * # Safety
@@ -4129,6 +3917,40 @@ uint8_t space_apply_solar_radiation_pressure_to_body_flag(struct WorldHandle *wo
                                                           Vec3 *out_acceleration);
 
 /**
+ * Computes atmospheric density using the exponential scale-height model.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
+double space_atmospheric_density_scale_height(double reference_density,
+                                              double altitude,
+                                              double reference_altitude,
+                                              double scale_height);
+
+/**
+ * # Safety
+ * `out_acceleration` must be null or point to a valid, writable `Vec3`.
+ */
+Bool space_atmospheric_drag_acceleration(Vec3 velocity,
+                                         Vec3 atmosphere_velocity,
+                                         double density,
+                                         double drag_coefficient,
+                                         double area,
+                                         double mass,
+                                         Vec3 *out_acceleration);
+
+/**
+ * # Safety
+ * `out_erosion` must be null or point to a valid, writable `AtomicOxygenErosion`.
+ */
+Bool space_atomic_oxygen_erosion(double fluence,
+                                 double erosion_yield,
+                                 double area,
+                                 double density,
+                                 AtomicOxygenErosion *out_erosion);
+
+/**
  * # Safety
  * `out_torque` must be null or point to a valid, writable `Vec3`.
  */
@@ -4136,36 +3958,134 @@ Bool space_gravity_gradient_torque(Vec3 position, Vec3 inertia_diag, double mu, 
 
 /**
  * # Safety
- * `world` must be a valid pointer to a `WorldHandle` created by this library.
- * `out_torque` must be null or point to a valid, writable `Vec3`.
+ * `out_acceleration` must be null or point to a valid, writable `Vec3`.
  */
-Bool space_apply_gravity_gradient_torque_to_body(struct WorldHandle *world,
-                                                 RigidBodyHandleRaw body_handle,
-                                                 Vec3 inertia_diag,
-                                                 double mu,
-                                                 Bool wake_up,
-                                                 Vec3 *out_torque);
+Bool space_j2_acceleration(Vec3 position,
+                           double mu,
+                           double equatorial_radius,
+                           double j2,
+                           Vec3 *out_acceleration);
+
+/**
+ * Computes the Sagnac phase rate of a ring interferometer.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
+double space_sagnac_phase_rate(double area, double angular_rate, double wavelength);
+
+/**
+ * # Safety
+ * `out_acceleration` must be null or point to a valid, writable `Vec3`.
+ */
+Bool space_solar_radiation_pressure_acceleration(Vec3 sun_direction,
+                                                 double solar_flux,
+                                                 double reflectivity,
+                                                 double area,
+                                                 double mass,
+                                                 Vec3 *out_acceleration);
+
+/**
+ * # Safety
+ * `out_battery` must be null or point to a valid, writable `BatteryEquivalentCircuit`.
+ */
+Bool space_battery_equivalent_circuit(double open_circuit_voltage,
+                                      double current,
+                                      double ohmic_resistance,
+                                      double rc_voltage,
+                                      double rc_resistance,
+                                      double rc_capacitance,
+                                      double capacity_coulombs,
+                                      BatteryEquivalentCircuit *out_battery);
+
+/**
+ * # Safety
+ * `out_balance` must be null or point to a valid, writable `Co2MassBalance`.
+ */
+Bool space_co2_mass_balance(double current_mass,
+                            double generation_rate,
+                            double removal_rate,
+                            double leakage_rate,
+                            double volume,
+                            double dt,
+                            Co2MassBalance *out_balance);
+
+/**
+ * # Safety
+ * `out_force` must be null or point to a valid, writable `ContactForceModel`.
+ */
+Bool space_contact_force_hunt_crossley(double penetration,
+                                       double penetration_rate,
+                                       double stiffness,
+                                       double damping,
+                                       double exponent,
+                                       ContactForceModel *out_force);
+
+/**
+ * # Safety
+ * `out_performance` must be null or point to a valid, writable `HallThrusterPerformance`.
+ */
+Bool space_hall_thruster_performance(double mass_flow_rate,
+                                     double exhaust_velocity,
+                                     double input_power,
+                                     double standard_gravity,
+                                     HallThrusterPerformance *out_performance);
+
+/**
+ * # Safety
+ * `out_rate` must be null or point to a valid, writable `ChemicalReactionRate`.
+ */
+Bool space_sabatier_methane_rate(double co2_molar_rate,
+                                 double h2_molar_rate,
+                                 double conversion,
+                                 ChemicalReactionRate *out_rate);
+
+/**
+ * # Safety
+ * `out_power` must be null or point to a valid, writable `SolarPanelPower`.
+ */
+Bool space_solar_panel_power(double solar_flux,
+                             double area,
+                             double efficiency,
+                             double incidence_angle,
+                             double degradation,
+                             SolarPanelPower *out_power);
+
+/**
+ * Computes a structural natural frequency from stiffness, mass, and a mode factor.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
+double space_structural_natural_frequency(double stiffness, double mass, double mode_factor);
 
 /**
  * # Safety
  * `world` must be a valid pointer to a `WorldHandle` created by this library.
- * `out_torque` must be null or point to a valid, writable `Vec3`.
+ * `out_exchange` must be null or point to a valid, writable `CmgExchange`.
  */
-uint8_t space_apply_gravity_gradient_torque_to_body_flag(struct WorldHandle *world,
-                                                         RigidBodyHandleRaw body_handle,
-                                                         Vec3 inertia_diag,
-                                                         double mu,
-                                                         Bool wake_up,
-                                                         Vec3 *out_torque);
+Bool space_apply_cmg_torque_to_body(struct WorldHandle *world,
+                                    RigidBodyHandleRaw body_handle,
+                                    Vec3 gimbal_axis,
+                                    Vec3 wheel_momentum,
+                                    double gimbal_rate,
+                                    Bool wake_up,
+                                    CmgExchange *out_exchange);
 
 /**
  * # Safety
- * `out_dipole` must be null or point to a valid, writable `Vec3`.
+ * `world` must be a valid pointer to a `WorldHandle` created by this library.
+ * `out_exchange` must be null or point to a valid, writable `CmgExchange`.
  */
-Bool space_magnetic_torquer_dipole(Vec3 commanded_torque,
-                                   Vec3 magnetic_field,
-                                   double max_dipole,
-                                   Vec3 *out_dipole);
+uint8_t space_apply_cmg_torque_to_body_flag(struct WorldHandle *world,
+                                            RigidBodyHandleRaw body_handle,
+                                            Vec3 gimbal_axis,
+                                            Vec3 wheel_momentum,
+                                            double gimbal_rate,
+                                            Bool wake_up,
+                                            CmgExchange *out_exchange);
 
 /**
  * # Safety
@@ -4195,6 +4115,15 @@ uint8_t space_apply_magnetic_torquer_to_body_flag(struct WorldHandle *world,
 
 /**
  * # Safety
+ * `out_exchange` must be null or point to a valid, writable `CmgExchange`.
+ */
+Bool space_cmg_exchange(Vec3 gimbal_axis,
+                        Vec3 wheel_momentum,
+                        double gimbal_rate,
+                        CmgExchange *out_exchange);
+
+/**
+ * # Safety
  * `out_inverse` must be null or point to a valid, writable `CmgRobustInverse`.
  */
 Bool space_cmg_robust_pseudoinverse_diag(Vec3 jacobian_diag,
@@ -4203,36 +4132,74 @@ Bool space_cmg_robust_pseudoinverse_diag(Vec3 jacobian_diag,
                                          CmgRobustInverse *out_inverse);
 
 /**
- * # Safety
- * `out_rates` must be null or point to a valid, writable `Sgp4SecularRates`.
- */
-Bool space_sgp4_j2_secular_rates(double semi_major_axis,
-                                 double eccentricity,
-                                 double inclination,
-                                 double mean_motion,
-                                 double equatorial_radius,
-                                 double j2,
-                                 Sgp4SecularRates *out_rates);
-
-/**
- * Computes a clamped closing-speed command for a docking glideslope.
+ * Computes the scalar Kalman gain.
  *
  * # Safety
  * This function takes no pointers and transfers no ownership; it is safe to call with
  * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
  */
-double space_docking_glideslope_command(double range,
-                                        double desired_slope,
-                                        double closing_speed_limit);
+double space_ekf_gain_scalar(double covariance,
+                             double measurement_jacobian,
+                             double measurement_noise);
 
 /**
- * Computes the Sagnac phase rate of a ring interferometer.
- *
  * # Safety
- * This function takes no pointers and transfers no ownership; it is safe to call with
- * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ * `out_prediction` must be null or point to a valid, writable `ScalarKalman`.
  */
-double space_sagnac_phase_rate(double area, double angular_rate, double wavelength);
+Bool space_ekf_predict_scalar(double state,
+                              double covariance,
+                              double nonlinear_delta,
+                              double jacobian,
+                              double process_noise,
+                              ScalarKalman *out_prediction);
+
+/**
+ * # Safety
+ * `out_update` must be null or point to a valid, writable `ScalarKalman`.
+ */
+Bool space_ekf_update_scalar(double predicted_state,
+                             double predicted_covariance,
+                             double measurement,
+                             double predicted_measurement,
+                             double kalman_gain,
+                             double measurement_jacobian,
+                             ScalarKalman *out_update);
+
+/**
+ * # Safety
+ * `out_attitude` must be null or point to a valid, writable `LeastSquaresAttitude`.
+ */
+Bool space_least_squares_attitude_two_vector(Vec3 body_primary,
+                                             Vec3 body_secondary,
+                                             Vec3 reference_primary,
+                                             Vec3 reference_secondary,
+                                             LeastSquaresAttitude *out_attitude);
+
+/**
+ * # Safety
+ * `out_dipole` must be null or point to a valid, writable `Vec3`.
+ */
+Bool space_magnetic_torquer_dipole(Vec3 commanded_torque,
+                                   Vec3 magnetic_field,
+                                   double max_dipole,
+                                   Vec3 *out_dipole);
+
+/**
+ * # Safety
+ * `out_derivative` must be null or point to a valid, writable `QuaternionDerivative`.
+ */
+Bool space_quaternion_derivative(Quat attitude,
+                                 Vec3 angular_velocity,
+                                 QuaternionDerivative *out_derivative);
+
+/**
+ * # Safety
+ * `out_derivative` must be null or point to a valid, writable `RigidBodyEulerDerivative`.
+ */
+Bool space_rigid_body_euler_derivative(Vec3 inertia_diag,
+                                       Vec3 angular_velocity,
+                                       Vec3 torque,
+                                       RigidBodyEulerDerivative *out_derivative);
 
 /**
  * Computes the PD control torque for a solar array drive.
@@ -4242,48 +4209,6 @@ double space_sagnac_phase_rate(double area, double angular_rate, double waveleng
  * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
  */
 double space_solar_array_pd_torque(double angle_error, double rate_error, double kp, double kd);
-
-/**
- * # Safety
- * `out_rate` must be null or point to a valid, writable `ChemicalReactionRate`.
- */
-Bool space_sabatier_methane_rate(double co2_molar_rate,
-                                 double h2_molar_rate,
-                                 double conversion,
-                                 ChemicalReactionRate *out_rate);
-
-/**
- * # Safety
- * `out_rate` must be null or point to a valid, writable `ChemicalReactionRate`.
- */
-Bool space_spe_oxygen_rate(double current,
-                           double cells,
-                           double faraday_efficiency,
-                           ChemicalReactionRate *out_rate);
-
-/**
- * # Safety
- * `out_power` must be null or point to a valid, writable `RadiatorPower`.
- */
-Bool space_radiator_power(double area,
-                          double emissivity,
-                          double temperature,
-                          double sink_temperature,
-                          double absorbed_power,
-                          RadiatorPower *out_power);
-
-/**
- * Computes the critical projectile diameter a Whipple shield can defeat.
- *
- * # Safety
- * This function takes no pointers and transfers no ownership; it is safe to call with
- * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
- */
-double space_whipple_critical_projectile_diameter(double bumper_thickness,
-                                                  double bumper_density,
-                                                  double projectile_density,
-                                                  double impact_velocity,
-                                                  double standoff);
 
 /**
  * Computes the net spacecraft surface charging current balance.
@@ -4300,6 +4225,16 @@ double space_surface_charging_current_balance(double photo_current,
 
 /**
  * # Safety
+ * `out_attitude` must be null or point to a valid, writable `Quat`.
+ */
+Bool space_triad_attitude(Vec3 body_primary,
+                          Vec3 body_secondary,
+                          Vec3 reference_primary,
+                          Vec3 reference_secondary,
+                          Quat *out_attitude);
+
+/**
+ * # Safety
  * `out_state` must be null or point to a valid, writable `AirlockDepressurization`.
  */
 Bool space_airlock_depressurization(double pressure,
@@ -4308,6 +4243,71 @@ Bool space_airlock_depressurization(double pressure,
                                     double conductance,
                                     double dt,
                                     AirlockDepressurization *out_state);
+
+/**
+ * Sums the evaporator, vapor, condenser, and wick thermal resistances of a heat pipe.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
+double space_heat_pipe_thermal_resistance(double evaporator_resistance,
+                                          double vapor_resistance,
+                                          double condenser_resistance,
+                                          double wick_resistance);
+
+/**
+ * # Safety
+ * `out_power` must be null or point to a valid, writable `RadiatorPower`.
+ */
+Bool space_radiator_power(double area,
+                          double emissivity,
+                          double temperature,
+                          double sink_temperature,
+                          double absorbed_power,
+                          RadiatorPower *out_power);
+
+/**
+ * # Safety
+ * `out_heat` must be null or point to a valid, writable `FluidLoopHeatTransfer`.
+ */
+Bool space_single_phase_loop_heat_transfer(double mass_flow_rate,
+                                           double specific_heat,
+                                           double inlet_temperature,
+                                           double heat_input,
+                                           FluidLoopHeatTransfer *out_heat);
+
+/**
+ * # Safety
+ * `out_rate` must be null or point to a valid, writable `ChemicalReactionRate`.
+ */
+Bool space_spe_oxygen_rate(double current,
+                           double cells,
+                           double faraday_efficiency,
+                           ChemicalReactionRate *out_rate);
+
+/**
+ * # Safety
+ * `out_balance` must be null or point to a valid, writable `ThermalBalance`.
+ */
+Bool space_thermal_balance(double absorbed_power,
+                           double internal_power,
+                           double emitted_area,
+                           double emissivity,
+                           ThermalBalance *out_balance);
+
+/**
+ * Computes the critical projectile diameter a Whipple shield can defeat.
+ *
+ * # Safety
+ * This function takes no pointers and transfers no ownership; it is safe to call with
+ * any argument values. Invalid inputs return `f64::NAN` and set `ERR_INVALID_ARGUMENT`.
+ */
+double space_whipple_critical_projectile_diameter(double bumper_thickness,
+                                                  double bumper_density,
+                                                  double projectile_density,
+                                                  double impact_velocity,
+                                                  double standoff);
 
 /**
  * Compute polyhedron gravity.

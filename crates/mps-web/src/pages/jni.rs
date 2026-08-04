@@ -10,7 +10,7 @@ pub async fn jni() -> topcoat::Result {
                 <div>
                     <div style="font-size:12px;color:#4a9eff;letter-spacing:3px;text-transform:uppercase;font-family:monospace;margin-bottom:8px;">"/ JNI"</div>
                     <h1 style="font-size:28px;font-weight:300;color:#fff;margin:0 0 10px;">"Java 21 JNI 绑定（fluent builder）"</h1>
-                    <p style="font-size:14px;color:#999;line-height:1.7;margin:0;">{ "mps-jni 编出 cdylib " }<code>"mps_rigid_body"</code>{ "，288 个 " }<code>"jni! / jni_e_c!"</code>{ " 宏导出方法分两块：通用物理走 mps-core 的 " }<code>"RigidBodyNative"</code>{ "（" }<code>"org.polaris2023.mps_rigid_body.RigidBodyNative"</code>{ "），太空刚体走 cosmos* 系列。每方法都由 catch_unwind 兜底——panic 永不进 JVM。" }</p>
+                    <p style="font-size:14px;color:#999;line-height:1.7;margin:0;">{ "mps-jni 编出 cdylib " }<code>"mps_rigid_body"</code>{ "，290 个 " }<code>"jni! / jni_e_c!"</code>{ " 宏导出方法分两块：通用物理走 mps-core 的 " }<code>"RigidBodyNative"</code>{ "（" }<code>"org.polaris2023.mps_rigid_body.RigidBodyNative"</code>{ "），太空刚体走 cosmos* 系列。每方法都由 catch_unwind 兜底——panic 永不进 JVM。" }</p>
                 </div>
                 <div style="font-size:48px;font-weight:700;color:#333;font-family:monospace;line-height:1;">"01"</div>
             </div>

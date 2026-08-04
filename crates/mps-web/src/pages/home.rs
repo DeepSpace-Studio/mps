@@ -1,3 +1,8 @@
+// NOTE: stats in this file (tests count ~580, JNI methods ~290, core FFI ~380) are
+// manually synced — re-check against `grep -rh '#[test]' crates/mps-test/src/ | wc -l`,
+// `grep -cE 'jni!\(|jni_e_c!\(' crates/mps-jni/src/lib.rs`, and
+// `grep -rh '^pub extern "C"' crates/mps-core/src/rapier/ | wc -l` after large changes.
+// See OPTIMIZATION.md §9 (option B) for the [A] automated alternative.
 use topcoat::{router::page, view::view};
 
 /// Home page — MPS Physics System overview
@@ -12,8 +17,8 @@ pub async fn home() -> topcoat::Result {
                 "运动物理系统 (米每秒)"
             </h1>
             <p style="font-size:16px; color:#aaa; max-width:720px; margin:0 auto 30px; line-height:1.7;">
-                "基于 " <strong style="color:#e0e0e0;">"Rapier3D-f64"</strong> " 的高精度 Rust 物理引擎。通过 C FFI (~480 函数) 和 Java JNI (~280 方法) 暴露完整 API。支持 "
-                <strong style="color:#e0e0e0;">"332 项测试"</strong> "、" <strong style="color:#e0e0e0;">"5 种引力模型"</strong> "、" <strong style="color:#e0e0e0;">"3 种辛积分器"</strong> "、" <strong style="color:#e0e0e0;">"共享内存零拷贝 Arena"</strong> "、" <strong style="color:#e0e0e0;">"28 个公式模块"</strong> " 和 " <strong style="color:#e0e0e0;">"10 个太阳系天体"</strong> "。"
+                "基于 " <strong style="color:#e0e0e0;">"Rapier3D-f64"</strong> " 的高精度 Rust 物理引擎。通过 C FFI (~380 函数) 和 Java JNI (~290 方法) 暴露完整 API。支持 "
+                <strong style="color:#e0e0e0;">"580 项测试"</strong> "、" <strong style="color:#e0e0e0;">"5 种引力模型"</strong> "、" <strong style="color:#e0e0e0;">"3 种辛积分器"</strong> "、" <strong style="color:#e0e0e0;">"共享内存零拷贝 Arena"</strong> "、" <strong style="color:#e0e0e0;">"28 个公式模块"</strong> " 和 " <strong style="color:#e0e0e0;">"10 个太阳系天体"</strong> "。"
             </p>
             <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
                 <a href="quickstart" style="background:#4a9eff; color:#fff; padding:12px 24px; border-radius:6px; text-decoration:none; font-weight:500;">"快速入门"</a>
@@ -23,7 +28,7 @@ pub async fn home() -> topcoat::Result {
 
         <div style="display:flex; gap:16px; justify-content:center; flex-wrap:wrap; margin:40px 0;">
             <div style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px 28px; text-align:center; min-width:120px;">
-                <strong style="display:block;font-size:28px;color:#4a9eff;font-weight:300;">"332"</strong>
+                <strong style="display:block;font-size:28px;color:#4a9eff;font-weight:300;">"580"</strong>
                 <span style="font-size:12px;color:#888;text-transform:uppercase;letter-spacing:1px;">"集成测试"</span>
             </div>
             <div style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px 28px; text-align:center; min-width:120px;">
@@ -153,7 +158,7 @@ pub async fn home() -> topcoat::Result {
                 </div>
                 <div style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px;">
                     <h3 style="font-size:16px; color:#fff; margin:0 0 8px;">"JNI + 共享内存"</h3>
-                    <p style="font-size:14px; color:#999; line-height:1.6; margin:0;">"Java 21 JNI 全绑定 (~280 方法)。共享内存 Arena (DirectByteBuffer) 零 JNI 读写，每帧仅 1 次 world_step 调用。"</p>
+                    <p style="font-size:14px; color:#999; line-height:1.6; margin:0;">"Java 21 JNI 全绑定 (~290 方法)。共享内存 Arena (DirectByteBuffer) 零 JNI 读写，每帧仅 1 次 world_step 调用。"</p>
                 </div>
             </div>
         </div>
@@ -163,11 +168,11 @@ pub async fn home() -> topcoat::Result {
             <pre style="background:#0d0d2b; border:1px solid #333; border-radius:6px; padding:16px; font-size:13px; line-height:1.5;">
                 <code class="language-text">
 "Java 21 JNI / Java 25 FFM
-  └─ Rust C ABI (~480 函数)
+  └─ Rust C ABI (~380 函数)
        ├─ mps-formula  — 28 纯公式模块 (300+ 函数)
        ├─ mps-core     — 物理引擎 + Rapier 封装 (World, 刚体, 碰撞体, 查询, 事件)
        ├─ mps-cosmos   — 太空刚体演算 (独立 world, Verlet 轨道积分)
-       ├─ mps-jni      — JNI 绑定 (~280 方法, 含 cosmos 一批)
+       ├─ mps-jni      — JNI 绑定 (~290 方法, 含 cosmos 一批)
        ├─ mps-ffm      — FFM 元数据
        └─ mps-test     — 集成测试 (含 cosmos 19)"
                 </code>
