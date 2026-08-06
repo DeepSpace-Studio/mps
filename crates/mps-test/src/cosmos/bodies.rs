@@ -1,6 +1,8 @@
 //! `mps_cosmos::bodies` 测试 —— 迁移自 `crates/mps-cosmos/src/bodies.rs`。
 
+#[cfg(test)]
 use mps_cosmos::bodies::{fixed_body_builder, satellite_builder};
+#[cfg(test)]
 use rapier3d::prelude::{ColliderSet, Vector};
 
 #[test]

@@ -9,14 +9,15 @@ use mps_core::rapier::ffi::{
     AabbDesc, AeroForceReport, AeroSurface, AirDragLaw, Bool, CRbTreeHandle as CRTH, Capsule,
     CharacterCollision, CharacterControllerHandle as CCH, ColliderBuilderHandle as CBH,
     ColliderHandleRaw as CRaw, CollisionEventRecord as CER, ContactForceEventRecord,
-    CoulombFrictionLaw, Cylinder, EffectiveCharacterMovement, Ellipsoid, ExternalForceLaw,
-    FluidForceReport, FluidVolume, HohmannTransfer, ImpulseJointHandleRaw as JRaw,
-    InteractionGroupsDesc, JointBuilderHandle as JBH, NewtonGravityLaw, NeuralBoundsDesc, Obb,
-    PointProjection, Prism, Quat, QuaternionDerivative, QueryFilterDesc, RTreeHandle as RTH,
-    RayHit, RigidBodyBuilderHandle as RBH, RigidBodyHandleRaw as RRaw, ScalarKalman,
-    ShapeCastHit, ShapeCastOptionsDesc, ShapeDesc, Sphere, SphericalShell, Ssv,
-    TrajectoryEnvironment, TrajectoryForceReport, Vec3, VoxelBuildStats, VoxelColliderOptions,
-    WorldHandle as WH,
+    CoulombFrictionLaw, Cylinder, DynamicalFrictionLaw, EddingtonRadiationPressureLaw,
+    EffectiveCharacterMovement, Ellipsoid, ExternalForceLaw, FluidForceReport, FluidVolume,
+    HohmannTransfer, ImpulseJointHandleRaw as JRaw, InteractionGroupsDesc,
+    JointBuilderHandle as JBH, MonDGravityLaw, NewtonGravityLaw, NeuralBoundsDesc, Obb,
+    PointProjection, Prism, PulsarMagneticDipoleLaw, Quat, QuaternionDerivative, QueryFilterDesc,
+    RTreeHandle as RTH, RayHit, RigidBodyBuilderHandle as RBH, RigidBodyHandleRaw as RRaw,
+    ScalarKalman, ShapeCastHit, ShapeCastOptionsDesc, ShapeDesc, SolarWindPressureLaw, Sphere,
+    SphericalShell, Ssv, TrajectoryEnvironment, TrajectoryForceReport, Vec3,
+    VoxelBuildStats, VoxelColliderOptions, WorldHandle as WH, JeansEscapeLaw, XrayIrradiationLaw,
 };
 #[cfg(feature = "anvilkit-bridge")]
 use mps_core::rapier::ffi::{AnvilKitAppHandle as AKH};
@@ -666,6 +667,80 @@ jni!(boolean worldSetNewtonGravityLaw(long world, double gravitational_constant,
     }).0 as jbyte
 });
 jni!(boolean worldClearNewtonGravityLaw(long world) { ev::world_clear_newton_gravity_law(m::<WH>(world)); Bool::TRUE.0 as jbyte });
+
+// =========================================================================
+// Force law API — solar-wind pressure / dynamical friction / MOND gravity
+// (PHYSICS_EXPANSION_PLAN C1: mirrors world_set_solar_wind_pressure_law &
+// friends from mps-core events.rs.  See crates/mps-core/src/rapier/events.rs.)
+// =========================================================================
+jni!(boolean worldSetSolarWindPressureLaw(long world, double proton_density, double v_sw_mps, double wind_dir_x, double wind_dir_y, double wind_dir_z, double effective_area_m2, int enabled) {
+    ev::world_set_solar_wind_pressure_law(m::<WH>(world), SolarWindPressureLaw {
+        proton_density, v_sw_mps, wind_direction: v3(wind_dir_x, wind_dir_y, wind_dir_z),
+        effective_area_m2, enabled: jb(enabled),
+    }).0 as jbyte
+});
+jni!(boolean worldClearSolarWindPressureLaw(long world) { ev::world_clear_solar_wind_pressure_law(m::<WH>(world)); Bool::TRUE.0 as jbyte });
+jni!(boolean worldSetDynamicalFrictionLaw(long world, double background_density, double coulomb_log, int enabled) {
+    ev::world_set_dynamical_friction_law(m::<WH>(world), DynamicalFrictionLaw {
+        background_density_kg_m3: background_density, coulomb_log, enabled: jb(enabled),
+    }).0 as jbyte
+});
+jni!(boolean worldClearDynamicalFrictionLaw(long world) { ev::world_clear_dynamical_friction_law(m::<WH>(world)); Bool::TRUE.0 as jbyte });
+jni!(boolean worldSetMonDGravityLaw(long world, double newtonian_a, double mond_a_zero, double direction_x, double direction_y, double direction_z, int enabled) {
+    ev::world_set_mond_gravity_law(m::<WH>(world), MonDGravityLaw {
+        newtonian_a, mond_a_zero, direction: v3(direction_x, direction_y, direction_z),
+        enabled: jb(enabled),
+    }).0 as jbyte
+});
+jni!(boolean worldClearMonDGravityLaw(long world) { ev::world_clear_mond_gravity_law(m::<WH>(world)); Bool::TRUE.0 as jbyte });
+
+// =========================================================================
+// Force law API — Eddington-limited radiation pressure (PHYSICS_EXPANSION_PLAN C2)
+// =========================================================================
+jni!(boolean worldSetEddingtonRadiationPressureLaw(long world, double mass_kg, double opacity, double source_x, double source_y, double source_z, double effective_area_m2, int enabled) {
+    ev::world_set_eddington_radiation_pressure_law(m::<WH>(world), EddingtonRadiationPressureLaw {
+        mass_kg, opacity, source_position: v3(source_x, source_y, source_z),
+        effective_area_m2, enabled: jb(enabled),
+    }).0 as jbyte
+});
+jni!(boolean worldClearEddingtonRadiationPressureLaw(long world) { ev::world_clear_eddington_radiation_pressure_law(m::<WH>(world)); Bool::TRUE.0 as jbyte });
+
+// =========================================================================
+// Force law API — X-ray disc bolometric irradiation (PHYSICS_EXPANSION_PLAN C3)
+// =========================================================================
+jni!(boolean worldSetXrayIrradiationLaw(long world, double k_t_eff_kev, double r_in_km, double spectral_hardening, double source_x, double source_y, double source_z, double effective_area_m2, int enabled) {
+    ev::world_set_xray_irradiation_law(m::<WH>(world), XrayIrradiationLaw {
+        k_t_eff_kev, r_in_km, spectral_hardening, source_position: v3(source_x, source_y, source_z),
+        effective_area_m2, enabled: jb(enabled),
+    }).0 as jbyte
+});
+jni!(boolean worldClearXrayIrradiationLaw(long world) { ev::world_clear_xray_irradiation_law(m::<WH>(world)); Bool::TRUE.0 as jbyte });
+
+// =========================================================================
+// Force law API — Pulsar magnetic-dipole torque (PHYSICS_EXPANSION_PLAN C3)
+// =========================================================================
+jni!(boolean worldSetPulsarMagneticDipoleLaw(long world, double moment_of_inertia, double ns_radius_m, double period_ms, double period_derivative, double pulsar_x, double pulsar_y, double pulsar_z, double spin_x, double spin_y, double spin_z, double mu_x, double mu_y, double mu_z, int enabled) {
+    ev::world_set_pulsar_magnetic_dipole_law(m::<WH>(world), PulsarMagneticDipoleLaw {
+        moment_of_inertia, ns_radius_m, period_ms, period_derivative,
+        pulsar_position: v3(pulsar_x, pulsar_y, pulsar_z),
+        spin_axis: v3(spin_x, spin_y, spin_z),
+        body_dipole_moment: v3(mu_x, mu_y, mu_z),
+        enabled: jb(enabled),
+    }).0 as jbyte
+});
+jni!(boolean worldClearPulsarMagneticDipoleLaw(long world) { ev::world_clear_pulsar_magnetic_dipole_law(m::<WH>(world)); Bool::TRUE.0 as jbyte });
+
+// =========================================================================
+// Force law API — Jeans-escape drag (PHYSICS_EXPANSION_PLAN C4)
+// =========================================================================
+jni!(boolean worldSetJeansEscapeLaw(long world, double n_exo, double temperature, double escape_parameter, double mass_kg, double dir_x, double dir_y, double dir_z, double effective_area_m2, int enabled) {
+    ev::world_set_jeans_escape_law(m::<WH>(world), JeansEscapeLaw {
+        n_exo, temperature, escape_parameter, mass_kg,
+        escape_direction: v3(dir_x, dir_y, dir_z),
+        effective_area_m2, enabled: jb(enabled),
+    }).0 as jbyte
+});
+jni!(boolean worldClearJeansEscapeLaw(long world) { ev::world_clear_jeans_escape_law(m::<WH>(world)); Bool::TRUE.0 as jbyte });
 
 // =========================================================================
 // Event ring buffer — lock-free dispatch

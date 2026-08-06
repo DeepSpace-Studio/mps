@@ -51,9 +51,10 @@ use crate::rapier::error::{
 };
 use crate::rapier::ffi::{
     AirDragLaw, Bool, CollisionEventRecord, ContactForceEventRecord, CoulombFrictionLaw,
-    CustomPhysicsReport, EventDispatchMode, ExternalForceLaw, MAX_OUTPUT_CAPACITY,
-    NewtonGravityLaw, WorldHandle, pack_collider_handle, vec3_finite, vec3_from_rapier,
-    vec3_to_rapier,
+    CustomPhysicsReport, DynamicalFrictionLaw, EddingtonRadiationPressureLaw, EventDispatchMode,
+    ExternalForceLaw, JeansEscapeLaw, MAX_OUTPUT_CAPACITY, MonDGravityLaw, NewtonGravityLaw,
+    PulsarMagneticDipoleLaw, SolarWindPressureLaw, WorldHandle, XrayIrradiationLaw,
+    pack_collider_handle, vec3_finite, vec3_from_rapier, vec3_to_rapier,
 };
 
 const MAX_EVENT_RECORDS: usize = 16_384;
@@ -1928,5 +1929,605 @@ pub extern "C" fn world_set_event_dispatch_mode(world: *mut WorldHandle, mode: u
         pc.dispatch_mode.store(mode as u32, Ordering::Release);
         clear_error();
         Bool::TRUE
+    })
+}
+
+// ===========================================================================
+// PHYSICS_EXPANSION_PLAN C1 — setters for the three new planet-physics laws.
+// Each setter (a) validates inputs, (b) registers a corresponding
+// `*ForceLaw` into the ForceRegistry (single traversal to remove the prior
+// instance, then push the new one), mirroring `world_set_newton_gravity_law`.
+// ===========================================================================
+
+/// Set (or disable) the solar-wind dynamic-pressure force law on a world.
+///
+/// # Safety
+///
+/// `world` must be a valid world pointer returned by `world_create`; a null
+/// pointer fails with `ERR_NULL_POINTER`.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_set_solar_wind_pressure_law(
+    world: *mut WorldHandle,
+    law: SolarWindPressureLaw,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        // Validate inputs.
+        if !law.proton_density.is_finite()
+            || law.proton_density <= 0.0
+            || !law.v_sw_mps.is_finite()
+            || law.v_sw_mps < 0.0
+            || !law.effective_area_m2.is_finite()
+            || law.effective_area_m2 <= 0.0
+            || !vec3_finite(law.wind_direction)
+        {
+            set_error(ERR_INVALID_ARGUMENT, "invalid solar wind pressure law");
+            return Bool::FALSE;
+        }
+
+        {
+            use crate::rapier::forces::ForceLawType;
+            world
+                .inner
+                .force_registry
+                .unregister_by_type(ForceLawType::SolarWindPressure);
+            if law.enabled.0 != 0 {
+                let sw_law = crate::rapier::interaction::SolarWindPressureForceLaw {
+                    proton_density: law.proton_density,
+                    v_sw_mps: law.v_sw_mps,
+                    wind_direction: vec3_to_rapier(law.wind_direction),
+                    effective_area_m2: law.effective_area_m2,
+                    enabled: true,
+                };
+                world.inner.force_registry.register(Box::new(sw_law));
+            }
+        }
+
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// `u8`-returning variant of `world_set_solar_wind_pressure_law`.
+///
+/// # Safety
+///
+/// Same contract as `world_set_solar_wind_pressure_law`.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_set_solar_wind_pressure_law_flag(
+    world: *mut WorldHandle,
+    law: SolarWindPressureLaw,
+) -> u8 {
+    ffi_guard(0, || world_set_solar_wind_pressure_law(world, law).0)
+}
+
+/// Clear the solar-wind pressure law on a world.
+///
+/// # Safety
+///
+/// `world` must be a valid world pointer returned by `world_create`; a null
+/// pointer is a no-op.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_clear_solar_wind_pressure_law(world: *mut WorldHandle) {
+    ffi_guard((), || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            return;
+        };
+        use crate::rapier::forces::ForceLawType;
+        world
+            .inner
+            .force_registry
+            .unregister_by_type(ForceLawType::SolarWindPressure);
+    })
+}
+
+/// Set (or disable) the Chandrasekhar dynamical-friction force law on a world.
+///
+/// # Safety
+///
+/// `world` must be a valid world pointer returned by `world_create`; a null
+/// pointer fails with `ERR_NULL_POINTER`.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_set_dynamical_friction_law(
+    world: *mut WorldHandle,
+    law: DynamicalFrictionLaw,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !law.background_density_kg_m3.is_finite()
+            || law.background_density_kg_m3 <= 0.0
+            || !law.coulomb_log.is_finite()
+            || law.coulomb_log <= 0.0
+        {
+            set_error(ERR_INVALID_ARGUMENT, "invalid dynamical friction law");
+            return Bool::FALSE;
+        }
+
+        {
+            use crate::rapier::forces::ForceLawType;
+            world
+                .inner
+                .force_registry
+                .unregister_by_type(ForceLawType::DynamicalFriction);
+            if law.enabled.0 != 0 {
+                let df_law = crate::rapier::interaction::DynamicalFrictionForceLaw {
+                    background_density_kg_m3: law.background_density_kg_m3,
+                    coulomb_log: law.coulomb_log,
+                    enabled: true,
+                };
+                world.inner.force_registry.register(Box::new(df_law));
+            }
+        }
+
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// `u8`-returning variant of `world_set_dynamical_friction_law`.
+///
+/// # Safety
+///
+/// Same contract as `world_set_dynamical_friction_law`.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_set_dynamical_friction_law_flag(
+    world: *mut WorldHandle,
+    law: DynamicalFrictionLaw,
+) -> u8 {
+    ffi_guard(0, || world_set_dynamical_friction_law(world, law).0)
+}
+
+/// Clear the dynamical-friction law on a world.
+///
+/// # Safety
+///
+/// `world` must be a valid world pointer returned by `world_create`; a null
+/// pointer is a no-op.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_clear_dynamical_friction_law(world: *mut WorldHandle) {
+    ffi_guard((), || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            return;
+        };
+        use crate::rapier::forces::ForceLawType;
+        world
+            .inner
+            .force_registry
+            .unregister_by_type(ForceLawType::DynamicalFriction);
+    })
+}
+
+/// Set (or disable) the MOND-corrected gravity force law on a world.
+///
+/// # Safety
+///
+/// `world` must be a valid world pointer returned by `world_create`; a null
+/// pointer fails with `ERR_NULL_POINTER`.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_set_mond_gravity_law(world: *mut WorldHandle, law: MonDGravityLaw) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !law.newtonian_a.is_finite()
+            || law.newtonian_a < 0.0
+            || !law.mond_a_zero.is_finite()
+            || law.mond_a_zero <= 0.0
+            || !vec3_finite(law.direction)
+        {
+            set_error(ERR_INVALID_ARGUMENT, "invalid MOND gravity law");
+            return Bool::FALSE;
+        }
+
+        {
+            use crate::rapier::forces::ForceLawType;
+            world
+                .inner
+                .force_registry
+                .unregister_by_type(ForceLawType::MonDGravity);
+            if law.enabled.0 != 0 {
+                let mond_law = crate::rapier::interaction::MonDGravityForceLaw {
+                    newtonian_a: law.newtonian_a,
+                    mond_a_zero: law.mond_a_zero,
+                    direction: vec3_to_rapier(law.direction),
+                    enabled: true,
+                };
+                world.inner.force_registry.register(Box::new(mond_law));
+            }
+        }
+
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// `u8`-returning variant of `world_set_mond_gravity_law`.
+///
+/// # Safety
+///
+/// Same contract as `world_set_mond_gravity_law`.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_set_mond_gravity_law_flag(
+    world: *mut WorldHandle,
+    law: MonDGravityLaw,
+) -> u8 {
+    ffi_guard(0, || world_set_mond_gravity_law(world, law).0)
+}
+
+/// Clear the MOND gravity law on a world.
+///
+/// # Safety
+///
+/// `world` must be a valid world pointer returned by `world_create`; a null
+/// pointer is a no-op.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_clear_mond_gravity_law(world: *mut WorldHandle) {
+    ffi_guard((), || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            return;
+        };
+        use crate::rapier::forces::ForceLawType;
+        world
+            .inner
+            .force_registry
+            .unregister_by_type(ForceLawType::MonDGravity);
+    })
+}
+
+/// Set (or disable) the Eddington-limited radiation-pressure force law on
+/// a world.
+///
+/// # Safety
+///
+/// `world` must be a valid world pointer returned by `world_create`; a null
+/// pointer fails with `ERR_NULL_POINTER`.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_set_eddington_radiation_pressure_law(
+    world: *mut WorldHandle,
+    law: EddingtonRadiationPressureLaw,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !law.mass_kg.is_finite()
+            || law.mass_kg <= 0.0
+            || !law.opacity.is_finite()
+            || law.opacity <= 0.0
+            || !law.effective_area_m2.is_finite()
+            || law.effective_area_m2 <= 0.0
+            || !vec3_finite(law.source_position)
+        {
+            set_error(ERR_INVALID_ARGUMENT, "invalid Eddington pressure law");
+            return Bool::FALSE;
+        }
+
+        {
+            use crate::rapier::forces::ForceLawType;
+            world
+                .inner
+                .force_registry
+                .unregister_by_type(ForceLawType::EddingtonRadiationPressure);
+            if law.enabled.0 != 0 {
+                let edd_law = crate::rapier::interaction::EddingtonRadiationPressureForceLaw {
+                    mass_kg: law.mass_kg,
+                    opacity: law.opacity,
+                    source_position: vec3_to_rapier(law.source_position),
+                    effective_area_m2: law.effective_area_m2,
+                    enabled: true,
+                };
+                world.inner.force_registry.register(Box::new(edd_law));
+            }
+        }
+
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// `u8`-returning variant of `world_set_eddington_radiation_pressure_law`.
+///
+/// # Safety
+///
+/// Same contract as `world_set_eddington_radiation_pressure_law`.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_set_eddington_radiation_pressure_law_flag(
+    world: *mut WorldHandle,
+    law: EddingtonRadiationPressureLaw,
+) -> u8 {
+    ffi_guard(0, || world_set_eddington_radiation_pressure_law(world, law).0)
+}
+
+/// Clear the Eddington radiation-pressure law on a world.
+///
+/// # Safety
+///
+/// `world` must be a valid world pointer returned by `world_create`; a null
+/// pointer is a no-op.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_clear_eddington_radiation_pressure_law(world: *mut WorldHandle) {
+    ffi_guard((), || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            return;
+        };
+        use crate::rapier::forces::ForceLawType;
+        world
+            .inner
+            .force_registry
+            .unregister_by_type(ForceLawType::EddingtonRadiationPressure);
+    })
+}
+
+/// Set (or disable) the X-ray disc bolometric irradiation force law on a
+/// world.  See `XrayIrradiationLaw` doc for parameter semantics.
+///
+/// # Safety
+///
+/// `world` must be a valid world pointer returned by `world_create`; a null
+/// pointer fails with `ERR_NULL_POINTER`.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_set_xray_irradiation_law(
+    world: *mut WorldHandle,
+    law: XrayIrradiationLaw,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !law.k_t_eff_kev.is_finite()
+            || law.k_t_eff_kev <= 0.0
+            || !law.r_in_km.is_finite()
+            || law.r_in_km <= 0.0
+            || !law.spectral_hardening.is_finite()
+            || law.spectral_hardening <= 0.0
+            || !law.effective_area_m2.is_finite()
+            || law.effective_area_m2 <= 0.0
+            || !vec3_finite(law.source_position)
+        {
+            set_error(ERR_INVALID_ARGUMENT, "invalid X-ray irradiation law");
+            return Bool::FALSE;
+        }
+
+        {
+            use crate::rapier::forces::ForceLawType;
+            world
+                .inner
+                .force_registry
+                .unregister_by_type(ForceLawType::XrayIrradiation);
+            if law.enabled.0 != 0 {
+                let x_law = crate::rapier::interaction::XrayIrradiationForceLaw {
+                    k_t_eff_kev: law.k_t_eff_kev,
+                    r_in_km: law.r_in_km,
+                    spectral_hardening: law.spectral_hardening,
+                    source_position: vec3_to_rapier(law.source_position),
+                    effective_area_m2: law.effective_area_m2,
+                    enabled: true,
+                };
+                world.inner.force_registry.register(Box::new(x_law));
+            }
+        }
+
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// `u8`-returning variant of `world_set_xray_irradiation_law`.
+///
+/// # Safety
+///
+/// Same contract as `world_set_xray_irradiation_law`.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_set_xray_irradiation_law_flag(
+    world: *mut WorldHandle,
+    law: XrayIrradiationLaw,
+) -> u8 {
+    ffi_guard(0, || world_set_xray_irradiation_law(world, law).0)
+}
+
+/// Clear the X-ray irradiation law on a world.
+///
+/// # Safety
+///
+/// `world` must be a valid world pointer returned by `world_create`; a null
+/// pointer is a no-op.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_clear_xray_irradiation_law(world: *mut WorldHandle) {
+    ffi_guard((), || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            return;
+        };
+        use crate::rapier::forces::ForceLawType;
+        world
+            .inner
+            .force_registry
+            .unregister_by_type(ForceLawType::XrayIrradiation);
+    })
+}
+
+/// Set (or disable) the pulsar magnetic-dipole torque law on a world.
+/// See `PulsarMagneticDipoleLaw` doc for parameter semantics.
+///
+/// # Safety
+///
+/// `world` must be a valid world pointer returned by `world_create`; a null
+/// pointer fails with `ERR_NULL_POINTER`.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_set_pulsar_magnetic_dipole_law(
+    world: *mut WorldHandle,
+    law: PulsarMagneticDipoleLaw,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !law.moment_of_inertia.is_finite()
+            || law.moment_of_inertia <= 0.0
+            || !law.ns_radius_m.is_finite()
+            || law.ns_radius_m <= 0.0
+            || !law.period_ms.is_finite()
+            || law.period_ms <= 0.0
+            || !law.period_derivative.is_finite()
+            || law.period_derivative <= 0.0
+            || !vec3_finite(law.pulsar_position)
+            || !vec3_finite(law.spin_axis)
+            || !vec3_finite(law.body_dipole_moment)
+        {
+            set_error(ERR_INVALID_ARGUMENT, "invalid pulsar magnetic dipole law");
+            return Bool::FALSE;
+        }
+
+        {
+            use crate::rapier::forces::ForceLawType;
+            world
+                .inner
+                .force_registry
+                .unregister_by_type(ForceLawType::PulsarMagneticDipole);
+            if law.enabled.0 != 0 {
+                let p_law = crate::rapier::interaction::PulsarMagneticDipoleForceLaw {
+                    moment_of_inertia: law.moment_of_inertia,
+                    ns_radius_m: law.ns_radius_m,
+                    period_ms: law.period_ms,
+                    period_derivative: law.period_derivative,
+                    pulsar_position: vec3_to_rapier(law.pulsar_position),
+                    spin_axis: vec3_to_rapier(law.spin_axis),
+                    body_dipole_moment: vec3_to_rapier(law.body_dipole_moment),
+                    enabled: true,
+                };
+                world.inner.force_registry.register(Box::new(p_law));
+            }
+        }
+
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// `u8`-returning variant of `world_set_pulsar_magnetic_dipole_law`.
+///
+/// # Safety
+///
+/// Same contract as `world_set_pulsar_magnetic_dipole_law`.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_set_pulsar_magnetic_dipole_law_flag(
+    world: *mut WorldHandle,
+    law: PulsarMagneticDipoleLaw,
+) -> u8 {
+    ffi_guard(0, || world_set_pulsar_magnetic_dipole_law(world, law).0)
+}
+
+/// Clear the pulsar magnetic-dipole torque law on a world.
+///
+/// # Safety
+///
+/// `world` must be a valid world pointer returned by `world_create`; a null
+/// pointer is a no-op.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_clear_pulsar_magnetic_dipole_law(world: *mut WorldHandle) {
+    ffi_guard((), || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            return;
+        };
+        use crate::rapier::forces::ForceLawType;
+        world
+            .inner
+            .force_registry
+            .unregister_by_type(ForceLawType::PulsarMagneticDipole);
+    })
+}
+
+/// Set (or disable) the Jeans-escape drag force law on a world.
+/// See `JeansEscapeLaw` doc for parameter semantics.
+///
+/// # Safety
+///
+/// `world` must be a valid world pointer returned by `world_create`; a null
+/// pointer fails with `ERR_NULL_POINTER`.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_set_jeans_escape_law(
+    world: *mut WorldHandle,
+    law: JeansEscapeLaw,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !law.n_exo.is_finite() || law.n_exo <= 0.0
+            || !law.temperature.is_finite() || law.temperature <= 0.0
+            || !law.escape_parameter.is_finite() || law.escape_parameter < 0.0
+            || !law.mass_kg.is_finite() || law.mass_kg <= 0.0
+            || !law.effective_area_m2.is_finite() || law.effective_area_m2 <= 0.0
+            || !vec3_finite(law.escape_direction)
+        {
+            set_error(ERR_INVALID_ARGUMENT, "invalid Jeans escape law");
+            return Bool::FALSE;
+        }
+
+        {
+            use crate::rapier::forces::ForceLawType;
+            world
+                .inner
+                .force_registry
+                .unregister_by_type(ForceLawType::JeansEscape);
+            if law.enabled.0 != 0 {
+                let j_law = crate::rapier::interaction::JeansEscapeDragForceLaw {
+                    n_exo: law.n_exo,
+                    temperature: law.temperature,
+                    escape_parameter: law.escape_parameter,
+                    mass_kg: law.mass_kg,
+                    escape_direction: vec3_to_rapier(law.escape_direction),
+                    effective_area_m2: law.effective_area_m2,
+                    enabled: true,
+                };
+                world.inner.force_registry.register(Box::new(j_law));
+            }
+        }
+
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// `u8`-returning variant of `world_set_jeans_escape_law`.
+///
+/// # Safety
+///
+/// Same contract as `world_set_jeans_escape_law`.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_set_jeans_escape_law_flag(
+    world: *mut WorldHandle,
+    law: JeansEscapeLaw,
+) -> u8 {
+    ffi_guard(0, || world_set_jeans_escape_law(world, law).0)
+}
+
+/// Clear the Jeans-escape drag law on a world.
+///
+/// # Safety
+///
+/// `world` must be a valid world pointer returned by `world_create`; a null
+/// pointer is a no-op.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_clear_jeans_escape_law(world: *mut WorldHandle) {
+    ffi_guard((), || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            return;
+        };
+        use crate::rapier::forces::ForceLawType;
+        world
+            .inner
+            .force_registry
+            .unregister_by_type(ForceLawType::JeansEscape);
     })
 }

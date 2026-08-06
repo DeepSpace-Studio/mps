@@ -2087,6 +2087,216 @@ void world_unregister_callback(struct WorldHandle *world, EventCallbackHandle ha
 Bool world_set_event_dispatch_mode(struct WorldHandle *world, uint32_t mode);
 
 /**
+ * Set (or disable) the solar-wind dynamic-pressure force law on a world.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer fails with `ERR_NULL_POINTER`.
+ */
+Bool world_set_solar_wind_pressure_law(struct WorldHandle *world, SolarWindPressureLaw law);
+
+/**
+ * `u8`-returning variant of `world_set_solar_wind_pressure_law`.
+ *
+ * # Safety
+ *
+ * Same contract as `world_set_solar_wind_pressure_law`.
+ */
+uint8_t world_set_solar_wind_pressure_law_flag(struct WorldHandle *world, SolarWindPressureLaw law);
+
+/**
+ * Clear the solar-wind pressure law on a world.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer is a no-op.
+ */
+void world_clear_solar_wind_pressure_law(struct WorldHandle *world);
+
+/**
+ * Set (or disable) the Chandrasekhar dynamical-friction force law on a world.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer fails with `ERR_NULL_POINTER`.
+ */
+Bool world_set_dynamical_friction_law(struct WorldHandle *world, DynamicalFrictionLaw law);
+
+/**
+ * `u8`-returning variant of `world_set_dynamical_friction_law`.
+ *
+ * # Safety
+ *
+ * Same contract as `world_set_dynamical_friction_law`.
+ */
+uint8_t world_set_dynamical_friction_law_flag(struct WorldHandle *world, DynamicalFrictionLaw law);
+
+/**
+ * Clear the dynamical-friction law on a world.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer is a no-op.
+ */
+void world_clear_dynamical_friction_law(struct WorldHandle *world);
+
+/**
+ * Set (or disable) the MOND-corrected gravity force law on a world.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer fails with `ERR_NULL_POINTER`.
+ */
+Bool world_set_mond_gravity_law(struct WorldHandle *world, MonDGravityLaw law);
+
+/**
+ * `u8`-returning variant of `world_set_mond_gravity_law`.
+ *
+ * # Safety
+ *
+ * Same contract as `world_set_mond_gravity_law`.
+ */
+uint8_t world_set_mond_gravity_law_flag(struct WorldHandle *world, MonDGravityLaw law);
+
+/**
+ * Clear the MOND gravity law on a world.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer is a no-op.
+ */
+void world_clear_mond_gravity_law(struct WorldHandle *world);
+
+/**
+ * Set (or disable) the Eddington-limited radiation-pressure force law on
+ * a world.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer fails with `ERR_NULL_POINTER`.
+ */
+Bool world_set_eddington_radiation_pressure_law(struct WorldHandle *world,
+                                                EddingtonRadiationPressureLaw law);
+
+/**
+ * `u8`-returning variant of `world_set_eddington_radiation_pressure_law`.
+ *
+ * # Safety
+ *
+ * Same contract as `world_set_eddington_radiation_pressure_law`.
+ */
+uint8_t world_set_eddington_radiation_pressure_law_flag(struct WorldHandle *world,
+                                                        EddingtonRadiationPressureLaw law);
+
+/**
+ * Clear the Eddington radiation-pressure law on a world.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer is a no-op.
+ */
+void world_clear_eddington_radiation_pressure_law(struct WorldHandle *world);
+
+/**
+ * Set (or disable) the X-ray disc bolometric irradiation force law on a
+ * world.  See `XrayIrradiationLaw` doc for parameter semantics.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer fails with `ERR_NULL_POINTER`.
+ */
+Bool world_set_xray_irradiation_law(struct WorldHandle *world, XrayIrradiationLaw law);
+
+/**
+ * `u8`-returning variant of `world_set_xray_irradiation_law`.
+ *
+ * # Safety
+ *
+ * Same contract as `world_set_xray_irradiation_law`.
+ */
+uint8_t world_set_xray_irradiation_law_flag(struct WorldHandle *world, XrayIrradiationLaw law);
+
+/**
+ * Clear the X-ray irradiation law on a world.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer is a no-op.
+ */
+void world_clear_xray_irradiation_law(struct WorldHandle *world);
+
+/**
+ * Set (or disable) the pulsar magnetic-dipole torque law on a world.
+ * See `PulsarMagneticDipoleLaw` doc for parameter semantics.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer fails with `ERR_NULL_POINTER`.
+ */
+Bool world_set_pulsar_magnetic_dipole_law(struct WorldHandle *world, PulsarMagneticDipoleLaw law);
+
+/**
+ * `u8`-returning variant of `world_set_pulsar_magnetic_dipole_law`.
+ *
+ * # Safety
+ *
+ * Same contract as `world_set_pulsar_magnetic_dipole_law`.
+ */
+uint8_t world_set_pulsar_magnetic_dipole_law_flag(struct WorldHandle *world,
+                                                  PulsarMagneticDipoleLaw law);
+
+/**
+ * Clear the pulsar magnetic-dipole torque law on a world.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer is a no-op.
+ */
+void world_clear_pulsar_magnetic_dipole_law(struct WorldHandle *world);
+
+/**
+ * Set (or disable) the Jeans-escape drag force law on a world.
+ * See `JeansEscapeLaw` doc for parameter semantics.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer fails with `ERR_NULL_POINTER`.
+ */
+Bool world_set_jeans_escape_law(struct WorldHandle *world, JeansEscapeLaw law);
+
+/**
+ * `u8`-returning variant of `world_set_jeans_escape_law`.
+ *
+ * # Safety
+ *
+ * Same contract as `world_set_jeans_escape_law`.
+ */
+uint8_t world_set_jeans_escape_law_flag(struct WorldHandle *world, JeansEscapeLaw law);
+
+/**
+ * Clear the Jeans-escape drag law on a world.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer returned by `world_create`; a null
+ * pointer is a no-op.
+ */
+void world_clear_jeans_escape_law(struct WorldHandle *world);
+
+/**
  * # Safety
  *
  * `out_report` may be null or must point to writable space for one

@@ -4,13 +4,19 @@
 //! 切分边界、`step_n` 批处理、默认 `n_body_softening_sq` 限幅，以及端到端
 //! 圆轨道 LEO 演算（RapierForce 短弧 + Verlet 整圈闭合）。
 
+#[cfg(test)]
 use mps_cosmos::bodies::satellite_builder;
+#[cfg(test)]
 use mps_cosmos::integrator::{AccelContext, snapshot_source_positions, total_acceleration};
+#[cfg(test)]
 use mps_cosmos::world::{
     CosmosWorld, CosmosWorldConfig, OrbitIntegration, StepResult, StepSkipReason,
 };
+#[cfg(test)]
 use mps_formula::celestial_data::{CelestialBodyId, get_celestial_body};
+#[cfg(test)]
 use mps_formula::spaceflight::kepler_period;
+#[cfg(test)]
 use rapier3d::prelude::Vector;
 
 /// RapierForce 路径回归测试：semi-implicit Euler 在纯点质量中心引力下推一段

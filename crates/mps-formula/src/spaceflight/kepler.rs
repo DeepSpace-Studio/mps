@@ -399,3 +399,106 @@ pub fn tsiolkovsky_delta_v(
     }
     Some(specific_impulse * standard_gravity * (initial_mass / final_mass).ln())
 }
+
+// ---------------------------------------------------------------------------
+// Constellation geometry (PHYSICS_EXPANSION_PLAN.md W3)
+// ---------------------------------------------------------------------------
+
+/// Walker delta constellation geometry — total satellites `t`, orbital planes
+/// `p`, phasing parameter `f`, returns the `(RAAN_deg, mean_anomaly_deg)` pair
+/// for the 0-based `idx`-th satellite in the shell.
+///
+/// Constraints enforced (return `None` on violation with a prior `set_error`
+/// call):
+/// - `t > 0`, `p > 0`, `p ≤ t`, `f < p`, `idx < t`
+/// - `t` must be exactly divisible by `p` (so each plane holds `s = t/p`
+///   satellites evenly)
+///
+/// Convention: RAAN spacing between planes is `360°/p`; in-plane mean-anomaly
+/// spacing is `360°/s`; the phasing offset for a Walker delta scales with the
+/// plane index: `plane · f · 360°/t` (the relative geometry between planes is
+/// what `f` controls).
+///
+/// Example: GPS Block II "24/3/2" shell → idx=17 gives (240°, 105°).
+pub fn walker_delta_layout(t: u32, p: u32, f: u32, idx: u32) -> Option<(f64, f64)> {
+    if t == 0
+        || p == 0
+        || p > t
+        || f >= p
+        || idx >= t
+    {
+        return None;
+    }
+    let s = t / p;
+    if s * p != t {
+        return None; // t must divide p exactly
+    }
+    let plane = idx / s;
+    let pos = idx % s;
+    let plane_spacing = 360.0 / p as f64;
+    let in_plane_spacing = 360.0 / s as f64;
+    let raan = (plane as f64) * plane_spacing;
+    // Walker delta phasing: each plane is offset by f·(360°/t) relative to
+    // the previous one, so the offset scales with the plane index.
+    let phasing_offset = (plane as f64) * (f as f64) * 360.0 / (t as f64);
+    let mean_anomaly = (pos as f64) * in_plane_spacing + phasing_offset;
+    Some((raan % 360.0, mean_anomaly % 360.0))
+}
+
+/// Sun-synchronous orbit (SSO) inclination from orbital altitude — simplified
+/// closed-form for near-circular low-Earth orbits.  Returns the inclination in
+/// degrees needed for the J2 precession rate
+/// `Ω̇ = -(3/2) · n · J2 · (R_E/a)² · cos(i)` to match the requested rate
+/// (one full rotation per year is 360°/365.25 d ≈ 0.9856 deg/day ≈ 1.991e-7
+/// rad/s).
+///
+/// Inputs:
+/// - `radius_earth_km` — central body's equatorial radius [km]
+/// - `altitude_km`     — mean orbital altitude above that radius [km] (≥ 0)
+/// - `mu_km3_s2`       — gravitational parameter μ [km³/s²]
+/// - `raan_precession_rate_rad_s` — desired RAAN precession rate [rad/s]
+///   (+1.991e-7 for "one revolution per year"; negative for dusk-dawn)
+///
+/// Returns `i_deg` in `[0°, 180°]`.  For typical 600 km LEO SSO, i ≈ 97.9°.
+pub fn sun_synchronous_inclination(
+    radius_earth_km: f64,
+    altitude_km: f64,
+    mu_km3_s2: f64,
+    raan_precession_rate_rad_s: f64,
+) -> Option<f64> {
+    const J2: f64 = 1.082626173e-3;
+    let a = altitude_km + radius_earth_km;
+    if !finite(&[radius_earth_km, altitude_km, mu_km3_s2, raan_precession_rate_rad_s])
+        || radius_earth_km <= 0.0
+        || altitude_km < 0.0
+        || mu_km3_s2 <= 0.0
+        || raan_precession_rate_rad_s == 0.0
+        || a <= 0.0
+    {
+        return None;
+    }
+    // mean motion n = sqrt(μ/a³)
+    let n = (mu_km3_s2 / (a * a * a)).sqrt();
+    // precession rate = -(3/2)·J2·n·(R_E/a)²·cos(i)
+    // ⇒ cos(i) = -dot_Ω / ((3/2)·J2·n·(R_E/a)²)
+    let denom = 1.5 * J2 * n * (radius_earth_km / a).powi(2);
+    if denom == 0.0 {
+        return None;
+    }
+    let cos_i = -raan_precession_rate_rad_s / denom;
+    if cos_i < -1.0 || cos_i > 1.0 {
+        return None; // no real inclination exists for this combination
+    }
+    Some(cos_i.acos().to_degrees())
+}
+
+/// Molniya-orbit critical argument-of-perigee: for a 12-hour high-eccentricity
+/// orbit with 63.4° inclination, the critical ω = 270° places apogee over the
+/// northern hemisphere (maximising dwell time over high-latitude coverage).
+/// This helper returns the critical inclination in degrees plus the
+/// conventional argument-of-perigee (270°) as a tuple; it exists so callers
+/// can refer to the design point without magic numbers.
+pub fn molniya_critical_elements() -> (f64, f64) {
+    (63.4, 270.0)
+}
+

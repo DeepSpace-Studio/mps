@@ -842,4 +842,455 @@ mod tests {
 
         mps_core::rapier::world::world_destroy(world);
     }
+
+    // =========================================================================
+    // PHYSICS_EXPANSION_PLAN C1: solar-wind pressure / dynamical-friction /
+    // MOND gravity force-law FFI mirroring (world_set_* / world_clear_*).
+    // Each law accepts a valid configuration, rejects NaN / non-positive
+    // parameters, and round-trips a clear → set → clear sequence.
+    // =========================================================================
+
+    #[test]
+    fn solar_wind_pressure_law_accepts_valid_config() {
+        let world = mps_core::rapier::world::world_create(Vec3::default());
+        let law = SolarWindPressureLaw {
+            proton_density: 5.0e6,
+            v_sw_mps: 400.0,
+            wind_direction: Vec3 { x: 1.0, y: 0.0, z: 0.0 },
+            effective_area_m2: 10.0,
+            enabled: Bool::TRUE,
+        };
+        assert_eq!(world_set_solar_wind_pressure_law(world, law), Bool::TRUE);
+        assert_eq!(last_error_code(), ERR_OK);
+        // Disable path: enabled=0 should also succeed (clears prior law).
+        let disabled = SolarWindPressureLaw { enabled: Bool::FALSE, ..law };
+        assert_eq!(world_set_solar_wind_pressure_law(world, disabled), Bool::TRUE);
+        assert_eq!(last_error_code(), ERR_OK);
+        // flag variant returns 1.
+        let one = world_set_solar_wind_pressure_law_flag(world, law);
+        assert_eq!(one, 1);
+        world_clear_solar_wind_pressure_law(world);
+        assert_eq!(last_error_code(), ERR_OK);
+        mps_core::rapier::world::world_destroy(world);
+    }
+
+    #[test]
+    fn solar_wind_pressure_law_rejects_invalid_parameters() {
+        let world = mps_core::rapier::world::world_create(Vec3::default());
+        let base = SolarWindPressureLaw {
+            proton_density: 5.0e6,
+            v_sw_mps: 400.0,
+            wind_direction: Vec3 { x: 1.0, y: 0.0, z: 0.0 },
+            effective_area_m2: 10.0,
+            enabled: Bool::TRUE,
+        };
+        // zero proton_density
+        let bad = SolarWindPressureLaw { proton_density: 0.0, ..base };
+        assert_eq!(world_set_solar_wind_pressure_law(world, bad), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        // negative v_sw_mps
+        let bad = SolarWindPressureLaw { v_sw_mps: -1.0, ..base };
+        assert_eq!(world_set_solar_wind_pressure_law(world, bad), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        // zero effective_area
+        let bad = SolarWindPressureLaw { effective_area_m2: 0.0, ..base };
+        assert_eq!(world_set_solar_wind_pressure_law(world, bad), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        // NaN direction
+        let bad = SolarWindPressureLaw {
+            wind_direction: Vec3 { x: f64::NAN, y: 0.0, z: 0.0 },
+            ..base
+        };
+        assert_eq!(world_set_solar_wind_pressure_law(world, bad), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        // null world
+        assert_eq!(
+            world_set_solar_wind_pressure_law(std::ptr::null_mut(), base),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+        mps_core::rapier::world::world_destroy(world);
+    }
+
+    #[test]
+    fn dynamical_friction_law_accepts_valid_config() {
+        let world = mps_core::rapier::world::world_create(Vec3::default());
+        let law = DynamicalFrictionLaw {
+            background_density_kg_m3: 1.0e-21,
+            coulomb_log: 10.0,
+            enabled: Bool::TRUE,
+        };
+        assert_eq!(world_set_dynamical_friction_law(world, law), Bool::TRUE);
+        assert_eq!(last_error_code(), ERR_OK);
+        let disabled = DynamicalFrictionLaw { enabled: Bool::FALSE, ..law };
+        assert_eq!(world_set_dynamical_friction_law(world, disabled), Bool::TRUE);
+        let one = world_set_dynamical_friction_law_flag(world, law);
+        assert_eq!(one, 1);
+        world_clear_dynamical_friction_law(world);
+        assert_eq!(last_error_code(), ERR_OK);
+        mps_core::rapier::world::world_destroy(world);
+    }
+
+    #[test]
+    fn dynamical_friction_law_rejects_invalid_parameters() {
+        let world = mps_core::rapier::world::world_create(Vec3::default());
+        let base = DynamicalFrictionLaw {
+            background_density_kg_m3: 1.0e-21,
+            coulomb_log: 10.0,
+            enabled: Bool::TRUE,
+        };
+        let bad = DynamicalFrictionLaw { background_density_kg_m3: 0.0, ..base };
+        assert_eq!(world_set_dynamical_friction_law(world, bad), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        let bad = DynamicalFrictionLaw { coulomb_log: 0.0, ..base };
+        assert_eq!(world_set_dynamical_friction_law(world, bad), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        let bad = DynamicalFrictionLaw { background_density_kg_m3: f64::NAN, ..base };
+        assert_eq!(world_set_dynamical_friction_law(world, bad), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        assert_eq!(
+            world_set_dynamical_friction_law(std::ptr::null_mut(), base),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+        mps_core::rapier::world::world_destroy(world);
+    }
+
+    #[test]
+    fn mond_gravity_law_accepts_valid_config() {
+        let world = mps_core::rapier::world::world_create(Vec3::default());
+        let law = MonDGravityLaw {
+            newtonian_a: 1.0e-10,
+            mond_a_zero: 1.2e-10,
+            direction: Vec3 { x: 0.0, y: -1.0, z: 0.0 },
+            enabled: Bool::TRUE,
+        };
+        assert_eq!(world_set_mond_gravity_law(world, law), Bool::TRUE);
+        assert_eq!(last_error_code(), ERR_OK);
+        let disabled = MonDGravityLaw { enabled: Bool::FALSE, ..law };
+        assert_eq!(world_set_mond_gravity_law(world, disabled), Bool::TRUE);
+        let one = world_set_mond_gravity_law_flag(world, law);
+        assert_eq!(one, 1);
+        world_clear_mond_gravity_law(world);
+        assert_eq!(last_error_code(), ERR_OK);
+        mps_core::rapier::world::world_destroy(world);
+    }
+
+    #[test]
+    fn mond_gravity_law_rejects_invalid_parameters() {
+        let world = mps_core::rapier::world::world_create(Vec3::default());
+        let base = MonDGravityLaw {
+            newtonian_a: 1.0e-10,
+            mond_a_zero: 1.2e-10,
+            direction: Vec3 { x: 0.0, y: -1.0, z: 0.0 },
+            enabled: Bool::TRUE,
+        };
+        let bad = MonDGravityLaw { mond_a_zero: 0.0, ..base };
+        assert_eq!(world_set_mond_gravity_law(world, bad), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        let bad = MonDGravityLaw { newtonian_a: -1.0, ..base };
+        assert_eq!(world_set_mond_gravity_law(world, bad), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        let bad = MonDGravityLaw {
+            direction: Vec3 { x: f64::NAN, y: 0.0, z: 0.0 },
+            ..base
+        };
+        assert_eq!(world_set_mond_gravity_law(world, bad), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        assert_eq!(
+            world_set_mond_gravity_law(std::ptr::null_mut(), base),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+        mps_core::rapier::world::world_destroy(world);
+    }
+
+    // =========================================================================
+    // PHYSICS_EXPANSION_PLAN C2: Eddington-limited radiation-pressure force-law
+    // FFI mirroring (world_set_eddington_radiation_pressure_law &
+    // world_clear_eddington_radiation_pressure_law).
+    // =========================================================================
+
+    #[test]
+    fn eddington_radiation_pressure_law_accepts_valid_config() {
+        let world = mps_core::rapier::world::world_create(Vec3::default());
+        let law = EddingtonRadiationPressureLaw {
+            mass_kg: 1.989e31,
+            opacity: 0.034,
+            source_position: Vec3 { x: 0.0, y: 0.0, z: 0.0 },
+            effective_area_m2: 1.0,
+            enabled: Bool::TRUE,
+        };
+        assert_eq!(
+            world_set_eddington_radiation_pressure_law(world, law),
+            Bool::TRUE
+        );
+        assert_eq!(last_error_code(), ERR_OK);
+        let disabled = EddingtonRadiationPressureLaw { enabled: Bool::FALSE, ..law };
+        assert_eq!(
+            world_set_eddington_radiation_pressure_law(world, disabled),
+            Bool::TRUE
+        );
+        assert_eq!(last_error_code(), ERR_OK);
+        let one = world_set_eddington_radiation_pressure_law_flag(world, law);
+        assert_eq!(one, 1);
+        world_clear_eddington_radiation_pressure_law(world);
+        assert_eq!(last_error_code(), ERR_OK);
+        mps_core::rapier::world::world_destroy(world);
+    }
+
+    #[test]
+    fn eddington_radiation_pressure_law_rejects_invalid_parameters() {
+        let world = mps_core::rapier::world::world_create(Vec3::default());
+        let base = EddingtonRadiationPressureLaw {
+            mass_kg: 1.989e31,
+            opacity: 0.034,
+            source_position: Vec3 { x: 0.0, y: 0.0, z: 0.0 },
+            effective_area_m2: 1.0,
+            enabled: Bool::TRUE,
+        };
+        let bad = EddingtonRadiationPressureLaw { mass_kg: 0.0, ..base };
+        assert_eq!(
+            world_set_eddington_radiation_pressure_law(world, bad),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        let bad = EddingtonRadiationPressureLaw { opacity: 0.0, ..base };
+        assert_eq!(
+            world_set_eddington_radiation_pressure_law(world, bad),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        let bad = EddingtonRadiationPressureLaw { effective_area_m2: 0.0, ..base };
+        assert_eq!(
+            world_set_eddington_radiation_pressure_law(world, bad),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        let bad = EddingtonRadiationPressureLaw {
+            source_position: Vec3 { x: f64::NAN, y: 0.0, z: 0.0 },
+            ..base
+        };
+        assert_eq!(
+            world_set_eddington_radiation_pressure_law(world, bad),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        assert_eq!(
+            world_set_eddington_radiation_pressure_law(std::ptr::null_mut(), base),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+        mps_core::rapier::world::world_destroy(world);
+    }
+
+    // =========================================================================
+    // PHYSICS_EXPANSION_PLAN C3: X-ray disc bolometric irradiation force-law
+    // FFI mirroring (world_set_xray_irradiation_law & world_clear_xray_irradiation_law).
+    // =========================================================================
+
+    #[test]
+    fn xray_irradiation_law_accepts_valid_config() {
+        let world = mps_core::rapier::world::world_create(Vec3::default());
+        let law = XrayIrradiationLaw {
+            k_t_eff_kev: 1.0,
+            r_in_km: 10.0,
+            spectral_hardening: 1.7,
+            source_position: Vec3 { x: 0.0, y: 0.0, z: 0.0 },
+            effective_area_m2: 1.0,
+            enabled: Bool::TRUE,
+        };
+        assert_eq!(world_set_xray_irradiation_law(world, law), Bool::TRUE);
+        assert_eq!(last_error_code(), ERR_OK);
+        let disabled = XrayIrradiationLaw { enabled: Bool::FALSE, ..law };
+        assert_eq!(world_set_xray_irradiation_law(world, disabled), Bool::TRUE);
+        assert_eq!(last_error_code(), ERR_OK);
+        let one = world_set_xray_irradiation_law_flag(world, law);
+        assert_eq!(one, 1);
+        world_clear_xray_irradiation_law(world);
+        assert_eq!(last_error_code(), ERR_OK);
+        mps_core::rapier::world::world_destroy(world);
+    }
+
+    #[test]
+    fn xray_irradiation_law_rejects_invalid_parameters() {
+        let world = mps_core::rapier::world::world_create(Vec3::default());
+        let base = XrayIrradiationLaw {
+            k_t_eff_kev: 1.0,
+            r_in_km: 10.0,
+            spectral_hardening: 1.7,
+            source_position: Vec3 { x: 0.0, y: 0.0, z: 0.0 },
+            effective_area_m2: 1.0,
+            enabled: Bool::TRUE,
+        };
+        let bad = XrayIrradiationLaw { k_t_eff_kev: 0.0, ..base };
+        assert_eq!(world_set_xray_irradiation_law(world, bad), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        let bad = XrayIrradiationLaw { r_in_km: 0.0, ..base };
+        assert_eq!(world_set_xray_irradiation_law(world, bad), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        let bad = XrayIrradiationLaw { spectral_hardening: 0.0, ..base };
+        assert_eq!(world_set_xray_irradiation_law(world, bad), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        let bad = XrayIrradiationLaw {
+            source_position: Vec3 { x: 0.0, y: f64::NAN, z: 0.0 },
+            ..base
+        };
+        assert_eq!(world_set_xray_irradiation_law(world, bad), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        assert_eq!(
+            world_set_xray_irradiation_law(std::ptr::null_mut(), base),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+        mps_core::rapier::world::world_destroy(world);
+    }
+
+    // =========================================================================
+    // PHYSICS_EXPANSION_PLAN C3: Pulsar magnetic-dipole torque force-law
+    // FFI mirroring (world_set_pulsar_magnetic_dipole_law &
+    // world_clear_pulsar_magnetic_dipole_law).
+    // =========================================================================
+
+    #[test]
+    fn pulsar_magnetic_dipole_law_accepts_valid_config() {
+        let world = mps_core::rapier::world::world_create(Vec3::default());
+        let law = PulsarMagneticDipoleLaw {
+            moment_of_inertia: 1.0e38, // typical NS
+            ns_radius_m: 1.0e4,       // 10 km
+            period_ms: 33.4,          // Crab-like
+            period_derivative: 4.2e-13,
+            pulsar_position: Vec3 { x: 0.0, y: 0.0, z: 0.0 },
+            spin_axis: Vec3 { x: 0.0, y: 0.0, z: 1.0 },
+            body_dipole_moment: Vec3 { x: 1.0, y: 0.0, z: 0.0 },
+            enabled: Bool::TRUE,
+        };
+        assert_eq!(world_set_pulsar_magnetic_dipole_law(world, law), Bool::TRUE);
+        assert_eq!(last_error_code(), ERR_OK);
+        let disabled = PulsarMagneticDipoleLaw { enabled: Bool::FALSE, ..law };
+        assert_eq!(world_set_pulsar_magnetic_dipole_law(world, disabled), Bool::TRUE);
+        assert_eq!(last_error_code(), ERR_OK);
+        let one = world_set_pulsar_magnetic_dipole_law_flag(world, law);
+        assert_eq!(one, 1);
+        world_clear_pulsar_magnetic_dipole_law(world);
+        assert_eq!(last_error_code(), ERR_OK);
+        mps_core::rapier::world::world_destroy(world);
+    }
+
+    #[test]
+    fn pulsar_magnetic_dipole_law_rejects_invalid_parameters() {
+        let world = mps_core::rapier::world::world_create(Vec3::default());
+        let base = PulsarMagneticDipoleLaw {
+            moment_of_inertia: 1.0e38,
+            ns_radius_m: 1.0e4,
+            period_ms: 33.4,
+            period_derivative: 4.2e-13,
+            pulsar_position: Vec3 { x: 0.0, y: 0.0, z: 0.0 },
+            spin_axis: Vec3 { x: 0.0, y: 0.0, z: 1.0 },
+            body_dipole_moment: Vec3 { x: 1.0, y: 0.0, z: 0.0 },
+            enabled: Bool::TRUE,
+        };
+        let bad = PulsarMagneticDipoleLaw { moment_of_inertia: 0.0, ..base };
+        assert_eq!(world_set_pulsar_magnetic_dipole_law(world, bad), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        let bad = PulsarMagneticDipoleLaw { ns_radius_m: 0.0, ..base };
+        assert_eq!(world_set_pulsar_magnetic_dipole_law(world, bad), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        let bad = PulsarMagneticDipoleLaw { period_ms: 0.0, ..base };
+        assert_eq!(world_set_pulsar_magnetic_dipole_law(world, bad), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        let bad = PulsarMagneticDipoleLaw { period_derivative: 0.0, ..base };
+        assert_eq!(world_set_pulsar_magnetic_dipole_law(world, bad), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        let bad = PulsarMagneticDipoleLaw {
+            spin_axis: Vec3 { x: 0.0, y: 0.0, z: 0.0 },
+            ..base
+        };
+        // spin_axis length=0: still passes FFI validation (vec3_finite passes
+        // (0,0,0)); the apply() guards the zero-length path. The FFI accepts
+        // the config — the law will just no-op in apply.
+        assert_eq!(world_set_pulsar_magnetic_dipole_law(world, bad), Bool::TRUE);
+        let bad = PulsarMagneticDipoleLaw {
+            pulsar_position: Vec3 { x: f64::NAN, y: 0.0, z: 0.0 },
+            ..base
+        };
+        assert_eq!(world_set_pulsar_magnetic_dipole_law(world, bad), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        assert_eq!(
+            world_set_pulsar_magnetic_dipole_law(std::ptr::null_mut(), base),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+        mps_core::rapier::world::world_destroy(world);
+    }
+
+    // =========================================================================
+    // PHYSICS_EXPANSION_PLAN C4: Jeans-escape drag force-law
+    // FFI mirroring (world_set_jeans_escape_law & world_clear_jeans_escape_law).
+    // =========================================================================
+
+    #[test]
+    fn jeans_escape_law_accepts_valid_config() {
+        let world = mps_core::rapier::world::world_create(Vec3::default());
+        let law = JeansEscapeLaw {
+            n_exo: 1.0e12,        // 1e12 m⁻³ — exobase density
+            temperature: 1000.0,  // 1000 K exobase
+            escape_parameter: 7.5, // Earth H λ ≈ 7.5
+            mass_kg: 1.673e-27,    // H atom ~ 1.673e-27 kg
+            escape_direction: Vec3 { x: 0.0, y: 0.0, z: 1.0 },
+            effective_area_m2: 1.0,
+            enabled: Bool::TRUE,
+        };
+        assert_eq!(world_set_jeans_escape_law(world, law), Bool::TRUE);
+        assert_eq!(last_error_code(), ERR_OK);
+        let disabled = JeansEscapeLaw { enabled: Bool::FALSE, ..law };
+        assert_eq!(world_set_jeans_escape_law(world, disabled), Bool::TRUE);
+        assert_eq!(last_error_code(), ERR_OK);
+        let one = world_set_jeans_escape_law_flag(world, law);
+        assert_eq!(one, 1);
+        world_clear_jeans_escape_law(world);
+        assert_eq!(last_error_code(), ERR_OK);
+        mps_core::rapier::world::world_destroy(world);
+    }
+
+    #[test]
+    fn jeans_escape_law_rejects_invalid_parameters() {
+        let world = mps_core::rapier::world::world_create(Vec3::default());
+        let base = JeansEscapeLaw {
+            n_exo: 1.0e12,
+            temperature: 1000.0,
+            escape_parameter: 7.5,
+            mass_kg: 1.673e-27,
+            escape_direction: Vec3 { x: 0.0, y: 0.0, z: 1.0 },
+            effective_area_m2: 1.0,
+            enabled: Bool::TRUE,
+        };
+        let bad = JeansEscapeLaw { n_exo: 0.0, ..base };
+        assert_eq!(world_set_jeans_escape_law(world, bad), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        let bad = JeansEscapeLaw { temperature: 0.0, ..base };
+        assert_eq!(world_set_jeans_escape_law(world, bad), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        let bad = JeansEscapeLaw { escape_parameter: -1.0, ..base };
+        assert_eq!(world_set_jeans_escape_law(world, bad), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        let bad = JeansEscapeLaw { mass_kg: 0.0, ..base };
+        assert_eq!(world_set_jeans_escape_law(world, bad), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        let bad = JeansEscapeLaw { effective_area_m2: 0.0, ..base };
+        assert_eq!(world_set_jeans_escape_law(world, bad), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        let bad = JeansEscapeLaw {
+            escape_direction: Vec3 { x: f64::NAN, y: 0.0, z: 0.0 },
+            ..base
+        };
+        assert_eq!(world_set_jeans_escape_law(world, bad), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        assert_eq!(
+            world_set_jeans_escape_law(std::ptr::null_mut(), base),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+        mps_core::rapier::world::world_destroy(world);
+    }
 }

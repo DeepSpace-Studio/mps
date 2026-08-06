@@ -317,6 +317,15 @@ const FORCE_LAW_TYPE_TAGS: &[(ForceLawType, u32)] = &[
     // Tags 14–25 retired (space/trajectory/terrain variants removed after
     // `mps-cosmos` took over celestial/n-body/drag). ControlPID keeps 23.
     (ForceLawType::ControlPID, 23),
+    // PHYSICS_EXPANSION_PLAN C1 variants occupy 27–29 (26 reserved for Custom).
+    (ForceLawType::SolarWindPressure, 27),
+    (ForceLawType::DynamicalFriction, 28),
+    (ForceLawType::MonDGravity, 29),
+    // C2–C4 variants occupy 30–33, matching `force_law_type_idx` in forces.rs.
+    (ForceLawType::EddingtonRadiationPressure, 30),
+    (ForceLawType::XrayIrradiation, 31),
+    (ForceLawType::PulsarMagneticDipole, 32),
+    (ForceLawType::JeansEscape, 33),
 ];
 
 /// Convert a u32 tag to `ForceLawType`.  Returns `None` for out-of-range tags.

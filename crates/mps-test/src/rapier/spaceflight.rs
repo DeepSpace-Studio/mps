@@ -16,6 +16,65 @@ mod tests {
     }
 
     #[test]
+    fn walker_delta_layout_phases_planes_by_f() {
+        use mps_formula::spaceflight::walker_delta_layout;
+
+        // GPS Block II "24/3/2": s = 8 sats/plane, RAAN spacing 120°,
+        // in-plane spacing 45°, per-plane phasing f·360°/t = 30°.
+        // idx=17 → plane 2, pos 1 → RAAN=240°, M = 45° + 2·30° = 105°.
+        let (raan, m) = walker_delta_layout(24, 3, 2, 17).unwrap();
+        assert!((raan - 240.0).abs() < 1.0e-9, "raan={raan}");
+        assert!((m - 105.0).abs() < 1.0e-9, "m={m}");
+
+        // f must change the *relative* geometry between planes: with f=0 the
+        // same idx sits at M=45°, with f=1 at M=75° (per-plane offset 15°
+        // × plane index 2).
+        let (_, m_f0) = walker_delta_layout(24, 3, 0, 17).unwrap();
+        let (_, m_f1) = walker_delta_layout(24, 3, 1, 17).unwrap();
+        assert!((m_f0 - 45.0).abs() < 1.0e-9, "m_f0={m_f0}");
+        assert!((m_f1 - 75.0).abs() < 1.0e-9, "m_f1={m_f1}");
+
+        // First satellite of each plane: pos=0, so M is pure phasing.
+        let (_, m_plane1) = walker_delta_layout(24, 3, 2, 8).unwrap();
+        assert!((m_plane1 - 30.0).abs() < 1.0e-9, "m_plane1={m_plane1}");
+
+        // Constraint violations.
+        assert!(walker_delta_layout(0, 3, 0, 0).is_none());
+        assert!(walker_delta_layout(24, 0, 0, 0).is_none());
+        assert!(walker_delta_layout(24, 3, 3, 0).is_none()); // f >= p
+        assert!(walker_delta_layout(24, 3, 0, 24).is_none()); // idx >= t
+        assert!(walker_delta_layout(24, 5, 0, 0).is_none()); // p does not divide t
+        assert!(walker_delta_layout(24, 30, 0, 0).is_none()); // p > t
+    }
+
+    #[test]
+    fn sun_synchronous_inclination_600km_is_about_97_8_deg() {
+        use mps_formula::spaceflight::sun_synchronous_inclination;
+
+        // Earth, 600 km LEO, one-rev-per-year RAAN precession ⇒ i ≈ 97.8°.
+        let i = sun_synchronous_inclination(6378.0, 600.0, 3.986_004_418e5, 1.991e-7)
+            .unwrap();
+        assert!((i - 97.79).abs() < 0.05, "i={i}");
+        // NaN / invalid inputs must be rejected, not returned as Some(NaN).
+        assert!(sun_synchronous_inclination(f64::NAN, 600.0, 3.986e5, 1.991e-7).is_none());
+        assert!(sun_synchronous_inclination(6378.0, f64::NAN, 3.986e5, 1.991e-7).is_none());
+        assert!(sun_synchronous_inclination(6378.0, 600.0, f64::NAN, 1.991e-7).is_none());
+        assert!(sun_synchronous_inclination(6378.0, 600.0, 3.986e5, f64::NAN).is_none());
+        assert!(sun_synchronous_inclination(6378.0, 600.0, 3.986e5, 0.0).is_none());
+        // Rate too large for J2 at this altitude → no real inclination.
+        assert!(sun_synchronous_inclination(6378.0, 600.0, 3.986e5, 1.0).is_none());
+    }
+
+    #[test]
+    fn molniya_critical_elements_are_the_design_point() {
+        use mps_formula::spaceflight::molniya_critical_elements;
+
+        let (inclination_deg, arg_perigee_deg) = molniya_critical_elements();
+        assert!((inclination_deg - 63.4).abs() < 1.0e-12);
+        assert!((arg_perigee_deg - 270.0).abs() < 1.0e-12);
+    }
+
+    #[test]
     fn orbital_elements_convert_to_state_and_back() {
         let elements = OrbitalElements {
             semi_major_axis: 7_000_000.0,

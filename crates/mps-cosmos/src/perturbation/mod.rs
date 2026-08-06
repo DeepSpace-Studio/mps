@@ -114,4 +114,3 @@ fn to_ffi(v: Vector) -> Vec3 {
 fn scale(v: Vec3, s: f64) -> Vector {
     Vector::new(v.x * s, v.y * s, v.z * s)
 }
-

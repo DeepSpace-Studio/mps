@@ -391,3 +391,167 @@ impl Default for NewtonGravityLaw {
         }
     }
 }
+
+// ===========================================================================
+// PHYSICS_EXPANSION_PLAN C1 — config structs for new ForceLaw variants.
+//
+// Each of these is the C-ABI shape that `world_set_<name>_law` accepts from
+// external callers (c, JNI, FFM).  They mirror the Rust private struct
+// inside `mps-core/src/rapier/interaction.rs`; the mps-core FFI wrapper
+// copies fields into the private law and registers it.
+// ===========================================================================
+
+/// Configure the solar-wind dynamic-pressure force law.
+///
+/// `proton_density` in protons/m³, `v_sw_mps` in m/s (world-frame bulk
+/// speed along `wind_direction`), `effective_area_m2` is the body's apparent
+/// disc area presented to the wind.  Push is along `wind_direction`.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SolarWindPressureLaw {
+    pub proton_density: f64,
+    pub v_sw_mps: f64,
+    pub wind_direction: Vec3,
+    pub effective_area_m2: f64,
+    pub enabled: Bool,
+}
+
+/// Configure the Chandrasekhar dynamical-friction force law.
+///
+/// `background_density_kg_m3` is the uniform ρ_bg; `coulomb_log` is ln Λ
+/// (typical ~10).  When enabled, every dynamic Rapier body moving through
+/// the background is decelerated opposite to its velocity.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DynamicalFrictionLaw {
+    pub background_density_kg_m3: f64,
+    pub coulomb_log: f64,
+    pub enabled: Bool,
+}
+
+/// Configure the MOND-corrected gravity force law.
+///
+/// Callers supply `newtonian_a` (m/s²) — the Newtonian acceleration
+/// magnitude toward the dominant attractor — along with `mond_a_zero`
+/// (Milgrom scale, typical 1.2e-10 m/s²) and `direction` (world-frame
+/// unit-vector toward the attractor).  When `a_N < a_0` the field is
+/// boosted to `sqrt(a_N · a_0)`; otherwise the Newtonian value is used.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct MonDGravityLaw {
+    pub newtonian_a: f64,
+    pub mond_a_zero: f64,
+    pub direction: Vec3,
+    pub enabled: Bool,
+}
+
+/// Configure the Eddington-limited radiation-pressure force law.
+///
+/// `mass_kg` is the accretor's mass (kg); `opacity` is the opacity κ in
+/// m²/kg (electron-scattering for H ≈ 0.034); `source_position` is the
+/// world-frame location of the luminous accretor; `effective_area_m2` is
+/// each Rapier body's apparent optical cross-section; `enabled` toggles
+/// the law.  When enabled, every dynamic Rapier body is pushed outward
+/// from `source_position` with force `(L_Edd / (c·4π·r²)) · A_eff` where
+/// `L_Edd = 4π G M c / κ` (see
+/// `mps_formula::high_energy_astro::eddington_limited_luminosity`).
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct EddingtonRadiationPressureLaw {
+    /// Accretor mass [kg].
+    pub mass_kg: f64,
+    /// Opacity κ [m²/kg].
+    pub opacity: f64,
+    /// World-frame accretor position.
+    pub source_position: Vec3,
+    /// Body apparent optical cross-section area [m²].
+    pub effective_area_m2: f64,
+    pub enabled: Bool,
+}
+
+/// Configure the X-ray disc bolometric irradiation force law.
+///
+/// `k_t_eff_kev` is the inner-edge effective temperature `kT_eff` in keV;
+/// `r_in_km` the inner disc radius in km; `spectral_hardening` f_col;
+/// `source_position` the world-frame X-ray source location;
+/// `effective_area_m2` each Rapier body's apparent optical cross-section;
+/// `enabled` toggles the law.  When enabled, every dynamic Rapier body is
+/// pushed outward from `source_position` with force
+/// `(L_X / (c·4π·r²)) · A_eff` where
+/// `L_X = L_SUN · xray_disc_bolometric_luminosity(kT, r_in, f_col)` (see
+/// `mps_formula::high_energy_astro::xray_disc_bolometric_luminosity`).
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct XrayIrradiationLaw {
+    /// Inner-edge effective temperature `kT_eff` [keV].
+    pub k_t_eff_kev: f64,
+    /// Inner disc radius [km].
+    pub r_in_km: f64,
+    /// Spectral hardening factor `f_col` (~1.7 for BH discs).
+    pub spectral_hardening: f64,
+    /// World-frame X-ray source position.
+    pub source_position: Vec3,
+    /// Body apparent optical cross-section area [m²].
+    pub effective_area_m2: f64,
+    pub enabled: Bool,
+}
+
+/// Configure the pulsar magnetic-dipole torque law.
+///
+/// `moment_of_inertia` [kg·m²], `ns_radius_m` [m], `period_ms` [ms],
+/// `period_derivative` [s/s] describe the pulsar (used to compute its
+/// surface B-field via `pulsar_surface_b_field`).  `pulsar_position` is its
+/// world-frame location; `spin_axis` is the unit vector along its magnetic
+/// (≈ rotation) axis; `body_dipole_moment` is the Rapier body's magnetic
+/// dipole moment μ [A·m²] as a vector (direction = dipole axis,
+/// magnitude = |μ|); `enabled` toggles the law.  When enabled, every
+/// dynamic Rapier body at distance `r` from the pulsar experiences torque
+/// `τ = μ × B(r)` with `B(r) = B_surf · (R_ns / r)³`.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PulsarMagneticDipoleLaw {
+    /// Pulsar moment of inertia [kg·m²].
+    pub moment_of_inertia: f64,
+    /// Neutron-star radius [m] (canonical 1e4 m = 10 km).
+    pub ns_radius_m: f64,
+    /// Spin period P [ms].
+    pub period_ms: f64,
+    /// Spin-down rate Ṗ [s/s].
+    pub period_derivative: f64,
+    /// World-frame pulsar position.
+    pub pulsar_position: Vec3,
+    /// Unit vector along the pulsar magnetic (≈ rotation) axis.
+    pub spin_axis: Vec3,
+    /// Body magnetic dipole moment μ [A·m²] — direction = dipole axis,
+    /// magnitude = |μ|.
+    pub body_dipole_moment: Vec3,
+    pub enabled: Bool,
+}
+
+/// Configure the Jeans-escape drag force law.
+///
+/// `n_exo` [m⁻³], `temperature` [K], `escape_parameter` λ (dimensionless),
+/// `mass_kg` molecule mass [kg] describe the exobase; `escape_direction` the
+/// unit vector along the escape direction (radially outward); `effective_area_m2`
+/// each Rapier body's apparent cross-section; `enabled` toggles the law.
+/// When enabled, every dynamic Rapier body is pushed along `escape_direction`
+/// with `F = (Φ · m · v_thermal) · A_eff`, where
+/// `Φ = mps_formula::heliophysics::jeans_escape_flux(n_exo, T, λ, m)` and
+/// `v_thermal = √(2 k_B T / m)`.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct JeansEscapeLaw {
+    /// Exobase number density `n_exo` [m⁻³].
+    pub n_exo: f64,
+    /// Exobase temperature `T` [K].
+    pub temperature: f64,
+    /// Jeans escape parameter λ (dimensionless).
+    pub escape_parameter: f64,
+    /// Mass of the escaping molecule `m` [kg].
+    pub mass_kg: f64,
+    /// World-frame unit vector along the escape direction.
+    pub escape_direction: Vec3,
+    /// Body apparent cross-section area [m²].
+    pub effective_area_m2: f64,
+    pub enabled: Bool,
+}

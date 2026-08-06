@@ -283,6 +283,7 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
             &mut world.inner.bodies,
             &mut world.inner.colliders,
             &world.inner.narrow_phase,
+            world.inner.integration_parameters.dt,
             &mut body_log,
             &mut pending_forces,
             &mut friction_work,

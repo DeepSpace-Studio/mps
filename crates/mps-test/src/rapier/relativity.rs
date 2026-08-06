@@ -349,4 +349,24 @@ mod tests {
             Bool::FALSE
         );
     }
+
+    #[test]
+    fn gw_inspiral_snr_scales_with_bandwidth_over_psd() {
+        // ρ ≈ h_rss·sqrt(Δf/S_n) = 1e-21·sqrt(380/1e-46) ≈ 1949.
+        let rho = gw_inspiral_snr(1.0e-21, 20.0, 400.0, 1.0e-46).unwrap();
+        assert!((rho - 1949.0).abs() < 5.0, "rho={rho}");
+        // Invalid inputs rejected.
+        assert!(gw_inspiral_snr(1.0e-21, 400.0, 20.0, 1.0e-46).is_none());
+        assert!(gw_inspiral_snr(0.0, 20.0, 400.0, 1.0e-46).is_none());
+    }
+
+    #[test]
+    fn gw_inspiral_time_to_coalescence_100hz_double_neutron_star() {
+        // 1.4+1.4 Msun → chirp mass ≈ 1.219 Msun; t_c(f_gw=100 Hz) ≈ 2.16 s.
+        let chirp_mass = 1.219 * SOLAR_MASS;
+        let t_c = gw_inspiral_time_to_coalescence(chirp_mass, 100.0).unwrap();
+        assert!((t_c - 2.16).abs() < 0.05, "t_c={t_c}");
+        assert!(gw_inspiral_time_to_coalescence(0.0, 100.0).is_none());
+        assert!(gw_inspiral_time_to_coalescence(chirp_mass, 0.0).is_none());
+    }
 }

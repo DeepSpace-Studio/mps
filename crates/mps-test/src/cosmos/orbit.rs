@@ -1,8 +1,12 @@
 //! `mps_cosmos::orbit` 测试 —— 迁移自 `crates/mps-cosmos/src/orbit.rs`。
 
+#[cfg(test)]
 use mps_cosmos::orbit::{BodyState, angular_momentum_of, elements_of, energy_of};
+#[cfg(test)]
 use mps_formula::celestial_data::{CelestialBodyId, get_celestial_body};
+#[cfg(test)]
 use mps_formula::spaceflight::{elements_to_state, kepler_period};
+#[cfg(test)]
 use rapier3d::prelude::Vector;
 
 #[test]

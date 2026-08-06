@@ -56,7 +56,7 @@ mod tests {
         pending: &'a mut SmallVec<[mps_core::rapier::events::PendingForce; 128]>,
         friction: &'a mut Vec<(RigidBodyHandle, RigidBodyHandle, Vector)>,
     ) -> ForceFacade<'a> {
-        ForceFacade::new(bodies, colliders, narrow_phase, log, pending, friction)
+        ForceFacade::new(bodies, colliders, narrow_phase, 1.0 / 60.0, log, pending, friction)
     }
 
     #[test]

@@ -4,13 +4,19 @@
 //! （点质量互引力，`-GM·r̂/r²`，不走 `celestial_acceleration` 的 ellipsoid/J2
 //! 分支）作为中心引力，直接验证 Verlet 自身的相位精度，排除引力模型误差。
 
+#[cfg(test)]
 use mps_cosmos::bodies::satellite_builder;
+#[cfg(test)]
 use mps_cosmos::gravity::{NBodySource, gm_from_mass};
+#[cfg(test)]
 use mps_cosmos::integrator::{
     AccelContext, snapshot_source_positions, total_acceleration, verlet_step,
 };
+#[cfg(test)]
 use mps_formula::celestial_data::{CelestialBodyId, get_celestial_body};
+#[cfg(test)]
 use mps_formula::spaceflight::kepler_period;
+#[cfg(test)]
 use rapier3d::prelude::{RigidBodySet, Vector};
 
 #[test]

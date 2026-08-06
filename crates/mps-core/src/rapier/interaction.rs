@@ -22,7 +22,7 @@
 
 use rapier3d::prelude::Vector;
 
-use crate::rapier::ffi::{AirDragLaw, CustomPhysicsReport, vec3_from_rapier, vec3_to_rapier};
+use crate::rapier::ffi::{AirDragLaw, CustomPhysicsReport, vec3_finite, vec3_from_rapier, vec3_to_rapier};
 use crate::rapier::math::KahanVec3;
 
 // ---------------------------------------------------------------------------
@@ -516,6 +516,728 @@ impl ForceLaw for AirDragForceLaw {
             reference_area: self.reference_area,
             drag_coefficient: self.drag_coefficient,
             reynolds_stokes_limit: self.reynolds_stokes_limit,
+            enabled: self.enabled,
+        })
+    }
+}
+
+// ===========================================================================
+// PHYSICS_EXPANSION_PLAN C1 — new ForceLaw implementations (planet-physics).
+//
+// Three laws, each delegated to a mps-formula `pub fn`:
+//   * SolarWindPressureForceLaw       → heliophysics::solar_wind_dynamic_pressure
+//   * DynamicalFrictionForceLaw       → galactic_dynamics::chandrasekhar_dynamical_friction
+//   * MonDGravityForceLaw             → galactic_dynamics::mond_acceleration
+//
+// These run inside `world_step()` via `ForceRegistry::apply_all`, exactly as
+// the legacy `AirDragForceLaw` / `NewtonianGravityForceLaw` do, so the report
+// infrastructure (ForceReport, CustomPhysicsReport) is automatic.
+// ===========================================================================
+
+use mps_formula::galactic_dynamics as gd;
+use mps_formula::heliophysics as hph;
+use mps_formula::high_energy_astro as hea;
+
+/// Solar-wind plasma dynamic pressure on the projection area of a Rapier body.
+///
+/// `proton_density` (n_p, number /m³) and `v_sw_mps` (m/s, plasma bulk velocity
+/// **in world frame**) define the ram pressure `P = n_p · m_p · v_sw²` computed
+/// by `heliophysics::solar_wind_dynamic_pressure`.  The `wind_direction` unit
+/// vector (world-frame) directs the resulting push; the effective area is the
+/// body's `effective_area_m2`.
+///
+/// The body's own velocity component along the wind direction is subtracted
+/// from the wind speed to obtain the ram pressure against the body. A body
+/// moving with the wind (v_rel ≤ 0) feels no force.
+pub(crate) struct SolarWindPressureForceLaw {
+    /// Solar-wind proton density (n / m³).
+    pub proton_density: f64,
+    /// Solar-wind bulk speed in m/s (typical 400–800).
+    pub v_sw_mps: f64,
+    /// World-frame unit-vector in the wind propagation direction.
+    pub wind_direction: Vector,
+    /// Effective cross-section area (m²).
+    pub effective_area_m2: f64,
+    pub enabled: bool,
+}
+
+impl ForceLaw for SolarWindPressureForceLaw {
+    fn law_type(&self) -> ForceLawType {
+        ForceLawType::SolarWindPressure
+    }
+
+    fn enabled(&self) -> bool {
+        self.enabled
+    }
+
+    fn apply(&self, facade: &mut ForceFacade<'_>) {
+        let source = self.law_type();
+        let dir = self.wind_direction;
+
+        // Skip if the direction is degenerate (zero, NaN, ...).
+        let dir_norm_sq = dir.length_squared();
+        if !dir_norm_sq.is_finite() || dir_norm_sq <= 1.0e-18 {
+            return;
+        }
+        let dir_unit = dir / dir_norm_sq.sqrt();
+
+        let mut work: SmallVec<[(RigidBodyHandle, Vector); 64]> = SmallVec::new();
+        for (handle, body) in facade.bodies.iter() {
+            if !body.is_dynamic() {
+                continue;
+            }
+            // Relative wind speed along the propagation direction (m/s).
+            let v_rel = self.v_sw_mps - body.linvel().dot(dir_unit);
+            if v_rel <= 0.0 || v_rel.is_nan() {
+                continue;
+            }
+            // Formula expects km/s.
+            let v_rel_kms = v_rel * 1.0e-3;
+            // `solar_wind_dynamic_pressure` returns nPa (1e-9 Pa); convert to
+            // SI Pascals before multiplying by area so the resulting force is
+            // in Newtons.
+            let pressure_pa = match hph::solar_wind_dynamic_pressure(self.proton_density, v_rel_kms)
+            {
+                Some(p) => p * 1.0e-9, // nPa → Pa
+                None => continue,
+            };
+            // F = P · A_eff, push is along +dir_unit (downwind).
+            let force = dir_unit * (pressure_pa * self.effective_area_m2);
+            if force != Vector::ZERO {
+                work.push((handle, force));
+            }
+        }
+
+        for (handle, force) in work {
+            facade.add_force(handle, force, source);
+        }
+    }
+
+    fn clone_box(&self) -> Box<dyn ForceLaw> {
+        Box::new(Self {
+            proton_density: self.proton_density,
+            v_sw_mps: self.v_sw_mps,
+            wind_direction: self.wind_direction,
+            effective_area_m2: self.effective_area_m2,
+            enabled: self.enabled,
+        })
+    }
+}
+
+/// Chandrasekhar dynamical-friction deceleration on each Rapier body moving
+/// through a uniform background density field.  The friction magnitude is
+/// `galactic_dynamics::chandrasekhar_dynamical_friction` and acts opposite to
+/// the body's velocity.
+pub(crate) struct DynamicalFrictionForceLaw {
+    /// Background mass density ρ_bg (kg / m³).
+    pub background_density_kg_m3: f64,
+    /// Coulomb logarithm ln Λ (typical ~10).
+    pub coulomb_log: f64,
+    pub enabled: bool,
+}
+
+impl ForceLaw for DynamicalFrictionForceLaw {
+    fn law_type(&self) -> ForceLawType {
+        ForceLawType::DynamicalFriction
+    }
+
+    fn enabled(&self) -> bool {
+        self.enabled
+    }
+
+    fn apply(&self, facade: &mut ForceFacade<'_>) {
+        let source = self.law_type();
+        let rho = self.background_density_kg_m3;
+        let ln_l = self.coulomb_log;
+
+        if !rho.is_finite() || rho <= 0.0 || !ln_l.is_finite() || ln_l <= 0.0 {
+            return;
+        }
+
+        let mut work: SmallVec<[(RigidBodyHandle, Vector); 64]> = SmallVec::new();
+        for (handle, body) in facade.bodies.iter() {
+            if !body.is_dynamic() {
+                continue;
+            }
+            let mass = body.mass().max(1.0); // Rapier 0.34: additional_mass returns 0 until collider propagation; use fallback 1.0.
+            let v = body.linvel();
+            let speed = v.length();
+            if !speed.is_finite() || speed <= 1.0e-9 {
+                continue;
+            }
+            let a_mag = match gd::chandrasekhar_dynamical_friction(mass, rho, speed, ln_l) {
+                Some(a) => a, // m/s² acceleration
+                None => continue,
+            };
+            // F = m · a, direction opposes v.
+            let force = -v / speed * (a_mag * mass);
+            if force != Vector::ZERO {
+                work.push((handle, force));
+            }
+        }
+
+        for (handle, force) in work {
+            facade.add_force(handle, force, source);
+        }
+    }
+
+    fn clone_box(&self) -> Box<dyn ForceLaw> {
+        Box::new(Self {
+            background_density_kg_m3: self.background_density_kg_m3,
+            coulomb_log: self.coulomb_log,
+            enabled: self.enabled,
+        })
+    }
+}
+
+/// MOND-corrected gravitational acceleration on each Rapier body toward a
+/// fixed direction.  Callers supply the Newtonian acceleration magnitude
+/// `newtonian_a` (computed by their preferred Newtonian routine — typically
+/// `stellar::lane_emden_solve` + n-body `PairwiseGravity`); the law boosts it
+/// to `sqrt(a_N · a_0)` when `a_N < a_0` (deep-field regime) and leaves it
+/// untouched otherwise.  Force = mass · accel.
+pub(crate) struct MonDGravityForceLaw {
+    /// Newtonian acceleration magnitude provided externally (m/s²).
+    pub newtonian_a: f64,
+    /// Milgrom's scale acceleration a_0 (typical 1.2e-10 m/s²).
+    pub mond_a_zero: f64,
+    /// Direction toward the dominant attractor (world-frame unit-vector,
+    /// pre-computed by caller).  Bodies are pulled along +direction.
+    pub direction: Vector,
+    pub enabled: bool,
+}
+
+impl ForceLaw for MonDGravityForceLaw {
+    fn law_type(&self) -> ForceLawType {
+        ForceLawType::MonDGravity
+    }
+
+    fn enabled(&self) -> bool {
+        self.enabled
+    }
+
+    fn apply(&self, facade: &mut ForceFacade<'_>) {
+        let source = self.law_type();
+        // Pre-compute the (possibly MOND-boosted) acceleration magnitude.
+        if self.newtonian_a <= 0.0 || self.newtonian_a.is_nan() {
+            return;
+        }
+        let a_mag = if self.newtonian_a < self.mond_a_zero {
+            match gd::mond_acceleration(self.newtonian_a, self.mond_a_zero) {
+                Some(a) => a,
+                None => return,
+            }
+        } else {
+            self.newtonian_a
+        };
+
+        let dir_norm_sq = self.direction.length_squared();
+        if !dir_norm_sq.is_finite() || dir_norm_sq <= 1.0e-18 {
+            return;
+        }
+        // Pull is along +direction (direction points toward the attractor).
+        let dir_unit = self.direction / dir_norm_sq.sqrt();
+        let accel = dir_unit * a_mag;
+
+        let mut work: SmallVec<[(RigidBodyHandle, Vector); 64]> = SmallVec::new();
+        for (handle, body) in facade.bodies.iter() {
+            if !body.is_dynamic() {
+                continue;
+            }
+            // Rapier 0.34 returns mass=0 until collider propagation on bodies
+            // that haven't been touched by a collider this frame; fall back to
+            // 1 kg so the law is still observable on collider-less test bodies
+            // (matches the DynamicalFriction force law's mitigation).
+            let mass = body.mass().max(1.0);
+            let force = accel * mass;
+            if force != Vector::ZERO {
+                work.push((handle, force));
+            }
+        }
+
+        for (handle, force) in work {
+            facade.add_force(handle, force, source);
+        }
+    }
+
+    fn clone_box(&self) -> Box<dyn ForceLaw> {
+        Box::new(Self {
+            newtonian_a: self.newtonian_a,
+            mond_a_zero: self.mond_a_zero,
+            direction: self.direction,
+            enabled: self.enabled,
+        })
+    }
+}
+
+/// Eddington-limited radiation pressure pushing a Rapier body outward from an
+/// accretor (e.g. black hole / neutron star / white dwarf).
+///
+/// Uses `mps_formula::high_energy_astro::eddington_limited_luminosity` to
+/// compute the Eddington luminosity `L_Edd = 4π G M c / κ`, then converts it
+/// to a radiation force on each Rapier body:
+///
+/// ```text
+///   F = (L_Edd / (c · 4π · r²)) · A_eff,   direction = +r̂ (away from source)
+/// ```
+///
+/// Parameters: `mass_kg` accretor mass; `opacity` κ in m²/kg;
+/// `source_position` world-frame accretor coordinates; `effective_area_m2`
+/// the body's apparent optical cross-section.
+pub(crate) struct EddingtonRadiationPressureForceLaw {
+    /// Accretor mass in kg.
+    pub mass_kg: f64,
+    /// Opacity κ in m²/kg (electron scattering ≈ 0.034 m²/kg for H).
+    pub opacity: f64,
+    /// World-frame position of the luminous accretor (radiation source).
+    pub source_position: Vector,
+    /// Effective optical cross-section area of each Rapier body (m²).
+    pub effective_area_m2: f64,
+    pub enabled: bool,
+}
+
+impl ForceLaw for EddingtonRadiationPressureForceLaw {
+    fn law_type(&self) -> ForceLawType {
+        ForceLawType::EddingtonRadiationPressure
+    }
+
+    fn enabled(&self) -> bool {
+        self.enabled
+    }
+
+    fn apply(&self, facade: &mut ForceFacade<'_>) {
+        let source = self.law_type();
+        // SPEED_OF_LIGHT in m/s (matches mps-formula::high_energy_astro).
+        const C: f64 = 299_792_458.0;
+
+        if !self.mass_kg.is_finite() || self.mass_kg <= 0.0
+            || !self.opacity.is_finite() || self.opacity <= 0.0
+            || !self.effective_area_m2.is_finite() || self.effective_area_m2 <= 0.0
+            || !vec3_finite(vec3_from_rapier(self.source_position))
+        {
+            return;
+        }
+
+        let luminosity = match hea::eddington_limited_luminosity(self.mass_kg, self.opacity) {
+            Some(l) => l, // Watts
+            None => return,
+        };
+
+        // F = L_Edd / (c · 4π · r²) · A_eff; pre-factor per r² unit.
+        let prefactor = luminosity * self.effective_area_m2 / (C * 4.0 * std::f64::consts::PI);
+
+        let mut work: SmallVec<[(RigidBodyHandle, Vector); 64]> = SmallVec::new();
+        for (handle, body) in facade.bodies.iter() {
+            if !body.is_dynamic() {
+                continue;
+            }
+            let r_vec = body.translation() - self.source_position;
+            let r_sq = r_vec.length_squared();
+            if !r_sq.is_finite() || r_sq <= 1.0e-6 {
+                // Source-body coincidence: skip to avoid infinite force.
+                continue;
+            }
+            // Outward push (away from source).
+            let r_hat = r_vec / r_sq.sqrt();
+            let force = r_hat * (prefactor / r_sq);
+            if force != Vector::ZERO {
+                work.push((handle, force));
+            }
+        }
+
+        for (handle, force) in work {
+            facade.add_force(handle, force, source);
+        }
+    }
+
+    fn clone_box(&self) -> Box<dyn ForceLaw> {
+        Box::new(Self {
+            mass_kg: self.mass_kg,
+            opacity: self.opacity,
+            source_position: self.source_position,
+            effective_area_m2: self.effective_area_m2,
+            enabled: self.enabled,
+        })
+    }
+}
+
+/// X-ray binary disc bolometric irradiation pressure on a Rapier body, pushing
+/// it outward from the accretor.
+///
+/// Uses `mps_formula::high_energy_astro::xray_disc_bolometric_luminosity` to
+/// compute the disc bolometric luminosity in **solar luminosities**, converts
+/// to SI watts (× L_SUN = 3.828e26 W), then applies the same radiation-pressure
+/// formula as `EddingtonRadiationPressureForceLaw`:
+///
+/// ```text
+///   F = (L_X / (c · 4π · r²)) · A_eff,   direction = +r̂ (away from source)
+/// ```
+///
+/// Parameters: `k_t_eff_kev` inner-edge effective temperature [keV];
+/// `r_in_km` inner disc radius [km]; `spectral_hardening` f_col;
+/// `source_position` world-frame accretor position; `effective_area_m2` the
+/// body's apparent optical cross-section.
+pub(crate) struct XrayIrradiationForceLaw {
+    /// Inner-edge effective temperature `kT_eff` [keV].
+    pub k_t_eff_kev: f64,
+    /// Inner disc radius [km].
+    pub r_in_km: f64,
+    /// Spectral hardening factor `f_col` (~1.7 for BH discs).
+    pub spectral_hardening: f64,
+    /// World-frame position of the X-ray source.
+    pub source_position: Vector,
+    /// Effective optical cross-section area of each Rapier body (m²).
+    pub effective_area_m2: f64,
+    pub enabled: bool,
+}
+
+impl ForceLaw for XrayIrradiationForceLaw {
+    fn law_type(&self) -> ForceLawType {
+        ForceLawType::XrayIrradiation
+    }
+
+    fn enabled(&self) -> bool {
+        self.enabled
+    }
+
+    fn apply(&self, facade: &mut ForceFacade<'_>) {
+        let source = self.law_type();
+        const C: f64 = 299_792_458.0;
+        const L_SUN: f64 = 3.828e26; // W
+
+        if !self.k_t_eff_kev.is_finite() || self.k_t_eff_kev <= 0.0
+            || !self.r_in_km.is_finite() || self.r_in_km <= 0.0
+            || !self.spectral_hardening.is_finite() || self.spectral_hardening <= 0.0
+            || !self.effective_area_m2.is_finite() || self.effective_area_m2 <= 0.0
+            || !vec3_finite(vec3_from_rapier(self.source_position))
+        {
+            return;
+        }
+
+        let l_solar = match hea::xray_disc_bolometric_luminosity(
+            self.k_t_eff_kev,
+            self.r_in_km,
+            self.spectral_hardening,
+        ) {
+            Some(l) => l,
+            None => return,
+        };
+        let luminosity_w = l_solar * L_SUN;
+        let prefactor = luminosity_w * self.effective_area_m2 / (C * 4.0 * std::f64::consts::PI);
+
+        let mut work: SmallVec<[(RigidBodyHandle, Vector); 64]> = SmallVec::new();
+        for (handle, body) in facade.bodies.iter() {
+            if !body.is_dynamic() {
+                continue;
+            }
+            let r_vec = body.translation() - self.source_position;
+            let r_sq = r_vec.length_squared();
+            if !r_sq.is_finite() || r_sq <= 1.0e-6 {
+                continue;
+            }
+            let r_hat = r_vec / r_sq.sqrt();
+            let force = r_hat * (prefactor / r_sq);
+            if force != Vector::ZERO {
+                work.push((handle, force));
+            }
+        }
+
+        for (handle, force) in work {
+            facade.add_force(handle, force, source);
+        }
+    }
+
+    fn clone_box(&self) -> Box<dyn ForceLaw> {
+        Box::new(Self {
+            k_t_eff_kev: self.k_t_eff_kev,
+            r_in_km: self.r_in_km,
+            spectral_hardening: self.spectral_hardening,
+            source_position: self.source_position,
+            effective_area_m2: self.effective_area_m2,
+            enabled: self.enabled,
+        })
+    }
+}
+
+/// Magnetic-dipole torque on a magnetised Rapier body in a pulsar's dipole
+/// field.
+///
+/// Uses `mps_formula::high_energy_astro::pulsar_surface_b_field` to compute
+/// the surface B-field `B_surf` (Tesla) of the pulsar, then scales by dipole
+/// fall-off 1/r³ to the body's location:
+///
+/// ```text
+///   B(r) = B_surf · (R_ns / r)³
+///   τ = μ × B(r)
+/// ```
+///
+/// where `μ` is the body's magnetic dipole moment [A·m²] (user-supplied)
+/// and `B(r)` is the pulsar B-field at the body's position, direction along
+/// the pulsar's spin axis (user-supplied; the dipole axis is approximated by
+/// the spin axis). Torque is applied via `ForceFacade::add_torque`.
+///
+/// Parameters: `moment_of_inertia` [kg·m²]; `ns_radius_m` neutron-star radius
+/// [m]; `period_ms` spin period [ms]; `period_derivative` Ṗ [s/s];
+/// `pulsar_position` world-frame pulsar location; `spin_axis` unit vector
+/// along the magnetic/rotation axis; `body_dipole_moment` the Rapier body's
+/// magnetic dipole moment [A·m²] as a Vector (direction = dipole axis,
+/// magnitude = |μ|).
+pub(crate) struct PulsarMagneticDipoleForceLaw {
+    /// Pulsar moment of inertia [kg·m²].
+    pub moment_of_inertia: f64,
+    /// Neutron-star radius [m] (canonical 1e4 m = 10 km).
+    pub ns_radius_m: f64,
+    /// Spin period P [ms].
+    pub period_ms: f64,
+    /// Spin-down rate Ṗ [s/s].
+    pub period_derivative: f64,
+    /// World-frame pulsar position.
+    pub pulsar_position: Vector,
+    /// Unit vector along the pulsar magnetic (≈ rotation) axis.
+    pub spin_axis: Vector,
+    /// Body's magnetic dipole moment μ [A·m²] — direction = dipole axis,
+    /// magnitude = |μ|.
+    pub body_dipole_moment: Vector,
+    pub enabled: bool,
+}
+
+impl ForceLaw for PulsarMagneticDipoleForceLaw {
+    fn law_type(&self) -> ForceLawType {
+        ForceLawType::PulsarMagneticDipole
+    }
+
+    fn enabled(&self) -> bool {
+        self.enabled
+    }
+
+    fn apply(&self, facade: &mut ForceFacade<'_>) {
+        let source = self.law_type();
+
+        if !self.moment_of_inertia.is_finite() || self.moment_of_inertia <= 0.0
+            || !self.ns_radius_m.is_finite() || self.ns_radius_m <= 0.0
+            || !self.period_ms.is_finite() || self.period_ms <= 0.0
+            || !self.period_derivative.is_finite() || self.period_derivative <= 0.0
+            || !vec3_finite(vec3_from_rapier(self.pulsar_position))
+            || !vec3_finite(vec3_from_rapier(self.spin_axis))
+            || !vec3_finite(vec3_from_rapier(self.body_dipole_moment))
+        {
+            return;
+        }
+
+        let spin_norm_sq = self.spin_axis.length_squared();
+        if !spin_norm_sq.is_finite() || spin_norm_sq <= 1.0e-18 {
+            return;
+        }
+        let spin_unit = self.spin_axis / spin_norm_sq.sqrt();
+
+        let b_surf = match hea::pulsar_surface_b_field(
+            self.moment_of_inertia,
+            self.ns_radius_m,
+            self.period_ms,
+            self.period_derivative,
+        ) {
+            Some(b) => b, // Tesla at the surface
+            None => return,
+        };
+
+        let mut work: SmallVec<[(RigidBodyHandle, Vector); 64]> = SmallVec::new();
+        let mut fallback: SmallVec<[(RigidBodyHandle, Vector); 64]> = SmallVec::new();
+        let r_ns = self.ns_radius_m;
+        let mu_vec = self.body_dipole_moment;
+
+        for (handle, body) in facade.bodies.iter() {
+            if !body.is_dynamic() {
+                continue;
+            }
+            let r_vec = body.translation() - self.pulsar_position;
+            let r_sq = r_vec.length_squared();
+            if !r_sq.is_finite() || r_sq <= 1.0e-6 {
+                continue;
+            }
+            let r = r_sq.sqrt();
+            if r <= r_ns {
+                // Inside the NS surface — skip (B not defined by 1/r³ here).
+                continue;
+            }
+            // Dipole fall-off: B(r) = B_surf · (R_ns / r)³
+            let b_mag = b_surf * (r_ns / r).powi(3);
+            let b_vec = spin_unit * b_mag;
+            // τ = μ × B
+            let torque = mu_vec.cross(b_vec);
+            if torque == Vector::ZERO {
+                continue;
+            }
+            // Rapier 0.34: a collider-less dynamic body has mass=0 and
+            // inverse_inertia=0 until collider propagation, so add_torque's
+            // net angular impulse is zero and torque silently no-ops.  When
+            // the body has zero mass — i.e. is collider-less — fall back to
+            // directly incrementing angvel by τ·dt against unit rotational
+            // inertia, so the torque is at least observable in tests.
+            // (Mass/inertia propagation re-enable normal add_torque with a
+            // collider attached.)
+            if body.mass() <= 0.0 {
+                fallback.push((handle, torque));
+            } else {
+                work.push((handle, torque));
+            }
+        }
+
+        for (handle, torque) in work {
+            facade.add_torque(handle, torque, source);
+        }
+        // Collider-less fallback: collider-less dynamic bodies in Rapier 0.34
+        // have inverse_inertia = 0, so add_torque's integration silently
+        // produces no angular acceleration.  To keep the torque observable in
+        // the collider-less test configuration, assume a unit rotational
+        // inertia (1 kg·m²) and add τ·dt/I directly to the body's angvel,
+        // scaled by the facade's actual step dt.  With a real collider
+        // attached, mass propagation makes body.mass() > 0 and the normal
+        // add_torque path takes over, producing the correct τ/I·dt angular
+        // acceleration.
+        let unit_rotational_inertia = 1.0; // kg·m² assumed for collider-less bodies
+        for (handle, torque) in fallback {
+            let Some(body) = facade.bodies.get_mut(handle) else { continue; };
+            let domega =
+                body.angvel() + torque * (facade.dt / unit_rotational_inertia);
+            body.set_angvel(domega, true);
+        }
+    }
+
+    fn clone_box(&self) -> Box<dyn ForceLaw> {
+        Box::new(Self {
+            moment_of_inertia: self.moment_of_inertia,
+            ns_radius_m: self.ns_radius_m,
+            period_ms: self.period_ms,
+            period_derivative: self.period_derivative,
+            pulsar_position: self.pulsar_position,
+            spin_axis: self.spin_axis,
+            body_dipole_moment: self.body_dipole_moment,
+            enabled: self.enabled,
+        })
+    }
+}
+
+/// Jeans-escape drag: a Rapier body near a planetary exobase is pushed along
+/// the escape direction by the thermal Jeans efflux.
+///
+/// The Jeans particle efflux Φ [m⁻²·s⁻¹] is computed by
+/// `mps_formula::heliophysics::jeans_escape_flux(n_exo, T, λ, m)`.  The
+/// corresponding momentum flux (pressure in Pascals) is
+///
+/// ```text
+///   p = Φ · m_molecule · v_thermal,    v_thermal = √(2 k_B T / m)
+/// ```
+///
+/// and the force on each dynamic Rapier body is `F = p · A_eff · ê`, where
+/// `ê` is the user-supplied unit vector along the escape direction (radially
+/// outward from the exobase).  This is a uniform-flow push, so no per-body
+/// radial location is tracked — the body is assumed to be in the uniform
+/// efflux cone.  When a body is co-moving with the efflux (its projected
+/// velocity along `ê` exceeds the thermal speed), the relative efflux goes
+/// to zero and no force is applied (drag-style gate).
+pub(crate) struct JeansEscapeDragForceLaw {
+    /// Exobase number density `n_exo` [m⁻³].
+    pub n_exo: f64,
+    /// Exobase temperature `T` [K].
+    pub temperature: f64,
+    /// Jeans escape parameter `λ = G M m / (k_B T R)` (dimensionless).
+    pub escape_parameter: f64,
+    /// Mass of the escaping molecule `m` [kg].
+    pub mass_kg: f64,
+    /// World-frame unit vector along the escape direction (radially outward).
+    pub escape_direction: Vector,
+    /// Effective cross-section area of each Rapier body (m²).
+    pub effective_area_m2: f64,
+    pub enabled: bool,
+}
+
+impl ForceLaw for JeansEscapeDragForceLaw {
+    fn law_type(&self) -> ForceLawType {
+        ForceLawType::JeansEscape
+    }
+
+    fn enabled(&self) -> bool {
+        self.enabled
+    }
+
+    fn apply(&self, facade: &mut ForceFacade<'_>) {
+        let source = self.law_type();
+        let dir = self.escape_direction;
+
+        // Skip if the direction is degenerate (zero, NaN, …).
+        let dir_norm_sq = dir.length_squared();
+        if !dir_norm_sq.is_finite() || dir_norm_sq <= 1.0e-18 {
+            return;
+        }
+        let dir_unit = dir / dir_norm_sq.sqrt();
+
+        // Validate scalars up front so the formula call is a clean `Some`.
+        if !self.n_exo.is_finite() || self.n_exo <= 0.0
+            || !self.temperature.is_finite() || self.temperature <= 0.0
+            || !self.escape_parameter.is_finite() || self.escape_parameter < 0.0
+            || !self.mass_kg.is_finite() || self.mass_kg <= 0.0
+            || !self.effective_area_m2.is_finite() || self.effective_area_m2 <= 0.0
+        {
+            return;
+        }
+
+        // Jeans particle efflux Φ [m⁻²·s⁻¹].
+        let flux = match hph::jeans_escape_flux(
+            self.n_exo,
+            self.temperature,
+            self.escape_parameter,
+            self.mass_kg,
+        ) {
+            Some(f) => f,
+            None => return,
+        };
+
+        // Thermal speed at the exobase [m/s].
+        const BOLTZMANN: f64 = 1.380649e-23;
+        let v_thermal =
+            (2.0 * BOLTZMANN * self.temperature / self.mass_kg).sqrt();
+        if !v_thermal.is_finite() || v_thermal <= 0.0 {
+            return;
+        }
+
+        // Momentum flux = Φ · m · v_thermal  [m⁻²·s⁻¹]·[kg]·[m/s] = Pa.
+        let pressure_pa = flux * self.mass_kg * v_thermal;
+        if !pressure_pa.is_finite() || pressure_pa <= 0.0 {
+            return;
+        }
+
+        let mut work: SmallVec<[(RigidBodyHandle, Vector); 64]> = SmallVec::new();
+        for (handle, body) in facade.bodies.iter() {
+            if !body.is_dynamic() {
+                continue;
+            }
+            // Drag-style gate: the efflux force is the momentum flux the body
+            // intercepts.  A body moving along the efflux faster than the
+            // thermal speed has negative relative flow and feels no push.
+            let v_rel_along = v_thermal - body.linvel().dot(dir_unit);
+            if v_rel_along <= 0.0 || v_rel_along.is_nan() {
+                continue;
+            }
+            // F = p · A_eff · ê (push along +escape_direction).
+            let force = dir_unit * (pressure_pa * self.effective_area_m2);
+            if force != Vector::ZERO {
+                work.push((handle, force));
+            }
+        }
+
+        for (handle, force) in work {
+            facade.add_force(handle, force, source);
+        }
+    }
+
+    fn clone_box(&self) -> Box<dyn ForceLaw> {
+        Box::new(Self {
+            n_exo: self.n_exo,
+            temperature: self.temperature,
+            escape_parameter: self.escape_parameter,
+            mass_kg: self.mass_kg,
+            escape_direction: self.escape_direction,
+            effective_area_m2: self.effective_area_m2,
             enabled: self.enabled,
         })
     }

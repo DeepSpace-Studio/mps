@@ -1,10 +1,13 @@
 //! `mps_cosmos::gravity` 测试 —— 迁移自 `crates/mps-cosmos/src/gravity.rs`。
 
+#[cfg(test)]
 use mps_cosmos::gravity::{
     CelestialSource, NBodySource, celestial_acceleration, n_body_acceleration,
     point_mass_acceleration,
 };
+#[cfg(test)]
 use mps_formula::celestial_data::{CelestialBodyId, get_celestial_body};
+#[cfg(test)]
 use rapier3d::prelude::{RigidBodyHandle, Vector};
 
 #[test]

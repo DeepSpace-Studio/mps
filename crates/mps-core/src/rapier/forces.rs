@@ -88,6 +88,37 @@ pub enum ForceLawType {
     MolecularCoulomb,
     /// PID controller output force.
     ControlPID,
+    /// Solar-wind dynamic pressure on a Rapier body (planet-surface sensitive).
+    /// Formula: see `mps_formula::heliophysics::solar_wind_dynamic_pressure`.
+    SolarWindPressure,
+    /// Chandrasekhar dynamical-friction deceleration for a body moving through
+    /// a background density field.  See `mps_formula::galactic_dynamics`.
+    DynamicalFriction,
+    /// MOND (Modified Newtonian Dynamics) gravity in the low-acceleration regime
+    /// (a < a_0), used for deep-field non-Newtonian flat rotation curves.
+    MonDGravity,
+    /// Eddington-limited radiation pressure pushing a Rapier body outward
+    /// from an accretor (luminous source). Formula: see
+    /// `mps_formula::high_energy_astro::eddington_limited_luminosity`; force
+    /// is `F = (L_Edd / (c · 4π · r²)) · A_eff`, along +r̂ (away from source).
+    EddingtonRadiationPressure,
+    /// X-ray binary disc bolometric irradiation pushing a Rapier body outward
+    /// from the accretor with force `F = (L_X / (c · 4π · r²)) · A_eff`.  The
+    /// luminosity is `mps_formula::high_energy_astro::xray_disc_bolometric_luminosity`
+    /// (returned in solar luminosities; multiplied by `L_SUN` for SI watts).
+    XrayIrradiation,
+    /// Magnetic-dipole torque on a magnetised Rapier body located in a pulsar's
+    /// dipole field.  Surface B-field magnitude is computed by
+    /// `mps_formula::high_energy_astro::pulsar_surface_b_field`; the dipole B
+    /// falls off as 1/r³; torque `τ = μ × B(r)`, applied via
+    /// `ForceFacade::add_torque`.  Configured by `PulsarMagneticDipoleLaw`.
+    PulsarMagneticDipole,
+    /// Jeans-escape drag: a Rapier body near a planetary exobase is pushed
+    /// along the escape direction by the thermal Jeans efflux.  Efflux Φ
+    /// [m⁻²·s⁻¹] is `mps_formula::heliophysics::jeans_escape_flux`; the
+    /// momentum flux is `Φ · m_molecule · v_thermal` (Pa), and force is
+    /// `p · A_eff · ê`.  Configured by `JeansEscapeLaw`.
+    JeansEscape,
     /// User-defined force registered via FFI (opaque type tag in upper 32 bits).
     Custom(u64),
 }
@@ -111,6 +142,13 @@ impl ForceLawType {
             Self::MolecularLennardJones => "MolecularLennardJones",
             Self::MolecularCoulomb => "MolecularCoulomb",
             Self::ControlPID => "ControlPID",
+            Self::SolarWindPressure => "SolarWindPressure",
+            Self::DynamicalFriction => "DynamicalFriction",
+            Self::MonDGravity => "MonDGravity",
+            Self::EddingtonRadiationPressure => "EddingtonRadiationPressure",
+            Self::XrayIrradiation => "XrayIrradiation",
+            Self::PulsarMagneticDipole => "PulsarMagneticDipole",
+            Self::JeansEscape => "JeansEscape",
             Self::Custom(_) => "Custom",
         }
     }
@@ -231,6 +269,18 @@ fn force_law_type_idx(ft: ForceLawType) -> usize {
         // Do not renumber the survivors (ControlPID/Custom) below — external
         // callers may persist the numeric tags.
         ForceLawType::ControlPID => 23,
+        // PHYSICS_EXPANSION_PLAN C1: solar wind / dyn friction / MOND gravity
+        // occupy 27–29 (26 is reserved for Custom).  Do NOT renumber below.
+        ForceLawType::SolarWindPressure => 27,
+        ForceLawType::DynamicalFriction => 28,
+        ForceLawType::MonDGravity => 29,
+        // C2: Eddington radiation pressure uses idx 30.
+        ForceLawType::EddingtonRadiationPressure => 30,
+        // C3: X-ray disc irradiation uses idx 31; PulsarMagneticDipole idx 32.
+        ForceLawType::XrayIrradiation => 31,
+        ForceLawType::PulsarMagneticDipole => 32,
+        // C4: Jeans-escape drag uses idx 33.
+        ForceLawType::JeansEscape => 33,
         ForceLawType::Custom(_) => 26,
     }
 }
@@ -252,6 +302,13 @@ fn force_law_type_from_idx(idx: usize) -> ForceLawType {
         12 => ForceLawType::MolecularLennardJones,
         13 => ForceLawType::MolecularCoulomb,
         23 => ForceLawType::ControlPID,
+        27 => ForceLawType::SolarWindPressure,
+        28 => ForceLawType::DynamicalFriction,
+        29 => ForceLawType::MonDGravity,
+        30 => ForceLawType::EddingtonRadiationPressure,
+        31 => ForceLawType::XrayIrradiation,
+        32 => ForceLawType::PulsarMagneticDipole,
+        33 => ForceLawType::JeansEscape,
         // 14–25 were retired space/trajectory/terrain variants; fall through to Custom.
         _ => ForceLawType::Custom(0),
     }
@@ -276,7 +333,7 @@ pub struct BodyForceLog {
 /// # Example
 ///
 /// ```ignore
-/// let mut facade = ForceFacade::new(bodies, colliders, narrow_phase);
+/// let mut facade = ForceFacade::new(bodies, colliders, narrow_phase, dt, ...);
 /// facade.add_force(handle, force_vec, ForceLawType::AirDrag);
 /// let report = facade.drain_report(); // auto-aggregated
 /// ```
@@ -284,6 +341,10 @@ pub struct ForceFacade<'a> {
     pub bodies: &'a mut RigidBodySet,
     pub colliders: &'a mut ColliderSet,
     pub narrow_phase: &'a NarrowPhase,
+    /// Timestep of the current `world_step` call (integration_parameters.dt).
+    /// Laws that integrate quantities directly (e.g. the collider-less pulsar
+    /// torque fallback) must scale by this value.
+    pub dt: f64,
     /// Per-body force log: indexed by handle index (arena Index → usize).
     /// `None` = no forces for this body yet.  Auto-expanding.
     pub body_log: &'a mut Vec<Option<BodyForceLog>>,
@@ -301,6 +362,7 @@ impl<'a> ForceFacade<'a> {
         bodies: &'a mut RigidBodySet,
         colliders: &'a mut ColliderSet,
         narrow_phase: &'a NarrowPhase,
+        dt: f64,
         body_log: &'a mut Vec<Option<BodyForceLog>>,
         pending_forces: &'a mut SmallVec<[crate::rapier::events::PendingForce; 128]>,
         friction_work: &'a mut Vec<(RigidBodyHandle, RigidBodyHandle, Vector)>,
@@ -309,6 +371,7 @@ impl<'a> ForceFacade<'a> {
             bodies,
             colliders,
             narrow_phase,
+            dt,
             body_log,
             pending_forces,
             friction_work,
@@ -449,7 +512,8 @@ impl<'a> ForceFacade<'a> {
             ..Default::default()
         };
 
-        const NUM_FORCE_TYPES: usize = 32;
+        // C4: JeansEscape idx=33 — bump array to 34 slots.
+        const NUM_FORCE_TYPES: usize = 34;
         let mut drained = std::mem::take(self.body_log);
         for log in drained.iter_mut().flatten() {
             let mut body_totals: [Option<KahanVec3>; NUM_FORCE_TYPES] = [None; NUM_FORCE_TYPES];

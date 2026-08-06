@@ -1060,3 +1060,83 @@ pub fn schwarzschild_effective_potential(r: f64, rs: f64, angular_momentum: f64)
     }
     Some((1.0 - rs / r) * (1.0 + angular_momentum * angular_momentum / (r * r)))
 }
+
+// ---------------------------------------------------------------------------
+// Gravitational-wave matched filtering (PHYSICS_EXPANSION_PLAN.md W6)
+// ---------------------------------------------------------------------------
+
+/// Matched-filter signal-to-noise ratio for a circular compact-binary
+/// inspiral against a flat (single-sided) noise PSD.  Order-of-magnitude
+/// estimate under the stationary-phase approximation:
+///
+/// ```text
+/// ρ² = 4 · ∫|h̃(f)|² / S_n(f) df
+/// ρ ≈ h_rss · sqrt(Δf / S_n)
+/// ```
+///
+/// Inputs:
+/// - `strain_rss` — root-sum-square strain amplitude `h_rss` [1/sqrt(Hz)]
+/// - `f_min`      — lower band edge [Hz] (e.g. 20 Hz for LIGO O4)
+/// - `f_max`      — upper band edge [Hz] (e.g. 400 Hz for post-merger cutoff)
+/// - `noise_psd`  — flat single-sided noise PSD `S_n` at the band centre
+///                  [Hz^-1] (e.g. 1e-46 for early-aLIGO at 100 Hz)
+///
+/// Returns the matched-filter SNR (dimensionless).  Note: real LIGO uses a
+/// shaped PSD curve, not a single number; this is a compact closed-form
+/// estimate that generalises naturally when integrated against an actual
+/// PSD curve later (see PHYSICS_EXPANSION_PLAN.md W6 follow-up).
+pub fn gw_inspiral_snr(
+    strain_rss: f64,
+    f_min: f64,
+    f_max: f64,
+    noise_psd: f64,
+) -> Option<f64> {
+    if !finite_positive(strain_rss)
+        || !finite_positive(f_min)
+        || !finite_positive(f_max)
+        || f_max <= f_min
+        || !finite_positive(noise_psd)
+    {
+        set_error(ERR_INVALID_ARGUMENT, "bad GW inspiral SNR args");
+        return None;
+    }
+    let bandwidth = f_max - f_min;
+    // ρ ≈ h_rss · sqrt(Δf / S_n) — root-sum-square convention; for
+    // root-power spectral density conventions this collapses the integral.
+    Some(strain_rss * (bandwidth / noise_psd).sqrt())
+}
+
+/// inspiral-time-to-coalescence for a circular binary in the quadrupole
+/// approximation (Peters & Mathews 1963, leading order):
+///
+/// ```text
+/// t_c = (5/256) · (c⁵ / G³) · (M_c⁵ / f⁵) · (π · f)^(-8/3)
+/// ```
+///
+/// Simplified (geometric units dropped back to SI): use chirp mass and the
+/// gravitational-wave frequency `f_gw` (twice the orbital frequency) to
+/// compute remaining inspiral time to coalescence.
+///
+/// Inputs:
+/// - `chirp_mass_kg` — M_c (pulsar-mass-plus-pulsar-mass-derived chirp mass)
+/// - `f_gw_hz`       — current gravitational-wave frequency [Hz]
+///
+/// Returns seconds until coalescence.  For reference, a 1.4 Msun + 1.4 Msun
+/// binary at f_gw = 100 Hz has t_c ≈ 2.2 s.
+pub fn gw_inspiral_time_to_coalescence(chirp_mass_kg: f64, f_gw_hz: f64) -> Option<f64> {
+    const G: f64 = 6.67430e-11;
+    if !finite_positive(chirp_mass_kg) || !finite_positive(f_gw_hz) {
+        set_error(ERR_INVALID_ARGUMENT, "bad GW t_c args");
+        return None;
+    }
+    // t_c = (5/256) · c^5 / (G^(5/3) · π^(8/3) · f_gw^(8/3) · M_c^(5/3))
+    // Standard inspiral formula from leading-order quadrupole radiation.
+    let f_pow = f_gw_hz.powf(8.0 / 3.0);
+    let m_pow = chirp_mass_kg.powf(5.0 / 3.0);
+    let numerator = 5.0 / 256.0 * SPEED_OF_LIGHT.powi(5);
+    let denominator = G.powf(5.0 / 3.0)
+        * core::f64::consts::PI.powf(8.0 / 3.0)
+        * f_pow
+        * m_pow;
+    Some(numerator / denominator)
+}
