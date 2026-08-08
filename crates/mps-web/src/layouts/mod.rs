@@ -17,7 +17,7 @@ table tr:hover td { background: #1a1a3e; }
 .callout { background: #0f1a2e; border-left: 4px solid #4a9eff; padding: 14px 18px; border-radius: 4px; margin: 20px 0; font-size: 14px; color: #bbb; }
 .callout strong { color: #fff; }
 .callout .hi { color: #4a9eff; font-family: monospace; }
-[data-lang] { display: none; }
+[data-lang]:not(html) { display: none; }
 [data-lang="zh"] { display: block; }
 html[data-lang="en"] [data-lang="en"] { display: block; }
 html[data-lang="en"] [data-lang="zh"] { display: none; }
