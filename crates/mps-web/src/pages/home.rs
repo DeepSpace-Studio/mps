@@ -1,179 +1,181 @@
 use topcoat::{router::page, view::view};
 
-use crate::metrics::{CORE_FFI_COUNT, JNI_METHOD_COUNT, TEST_COUNT};
+use crate::metrics::{
+    CELESTIAL_COUNT, CORE_FFI_COUNT, FORMULA_MODULE_COUNT, GRAVITY_MODEL_COUNT,
+    INTEGRATOR_COUNT, JNI_METHOD_COUNT, TEST_COUNT,
+};
 
 /// Home page — MPS Physics System overview
 #[page("/")]
 pub async fn home() -> topcoat::Result {
     view! {
-        <div style="text-align:center; padding:60px 20px 40px;">
-            <div style="font-size:12px; color:#4a9eff; letter-spacing:3px; text-transform:uppercase; margin-bottom:12px; font-family:monospace;">
-                "/ MPS PHYSICS OBSERVATORY"
-            </div>
-            <h1 style="font-size:36px; font-weight:300; color:#fff; margin:0 0 16px;">
-                "运动物理系统 (米每秒)"
+        <div class="hero">
+            <div class="hero-tag">"/ MPS PHYSICS OBSERVATORY"</div>
+            <h1 class="hero-title">
+                <span data-lang="zh">"运动物理系统 (米每秒)"</span>
+                <span data-lang="en">"Motion Physics System (Meters Per Second)"</span>
             </h1>
-            <p style="font-size:16px; color:#aaa; max-width:720px; margin:0 auto 30px; line-height:1.7;">
-                "基于 " <strong style="color:#e0e0e0;">"Rapier3D-f64"</strong> " 的高精度 Rust 物理引擎。通过 C FFI (" <strong style="color:#e0e0e0;">{ (CORE_FFI_COUNT) }</strong> " 函数) 和 Java JNI (" <strong style="color:#e0e0e0;">{ (JNI_METHOD_COUNT) }</strong> " 方法) 暴露完整 API。支持 "
-                <strong style="color:#e0e0e0;">{ (TEST_COUNT) }</strong> " 项测试、" <strong style="color:#e0e0e0;">"5 种引力模型"</strong> "、" <strong style="color:#e0e0e0;">"3 种辛积分器"</strong> "、" <strong style="color:#e0e0e0;">"共享内存零拷贝 Arena"</strong> "、" <strong style="color:#e0e0e0;">"28 个公式模块"</strong> " 和 " <strong style="color:#e0e0e0;">"10 个太阳系天体"</strong> "。"
+            <p class="hero-desc">
+                <span data-lang="zh">{ "基于 " }<strong class="text-hl">"Rapier3D-f64"</strong>{ " 的高精度 Rust 物理引擎。通过 C FFI (" }<strong class="text-hl">{ (CORE_FFI_COUNT) }</strong>{ " 函数) 和 Java JNI (" }<strong class="text-hl">{ (JNI_METHOD_COUNT) }</strong>{ " 方法) 暴露完整 API。支持 " }<strong class="text-hl">{ (TEST_COUNT) }</strong>{ " 项测试、" }<strong class="text-hl">{ (GRAVITY_MODEL_COUNT) }</strong>{ " 种引力模型、" }<strong class="text-hl">{ (INTEGRATOR_COUNT) }</strong>{ " 种辛积分器、共享内存零拷贝 Arena、" }<strong class="text-hl">{ (FORMULA_MODULE_COUNT) }</strong>{ " 个公式模块和 " }<strong class="text-hl">{ (CELESTIAL_COUNT) }</strong>{ " 个太阳系天体。" }</span>
+                <span data-lang="en">{ "High-precision Rust physics engine based on " }<strong class="text-hl">"Rapier3D-f64"</strong>{ ". Full API exposed via C FFI (" }<strong class="text-hl">{ (CORE_FFI_COUNT) }</strong>{ " functions) and Java JNI (" }<strong class="text-hl">{ (JNI_METHOD_COUNT) }</strong>{ " methods). " }<strong class="text-hl">{ (TEST_COUNT) }</strong>{ " tests, " }<strong class="text-hl">{ (GRAVITY_MODEL_COUNT) }</strong>{ " gravity models, " }<strong class="text-hl">{ (INTEGRATOR_COUNT) }</strong>{ " symplectic integrators, zero-copy shared-memory Arena, " }<strong class="text-hl">{ (FORMULA_MODULE_COUNT) }</strong>{ " formula modules and " }<strong class="text-hl">{ (CELESTIAL_COUNT) }</strong>{ " celestial bodies." }</span>
             </p>
-            <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
-                <a href="quickstart" style="background:#4a9eff; color:#fff; padding:12px 24px; border-radius:6px; text-decoration:none; font-weight:500;">"快速入门"</a>
-                <a href="api" style="border:1px solid #4a9eff; color:#4a9eff; padding:12px 24px; border-radius:6px; text-decoration:none; font-weight:500;">"API 参考"</a>
-            </div>
-        </div>
-
-        <div style="display:flex; gap:16px; justify-content:center; flex-wrap:wrap; margin:40px 0;">
-            <div style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px 28px; text-align:center; min-width:120px;">
-                <strong style="display:block;font-size:28px;color:#4a9eff;font-weight:300;">{ (TEST_COUNT) }</strong>
-                <span style="font-size:12px;color:#888;text-transform:uppercase;letter-spacing:1px;">"集成测试"</span>
-            </div>
-            <div style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px 28px; text-align:center; min-width:120px;">
-                <strong style="display:block;font-size:28px;color:#4a9eff;font-weight:300;">"300+"</strong>
-                <span style="font-size:12px;color:#888;text-transform:uppercase;letter-spacing:1px;">"纯公式函数"</span>
-            </div>
-            <div style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px 28px; text-align:center; min-width:120px;">
-                <strong style="display:block;font-size:28px;color:#4a9eff;font-weight:300;">"28"</strong>
-                <span style="font-size:12px;color:#888;text-transform:uppercase;letter-spacing:1px;">"公式模块"</span>
-            </div>
-            <div style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px 28px; text-align:center; min-width:120px;">
-                <strong style="display:block;font-size:28px;color:#4a9eff;font-weight:300;">"10"</strong>
-                <span style="font-size:12px;color:#888;text-transform:uppercase;letter-spacing:1px;">"太阳系天体"</span>
-            </div>
-        </div>
-
-        <div style="text-align:center; margin:40px 0;">
-            <div style="font-size:12px; color:#4a9eff; letter-spacing:3px; text-transform:uppercase; margin-bottom:12px; font-family:monospace;">
-                "/ MODULE DIRECTORY"
-            </div>
-            <h2 style="font-size:24px; font-weight:300; color:#fff; margin:0 0 24px;">"模块目录"</h2>
-
-            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:16px;">
-                <a href="architecture" style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px; text-decoration:none; color:#ccc; display:flex; flex-direction:column; gap:8px;">
-                    <span style="font-family:monospace; font-size:12px; color:#4a9eff;">"01"</span>
-                    <strong style="font-size:16px; color:#fff;">"核心引擎"</strong>
-                    <small style="font-size:13px; color:#888; line-height:1.5;">"World、刚体、碰撞体、关节、查询、控制器"</small>
-                    <em style="font-style:normal; font-size:18px; color:#4a9eff; text-align:right; margin-top:auto;">"↗"</em>
+            <div class="hero-actions">
+                <a href="quickstart" class="btn-primary">
+                    <span data-lang="zh">"快速入门"</span>
+                    <span data-lang="en">"Quickstart"</span>
                 </a>
-                <a href="cosmos" style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px; text-decoration:none; color:#ccc; display:flex; flex-direction:column; gap:8px;">
-                    <span style="font-family:monospace; font-size:12px; color:#4a9eff;">"06"</span>
-                    <strong style="font-size:16px; color:#fff;">"太空刚体演算"</strong>
-                    <small style="font-size:13px; color:#888; line-height:1.5;">"CosmosWorld、Verlet 轨道积分、n-body 互引力、环境扰动"</small>
-                    <em style="font-style:normal; font-size:18px; color:#4a9eff; text-align:right; margin-top:auto;">"↗"</em>
-                </a>
-                <a href="gravity" style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px; text-decoration:none; color:#ccc; display:flex; flex-direction:column; gap:8px;">
-                    <span style="font-family:monospace; font-size:12px; color:#4a9eff;">"02"</span>
-                    <strong style="font-size:16px; color:#fff;">"物理系统"</strong>
-                    <small style="font-size:13px; color:#888; line-height:1.5;">"引力、地形、力注册表、事件系统、空气动力学、流体"</small>
-                    <em style="font-style:normal; font-size:18px; color:#4a9eff; text-align:right; margin-top:auto;">"↗"</em>
-                </a>
-                <a href="formula" style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px; text-decoration:none; color:#ccc; display:flex; flex-direction:column; gap:8px;">
-                    <span style="font-family:monospace; font-size:12px; color:#4a9eff;">"03"</span>
-                    <strong style="font-size:16px; color:#fff;">"领域公式"</strong>
-                    <small style="font-size:13px; color:#888; line-height:1.5;">"28 模块 — 航天、天体物理、核物理、相对论、量子等"</small>
-                    <em style="font-style:normal; font-size:18px; color:#4a9eff; text-align:right; margin-top:auto;">"↗"</em>
-                </a>
-                <a href="arena" style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px; text-decoration:none; color:#ccc; display:flex; flex-direction:column; gap:8px;">
-                    <span style="font-family:monospace; font-size:12px; color:#4a9eff;">"04"</span>
-                    <strong style="font-size:16px; color:#fff;">"集成方案"</strong>
-                    <small style="font-size:13px; color:#888; line-height:1.5;">"Arena 共享内存、JNI/FFM 绑定、Java 生态"</small>
-                    <em style="font-style:normal; font-size:18px; color:#4a9eff; text-align:right; margin-top:auto;">"↗"</em>
-                </a>
-                <a href="api" style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px; text-decoration:none; color:#ccc; display:flex; flex-direction:column; gap:8px;">
-                    <span style="font-family:monospace; font-size:12px; color:#4a9eff;">"05"</span>
-                    <strong style="font-size:16px; color:#fff;">"参考资料"</strong>
-                    <small style="font-size:13px; color:#888; line-height:1.5;">"完整 API 表、精度与性能、优化指南"</small>
-                    <em style="font-style:normal; font-size:18px; color:#4a9eff; text-align:right; margin-top:auto;">"↗"</em>
+                <a href="api" class="btn-outline">
+                    <span data-lang="zh">"API 参考"</span>
+                    <span data-lang="en">"API Reference"</span>
                 </a>
             </div>
         </div>
 
-        <div style="margin:40px 0;">
-            <h2 style="font-size:20px; font-weight:300; color:#fff; margin:0 0 16px;">"公式模块 (28)"</h2>
-            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:12px;">
-                <div style="background:#16213e; border:1px solid #333; border-radius:6px; padding:16px; text-align:center;">
-                    <span style="display:block;font-size:22px;color:#4a9eff;font-weight:600;">"88"</span>
-                    <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;">"航天工程"</span>
+        <div class="metric-grid">
+            <div class="metric-card">
+                <strong class="num">{ (TEST_COUNT) }</strong>
+                <span class="label"><span data-lang="zh">"集成测试"</span><span data-lang="en">"Tests"</span></span>
+            </div>
+            <div class="metric-card">
+                <strong class="num">"300+"</strong>
+                <span class="label"><span data-lang="zh">"纯公式函数"</span><span data-lang="en">"Formula Fns"</span></span>
+            </div>
+            <div class="metric-card">
+                <strong class="num">{ (FORMULA_MODULE_COUNT) }</strong>
+                <span class="label"><span data-lang="zh">"公式模块"</span><span data-lang="en">"Formula Modules"</span></span>
+            </div>
+            <div class="metric-card">
+                <strong class="num">{ (CELESTIAL_COUNT) }</strong>
+                <span class="label"><span data-lang="zh">"太阳系天体"</span><span data-lang="en">"Celestial Bodies"</span></span>
+            </div>
+        </div>
+
+        <div class="text-center section-divider">
+            <div class="hero-tag">"/ MODULE DIRECTORY"</div>
+            <h2 class="section-heading-lg">
+                <span data-lang="zh">"模块目录"</span>
+                <span data-lang="en">"Module Directory"</span>
+            </h2>
+
+            <div class="module-grid">
+                <a href="architecture" class="module-card">
+                    <span class="idx">"01"</span>
+                    <strong class="title"><span data-lang="zh">"核心引擎"</span><span data-lang="en">"Core Engine"</span></strong>
+                    <small class="desc"><span data-lang="zh">"World、刚体、碰撞体、关节、查询、控制器"</span><span data-lang="en">"World, rigid bodies, colliders, joints, queries, controllers"</span></small>
+                    <em class="arrow">"↗"</em>
+                </a>
+                <a href="cosmos" class="module-card">
+                    <span class="idx">"06"</span>
+                    <strong class="title"><span data-lang="zh">"太空刚体演算"</span><span data-lang="en">"Cosmos Rigid Body"</span></strong>
+                    <small class="desc"><span data-lang="zh">"CosmosWorld、Verlet 轨道积分、n-body 互引力、环境扰动"</span><span data-lang="en">"CosmosWorld, Verlet orbit integration, n-body gravity, perturbations"</span></small>
+                    <em class="arrow">"↗"</em>
+                </a>
+                <a href="gravity" class="module-card">
+                    <span class="idx">"02"</span>
+                    <strong class="title"><span data-lang="zh">"物理系统"</span><span data-lang="en">"Physics Systems"</span></strong>
+                    <small class="desc"><span data-lang="zh">"引力、地形、力注册表、事件系统、空气动力学、流体"</span><span data-lang="en">"Gravity, terrain, force registry, events, aerodynamics, fluid"</span></small>
+                    <em class="arrow">"↗"</em>
+                </a>
+                <a href="formula" class="module-card">
+                    <span class="idx">"03"</span>
+                    <strong class="title"><span data-lang="zh">"领域公式"</span><span data-lang="en">"Domain Formulas"</span></strong>
+                    <small class="desc"><span data-lang="zh">"28 模块 — 航天、天体物理、核物理、相对论、量子等"</span><span data-lang="en">"28 modules — spaceflight, astrophysics, nuclear, relativity, quantum, etc."</span></small>
+                    <em class="arrow">"↗"</em>
+                </a>
+                <a href="arena" class="module-card">
+                    <span class="idx">"04"</span>
+                    <strong class="title"><span data-lang="zh">"集成方案"</span><span data-lang="en">"Integration"</span></strong>
+                    <small class="desc"><span data-lang="zh">"Arena 共享内存、JNI/FFM 绑定、Java 生态"</span><span data-lang="en">"Arena shared memory, JNI/FFM bindings, Java ecosystem"</span></small>
+                    <em class="arrow">"↗"</em>
+                </a>
+                <a href="api" class="module-card">
+                    <span class="idx">"05"</span>
+                    <strong class="title"><span data-lang="zh">"参考资料"</span><span data-lang="en">"Reference"</span></strong>
+                    <small class="desc"><span data-lang="zh">"完整 API 表、精度与性能、优化指南"</span><span data-lang="en">"Full API tables, precision & performance, optimization guide"</span></small>
+                    <em class="arrow">"↗"</em>
+                </a>
+            </div>
+        </div>
+
+        <div class="section-divider">
+            <h2 class="section-heading">
+                <span data-lang="zh">{ "公式模块 (" }{ (FORMULA_MODULE_COUNT) }{ ")" }</span>
+                <span data-lang="en">{ "Formula Modules (" }{ (FORMULA_MODULE_COUNT) }{ ")" }</span>
+            </h2>
+            <div class="mini-stat-grid">
+                <div class="stat-card"><span class="num">"88"</span><span class="label"><span data-lang="zh">"航天工程"</span><span data-lang="en">"Spaceflight"</span></span></div>
+                <div class="stat-card"><span class="num">"23"</span><span class="label"><span data-lang="zh">"核物理"</span><span data-lang="en">"Nuclear"</span></span></div>
+                <div class="stat-card"><span class="num">"26"</span><span class="label"><span data-lang="zh">"材料力学"</span><span data-lang="en">"Mechanics"</span></span></div>
+                <div class="stat-card"><span class="num">"19"</span><span class="label"><span data-lang="zh">"天体物理"</span><span data-lang="en">"Astrophysics"</span></span></div>
+                <div class="stat-card"><span class="num">"23"</span><span class="label"><span data-lang="zh">"相对论"</span><span data-lang="en">"Relativity"</span></span></div>
+                <div class="stat-card"><span class="num">"20"</span><span class="label"><span data-lang="zh">"量子力学"</span><span data-lang="en">"Quantum"</span></span></div>
+                <div class="stat-card"><span class="num">"16"</span><span class="label"><span data-lang="zh">"电磁学"</span><span data-lang="en">"Electromagnetism"</span></span></div>
+                <div class="stat-card"><span class="num">"18"</span><span class="label"><span data-lang="zh">"流体力学"</span><span data-lang="en">"Fluid Dynamics"</span></span></div>
+            </div>
+        </div>
+
+        <div class="callout">
+            <p>
+                <span data-lang="zh">{ "全部公式位于独立 crate " }<span class="hi">"mps-formula"</span>{ " — 纯 Rust 实现，不依赖 Rapier 或 WorldHandle。" }</span>
+                <span data-lang="en">{ "All formulas live in a standalone crate " }<span class="hi">"mps-formula"</span>{ " — pure Rust, no Rapier or WorldHandle dependency." }</span>
+            </p>
+        </div>
+
+        <div class="section-divider">
+            <h2 class="section-heading">
+                <span data-lang="zh">"核心特性"</span>
+                <span data-lang="en">"Key Features"</span>
+            </h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h3><span data-lang="zh">"高精度引力"</span><span data-lang="en">"High-Precision Gravity"</span></h3>
+                    <p><span data-lang="zh">"球谐展开 (EGM2008 8×8)、椭球引力、J2-J6 带谐、四极张量。自动根据轨道高度选择最优模型。"</span><span data-lang="en">"Spherical harmonics (EGM2008 8×8), ellipsoidal gravity, J2-J6 zonal harmonics, quadrupole tensor. Auto-selects optimal model by orbital altitude."</span></p>
                 </div>
-                <div style="background:#16213e; border:1px solid #333; border-radius:6px; padding:16px; text-align:center;">
-                    <span style="display:block;font-size:22px;color:#4a9eff;font-weight:600;">"23"</span>
-                    <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;">"核物理"</span>
+                <div class="feature-card">
+                    <h3><span data-lang="zh">"辛积分器"</span><span data-lang="en">"Symplectic Integrators"</span></h3>
+                    <p><span data-lang="zh">{ "Leapfrog、Yoshida 4 阶、Forest-Ruth 8 阶。Kahan 补偿精度从 15 位→30 位有效数字。后牛顿 1PN+2PN 相对论修正。" }<a href="./cosmos" class="link">"mps-cosmos"</a>{ " 另提供 velocity-Verlet 轨道积分，长弧相位误差随 dt² 收敛。" }</span><span data-lang="en">{ "Leapfrog, Yoshida 4th order, Forest-Ruth 8th order. Kahan compensation: 15→30 significant digits. Post-Newtonian 1PN+2PN corrections." }<a href="./cosmos" class="link">"mps-cosmos"</a>{ " adds velocity-Verlet orbit integration with dt² phase error convergence." }</span></p>
                 </div>
-                <div style="background:#16213e; border:1px solid #333; border-radius:6px; padding:16px; text-align:center;">
-                    <span style="display:block;font-size:22px;color:#4a9eff;font-weight:600;">"26"</span>
-                    <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;">"材料力学"</span>
+                <div class="feature-card">
+                    <h3><span data-lang="zh">"内置天体"</span><span data-lang="en">"Built-in Celestials"</span></h3>
+                    <p><span data-lang="zh">"太阳系 10 天体精密参数 (JPL DE441)。地球 EGM2008、月球 LP165 + 12 Mascon (GRAIL)、火星 Mars50c。"</span><span data-lang="en">"10 solar system bodies with precision data (JPL DE441). Earth EGM2008, Moon LP165 + 12 Mascons (GRAIL), Mars Mars50c."</span></p>
                 </div>
-                <div style="background:#16213e; border:1px solid #333; border-radius:6px; padding:16px; text-align:center;">
-                    <span style="display:block;font-size:22px;color:#4a9eff;font-weight:600;">"19"</span>
-                    <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;">"天体物理"</span>
+                <div class="feature-card">
+                    <h3><span data-lang="zh">"地形引力"</span><span data-lang="en">"Terrain Gravity"</span></h3>
+                    <p><span data-lang="zh">"多面体引力 (Werner-Scheeres)、DEM 地形质量分布、FFT 加速。月球 Mascon 模型防止低轨坠毁。"</span><span data-lang="en">"Polyhedral gravity (Werner-Scheeres), DEM terrain mass distribution, FFT acceleration. Lunar Mascon model prevents low-orbit decay."</span></p>
                 </div>
-                <div style="background:#16213e; border:1px solid #333; border-radius:6px; padding:16px; text-align:center;">
-                    <span style="display:block;font-size:22px;color:#4a9eff;font-weight:600;">"23"</span>
-                    <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;">"相对论"</span>
+                <div class="feature-card">
+                    <h3>"ForceRegistry"</h3>
+                    <p><span data-lang="zh">"类型化力注册表。任意力实现 ForceLaw trait 后自动调度，世界步进内自动聚合报告，无需手写分发逻辑。"</span><span data-lang="en">"Typed force registry. Any force implementing ForceLaw trait auto-dispatches; world step auto-aggregates reports, no manual dispatch needed."</span></p>
                 </div>
-                <div style="background:#16213e; border:1px solid #333; border-radius:6px; padding:16px; text-align:center;">
-                    <span style="display:block;font-size:22px;color:#4a9eff;font-weight:600;">"20"</span>
-                    <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;">"量子力学"</span>
-                </div>
-                <div style="background:#16213e; border:1px solid #333; border-radius:6px; padding:16px; text-align:center;">
-                    <span style="display:block;font-size:22px;color:#4a9eff;font-weight:600;">"16"</span>
-                    <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;">"电磁学"</span>
-                </div>
-                <div style="background:#16213e; border:1px solid #333; border-radius:6px; padding:16px; text-align:center;">
-                    <span style="display:block;font-size:22px;color:#4a9eff;font-weight:600;">"18"</span>
-                    <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;">"流体力学"</span>
+                <div class="feature-card">
+                    <h3><span data-lang="zh">"JNI + 共享内存"</span><span data-lang="en">"JNI + Shared Memory"</span></h3>
+                    <p><span data-lang="zh">{ "Java 21 JNI 全绑定 (" }<strong class="text-hl">{ (JNI_METHOD_COUNT) }</strong>{ " 方法)。共享内存 Arena (DirectByteBuffer) 零 JNI 读写，每帧仅 1 次 world_step 调用。" }</span><span data-lang="en">{ "Java 21 JNI full binding (" }<strong class="text-hl">{ (JNI_METHOD_COUNT) }</strong>{ " methods). Shared-memory Arena (DirectByteBuffer) for zero-JNI read/write, only 1 world_step call per frame." }</span></p>
                 </div>
             </div>
         </div>
 
-        <div class="callout" style="background:#0f1a2e; border-left:4px solid #4a9eff; padding:14px 18px; border-radius:4px; margin:20px 0;">
-            <p>"全部公式位于独立 crate " <span class="hi" style="color:#4a9eff; font-family:monospace;">"mps-formula"</span> " — 纯 Rust 实现，不依赖 Rapier 或 WorldHandle。"</p>
-        </div>
-
-        <div style="margin:40px 0;">
-            <h2 style="font-size:20px; font-weight:300; color:#fff; margin:0 0 16px;">"核心特性"</h2>
-            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:16px;">
-                <div style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px;">
-                    <h3 style="font-size:16px; color:#fff; margin:0 0 8px;">"高精度引力"</h3>
-                    <p style="font-size:14px; color:#999; line-height:1.6; margin:0;">"球谐展开 (EGM2008 8×8)、椭球引力、J2-J6 带谐、四极张量。自动根据轨道高度选择最优模型。"</p>
-                </div>
-                <div style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px;">
-                    <h3 style="font-size:16px; color:#fff; margin:0 0 8px;">"辛积分器"</h3>
-                    <p style="font-size:14px; color:#999; line-height:1.6; margin:0;">"Leapfrog、Yoshida 4 阶、Forest-Ruth 8 阶。Kahan 补偿精度从 15 位→30 位有效数字。后牛顿 1PN+2PN 相对论修正。" <a href="./cosmos" style="color:#4a9eff;">"mps-cosmos"</a> " 另提供 velocity-Verlet 轨道积分，长弧相位误差随 dt² 收敛。"</p>
-                </div>
-                <div style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px;">
-                    <h3 style="font-size:16px; color:#fff; margin:0 0 8px;">"内置天体"</h3>
-                    <p style="font-size:14px; color:#999; line-height:1.6; margin:0;">"太阳系 10 天体精密参数 (JPL DE441)。地球 EGM2008、月球 LP165 + 12 Mascon (GRAIL)、火星 Mars50c。"</p>
-                </div>
-                <div style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px;">
-                    <h3 style="font-size:16px; color:#fff; margin:0 0 8px;">"地形引力"</h3>
-                    <p style="font-size:14px; color:#999; line-height:1.6; margin:0;">"多面体引力 (Werner-Scheeres)、DEM 地形质量分布、FFT 加速。月球 Mascon 模型防止低轨坠毁。"</p>
-                </div>
-                <div style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px;">
-                    <h3 style="font-size:16px; color:#fff; margin:0 0 8px;">"ForceRegistry"</h3>
-                    <p style="font-size:14px; color:#999; line-height:1.6; margin:0;">"类型化力注册表。任意力实现 ForceLaw trait 后自动调度，世界步进内自动聚合报告，无需手写分发逻辑。"</p>
-                </div>
-                <div style="background:#16213e; border:1px solid #333; border-radius:8px; padding:20px;">
-                    <h3 style="font-size:16px; color:#fff; margin:0 0 8px;">"JNI + 共享内存"</h3>
-                    <p style="font-size:14px; color:#999; line-height:1.6; margin:0;">{ "Java 21 JNI 全绑定 (" } <strong>{ (JNI_METHOD_COUNT) }</strong> { " 方法)。共享内存 Arena (DirectByteBuffer) 零 JNI 读写，每帧仅 1 次 world_step 调用。" }</p>
-                </div>
-            </div>
-        </div>
-
-        <div style="margin:40px 0;">
-            <h2 style="font-size:20px; font-weight:300; color:#fff; margin:0 0 16px;">"架构设计"</h2>
-            <pre style="background:#0d0d2b; border:1px solid #333; border-radius:6px; padding:16px; font-size:13px; line-height:1.5;">
-                <code class="language-text">
-"Java 21 JNI / Java 25 FFM
-  └─ Rust C ABI ({ (CORE_FFI_COUNT) } 函数)
+        <div class="section-divider">
+            <h2 class="section-heading">
+                <span data-lang="zh">"架构设计"</span>
+                <span data-lang="en">"Architecture"</span>
+            </h2>
+            <pre><code class="language-text">
+<span data-lang="zh">"Java 21 JNI / Java 25 FFM
+  └─ Rust C ABI ("</span><span data-lang="en">"Java 21 JNI / Java 25 FFM
+  └─ Rust C ABI ("</span>{ (CORE_FFI_COUNT) }<span data-lang="zh">" 函数)
        ├─ mps-formula  — 28 纯公式模块 (300+ 函数)
        ├─ mps-core     — 物理引擎 + Rapier 封装 (World, 刚体, 碰撞体, 查询, 事件)
        ├─ mps-cosmos   — 太空刚体演算 (独立 world, Verlet 轨道积分)
-       ├─ mps-jni      — JNI 绑定 ({ (JNI_METHOD_COUNT) } 方法, 含 cosmos 一批)
+       ├─ mps-jni      — JNI 绑定 ("</span><span data-lang="en">" functions)
+       ├─ mps-formula  — 28 pure formula modules (300+ functions)
+       ├─ mps-core     — physics engine + Rapier wrapper (World, bodies, colliders, queries, events)
+       ├─ mps-cosmos   — cosmos rigid body (separate world, Verlet orbit integration)
+       ├─ mps-jni      — JNI bindings ("</span>{ (JNI_METHOD_COUNT) }<span data-lang="zh">" 方法, 含 cosmos 一批)
        ├─ mps-ffm      — FFM 元数据
-       └─ mps-test     — 集成测试 (含 cosmos 19)"
-                </code>
-            </pre>
+       └─ mps-test     — 集成测试 (含 cosmos 19)"</span><span data-lang="en">" methods, incl. cosmos batch)
+       ├─ mps-ffm      — FFM metadata
+       └─ mps-test     — integration tests (incl. cosmos 19)"</span>
+            </code></pre>
         </div>
     }
 }

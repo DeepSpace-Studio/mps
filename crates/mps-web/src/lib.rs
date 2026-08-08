@@ -9,7 +9,6 @@ use topcoat::router::Router;
 /// counts/JNI method counts/FFI counts in sync with the source.
 pub mod metrics;
 
-mod components;
 mod layouts;
 mod pages;
 
@@ -25,6 +24,7 @@ use pages::gravity::gravity;
 use pages::home::home;
 use pages::integrators::integrators;
 use pages::jni::jni;
+use pages::page_not_found::page_not_found;
 use pages::quickstart::quickstart;
 use pages::voxel::voxel;
 
@@ -45,5 +45,6 @@ pub fn app() -> Router {
         .page(jni)
         .page(ffm)
         .page(api)
+        .page(page_not_found)
         .build()
 }

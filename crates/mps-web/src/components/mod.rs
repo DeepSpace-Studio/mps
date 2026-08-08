@@ -1,6 +1,2 @@
-pub mod doc_module;
-pub mod footer;
-pub mod header;
-pub mod metric_card;
-pub mod module_card;
-pub mod stat_card;
+// Component module — currently empty.
+// All reusable styles are defined as CSS classes in layouts/mod.rs.

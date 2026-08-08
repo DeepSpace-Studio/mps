@@ -69,7 +69,8 @@ jobs:
           # Create output directory
           mkdir -p _site
 
-          # Export all pages
+          # All pages registered in lib.rs (kept in sync manually —
+          # new pages must be added to both lib.rs and this list)
           PAGES=(
             "/"
             "/quickstart"
@@ -84,7 +85,13 @@ jobs:
             "/jni"
             "/ffm"
             "/api"
+            "/404"
           )
+
+          BASE_URL="${{ steps.configure-pages.outputs.base_url }}"
+          # Fallback for local testing
+          if [ -z "$BASE_URL" ]; then BASE_URL="https://polari-stars-mc.github.io/rigid-body"; fi
+          BASE_URL="${BASE_URL%/}"
 
           for page in "${PAGES[@]}"; do
             echo "Exporting $page ..."
@@ -100,6 +107,26 @@ jobs:
               exit 1
             fi
           done
+
+          # Generate sitemap.xml
+          echo '<?xml version="1.0" encoding="UTF-8"?>' > _site/sitemap.xml
+          echo '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' >> _site/sitemap.xml
+          for page in "${PAGES[@]}"; do
+            if [ "$page" = "/404" ]; then continue; fi
+            echo "  <url>" >> _site/sitemap.xml
+            echo "    <loc>${BASE_URL}${page}/</loc>" >> _site/sitemap.xml
+            echo "    <changefreq>weekly</changefreq>" >> _site/sitemap.xml
+            echo "    <priority>$( [ "$page" = "/" ] && echo 1.0 || echo 0.8 )</priority>" >> _site/sitemap.xml
+            echo "  </url>" >> _site/sitemap.xml
+          done
+          echo '</urlset>' >> _site/sitemap.xml
+          echo "Generated sitemap.xml"
+
+          # Generate robots.txt
+          echo "User-agent: *" > _site/robots.txt
+          echo "Allow: /" >> _site/robots.txt
+          echo "Sitemap: ${BASE_URL}/sitemap.xml" >> _site/robots.txt
+          echo "Generated robots.txt"
 
           # Kill the server
           kill $SERVER_PID 2>/dev/null || true

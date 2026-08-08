@@ -9,5 +9,6 @@ pub mod gravity;
 pub mod home;
 pub mod integrators;
 pub mod jni;
+pub mod page_not_found;
 pub mod quickstart;
 pub mod voxel;
