@@ -285,6 +285,17 @@ jni!(int worldBodySnapshot(long world, long out_handles, long out_values, int ca
 jni!(int worldUpdateBodyPoses(long world, long handles, long values, int count, int wake_up) { wo::world_update_body_poses(m::<WH>(world), p::<RRaw>(handles), p::<f64>(values), u32_from_jint(count), jb(wake_up)) as jint });
 jni!(int worldUpdateBodyVelocities(long world, long handles, long values, int count, int wake_up) { wo::world_update_body_velocities(m::<WH>(world), p::<RRaw>(handles), p::<f64>(values), u32_from_jint(count), jb(wake_up)) as jint });
 
+#[cfg(feature = "relative-force")]
+jni!(boolean worldSetRelativeForceEnabled(long world, long handle, int enabled, double lx, double ly, double lz) { wo::world_set_relative_force_enabled(m::<WH>(world), handle as RRaw, jb(enabled), v3(lx, ly, lz)).0 as jbyte });
+#[cfg(feature = "relative-force")]
+jni!(boolean worldGetRelativeForceEnabled(long world, long handle) { wo::world_get_relative_force_enabled(cp::<WH>(world), handle as RRaw).0 as jbyte });
+#[cfg(feature = "relative-force")]
+jni_e_c!(double_array worldGetRelativeForceLocalPoint(env _env, class _class, long world, long handle) { vec3_to_j_double_array(_env, wo::world_get_relative_force_local_point(cp::<WH>(world), handle as RRaw)) });
+#[cfg(feature = "relative-force")]
+jni!(boolean worldSetRelativeForceLocalPoint(long world, long handle, double lx, double ly, double lz) { wo::world_set_relative_force_local_point(m::<WH>(world), handle as RRaw, v3(lx, ly, lz)).0 as jbyte });
+#[cfg(feature = "relative-force")]
+jni!(boolean worldRemoveRelativeForce(long world, long handle) { wo::world_remove_relative_force(m::<WH>(world), handle as RRaw).0 as jbyte });
+
 //世界插入
 jni!(long worldInsertRigidBody(long world, long memory_handle) { rb::world_insert_rigid_body(m::<WH>(world), m::<RB>(memory_handle)) as jlong });
 jni!(boolean worldRemoveRigidBody(long world, long handle, int remove_attached_colliders) { rb::world_remove_rigid_body(m::<WH>(world), handle as RRaw, jb(remove_attached_colliders)).0 as jbyte });
@@ -466,6 +477,10 @@ jni!(void rigidBodyGetAngvelOut(long world, long body, long out_angvel) { rb::ri
 jni!(boolean rigidBodySetAngvel(long world, long body, double x, double y, double z, int wake_up) { rb::rigid_body_set_angvel(m::<WH>(world), body as RRaw, v3(x, y, z), jb(wake_up)).0 as jbyte });
 jni!(boolean rigidBodyAddForce(long world, long body, double x, double y, double z, int wake_up) { rb::rigid_body_add_force(m::<WH>(world), body as RRaw, v3(x, y, z), jb(wake_up)).0 as jbyte });
 jni!(boolean rigidBodyAddForceAtPoint(long world, long body, double x, double y, double z, double px, double py, double pz, int wake_up) { rb::rigid_body_add_force_at_point(m::<WH>(world), body as RRaw, v3(x, y, z), v3(px, py, pz), jb(wake_up)).0 as jbyte });
+#[cfg(feature = "relative-force")]
+jni!(boolean rigidBodyAddForceAtLocalPoint(long world, long body, double x, double y, double z, double lx, double ly, double lz, int wake_up) { rb::rigid_body_add_force_at_local_point(m::<WH>(world), body as RRaw, v3(x, y, z), v3(lx, ly, lz), jb(wake_up)).0 as jbyte });
+#[cfg(feature = "relative-force")]
+jni!(boolean rigidBodyAddTorqueAtLocalPoint(long world, long body, double x, double y, double z, double lx, double ly, double lz, int wake_up) { rb::rigid_body_add_torque_at_local_point(m::<WH>(world), body as RRaw, v3(x, y, z), v3(lx, ly, lz), jb(wake_up)).0 as jbyte });
 jni!(boolean rigidBodyResetForce(long world, long body, int wake_up) { rb::rigid_body_reset_force(m::<WH>(world), body as RRaw, jb(wake_up)).0 as jbyte });
 jni!(boolean rigidBodyAddTorque(long world, long body, double x, double y, double z, int wake_up) { rb::rigid_body_add_torque(m::<WH>(world), body as RRaw, v3(x, y, z), jb(wake_up)).0 as jbyte });
 jni!(boolean rigidBodyResetTorque(long world, long body, int wake_up) { rb::rigid_body_reset_torque(m::<WH>(world), body as RRaw, jb(wake_up)).0 as jbyte });
@@ -492,8 +507,18 @@ macro_rules! query_filter_args {
 }
 
 jni!(long queryCastRay(long world, double ox, double oy, double oz, double dx, double dy, double dz, double max_toi, int solid, int flags, int memberships, int filter, int use_groups, long exclude_collider, int use_exclude_collider, long exclude_rigid_body, int use_exclude_rigid_body, long out_hit) {
-    let hit = qu::query_cast_ray(cp::<WH>(world), v3(ox, oy, oz), v3(dx, dy, dz), max_toi, jb(solid), query_filter_args!(flags,memberships,filter,use_groups,exclude_collider,use_exclude_collider,exclude_rigid_body,use_exclude_rigid_body));
-    if let Some(out) = unsafe { pm::<RayHit>(out_hit).as_mut() } { *out = hit; }
+    let world_ptr = cp::<WH>(world);
+    if world_ptr.is_null() {
+        er::set_error(er::ERR_NULL_POINTER, "world is null");
+        return 0;
+    }
+    let filter_desc = query_filter_args!(flags, memberships, filter, use_groups, exclude_collider, use_exclude_collider, exclude_rigid_body, use_exclude_rigid_body);
+    let hit = qu::query_cast_ray(world_ptr, v3(ox, oy, oz), v3(dx, dy, dz), max_toi, jb(solid), filter_desc);
+    if out_hit != 0 {
+        if let Some(out) = unsafe { pm::<RayHit>(out_hit).as_mut() } {
+            *out = hit;
+        }
+    }
     hit.collider as jlong
 });
 

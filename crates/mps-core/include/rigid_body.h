@@ -3481,6 +3481,50 @@ Bool rigid_body_add_force_at_point(struct WorldHandle *world,
  *
  * `world` must be a live pointer returned by `world_create`, or null.
  */
+Bool rigid_body_add_force_at_local_point(struct WorldHandle *world,
+                                         RigidBodyHandleRaw handle,
+                                         Vec3 force,
+                                         Vec3 local_point,
+                                         Bool wake_up);
+
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
+Bool rigid_body_add_torque_at_local_point(struct WorldHandle *world,
+                                          RigidBodyHandleRaw handle,
+                                          Vec3 torque,
+                                          Vec3 _local_point,
+                                          Bool wake_up);
+
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
+uint8_t rigid_body_add_force_at_local_point_flag(struct WorldHandle *world,
+                                                 RigidBodyHandleRaw handle,
+                                                 Vec3 force,
+                                                 Vec3 local_point,
+                                                 Bool wake_up);
+
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
+uint8_t rigid_body_add_torque_at_local_point_flag(struct WorldHandle *world,
+                                                  RigidBodyHandleRaw handle,
+                                                  Vec3 torque,
+                                                  Vec3 local_point,
+                                                  Bool wake_up);
+
+/**
+ * # Safety
+ *
+ * `world` must be a live pointer returned by `world_create`, or null.
+ */
 Bool rigid_body_reset_force(struct WorldHandle *world, RigidBodyHandleRaw handle, Bool wake_up);
 
 /**
@@ -5169,6 +5213,54 @@ uint64_t world_get_shared_arena_size(const struct WorldHandle *world);
  * yet destroyed.
  */
 void world_reset_shared_arena_events(struct WorldHandle *world);
+
+/**
+ * Enable or disable relative force for a rigid body.
+ * When enabled, forces applied via `rigid_body_add_force_at_local_point`
+ * will be applied at the local attachment point instead of world coordinates.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create` (or null).
+ */
+Bool world_set_relative_force_enabled(struct WorldHandle *world,
+                                      RigidBodyHandleRaw handle,
+                                      Bool enabled,
+                                      Vec3 local_point);
+
+/**
+ * Check if relative force is enabled for a rigid body.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create` (or null).
+ */
+Bool world_get_relative_force_enabled(const struct WorldHandle *world, RigidBodyHandleRaw handle);
+
+/**
+ * Get the local attachment point for relative force.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create` (or null).
+ */
+Vec3 world_get_relative_force_local_point(const struct WorldHandle *world,
+                                          RigidBodyHandleRaw handle);
+
+/**
+ * Set the local attachment point for relative force.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create` (or null).
+ */
+Bool world_set_relative_force_local_point(struct WorldHandle *world,
+                                          RigidBodyHandleRaw handle,
+                                          Vec3 local_point);
+
+/**
+ * Remove relative force configuration for a rigid body.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create` (or null).
+ */
+Bool world_remove_relative_force(struct WorldHandle *world, RigidBodyHandleRaw handle);
 
 #ifdef __cplusplus
 }  // extern "C"

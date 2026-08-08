@@ -9,6 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 anvilkit-bridge = ["mps-core/anvilkit-bridge"]
+relative-force = ["mps-core/relative-force"]
 
 [dependencies]
 mps-formula = { path = "../mps-formula" }

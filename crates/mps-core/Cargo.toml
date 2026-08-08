@@ -15,10 +15,12 @@ smallvec = { workspace = true }
 rayon = { workspace = true }
 anvilkit = { workspace = true, optional = true }
 bevy_ecs = { workspace = true, optional = true }
+dashmap = { workspace = true }
 
 [features]
 default = []
 anvilkit-bridge = ["dep:anvilkit", "dep:bevy_ecs"]
+relative-force = []
 
 [build-dependencies]
 cbindgen = "0.29.4"

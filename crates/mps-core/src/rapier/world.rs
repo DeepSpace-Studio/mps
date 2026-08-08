@@ -4,6 +4,9 @@ use rapier3d::prelude::{
 };
 use std::sync::Arc;
 
+#[cfg(feature = "relative-force")]
+use dashmap::DashMap;
+
 use crate::rapier::error::{
     ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, ERR_UNSUPPORTED,
     clear_error, ffi_guard, set_error,
@@ -64,6 +67,9 @@ pub struct PhysicsWorld {
     pub(crate) shared_arena: Option<Box<crate::rapier::shared_arena::SharedPhysicsArena>>,
     /// Persistent per-frame work buffers — cleared and reused each `world_step`.
     pub(crate) buffers: FrameWorkBuffers,
+    /// Relative force feature: per-body enabled state and local attachment point.
+    #[cfg(feature = "relative-force")]
+    pub(crate) relative_force: DashMap<RigidBodyHandleRaw, (bool, Vec3)>,
 }
 
 impl PhysicsWorld {
@@ -93,6 +99,8 @@ impl PhysicsWorld {
             force_registry: ForceRegistry::new(),
             shared_arena: None,
             buffers: FrameWorkBuffers::default(),
+            #[cfg(feature = "relative-force")]
+            relative_force: DashMap::new(),
         }
     }
 }
@@ -1000,5 +1008,159 @@ pub extern "C" fn world_reset_shared_arena_events(world: *mut WorldHandle) {
         if let Some(ref arena) = world.inner.shared_arena {
             arena.reset_event_ring();
         }
+    })
+}
+
+/// Enable or disable relative force for a rigid body.
+/// When enabled, forces applied via `rigid_body_add_force_at_local_point`
+/// will be applied at the local attachment point instead of world coordinates.
+///
+/// # Safety
+/// `world` must be a valid pointer returned by `world_create` (or null).
+#[cfg(feature = "relative-force")]
+#[unsafe(no_mangle)]
+pub extern "C" fn world_set_relative_force_enabled(
+    world: *mut WorldHandle,
+    handle: RigidBodyHandleRaw,
+    enabled: Bool,
+    local_point: Vec3,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let Some(_) = world.inner.bodies.get(unpack_rigid_body_handle(handle)) else {
+            set_error(ERR_NOT_FOUND, "body was not found");
+            return Bool::FALSE;
+        };
+        if !vec3_finite(local_point) {
+            set_error(ERR_INVALID_ARGUMENT, "non-finite local point");
+            return Bool::FALSE;
+        }
+        world.inner.relative_force.insert(handle, (enabled.0 != 0, local_point));
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Check if relative force is enabled for a rigid body.
+///
+/// # Safety
+/// `world` must be a valid pointer returned by `world_create` (or null).
+#[cfg(feature = "relative-force")]
+#[unsafe(no_mangle)]
+pub extern "C" fn world_get_relative_force_enabled(
+    world: *const WorldHandle,
+    handle: RigidBodyHandleRaw,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let Some(_) = world.inner.bodies.get(unpack_rigid_body_handle(handle)) else {
+            set_error(ERR_NOT_FOUND, "body was not found");
+            return Bool::FALSE;
+        };
+        let enabled = world
+                    .inner
+                    .relative_force
+                    .get(&handle)
+                    .map(|v| v.0)
+                    .unwrap_or(false);
+        clear_error();
+        Bool(enabled as u8)
+    })
+}
+
+/// Get the local attachment point for relative force.
+///
+/// # Safety
+/// `world` must be a valid pointer returned by `world_create` (or null).
+#[cfg(feature = "relative-force")]
+#[unsafe(no_mangle)]
+pub extern "C" fn world_get_relative_force_local_point(
+    world: *const WorldHandle,
+    handle: RigidBodyHandleRaw,
+) -> Vec3 {
+    ffi_guard(Vec3::default(), || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Vec3::default();
+        };
+        let Some(_) = world.inner.bodies.get(unpack_rigid_body_handle(handle)) else {
+            set_error(ERR_NOT_FOUND, "body was not found");
+            return Vec3::default();
+        };
+        let local_point = world
+                    .inner
+                    .relative_force
+                    .get(&handle)
+                    .map(|v| v.1)
+                    .unwrap_or(Vec3::default());
+        clear_error();
+        local_point
+    })
+}
+
+/// Set the local attachment point for relative force.
+///
+/// # Safety
+/// `world` must be a valid pointer returned by `world_create` (or null).
+#[cfg(feature = "relative-force")]
+#[unsafe(no_mangle)]
+pub extern "C" fn world_set_relative_force_local_point(
+    world: *mut WorldHandle,
+    handle: RigidBodyHandleRaw,
+    local_point: Vec3,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let Some(_) = world.inner.bodies.get(unpack_rigid_body_handle(handle)) else {
+            set_error(ERR_NOT_FOUND, "body was not found");
+            return Bool::FALSE;
+        };
+        if !vec3_finite(local_point) {
+            set_error(ERR_INVALID_ARGUMENT, "non-finite local point");
+            return Bool::FALSE;
+        }
+        // Insert-or-update: keep existing enabled state, only replace point.
+        world
+            .inner
+            .relative_force
+            .entry(handle)
+            .and_modify(|(_, point)| *point = local_point)
+            .or_insert((false, local_point));
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Remove relative force configuration for a rigid body.
+///
+/// # Safety
+/// `world` must be a valid pointer returned by `world_create` (or null).
+#[cfg(feature = "relative-force")]
+#[unsafe(no_mangle)]
+pub extern "C" fn world_remove_relative_force(
+    world: *mut WorldHandle,
+    handle: RigidBodyHandleRaw,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let removed = world.inner.relative_force.remove(&handle).is_some();
+        if !removed {
+            set_error(ERR_NOT_FOUND, "relative force not configured for this body");
+            return Bool::FALSE;
+        }
+        clear_error();
+        Bool::TRUE
     })
 }

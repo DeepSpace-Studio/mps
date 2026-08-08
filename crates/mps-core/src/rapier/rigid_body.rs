@@ -11,6 +11,9 @@ use crate::rapier::ffi::{
     unpack_rigid_body_handle, vec3_finite, vec3_from_rapier, vec3_to_rapier,
 };
 
+#[cfg(feature = "relative-force")]
+use rapier3d::prelude::RigidBodyType;
+
 fn builder_from_status(status: BodyStatus) -> RigidBodyBuilder {
     match status {
         BodyStatus::Dynamic => RigidBodyBuilder::dynamic(),
@@ -1071,6 +1074,109 @@ pub extern "C" fn rigid_body_add_force_at_point(
         clear_error();
         Bool::TRUE
     })
+}
+
+/// # Safety
+///
+/// `world` must be a live pointer returned by `world_create`, or null.
+#[cfg(feature = "relative-force")]
+#[unsafe(no_mangle)]
+pub extern "C" fn rigid_body_add_force_at_local_point(
+    world: *mut WorldHandle,
+    handle: RigidBodyHandleRaw,
+    force: Vec3,
+    local_point: Vec3,
+    wake_up: Bool,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let Some(body) = world.inner.bodies.get_mut(unpack_rigid_body_handle(handle)) else {
+            set_error(ERR_NOT_FOUND, "body was not found");
+            return Bool::FALSE;
+        };
+        if !vec3_finite(force) || !vec3_finite(local_point) {
+            set_error(ERR_INVALID_ARGUMENT, "non-finite body force or local point");
+            return Bool::FALSE;
+        }
+        if body.body_type() != RigidBodyType::Dynamic {
+            set_error(ERR_INVALID_ARGUMENT, "relative force only works on dynamic bodies");
+            return Bool::FALSE;
+        }
+
+        let world_point = body.position().transform_point(vec3_to_rapier(local_point));
+        body.add_force_at_point(vec3_to_rapier(force), world_point, wake_up.0 != 0);
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// # Safety
+///
+/// `world` must be a live pointer returned by `world_create`, or null.
+#[cfg(feature = "relative-force")]
+#[unsafe(no_mangle)]
+pub extern "C" fn rigid_body_add_torque_at_local_point(
+    world: *mut WorldHandle,
+    handle: RigidBodyHandleRaw,
+    torque: Vec3,
+    _local_point: Vec3,
+    wake_up: Bool,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let Some(body) = world.inner.bodies.get_mut(unpack_rigid_body_handle(handle)) else {
+            set_error(ERR_NOT_FOUND, "body was not found");
+            return Bool::FALSE;
+        };
+        if !vec3_finite(torque) || !vec3_finite(_local_point) {
+            set_error(ERR_INVALID_ARGUMENT, "non-finite body torque or local point");
+            return Bool::FALSE;
+        }
+        if body.body_type() != RigidBodyType::Dynamic {
+            set_error(ERR_INVALID_ARGUMENT, "relative torque only works on dynamic bodies");
+            return Bool::FALSE;
+        }
+
+        body.add_torque(vec3_to_rapier(torque), wake_up.0 != 0);
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// # Safety
+///
+/// `world` must be a live pointer returned by `world_create`, or null.
+#[cfg(feature = "relative-force")]
+#[unsafe(no_mangle)]
+pub extern "C" fn rigid_body_add_force_at_local_point_flag(
+    world: *mut WorldHandle,
+    handle: RigidBodyHandleRaw,
+    force: Vec3,
+    local_point: Vec3,
+    wake_up: Bool,
+) -> u8 {
+    ffi_guard(0, || rigid_body_add_force_at_local_point(world, handle, force, local_point, wake_up).0)
+}
+
+/// # Safety
+///
+/// `world` must be a live pointer returned by `world_create`, or null.
+#[cfg(feature = "relative-force")]
+#[unsafe(no_mangle)]
+pub extern "C" fn rigid_body_add_torque_at_local_point_flag(
+    world: *mut WorldHandle,
+    handle: RigidBodyHandleRaw,
+    torque: Vec3,
+    local_point: Vec3,
+    wake_up: Bool,
+) -> u8 {
+    ffi_guard(0, || rigid_body_add_torque_at_local_point(world, handle, torque, local_point, wake_up).0)
 }
 
 /// # Safety
