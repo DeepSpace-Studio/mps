@@ -1,7 +1,47 @@
 /// Root layout wraps all pages with HTML skeleton, header, and footer.
+/// Language is detected from `Accept-Language` header / cookie / query param (defaults to "zh").
 #[topcoat::router::layout("/")]
-pub async fn root_layout(slot: topcoat::router::Slot<'_>) -> topcoat::Result {
+pub async fn root_layout(
+    slot: topcoat::router::Slot<'_>,
+    cx: &topcoat::context::Cx,
+) -> topcoat::Result {
     use crate::metrics::VERSION;
+    use crate::i18n::i18n_dict_script;
+    use topcoat::router::{parts, uri, headers};
+    use url::form_urlencoded::parse;
+
+    // Detect language: query param `?lang=...` > cookie `mps-lang` > Accept-Language header > default "zh"
+    let req_parts = parts(cx);
+    let lang = req_parts
+        .uri
+        .query()
+        .and_then(|q| parse(q.as_bytes()).find(|(k, _)| k == "lang").map(|(_, v)| v.to_string()))
+        .or_else(|| {
+            headers(cx)
+                .get("cookie")
+                .and_then(|c| c.to_str().ok())
+                .and_then(|c| {
+                    c.split(';')
+                        .find(|s| s.trim().starts_with("mps-lang="))
+                        .map(|s| s.trim()[9..].to_string())
+                })
+        })
+        .or_else(|| {
+            headers(cx)
+                .get("accept-language")
+                .and_then(|h| h.to_str().ok())
+                .map(|h| {
+                    if h.starts_with("en") {
+                        "en".to_string()
+                    } else {
+                        "zh".to_string()
+                    }
+                })
+        })
+        .unwrap_or_else(|| "zh".to_string());
+
+    let dict_script = i18n_dict_script(&lang);
+    let html_lang = if lang == "en" { "en" } else { "zh-CN" };
 
     let css = r#"
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -174,11 +214,12 @@ html[data-lang="zh"] [data-lang="en"] { display: none; }
 
     topcoat::view::view! {
         <!DOCTYPE html>
-        <html lang="zh-CN" data-lang="zh">
+        <html lang={ (html_lang) } data-lang={ (lang) }>
             <head>
                 <meta charset="utf-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 (topcoat::view::Unescaped::new_unchecked(base_tag))
+                (dict_script)
                 <title>"MPS Motion Physics System"</title>
                 <meta name="description" content="MPS (Meters Per Second) — high-precision Rust physics engine built on Rapier3D-f64. C FFI, Java JNI, Java FFM bindings. 5 gravity models, 3 symplectic integrators, 28 formula modules, shared-memory zero-copy Arena.">
                 <meta name="keywords" content="Rust,physics,Rapier3D,JNI,FFM,simulation,spaceflight,orbital mechanics,rigid body">

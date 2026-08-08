@@ -9,6 +9,7 @@ use topcoat::router::Router;
 /// counts/JNI method counts/FFI counts in sync with the source.
 pub mod metrics;
 
+mod i18n;
 mod layouts;
 mod pages;
 
