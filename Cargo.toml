@@ -25,7 +25,6 @@ smallvec = "1.15.2"
 rayon = "1.12"
 anvilkit = { version = "0.1", features = ["rapier"] }
 bevy_ecs = { version = "0.19.0" }
-topcoat = { version = "0.4.0" }
 dashmap = "6.1"
 
 # Profile settings only take effect at the workspace root.

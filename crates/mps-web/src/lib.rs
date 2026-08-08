@@ -1,51 +1,83 @@
-// Topcoat `#[component]` functions use PascalCase by framework convention, and
-// the macro's generated props struct trips dead-code lints on its fields.
-#![allow(non_snake_case, dead_code)]
+// MPS Web — Dioxus 0.6 + dioxus-i18n (Fluent)
 
-use topcoat::router::Router;
-
-/// Auto-generated metrics constants (see `xtask dump-metrics`,
-/// OPTIMIZATION.md §N3). Used by `pages/home.rs` to keep the displayed test
-/// counts/JNI method counts/FFI counts in sync with the source.
-pub mod metrics;
+#![allow(non_snake_case, unused)]
 
 mod i18n;
 mod layouts;
 mod pages;
 
-use layouts::root_layout;
-use pages::api::api;
-use pages::architecture::architecture;
-use pages::arena::arena;
-use pages::cosmos::cosmos;
-use pages::events::events;
-use pages::ffm::ffm;
-use pages::formula::formula;
-use pages::gravity::gravity;
-use pages::home::home;
-use pages::integrators::integrators;
-use pages::jni::jni;
-use pages::page_not_found::page_not_found;
-use pages::quickstart::quickstart;
-use pages::voxel::voxel;
 
-/// Build and return the application router.
-pub fn app() -> Router {
-    Router::builder()
-        .layout(root_layout)
-        .page(home)
-        .page(quickstart)
-        .page(architecture)
-        .page(gravity)
-        .page(integrators)
-        .page(formula)
-        .page(voxel)
-        .page(events)
-        .page(arena)
-        .page(cosmos)
-        .page(jni)
-        .page(ffm)
-        .page(api)
-        .page(page_not_found)
-        .build()
+mod metrics;
+
+use dioxus::prelude::*;
+use dioxus_i18n::prelude::*;
+use unic_langid::langid;
+
+use pages::api::Api;
+use pages::architecture::Architecture;
+use pages::arena::Arena;
+use pages::cosmos::Cosmos;
+use pages::events::Events;
+use pages::ffm::Ffm;
+use pages::formula::Formula;
+use pages::gravity::Gravity;
+use pages::home::Home;
+use pages::integrators::Integrators;
+use pages::jni::Jni;
+use pages::not_found::NotFound;
+use pages::quickstart::Quickstart;
+use pages::voxel::Voxel;
+
+/// Route enum — Dioxus 0.6 Routable derive auto-generates parsing/rendering.
+#[derive(Routable, Clone, PartialEq, Debug)]
+#[rustfmt::skip]
+pub enum Route {
+    #[route("/")]
+    Home {},
+    #[route("/quickstart")]
+    Quickstart {},
+    #[route("/architecture")]
+    Architecture {},
+    #[route("/gravity")]
+    Gravity {},
+    #[route("/integrators")]
+    Integrators {},
+    #[route("/formula")]
+    Formula {},
+    #[route("/voxel")]
+    Voxel {},
+    #[route("/events")]
+    Events {},
+    #[route("/arena")]
+    Arena {},
+    #[route("/cosmos")]
+    Cosmos {},
+    #[route("/jni")]
+    Jni {},
+    #[route("/ffm")]
+    Ffm {},
+    #[route("/api")]
+    Api {},
+    #[route("/404")]
+    NotFound {},
+}
+
+fn app() -> Element {
+    // Initialize i18n with Fluent resources embedded via include_str! (WASM-safe static locales).
+    use_init_i18n(|| {
+        I18nConfig::new(langid!("zh-CN"))
+            .with_fallback(langid!("zh-CN"))
+            .with_locale((langid!("zh-CN"), include_str!("./i18n/locales/zh-CN.ftl")))
+            .with_locale((langid!("en"), include_str!("./i18n/locales/en.ftl")))
+    });
+
+    rsx! {
+        layouts::Layout {
+            Router::<Route> {}
+        }
+    }
+}
+
+pub fn main() {
+    dioxus::launch(app);
 }
