@@ -18,25 +18,31 @@
 //! 当前位置/速度来评估足够），保持单条积分路径，避免半步力再喂回 rapier。
 
 use crate::gravity::{CelestialSource, NBodySource, celestial_acceleration};
-use rapier3d::prelude::{RigidBody, RigidBodyHandle, RigidBodySet, Vector};
+use rapier3d::prelude::{RigidBody, RigidBodyHandle, RigidBodySet, Rotation, Vector};
 
 /// 评估单体加速度所需的全部"环境上下文"——把原来 `total_acceleration`
 /// 11 个参数里"与具体被推体无关的共享只读数据"打包，便于在 Verlet 子步里
 /// 让多个体的 `accel_fn` 闭包按引用共享同一份（而非每体克隆）。
 ///
 /// `handle` / `mass` / `perturbation` 是 per-body 的，仍作为函数参数传入，
-/// 不会进 ctx。`source_positions` 是子步开头一次性拍下的 n-body 源位置快照，
-/// 子步内不变，所有体共享。`relativistic` 控制中心天体引力的 1PN/2PN 修正。
+/// 不会进 ctx。`source_positions` 与 `source_rotations` 是子步开头一次性拍下的
+/// n-body 源质心位置与姿态快照，子步内不变、所有体共享。`relativistic` 控制
+/// 中心天体引力的 1PN/2PN 修正。
 #[derive(Clone, Copy)]
 pub struct AccelContext<'a> {
     pub celestials: &'a [CelestialSource],
     pub n_body_sources: &'a [NBodySource],
     pub source_positions: &'a [Vector],
+    pub source_rotations: &'a [Rotation],
     pub softening_sq: f64,
     pub central_body: Option<&'a mps_formula::celestial_data::CelestialBody>,
     pub sun_position: Vector,
     pub relativistic: crate::world::RelativisticCorrection,
 }
+
+/// 不规则质量分布近场分支的姿态 fallback：源刚体被移除或快照表未覆盖某
+/// arena index 时按这个 `IDENTITY` 算（在该分支的近场状态下等价于"源没转"）。
+pub const DEFAULT_ROT: Rotation = Rotation::IDENTITY;
 
 /// 对单体的总加速度评估（天体引力 + n-body + 环境扰动），返回加速度 (m/s²)。
 ///
@@ -56,6 +62,7 @@ pub fn total_acceleration(
         celestials,
         n_body_sources,
         source_positions,
+        source_rotations,
         softening_sq,
         central_body,
         sun_position,
@@ -84,6 +91,9 @@ pub fn total_acceleration(
     // n_body_sources 为空时跳过：不构造闭包、不走循环，是单体的快路径。
     // 非空时直接用 slice 索引取源位置（替代闭包闭包 + .get(idx).copied()
     // 的虚调用路径）；位置快照已按 arena 容量建好，索引必在界内。
+    // 不规则质量分布分支：当源带 `points` 且 near field（dist ≤
+    // `src.near_field_threshold()`）时按 Σ G·mᵢ·dᵢ/|dᵢ|³ 求和，把 `local_offset`
+    // 经源姿态变到世界坐标；远场/无 points → 单 monopole。
     if !n_body_sources.is_empty() {
         let exclude = handle.into_raw_parts().0 as usize;
         let mut acc_nb = Vector::ZERO;
@@ -103,7 +113,28 @@ pub fn total_acceleration(
                 continue;
             }
             let dist = dist_sq.sqrt();
-            acc_nb += d * (src.gm / (dist_sq * dist));
+            let near_threshold = src.near_field_threshold();
+            if !src.points.is_empty() && near_threshold > 0.0 && dist <= near_threshold {
+                let rot = source_rotations
+                    .get(src_idx)
+                    .copied()
+                    .unwrap_or(DEFAULT_ROT);
+                for mp in &src.points {
+                    if mp.gm <= 0.0 {
+                        continue;
+                    }
+                    let world = r_j + rot * mp.local_offset;
+                    let d_i = world - position;
+                    let dist_sq_i = d_i.length_squared() + softening_sq;
+                    if dist_sq_i < 1.0 {
+                        continue;
+                    }
+                    let dist_i = dist_sq_i.sqrt();
+                    acc_nb += d_i * (mp.gm / (dist_sq_i * dist_i));
+                }
+            } else {
+                acc_nb += d * (src.gm / (dist_sq * dist));
+            }
         }
         acc += acc_nb;
     }

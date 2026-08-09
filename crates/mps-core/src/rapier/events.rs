@@ -620,9 +620,10 @@ impl PhysicsHooks for CallbackPhysicsHooks {
             dynamic_mu
         };
 
-        for contact in context.solver_contacts.iter_mut() {
-            contact.friction = friction;
-        }
+        // rapier3d 0.35 moved `friction` off of per-point `SolverContact` and
+        // onto the manifold (`ContactModificationContext::friction`). Setting
+        // one value here applies to every solver contact of this manifold.
+        *context.friction = friction;
     }
 }
 

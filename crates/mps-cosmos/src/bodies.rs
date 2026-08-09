@@ -24,6 +24,12 @@ pub fn satellite_builder(
         1.0e-3 // 退化：极小但非零惯量
     };
     RigidBodyBuilder::dynamic()
+        // rapier 0.35 从\"线速度阈值\"改成\"姿态漂移\"判 sleep——空跑的卫星在
+        // 大 `dt` 下会单步触发 sleep 并把 linvel 清零，与项目对\"永恒漂浮天体\"
+        // 的语义冲突。对刚发射的卫星永远禁用 sleep，归属它们的速度完全由我们
+        // 的积子或 Rapier 力律决定（fixed_body_builder 仍可 sleep，但 fixed 体不
+        // 受 sleep 影响速度）。
+        .can_sleep(false)
         .additional_mass_properties(MassProperties::new(
             Vector::ZERO,
             mass,

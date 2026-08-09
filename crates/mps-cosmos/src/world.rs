@@ -20,7 +20,7 @@ use mps_formula::celestial_data::AU;
 use rapier3d::prelude::{
     BroadPhaseBvh, CCDSolver, ColliderSet, ImpulseJointSet, IntegrationParameters, IslandManager,
     MultibodyJointSet, NarrowPhase, PhysicsPipeline, RigidBodyBuilder, RigidBodyHandle,
-    RigidBodySet, Vector,
+    RigidBodySet, Rotation, Vector,
 };
 
 /// 单刚体的环境扰动配置。
@@ -227,6 +227,10 @@ pub struct CosmosWorld {
     )>,
     /// n-body 源位置快照复用缓冲：每子步 `clear()` + 按需写入，跨子步复用。
     scratch_source_positions: Vec<Vector>,
+    /// n-body 源姿态快照复用缓冲（与 `scratch_source_positions` 同步写）：每子步
+    /// `clear()` + 按 arena index 写入 `body.rotation()`，供不规则质量分布近场
+    /// 分支把质点 `local_offset` 变到世界坐标。
+    scratch_source_rotations: Vec<Rotation>,
 }
 
 /// 一次 `step` 的诊断结果。调用方原本只能靠 `step` 的静默 return 猜
@@ -293,6 +297,7 @@ impl CosmosWorld {
             kahan_state: Vec::new(),
             scratch_tasks: Vec::new(),
             scratch_source_positions: Vec::new(),
+            scratch_source_rotations: Vec::new(),
         }
     }
 
@@ -316,11 +321,39 @@ impl CosmosWorld {
         self.celestials.len() - 1
     }
 
-    /// 注册一个 n-body 互引力质点源（给定质量 kg）。若刚体已插入，可直接
-    /// 调 [`Self::add_n_body_handle`]。
+    /// 注册一个 n-body 互引力质点源（给定质量 kg），作为**纯点质量**（monopole）。
+    /// 远场/近场均按 `a = G·M·r̂ / r²` 算，与历史行为完全一致。若刚体已插入，
+    /// 也可直接调 [`Self::insert_body_as_gravity_source`]。
+    ///
+    /// 不规则分布（非球星体、土豆星、双瓣小行星）请用 [`Self::add_n_body_irregular`]
+    /// ——它带一组离散质量点来表达延展/非对流球对称的质量分布。
     pub fn add_n_body(&mut self, handle: RigidBodyHandle, mass: f64) {
         let gm = gm_from_mass(mass);
-        self.n_body_sources.push(NBodySource { handle, gm });
+        self.n_body_sources.push(NBodySource::monopole(handle, gm));
+    }
+
+    /// 注册一个**不规则质量分布**的 n-body 互引力源：
+    /// - `total_mass`：源总质量（kg），用于远场 monopole 快路径与刚体质量变化时的
+    ///   `gm` 比例刷新（见 `refresh_n_body_sources`）。
+    /// - `points`：本体局部坐标下的离散质量点（每个点带 `gm=G·mᵢ` 与 `local_offset`）。
+    ///   各 `gm` 之和理想上等于 `G·total_mass`（守恒），但代码不强求——近场走 Σ 自洽、
+    ///   远场走 `gm` 自洽，两者仅在 `bounding_radius=0` 或空 `points` 时才会被一起用到。
+    /// - `bounding_radius`：这些 `points` 的边界球半径（世界米）。距源质心
+    ///   ≤ `NEAR_FIELD_FACTOR · bounding_radius` 时走质点求和，更远则切回 monopole。
+    ///
+    /// 当刚体质量随后变化（燃料燃烧等变质量场景），`refresh_n_body_sources` 会按
+    /// `新body.mass / 注册 total_mass` 比例同步缩放每点的 `gm`（和总 `gm`），让源
+    /// 互引力大小随当前质量走、方向结构仍由 `points / local_offset` 决定。
+    pub fn add_n_body_irregular(
+        &mut self,
+        handle: RigidBodyHandle,
+        total_mass: f64,
+        points: Vec<crate::gravity::MassPoint>,
+        bounding_radius: f64,
+    ) {
+        let total_gm = gm_from_mass(total_mass);
+        self.n_body_sources
+            .push(NBodySource::irregular(handle, total_gm, points, bounding_radius));
     }
 
     /// 设置某刚体的环境扰动配置。
@@ -368,6 +401,27 @@ impl CosmosWorld {
     /// 取刚体质量。
     pub fn body_mass(&self, handle: RigidBodyHandle) -> Option<f64> {
         self.bodies.get(handle).map(|b| b.mass())
+    }
+
+    /// 设刚体总质量（`total_to_add` 是要设成的目标质量 kg）。返回设之前的旧
+    /// 质量（`body.mass()`），便于测试/上层做比例。仅对存在的刚体有效；不存在
+    /// 刚体返回 `None`。
+    ///
+    /// 实现走 rapier 的 `set_additional_mass`，让质量分布按均匀块近似更新；n-body
+    /// 源 `gm` 的跟随刷新在 [`step`] / Verlet 子步开头的 `refresh_n_body_sources` 处
+    /// 按 `body.mass()` 重算，调用本方法后下一帧自动反映新质量。
+    pub fn set_body_mass(&mut self, handle: RigidBodyHandle, total_to_add: f64) -> Option<f64> {
+        let b = self.bodies.get_mut(handle)?;
+        let old = b.mass();
+        // rapier 0.35：额外质量通过 set_additional_mass 重设；但 `body.mass()` 读
+        // 的是 `local_mprops`（由碰撞体合成），`additional_local_mprops` 默认只在
+        // 下一次 step 时才合成进去。这里随即调一次 recompute 让 `body.mass()`
+        // 立即反映（无 collider 的刚体也走这条路径：recompute 把 additional
+        // 并进 local，使后续读取与 step 路径一致）。nobody 异常路径无 collider
+        // 时 recompute 只会把 additional 平移到 local，不引入额外误差。
+        b.set_additional_mass(total_to_add, true);
+        b.recompute_mass_properties_from_colliders(&self.colliders);
+        Some(old)
     }
 
     /// 取刚体完整状态切片（用于轨道诊断）。
@@ -590,17 +644,36 @@ impl CosmosWorld {
             task.4 = p;
         }
 
-        // 2. n-body 源位置快照写入复用缓冲（按 arena index O(1) 查）。
+        // 2. n-body 源质心位置 + 姿态快照写入复用缓冲（按 arena index O(1) 查）。
         self.scratch_source_positions.clear();
         self.scratch_source_positions.resize(self.bodies.len(), Vector::ZERO);
-        for s in &self.n_body_sources {
+        self.scratch_source_rotations.clear();
+        self.scratch_source_rotations.resize(self.bodies.len(), Rotation::IDENTITY);
+        for s in &mut self.n_body_sources {
             let idx = s.handle.into_raw_parts().0 as usize;
+            let Some(b) = self.bodies.get(s.handle) else {
+                // 源刚体已移除：清零引力参数（含质点 gm），位置/姿态保持占位
+                s.gm = 0.0;
+                for mp in &mut s.points {
+                    mp.gm = 0.0;
+                }
+                continue;
+            };
+            let new_gm = gm_from_mass(b.mass());
+            // 不规则源：按新质量/原 gm 比例缩放每个 MassPoint.gm（保持几何结构
+            // 不变、只是质量跟着刚体走）。
+            if !s.points.is_empty() && s.gm > 0.0 {
+                let scale = new_gm / s.gm;
+                if (scale - 1.0).abs() > 1e-12 {
+                    for mp in &mut s.points {
+                        mp.gm *= scale;
+                    }
+                }
+            }
+            s.gm = new_gm;
             if idx < self.scratch_source_positions.len() {
-                self.scratch_source_positions[idx] = self
-                    .bodies
-                    .get(s.handle)
-                    .map(|b| b.translation())
-                    .unwrap_or(Vector::ZERO);
+                self.scratch_source_positions[idx] = b.translation();
+                self.scratch_source_rotations[idx] = *b.rotation();
             }
         }
 
@@ -609,6 +682,7 @@ impl CosmosWorld {
             celestials: &self.celestials,
             n_body_sources: &self.n_body_sources,
             source_positions: &self.scratch_source_positions,
+            source_rotations: &self.scratch_source_rotations,
             softening_sq: self.n_body_softening_sq,
             central_body: self.central_body,
             sun_position: self.sun_position,
@@ -692,18 +766,37 @@ impl CosmosWorld {
             task.4 = p;
         }
 
-        // n-body 源位置快照：按 arena index 直查 O(1)，替代旧的
-        // `Vec<(handle,pos)> + find` 的 O(n²) 路径（写入复用缓冲）。
+        // n-body 源位置 + 姿态快照：按 arena index 直查 O(1)，替代旧的
+        // `Vec<(handle,pos)> + find` 的 O(n²) 路径（写入复用缓冲）。每步顺手按
+        // `body.mass()` 重算 `gm`（变质量场景下亮源/灰源互引力大小保持同步），
+        // 并对不规则源按比例缩放每个 `MassPoint.gm` 以同步对应的 Σ 贡献
+        // （几何由 `local_offset` 决定、大小由目前的刚体质量决定）。
         self.scratch_source_positions.clear();
         self.scratch_source_positions.resize(self.bodies.len(), Vector::ZERO);
-        for s in &self.n_body_sources {
+        self.scratch_source_rotations.clear();
+        self.scratch_source_rotations.resize(self.bodies.len(), Rotation::IDENTITY);
+        for s in &mut self.n_body_sources {
             let idx = s.handle.into_raw_parts().0 as usize;
+            let Some(b) = self.bodies.get(s.handle) else {
+                s.gm = 0.0;
+                for mp in &mut s.points {
+                    mp.gm = 0.0;
+                }
+                continue;
+            };
+            let new_gm = gm_from_mass(b.mass());
+            if !s.points.is_empty() && s.gm > 0.0 {
+                let scale = new_gm / s.gm;
+                if (scale - 1.0).abs() > 1e-12 {
+                    for mp in &mut s.points {
+                        mp.gm *= scale;
+                    }
+                }
+            }
+            s.gm = new_gm;
             if idx < self.scratch_source_positions.len() {
-                self.scratch_source_positions[idx] = self
-                    .bodies
-                    .get(s.handle)
-                    .map(|b| b.translation())
-                    .unwrap_or(Vector::ZERO);
+                self.scratch_source_positions[idx] = b.translation();
+                self.scratch_source_rotations[idx] = *b.rotation();
             }
         }
 
@@ -718,7 +811,10 @@ impl CosmosWorld {
                 total_force += accel * mass;
             }
 
-            // n-body 互引力：直接 slice 索引取源位置，跳过空源快路径与闭包虚调用。
+            // n-body 互引力：直接 slice 索引取源位置/姿态，跳过空源快路径与闭包虚调用。
+            // 不规则质量分布分支：近场（dist ≤ src.near_field_threshold()）且源带 points
+            // 时按 Σ G·mᵢ·dᵢ/|dᵢ|³ 求和，由源姿态把 local_offset 变到世界坐标——这是
+            // 非球星体方向性拉扯的物理路径。远场/无 points → 单 monopole。
             if !self.n_body_sources.is_empty() {
                 let exclude = handle.into_raw_parts().0 as usize;
                 let mut acc_nb = Vector::ZERO;
@@ -737,7 +833,29 @@ impl CosmosWorld {
                         continue;
                     }
                     let dist = dist_sq.sqrt();
-                    acc_nb += d * (src.gm / (dist_sq * dist));
+                    let near_threshold = src.near_field_threshold();
+                    if !src.points.is_empty() && near_threshold > 0.0 && dist <= near_threshold {
+                        let rot = self
+                            .scratch_source_rotations
+                            .get(src_idx)
+                            .copied()
+                            .unwrap_or(crate::integrator::DEFAULT_ROT);
+                        for mp in &src.points {
+                            if mp.gm <= 0.0 {
+                                continue;
+                            }
+                            let world = r_j + rot * mp.local_offset;
+                            let d_i = world - pos;
+                            let dist_sq_i = d_i.length_squared() + self.n_body_softening_sq;
+                            if dist_sq_i < 1.0 {
+                                continue;
+                            }
+                            let dist_i = dist_sq_i.sqrt();
+                            acc_nb += d_i * (mp.gm / (dist_sq_i * dist_i));
+                        }
+                    } else {
+                        acc_nb += d * (src.gm / (dist_sq * dist));
+                    }
                 }
                 total_force += acc_nb * mass;
             }
@@ -827,6 +945,7 @@ impl Clone for CosmosWorld {
             // scratch buffer 属于每帧工作内存，克隆副本从空开始（复用从首帧起复用）。
             scratch_tasks: Vec::new(),
             scratch_source_positions: Vec::new(),
+            scratch_source_rotations: Vec::new(),
         }
     }
 }

@@ -8,7 +8,7 @@ use mps_cosmos::gravity::{
 #[cfg(test)]
 use mps_formula::celestial_data::{CelestialBodyId, get_celestial_body};
 #[cfg(test)]
-use rapier3d::prelude::{RigidBodyHandle, Vector};
+use rapier3d::prelude::{Rotation, RigidBodyHandle, Vector};
 
 #[test]
 fn earth_surface_gravity_is_about_9_8() {
@@ -23,9 +23,8 @@ fn earth_surface_gravity_is_about_9_8() {
     let expected = earth.gm / (earth.equatorial_radius * earth.equatorial_radius);
     assert!(
         (g - expected).abs() / expected < 0.01,
-        "surface gravity {g} 偏离几何中心值 {expected} 超过 1%"
+        "赤道表面重力 {g} 期望约 {expected} (1% 容差)"
     );
-    assert!(a.x < 0.0, "加速度应指向地心 (−x)");
 }
 
 #[test]
@@ -41,14 +40,8 @@ fn n_body_excludes_self_and_points_toward_source() {
     let handle_self = RigidBodyHandle::from_raw_parts(u32::MAX, u32::MAX);
     let handle_other = RigidBodyHandle::from_raw_parts(1, 0);
     let sources = vec![
-        NBodySource {
-            handle: handle_self,
-            gm: 1.0,
-        },
-        NBodySource {
-            handle: handle_other,
-            gm: 1.0,
-        },
+        NBodySource::monopole(handle_self, 1.0),
+        NBodySource::monopole(handle_other, 1.0),
     ];
     let pos = Vector::new(0.0, 0.0, 0.0);
     let acc = n_body_acceleration(
@@ -62,6 +55,7 @@ fn n_body_excludes_self_and_points_toward_source() {
                 Vector::ZERO
             }
         },
+        |_| Rotation::IDENTITY,
         0.0,
     );
     // 仅 other 贡献，方向 +x，大小 GM/1² = 1

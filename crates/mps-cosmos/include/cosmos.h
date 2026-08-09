@@ -11,6 +11,12 @@
 #include <stdlib.h>
 
 /**
+ * 默认近场阈值倍率：|d| ≤ 8·bounding_radius 时走质点求和。8 给到 r² 误差 ~1.5%
+ * 的 monopole，足够典型的薄壳/扁平分布过渡到 monopole。
+ */
+#define NEAR_FIELD_FACTOR 8.0
+
+/**
  * 太空物理世界。所有公开 API 自行管理内部 `RigidBodySet` 等。
  *
  * 手写 `Clone`（而非 derive）因为 `PhysicsPipeline` 不实现 `Clone`——它是
@@ -19,6 +25,8 @@
  * 成本是深拷贝整个 body/collider set；超大规模场景应考虑 `Arc` 共享只读配置。
  */
 typedef struct CosmosWorld CosmosWorld;
+
+
 
 #ifdef __cplusplus
 extern "C" {

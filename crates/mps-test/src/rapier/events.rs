@@ -1294,3 +1294,116 @@ mod tests {
         mps_core::rapier::world::world_destroy(world);
     }
 }
+
+/// Ad-hoc verification that the rapier3d 0.35 hoist of `friction` off of
+/// per-point `SolverContact` onto `ContactModificationContext::friction` is
+/// honored end-to-end via the public FFI code path.
+///
+/// Strategy: drop an identical slab onto a fixed floor with horizontal velocity
+/// twice -- once with the Coulomb friction hook mu = 0 (frictionless), once with
+/// mu = 1 (sticky). If the hook is wired into `context.friction` correctly, the
+/// sticky case must lose noticeably more horizontal speed than the
+/// frictionless case after the same number of steps. If the hook were a no-op
+/// both cases would coast identically at the default combined friction.
+#[cfg(test)]
+mod verify_friction_hoist {
+    use mps_core::rapier::collider::collider_builder_build;
+    use mps_core::rapier::collider::collider_builder_create_ex;
+    use mps_core::rapier::collider::world_insert_collider_with_parent;
+    use mps_core::rapier::events::*;
+    use mps_core::rapier::ffi::*;
+    use mps_core::rapier::rigid_body::rigid_body_builder_build;
+    use mps_core::rapier::rigid_body::rigid_body_builder_create;
+    use mps_core::rapier::rigid_body::rigid_body_builder_set_additional_mass;
+    use mps_core::rapier::rigid_body::rigid_body_builder_set_linear_damping;
+    use mps_core::rapier::rigid_body::rigid_body_builder_set_linvel;
+    use mps_core::rapier::rigid_body::rigid_body_builder_set_translation;
+    use mps_core::rapier::rigid_body::rigid_body_get_linvel_out;
+    use mps_core::rapier::rigid_body::world_insert_rigid_body;
+    use mps_core::rapier::world::{world_create, world_destroy, world_step};
+
+    /// Build a 0.5 cuboid resting on a large fixed floor, sliding at vx = 5.0.
+    fn run_slide(mu: f64) -> (f64, f64) {
+        let world = world_create(Vec3 { x: 0.0, y: -9.81, z: 0.0 });
+        assert_eq!(
+            world_set_coulomb_friction_law(
+                world,
+                CoulombFrictionLaw {
+                    static_coefficient: mu,
+                    dynamic_coefficient: mu,
+                    velocity_threshold: 0.01,
+                    enabled: Bool::TRUE,
+                },
+            ),
+            Bool::TRUE
+        );
+
+        let ground_builder =
+            rigid_body_builder_create(BodyStatus::Fixed as u32);
+        rigid_body_builder_set_translation(
+            ground_builder,
+            Vec3 { x: 0.0, y: -0.5, z: 0.0 },
+        );
+        let ground = rigid_body_builder_build(ground_builder);
+        let ground_handle = world_insert_rigid_body(world, ground);
+        let ground_collider = collider_builder_build(collider_builder_create_ex(ShapeDesc {
+            shape_type: 1,
+            a: 5.0,
+            b: 0.25,
+            c: 5.0,
+            d: 0.0,
+        }));
+        world_insert_collider_with_parent(world, ground_collider, ground_handle);
+
+        let body_builder =
+            rigid_body_builder_create(BodyStatus::Dynamic as u32);
+        rigid_body_builder_set_translation(
+            body_builder,
+            Vec3 { x: 0.0, y: 0.05, z: 0.0 },
+        );
+        rigid_body_builder_set_additional_mass(body_builder, 1.0);
+        rigid_body_builder_set_linear_damping(body_builder, 0.0);
+        rigid_body_builder_set_linvel(
+            body_builder,
+            Vec3 { x: 5.0, y: 0.0, z: 0.0 },
+        );
+        let body = rigid_body_builder_build(body_builder);
+        let body_handle = world_insert_rigid_body(world, body);
+        let body_collider = collider_builder_build(collider_builder_create_ex(ShapeDesc {
+            shape_type: 1,
+            a: 0.25,
+            b: 0.25,
+            c: 0.25,
+            d: 0.0,
+        }));
+        world_insert_collider_with_parent(world, body_collider, body_handle);
+
+        for _ in 0..120 {
+            world_step(world, 1.0 / 60.0);
+        }
+
+        let mut v = Vec3::default();
+        rigid_body_get_linvel_out(world, body_handle, &mut v);
+        world_destroy(world);
+        (v.x, v.y)
+    }
+
+    #[test]
+    fn hook_sets_manifold_friction_observed_in_kinematics() {
+        let (vx_free, _vy_free) = run_slide(0.0);
+        let (vx_stick, _vy_stick) = run_slide(1.0);
+
+        assert!(
+            vx_free > vx_stick,
+            "frictionless vx ({vx_free}) must exceed sticky vx ({vx_stick})"
+        );
+        assert!(
+            vx_free > 4.5,
+            "mu=0 slab should retain most of its 5.0 m/s but got vx={vx_free}"
+        );
+        assert!(
+            vx_stick < 2.0,
+            "mu=1 slab should decelerate sharply but got vx={vx_stick}"
+        );
+    }
+}

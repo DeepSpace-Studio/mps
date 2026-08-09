@@ -17,7 +17,7 @@ use mps_formula::celestial_data::{CelestialBodyId, get_celestial_body};
 #[cfg(test)]
 use mps_formula::spaceflight::kepler_period;
 #[cfg(test)]
-use rapier3d::prelude::{RigidBodySet, Vector};
+use rapier3d::prelude::{Rotation, RigidBodySet, Vector};
 
 #[test]
 fn verlet_circle_orbit_closes_tight() {
@@ -39,17 +39,17 @@ fn verlet_circle_orbit_closes_tight() {
     let sat_hdl = bodies.insert(
         satellite_builder(1000.0, Vector::new(r, 0.0, 0.0), Vector::new(0.0, v, 0.0), 1.0).build(),
     );
-    let n_body_sources = vec![NBodySource {
-        handle: earth_hdl,
-        gm: gm_from_mass(5.972e24),
-    }];
+    let n_body_sources = vec![NBodySource::monopole(earth_hdl, gm_from_mass(5.972e24))];
 
     // ctx：无 celestials，仅一个 n-body 点质量源。
     let src_pos = snapshot_source_positions(&bodies, &n_body_sources);
+    // 纯 monopole 源（无 points）不读 rotation，用 identity 切片填充。
+    let src_rot: Vec<Rotation> = (0..bodies.len()).map(|_| Rotation::IDENTITY).collect();
     let ctx = AccelContext {
         celestials: &[],
         n_body_sources: &n_body_sources,
         source_positions: &src_pos,
+        source_rotations: &src_rot,
         softening_sq: 0.0,
         central_body: None,
         sun_position: Vector::ZERO,

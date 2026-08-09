@@ -2768,7 +2768,7 @@ dependencies = [
  "glam 0.33.1",
  "nalgebra 0.35.0",
  "num-traits",
- "simba 0.10.0",
+ "simba 0.10.2",
 ]
 
 [[package]]
@@ -4047,7 +4047,7 @@ dependencies = [
  "num-complex",
  "num-rational",
  "num-traits",
- "simba 0.10.0",
+ "simba 0.10.2",
  "typenum",
 ]
 
@@ -4585,9 +4585,9 @@ dependencies = [
 
 [[package]]
 name = "parry3d-f64"
-version = "0.29.0"
+version = "0.30.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e701f6a7de3627099b5f96d6ec33d7837e854bc1d987deab41d8a1da59de20f7"
+checksum = "8c5f71cd1d7f0c475116a52c61baa8d0de69fc258bc4debf86cb4c4ca8f35f3f"
 dependencies = [
  "approx",
  "arrayvec",
@@ -4602,8 +4602,9 @@ dependencies = [
  "num-derive",
  "num-traits",
  "ordered-float",
+ "rayon",
  "rstar",
- "simba 0.10.0",
+ "simba 0.10.2",
  "slab",
  "smallvec",
  "spade",
@@ -4887,7 +4888,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4994,11 +4995,12 @@ dependencies = [
 
 [[package]]
 name = "rapier3d-f64"
-version = "0.34.0"
+version = "0.35.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4351e821e5db9464a22d59f3e7903ab5759f7c1241bb82f042486494e5178ecf"
+checksum = "37b190a04d82374606416c5bd651a805d754985e5895fefcb34a8f248cf38fa2"
 dependencies = [
  "approx",
+ "arrayvec",
  "bitflags 2.13.0",
  "glamx",
  "log",
@@ -5008,7 +5010,7 @@ dependencies = [
  "profiling",
  "rayon",
  "serde",
- "simba 0.10.0",
+ "simba 0.10.2",
  "static_assertions",
  "thiserror 2.0.18",
 ]
@@ -5537,9 +5539,9 @@ dependencies = [
 
 [[package]]
 name = "simba"
-version = "0.10.0"
+version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f45c644a9f3a386f9288625d9f0c1e999e1acf07a37df35d0516c7f199d9cb2"
+checksum = "f1a7200d82ff1c7b4235efd12f11e2537a402c91cf83a5cb97ce80eef787fde7"
 dependencies = [
  "approx",
  "num-complex",
