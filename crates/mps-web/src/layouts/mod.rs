@@ -3,8 +3,8 @@ use dioxus_i18n::prelude::*;
 use unic_langid::langid;
 
 use crate::Route;
+use crate::i18n::{langs, t};
 use crate::metrics::VERSION;
-use crate::i18n::{t, langs};
 
 /// Global CSS for the entire site — dark theme, responsive grid, no inline styles.
 const CSS: &str = include_str!("site.css");

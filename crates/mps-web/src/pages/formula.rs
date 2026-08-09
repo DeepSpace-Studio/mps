@@ -19,7 +19,7 @@ pub fn Formula() -> Element {
 
         // ── Spaceflight (rasid 88 fn / 9 files) ────────────────────────────
         div { class: "section-card",
-            h2 { { t!("form-cat-spaceflight") } }
+            h2 { { t!("formula-cat-spaceflight") } }
             ul { class: "ul-plain",
                 li { { t!("form-mod-kepler") } }
                 li { { t!("form-mod-dynamics") } }
@@ -35,7 +35,7 @@ pub fn Formula() -> Element {
 
         // ── Astrophysics & stellar physics ────────────────────────────────
         div { class: "section-divider",
-            h2 { class: "section-heading", { t!("form-cat-astrophysics") } }
+            h2 { class: "section-heading", { t!("formula-cat-astrophysics") } }
             ul { class: "ul-plain",
                 li { { t!("form-mod-astrophysics") } }
                 li { { t!("form-mod-stellar") } }
@@ -50,7 +50,7 @@ pub fn Formula() -> Element {
 
         // ── Mechanics ──────────────────────────────────────────────────────
         div { class: "section-divider",
-            h2 { class: "section-heading", { t!("form-cat-mechanics") } }
+            h2 { class: "section-heading", { t!("formula-cat-mechanics") } }
             ul { class: "ul-plain",
                 li { { t!("form-mod-mechanics") } }
                 li { { t!("form-mod-material") } }
@@ -64,7 +64,7 @@ pub fn Formula() -> Element {
 
         // ── Relativity ─────────────────────────────────────────────────────
         div { class: "section-divider",
-            h2 { class: "section-heading", { t!("form-cat-relativity") } }
+            h2 { class: "section-heading", { t!("formula-cat-relativity") } }
             ul { class: "ul-plain",
                 li { { t!("form-mod-relativity") } }
                 li { { t!("form-mod-transmission") } }
@@ -73,25 +73,25 @@ pub fn Formula() -> Element {
 
         // ── Quantum & electromagnetism ────────────────────────────────────
         div { class: "section-divider",
-            h2 { class: "section-heading", { t!("form-cat-quantum") } }
+            h2 { class: "section-heading", { t!("formula-cat-quantum") } }
             p { class: "p-muted", { t!("form-mod-quantum") } }
         }
         div { class: "section-divider",
-            h2 { class: "section-heading", { t!("form-cat-electromagnetism") } }
+            h2 { class: "section-heading", { t!("formula-cat-electromagnetism") } }
             p { class: "p-muted", { t!("form-mod-em") } }
         }
 
         // ── Nuclear, thermodynamics & continuum ───────────────────────────
         div { class: "section-divider",
-            h2 { class: "section-heading", { t!("form-cat-nuclear") } }
+            h2 { class: "section-heading", { t!("formula-cat-nuclear") } }
             p { class: "p-muted", { t!("form-mod-nuclear") } }
         }
         div { class: "section-divider",
-            h2 { class: "section-heading", { t!("form-cat-fluid") } }
+            h2 { class: "section-heading", { t!("formula-cat-fluid") } }
             ul { class: "ul-plain",
                 li { { t!("form-mod-fluid") } }
                 li { { t!("form-mod-plasma") } }
-                li { { t!("form-mod-superfluid") } }
+                li { { t!("form-mod-superfluidity") } }
                 li { { t!("form-mod-continuum") } }
             }
         }

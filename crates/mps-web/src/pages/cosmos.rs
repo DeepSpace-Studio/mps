@@ -71,7 +71,7 @@ pub fn Cosmos() -> Element {
         // ── Celestial catalogue ──────────────────────────────────────────
         div { class: "section-divider",
             h2 { class: "section-heading",
-                { t!("cosmos-bodies-title", count = CELESTIAL_COUNT) }
+                { t!("cosmos-bodies-title", count: CELESTIAL_COUNT) }
             }
             p { class: "p-muted", { t!("cosmos-bodies-desc") } }
         }

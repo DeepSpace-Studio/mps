@@ -6,7 +6,6 @@ mod i18n;
 mod layouts;
 mod pages;
 
-
 mod metrics;
 
 use dioxus::prelude::*;

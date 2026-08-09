@@ -1,6 +1,6 @@
+use crate::Route;
 use dioxus::prelude::*;
 use dioxus_i18n::t;
-use crate::Route;
 
 /// 404 page — route not found.
 pub fn NotFound() -> Element {

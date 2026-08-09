@@ -1,11 +1,11 @@
 use dioxus::prelude::*;
 use dioxus_i18n::t;
 
-use crate::metrics::{
-    CELESTIAL_COUNT, CORE_FFI_COUNT, FORMULA_MODULE_COUNT, GRAVITY_MODEL_COUNT,
-    INTEGRATOR_COUNT, JNI_METHOD_COUNT, TEST_COUNT,
-};
 use crate::Route;
+use crate::metrics::{
+    CELESTIAL_COUNT, CORE_FFI_COUNT, FORMULA_MODULE_COUNT, GRAVITY_MODEL_COUNT, INTEGRATOR_COUNT,
+    JNI_METHOD_COUNT, TEST_COUNT,
+};
 
 /// Home page — MPS Physics System overview
 pub fn Home() -> Element {

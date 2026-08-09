@@ -68,7 +68,8 @@ pub fn Integrators() -> Element {
             p { class: "p-muted", { t!("int-adaptive-desc") } }
             div { class: "code-block",
                 pre { code {
-                    "let dt = adaptive_step_size(dt, err, tol, order);\nif step_accepted(err, tol) { commit_step(); }"
+                    r#"let dt = adaptive_step_size(dt, err, tol, order);
+    if step_accepted(err, tol) {{ commit_step(); }}"#
                 } }
             }
         }

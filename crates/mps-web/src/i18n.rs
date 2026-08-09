@@ -12,10 +12,7 @@ pub mod langs {
     pub const EN: LanguageIdentifier = unic_langid::langid!("en");
 
     /// All supported languages in drop-down order.
-    pub const ALL: &[(&LanguageIdentifier, &str)] = &[
-        (&ZH_CN, "中文"),
-        (&EN, "English"),
-    ];
+    pub const ALL: &[(&LanguageIdentifier, &str)] = &[(&ZH_CN, "中文"), (&EN, "English")];
 
     /// Parse a language string ("zh", "zh-CN", "en", "en-US") to a LanguageIdentifier.
     pub fn parse(s: &str) -> Option<LanguageIdentifier> {

@@ -31,7 +31,7 @@ pub fn Architecture() -> Element {
                 div { class: "feature-card",
                     h3 { { t!("arch-layer-formula-title") } }
                     p { { t!("arch-layer-formula-desc",
-                            modules = FORMULA_MODULE_COUNT) } }
+                            modules: FORMULA_MODULE_COUNT) } }
                 }
                 div { class: "feature-card",
                     h3 { { t!("arch-layer-core-title") } }
@@ -43,11 +43,11 @@ pub fn Architecture() -> Element {
                 }
                 div { class: "feature-card",
                     h3 { { t!("arch-layer-jni-title") } }
-                    p { { t!("arch-layer-jni-desc", methods = JNI_METHOD_COUNT) } }
+                    p { { t!("arch-layer-jni-desc", methods: JNI_METHOD_COUNT) } }
                 }
                 div { class: "feature-card",
                     h3 { { t!("arch-layer-test-title") } }
-                    p { { t!("arch-layer-test-desc", tests = TEST_COUNT) } }
+                    p { { t!("arch-layer-test-desc", tests: TEST_COUNT) } }
                 }
                 div { class: "feature-card",
                     h3 { { t!("arch-layer-ffm-title") } }
