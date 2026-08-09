@@ -1,6 +1,7 @@
 pub mod api;
 pub mod architecture;
 pub mod arena;
+pub mod batch;
 pub mod cosmos;
 pub mod events;
 pub mod ffm;

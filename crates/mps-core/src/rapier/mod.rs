@@ -4,6 +4,7 @@ pub mod aerodynamics;
 pub mod anvilkit;
 pub use mps_formula::astrophysics;
 pub use mps_formula::biomechanics;
+pub mod batch;
 pub mod bounds;
 pub mod bridge;
 pub use mps_formula::celestial_data;

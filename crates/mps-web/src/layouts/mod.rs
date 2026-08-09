@@ -39,6 +39,7 @@ pub fn Layout() -> Element {
                 Link { to: Route::Voxel {}, class: "nav-link", { t!("nav-voxel") } }
                 Link { to: Route::Events {}, class: "nav-link", { t!("nav-events") } }
                 Link { to: Route::Arena {}, class: "nav-link", { t!("nav-arena") } }
+                Link { to: Route::Batch {}, class: "nav-link", { t!("nav-batch") } }
                 Link { to: Route::Cosmos {}, class: "nav-link", { t!("nav-cosmos") } }
                 Link { to: Route::Jni {}, class: "nav-link", { t!("nav-jni") } }
                 Link { to: Route::Ffm {}, class: "nav-link", { t!("nav-ffm") } }

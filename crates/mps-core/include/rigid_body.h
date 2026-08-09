@@ -10,6 +10,19 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+/**
+ * Maximum number of requests a single batch can hold.  Prevents a runaway
+ * caller from exhausting memory before [`ColliderBatch::execute`] runs.
+ */
+#define MAX_BATCH_REQUESTS 100000
+
+/**
+ * Maximum number of compound parts in a single merged collider.  Rapier's
+ * compound shape stores parts in a `Vec` so the practical limit is available
+ * memory; we cap to keep broadphase insertion tractable.
+ */
+#define MAX_COMPOUND_PARTS 50000
+
 #define ERR_OK 0
 
 #define ERR_NULL_POINTER 1
@@ -96,6 +109,122 @@ typedef struct RTreeHandle RTreeHandle;
 typedef struct RigidBodyBuilderHandle RigidBodyBuilderHandle;
 
 typedef struct WorldHandle WorldHandle;
+
+/**
+ * A single collider creation request, designed for batch submission via the
+ * Box3D-style pipeline.
+ *
+ * Fields are flat `#[repr(C)]` so the FFI caller can build a contiguous array
+ * and pass `(ptr, count)` to [`world_batch_add_colliders`].
+ *
+ * [`world_batch_add_colliders`]: crate::rapier::world::world_batch_add_colliders
+ */
+typedef struct ColliderRequest {
+  /**
+   * Shape descriptor (shape_type + 4 floats a/b/c/d).  See [`ShapeDesc`].
+   */
+  ShapeDesc shape;
+  /**
+   * Local translation relative to the merged collider origin (world pos if
+   * `body_parent == 0` and no merge happens).
+   */
+  Vec3 translation;
+  /**
+   * Local rotation as a unit quaternion (xyzw, but stored as ijkw in [`Quat`]).
+   */
+  Quat rotation;
+  /**
+   * Coulomb friction coefficient (≥ 0).
+   */
+  double friction;
+  /**
+   * Coefficient of restitution (≥ 0, typically < 1).
+   */
+  double restitution;
+  /**
+   * Mass density (≥ 0).  Ignored for static (parentless) shapes.
+   */
+  double density;
+  /**
+   * Collision group memberships bitmask.
+   */
+  InteractionGroupsDesc collision_groups;
+  /**
+   * Solver group memberships bitmask.
+   */
+  InteractionGroupsDesc solver_groups;
+  /**
+   * If non-zero, this collider is attached to the given rigid body.
+   */
+  RigidBodyHandleRaw body_parent;
+  /**
+   * If non-zero, the collider is a sensor (no collision response).
+   */
+  Bool is_sensor;
+  /**
+   * Bitmask of [`ActiveEvents`] to enable.
+   */
+  uint32_t active_events;
+  /**
+   * Bitmask of [`ActiveHooks`] to enable.
+   */
+  uint32_t active_hooks;
+  /**
+   * Per-collider erosion margin (Rapier `contact_partitioning`).  Only
+   * meaningful for round shapes; 0 = no erosion.
+   */
+  double erosion_margin;
+} ColliderRequest;
+
+/**
+ * Parameter preset that approximates Box3D's sandbox physics feel.
+ *
+ * These values are applied to every collider in a batch unless the request
+ * itself overrides the corresponding field (> 0 for floats, non-default for
+ * groups).  The preset is passed to [`ColliderBatch::new`] and used during
+ * [`ColliderBatch::execute`].
+ */
+typedef struct Box3DPreset {
+  /**
+   * Default friction when the request's `friction` is <= 0.
+   * Box3D feel ≈ 0.6 (moderate grip, not icy).
+   */
+  double default_friction;
+  /**
+   * Default restitution when the request's `restitution` is < 0.
+   * Box3D feel ≈ 0.2 (slight bounce, realistic).
+   */
+  double default_restitution;
+  /**
+   * Default density for dynamic shapes when the request's `density` is
+   * <= 0.  Box3D feel ≈ 1.0 (water-equivalent for intuitive masses).
+   */
+  double default_density;
+  /**
+   * Erosion margin applied to round shapes for stable stacking.
+   * Box3D feel ≈ 0.01 (small margin prevents jitter on stacked bodies).
+   */
+  double default_erosion_margin;
+  /**
+   * Linear damping applied to dynamic bodies created by merge_static_shapes.
+   * Box3D feel ≈ 0.05 (slight slow-down, prevents perpetual motion).
+   */
+  double linear_damping;
+  /**
+   * Angular damping for dynamic bodies.
+   * Box3D feel ≈ 0.05.
+   */
+  double angular_damping;
+  /**
+   * CCD sub-steps for fast-moving dynamic bodies.  0 = off.
+   * Box3D feel ≈ 1 (enough to prevent tunneling at sandbox speeds).
+   */
+  uint32_t ccd_substeps;
+  /**
+   * Solver iterations.  Box3D feel ≈ 4 (GoodBalance between stability and CPU).
+   */
+  uint32_t solver_iterations;
+} Box3DPreset;
 
 /**
  * A mass concentration (mascon) on the Moon's surface.
@@ -443,6 +572,63 @@ Bool material_hertz_contact_force(MaterialProperties material1,
                                   double penetration_rate,
                                   double damping,
                                   HertzContactReport *out_report);
+
+/**
+ * Batch-add colliders from a flat array of [`ColliderRequest`]s.
+ *
+ * Creates a [`ColliderBatch`] internally, pushes all requests, executes the
+ * merge + insert pipeline, and writes the resulting collider handles into
+ * `out_handles`.  Returns the number of handles written.
+ *
+ * The Box3D feel preset is passed by value; use [`Box3DPreset::default`] for
+ * zero-initialised fields, or [`Box3DPreset::box3d_default`] via the FFI
+ * convenience function [`box3d_preset_default`].
+ *
+ * # Safety
+ *
+ * `world` must be a valid pointer from `world_create`.  `requests` must point
+ * to at least `count` readable `ColliderRequest` values.  `out_handles` must
+ * point to writable memory for at least `count * size_of(ColliderHandleRaw)`
+ * bytes (each request could produce up to one handle, fewer if merged).
+ */
+uint32_t world_batch_add_colliders(struct WorldHandle *world,
+                                   const struct ColliderRequest *requests,
+                                   uint32_t count,
+                                   struct Box3DPreset preset,
+                                   ColliderHandleRaw *out_handles,
+                                   uint32_t out_capacity);
+
+/**
+ * Merge static shapes and insert with a single `ColliderSet::insert`.
+ *
+ * Like [`world_batch_add_colliders`] but requires all requests to be static
+ * (parentless).  Returns the number of (compound) collider handles written.
+ *
+ * # Safety
+ *
+ * Same as [`world_batch_add_colliders`].
+ */
+uint32_t world_merge_static_shapes(struct WorldHandle *world,
+                                   const struct ColliderRequest *requests,
+                                   uint32_t count,
+                                   struct Box3DPreset preset,
+                                   ColliderHandleRaw *out_handles,
+                                   uint32_t out_capacity);
+
+/**
+ * Convenience: get the Box3D default-feel preset.
+ */
+struct Box3DPreset box3d_preset_default(void);
+
+/**
+ * Convenience: get the Box3D sticky-feel preset (high friction, no bounce).
+ */
+struct Box3DPreset box3d_preset_sticky(void);
+
+/**
+ * Convenience: get the Box3D bouncy-feel preset (low friction, high restitution).
+ */
+struct Box3DPreset box3d_preset_bouncy(void);
 
 /**
  * # Safety

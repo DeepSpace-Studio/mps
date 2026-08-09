@@ -16,6 +16,7 @@ use layouts::Layout;
 use pages::api::Api;
 use pages::architecture::Architecture;
 use pages::arena::Arena;
+use pages::batch::Batch;
 use pages::cosmos::Cosmos;
 use pages::events::Events;
 use pages::ffm::Ffm;
@@ -54,6 +55,8 @@ pub enum Route {
     Events {},
     #[route("/arena")]
     Arena {},
+    #[route("/batch")]
+    Batch {},
     #[route("/cosmos")]
     Cosmos {},
     #[route("/jni")]

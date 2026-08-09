@@ -35,6 +35,8 @@ include = [
   "Co2MassBalance",
   "ColliderHandleRaw",
   "ColliderBuilderHandle",
+  "ColliderRequest",
+  "Box3DPreset",
   "ConcentrationBuoyancyReport",
   "CollisionEventRecord",
   "CollisionProbability",

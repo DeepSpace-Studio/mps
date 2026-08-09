@@ -11,6 +11,7 @@ nav-formula = Formula
 nav-voxel = Voxel
 nav-events = Events
 nav-arena = Arena
+nav-batch = Batch Colliders
 nav-cosmos = Cosmos
 nav-jni = JNI
 nav-ffm = FFM
@@ -360,6 +361,71 @@ cosmos-bodies-title = Body catalogue ({ $count })
 cosmos-bodies-desc = JPL DE441 provides the GM, orbital elements, and phase of 10 primary bodies; injected into CosmosWorld at init.
 cosmos-jni-title = JNI integration
 cosmos-jni-desc = mps-jni exposes cosmos_batch_* methods: submit many spacecraft states at once rather than per-body; tracking-queue friendly.
+
+# ---- Batch collider page ----
+batch-tag = // Box3D
+batch-title = Batch Collider Pipeline
+batch-desc = Box3D-style batch insertion + same-material merge + physics-feel presets; one ColliderSet::insert amortises N shapes.
+batch-pipeline-title = Pipeline
+batch-pipeline-lead = The upper layer pushes ColliderRequest records into a ColliderBatch manager, which merges compatible static shapes into a compound and inserts in one shot.
+batch-step-1-title = Build requests
+batch-step-1-desc = Populate a ColliderRequest array — shape, pose, material, collision groups, parent body.
+batch-step-2-title = Choose preset
+batch-step-2-desc = Pass a Box3DPreset to set default friction/restitution/density/erosion/damping/CCD substeps/solver iterations.
+batch-step-3-title = Merge and insert
+batch-step-3-desc = Same-material static shapes merge into a single compound collider; different materials or dynamic shapes are grouped and inserted separately.
+batch-step-4-title = Return handles
+batch-step-4-desc = Returns ColliderHandleRaw for each generated collider; the caller can use them for queries and further operations.
+batch-request-title = ColliderRequest fields
+batch-request-lead = Each request is a #[repr(C)] flat struct; build a contiguous array and pass (ptr, count) to the FFI.
+batch-col-field = Field
+batch-col-type = Type
+batch-col-desc = Description
+batch-col-scenario = Scenario
+batch-col-result = Result
+batch-field-shape = Shape descriptor (shape_type + a/b/c/d floats)
+batch-field-translation = Local translation relative to the merged collider origin
+batch-field-rotation = Unit quaternion local rotation
+batch-field-friction = Coulomb friction coefficient (>= 0)
+batch-field-restitution = Coefficient of restitution (>= 0, typically < 1)
+batch-field-density = Mass density (>= 0; ignored for static shapes)
+batch-field-collision-groups = Collision group memberships bitmask
+batch-field-solver-groups = Solver group memberships bitmask
+batch-field-body-parent = When non-zero, attaches collider to the given rigid body
+batch-field-is-sensor = When non-zero, the collider is a sensor (no collision response)
+batch-field-erosion-margin = Erosion margin; only meaningful for round shapes; 0 = no erosion
+batch-preset-title = Box3D physics-feel presets
+batch-preset-lead = Three built-in presets cover common sandbox physics scenarios; also available via FFI constructors.
+batch-preset-default-title = Default
+batch-preset-default-desc = Balanced — moderate friction, slight bounce, gentle damping. Good for general sandbox use.
+batch-preset-sticky-title = Sticky
+batch-preset-sticky-desc = No bounce, high friction. Good for ground/walls and static geometry.
+batch-preset-bouncy-title = Bouncy
+batch-preset-bouncy-desc = Low friction, high restitution, more CCD substeps. Good for bouncing/stacking demos.
+batch-merge-title = Merge strategy
+batch-merge-lead = The manager groups by material, collision groups, sensor flag, and parent body; same-group static shapes merge into a compound.
+batch-merge-same-material = Same material + same collision groups + static
+batch-merge-compound = Merged into a single compound collider (one insert)
+batch-merge-diff-material = Different material or different collision groups
+batch-merge-separate = Each gets its own collider (multiple inserts)
+batch-merge-dynamic-parent = Attached to a dynamic rigid body
+batch-merge-attach = Attached via insert_with_parent to the parent body
+batch-merge-sensor = Sensor flag is true
+batch-merge-sensor-result = Sensor collider does not participate in collision response, only triggers events
+batch-erosion-title = Erosion
+batch-erosion-lead = Rapier/parry has no built-in clone_eroded API; we rebuild the shape as its round variant with border_radius = erosion_margin.
+batch-erosion-cuboid = Converts a hard-edge cuboid to a round cuboid, reducing jitter when stacked.
+batch-erosion-cylinder = Cylinder to round cylinder; edge contact is smoother.
+batch-erosion-cone = Cone to round cone; the tip is blunted to prevent penetration.
+batch-erosion-note = Ball / Capsule shapes are already round; erosion does not change their geometry. Ball and unsupported shapes fall back to shape_from_desc.
+batch-ffi-title = FFI entry points
+batch-ffi-lead = All pub extern "C" fn; payloads are #[repr(C)] flat structs; cbindgen generates the rigid_body.h header.
+batch-limits-title = Capacity limits
+batch-limit-max-requests = MAX_BATCH_REQUESTS = 100 000 — maximum requests per batch.
+batch-limit-max-compound = MAX_COMPOUND_PARTS = 50 000 — maximum parts in a single compound.
+batch-limit-erosion-zero = When erosion_margin = 0, round-variant rebuild is skipped and the original shape is used directly.
+batch-example-title = Rust usage example
+batch-example-lead = Build a ColliderRequest array, pass to batch_add_colliders; same-material shapes auto-merge into a compound.
 
 # ---- 404 page ----
 not-found-title = Page Not Found

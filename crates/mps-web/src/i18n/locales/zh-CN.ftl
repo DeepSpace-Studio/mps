@@ -11,6 +11,7 @@ nav-formula = 公式模块
 nav-voxel = 体素
 nav-events = 事件
 nav-arena = Arena
+nav-batch = 批量碰撞体
 nav-cosmos = 太空
 nav-jni = JNI
 nav-ffm = FFM
@@ -360,6 +361,71 @@ cosmos-bodies-title = 天体目录 ({ $count })
 cosmos-bodies-desc = JPL DE441 提供 10 个主要天体的 GM、轨道根数、相位，初始化时灌入 CosmosWorld。
 cosmos-jni-title = JNI 集成
 cosmos-jni-desc = mps-jni 暴露 cosmos_batch_* 方法：一次性提交多个飞船状态而非逐体调用，对 tracking 队列友好。
+
+# ---- Batch collider page ----
+batch-tag = // Box3D
+batch-title = 批量碰撞体管线
+batch-desc = Box3D 风格批量插入 + 同材质合并 + 物理感预设，一次 ColliderSet::insert 摊销 N 个形状。
+batch-pipeline-title = 管线流程
+batch-pipeline-lead = 上层将 ColliderRequest 记录压入 ColliderBatch 管理器，合并兼容的静态形状为单个 compound，然后一次性插入。
+batch-step-1-title = 构造请求
+batch-step-1-desc = 填充 ColliderRequest 数组 — 形状、位姿、材质、碰撞组、父刚体。
+batch-step-2-title = 选择预设
+batch-step-2-desc = 传入 Box3DPreset 设定默认摩擦/弹性/密度/侵蚀/阻尼/CCD 步数/求解器迭代。
+batch-step-3-title = 合并与插入
+batch-step-3-desc = 同材质静态形状合并为单个 compound collider；不同材质或动态形状分组插入。
+batch-step-4-title = 返回句柄
+batch-step-4-desc = 返回每个生成的 collider 的 ColliderHandleRaw，上层可直接用于查询和后续操作。
+batch-request-title = ColliderRequest 字段
+batch-request-lead = 每条请求是一个 #[repr(C)] 扁平结构体，可构造连续数组传 (ptr, count) 给 FFI。
+batch-col-field = 字段
+batch-col-type = 类型
+batch-col-desc = 说明
+batch-col-scenario = 场景
+batch-col-result = 结果
+batch-field-shape = 形状描述符（shape_type + a/b/c/d 四个浮点）
+batch-field-translation = 相对合并 collider 原点的局部平移
+batch-field-rotation = 单位四元数局部旋转
+batch-field-friction = 库仑摩擦系数（≥ 0）
+batch-field-restitution = 恢复系数（≥ 0，通常 < 1）
+batch-field-density = 质量密度（≥ 0，静态形状忽略）
+batch-field-collision-groups = 碰撞组成员位掩码
+batch-field-solver-groups = 求解器组成员位掩码
+batch-field-body-parent = 非零时绑定到指定刚体
+batch-field-is-sensor = 非零时为传感器（无碰撞响应）
+batch-field-erosion-margin = 侵蚀裕度，仅对圆角形状有效；0 = 无侵蚀
+batch-preset-title = Box3D 物理感预设
+batch-preset-lead = 三种内置预设覆盖常见沙盒物理场景，也可通过 FFI 构造器获取。
+batch-preset-default-title = Default
+batch-preset-default-desc = 平衡型 — 中等摩擦、轻微弹性、适度阻尼。适合通用沙盒。
+batch-preset-sticky-title = Sticky
+batch-preset-sticky-desc = 不反弹、高摩擦。适合地面/墙壁等静态几何体。
+batch-preset-bouncy-title = Bouncy
+batch-preset-bouncy-desc = 低摩擦、高弹性、更多 CCD 子步。适合弹跳/堆积演示。
+batch-merge-title = 合并策略
+batch-merge-lead = 管理器按材质、碰撞组、传感器标志、父刚体分组，同组静态形状合并为 compound。
+batch-merge-same-material = 同材质 + 同碰撞组 + 静态
+batch-merge-compound = 合并为单个 compound collider（一次 insert）
+batch-merge-diff-material = 不同材质或不同碰撞组
+batch-merge-separate = 各自独立 collider（多次 insert）
+batch-merge-dynamic-parent = 绑定到动态刚体
+batch-merge-attach = 通过 insert_with_parent 附着到父刚体
+batch-merge-sensor = 传感器标志为真
+batch-merge-sensor-result = 传感器 collider 不参与碰撞响应，仅触发事件
+batch-erosion-title = 侵蚀 (Erosion)
+batch-erosion-lead = Rapier/parry 无内置 clone_eroded API，我们重建形状为圆角变体，border_radius = erosion_margin。
+batch-erosion-cuboid = 将硬边长方体转为圆角长方体，堆积时减少抖动。
+batch-erosion-cylinder = 圆柱体转圆角圆柱，边缘接触更平滑。
+batch-erosion-cone = 圆锥转圆角圆锥，尖端钝化避免穿透。
+batch-erosion-note = Ball / Capsule 等形状本身已圆滑，侵蚀不改变其几何。Ball 和不支持的形状回退到 shape_from_desc。
+batch-ffi-title = FFI 入口
+batch-ffi-lead = 全部 pub extern "C" fn，载荷为 #[repr(C)] 扁平结构体，cbindgen 生成 rigid_body.h 头文件。
+batch-limits-title = 容量限制
+batch-limit-max-requests = MAX_BATCH_REQUESTS = 100 000 — 单批次最大请求数。
+batch-limit-max-compound = MAX_COMPOUND_PARTS = 50 000 — 单个 compound 最大部件数。
+batch-limit-erosion-zero = erosion_margin = 0 时跳过圆角重建，直接使用原始形状。
+batch-example-title = Rust 使用示例
+batch-example-lead = 构造 ColliderRequest 数组，传入 batch_add_colliders，同材质自动合并为 compound。
 
 # ---- 404 page ----
 not-found-title = 页面未找到

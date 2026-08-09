@@ -15,6 +15,7 @@ pub mod rapier {
     pub mod aerodynamics;
     pub mod anvilkit;
     pub mod astrophysics;
+    pub mod batch;
     pub mod biomechanics;
     pub mod bounds;
     pub mod bridge;
