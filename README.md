@@ -176,7 +176,14 @@ Java 25 FFM smoke test: passed
 
 ## Documentation
 
-Online documentation at `crates/mps-web/` — Rust SSR site built with Topcoat framework, serving docs at `https://Polari-Stars-MC.github.io/rigid-body/`.
+Online documentation at `crates/mps-web/` — Rust SSR site built with Dioxus 0.7 + dioxus-i18n (Fluent), serving docs at `https://Polari-Stars-MC.github.io/rigid-body/`.
+
+The `.github/workflows/pages.yml` workflow builds the site with `cargo build -p mps-web --release` (subscribing the Dioxus Router to the GitHub Pages base path via `DIOXUS_ASSET_ROOT`), launches the binary as a local SSR server, and exports each route to `_site/<path>/index.html` for GitHub Pages.
+
+**Forks:** the base path is derived from `${{ steps.configure-pages.outputs.base_path }}`, which auto-adapts to the fork's repository name — no hard-coded `/rigid-body` path in either the Rust code or the workflow. To deploy a fork:
+
+1. Enable Actions in the fork's **Settings → Actions → General**.
+2. Set **Settings → Pages → Source** to *GitHub Actions*.
 
 ## Current Gaps
 

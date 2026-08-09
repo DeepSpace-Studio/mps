@@ -35,27 +35,49 @@ jobs:
       - name: Cache Cargo artifacts
         uses: Swatinem/rust-cache@v2
 
-      - name: Build mps-web
-        run: cargo build -p mps-web --release
-
       - name: Setup Pages
         id: configure-pages
         uses: actions/configure-pages@v5
 
+      - name: Build mps-web
+        # Dioxus 0.7's `dioxus_cli_config::base_path()` reads
+        # `DIOXUS_ASSET_ROOT` at *compile time* in release builds via
+        # `option_env!`, baking the base path into the binary. We must
+        # therefore export the env var during `cargo build` (not just at
+        # run time) so the SSR router knows to nest routes under the
+        # Pages sub-path and prefix all internal `<Link>` hrefs.
+        #
+        # `configure-pages` returns `/$(basename ${{ github.repository }})`
+        # for project pages (e.g. `/rigid-body` here, `/some-fork-name`
+        # for a repo named `some-fork-name`). It returns an empty string
+        # for user/org home pages and custom-domain deployments, in
+        # which case Dioxus serves at `/` with no prefix. This makes the
+        # export fork-compatible: fork the repo → enable Actions + Pages
+        # → base_path auto-adapts to the fork's name.
+        env:
+          DIOXUS_ASSET_ROOT: ${{ steps.configure-pages.outputs.base_path }}
+        run: cargo build -p mps-web --release
+
       - name: Start server and export static pages
         env:
-          # Serve pages with <base href="/<repo>/"> so relative links like
-          # ./quickstart resolve under the GitHub Pages sub-path.
-          MPS_BASE_PATH: ${{ steps.configure-pages.outputs.base_path }}/
+          # Passed again at run time for clarity / future debug-build support.
+          DIOXUS_ASSET_ROOT: ${{ steps.configure-pages.outputs.base_path }}
         run: |
           # Start the server in background on port 8080
           PORT=8080 ./target/release/mps-web &
           SERVER_PID=$!
 
+          # Base path prefix Dioxus serves under (from DIOXUS_ASSET_ROOT /
+          # GitHub Pages base_path). For project pages this is
+          # `/<repo-name>` — auto-adapts when the repo is forked under a
+          # different name. Empty for root / custom-domain deployments.
+          SERVE_BASE="${{ steps.configure-pages.outputs.base_path }}"
+          SERVE_BASE="${SERVE_BASE%/}"
+
           # Wait for the server to be ready (retry up to 10 times)
           for i in $(seq 1 10); do
-            if curl -sf -o /dev/null "http://127.0.0.1:8080/" 2>/dev/null; then
-              echo "Server ready after ${i}s"
+            if curl -sf -o /dev/null "http://127.0.0.1:8080${SERVE_BASE}/" 2>/dev/null; then
+              echo "Server ready after ${i}s (serving under ${SERVE_BASE:-/})"
               break
             fi
             if [ "$i" = "10" ]; then
@@ -70,7 +92,8 @@ jobs:
           mkdir -p _site
 
           # All pages registered in lib.rs (kept in sync manually —
-          # new pages must be added to both lib.rs and this list)
+          # new pages must be added to both lib.rs and this list).
+          # These are the Dioxus Router paths (without the base-path prefix).
           PAGES=(
             "/"
             "/quickstart"
@@ -89,20 +112,26 @@ jobs:
           )
 
           BASE_URL="${{ steps.configure-pages.outputs.base_url }}"
-          # Fallback for local testing
-          if [ -z "$BASE_URL" ]; then BASE_URL="https://polari-stars-mc.github.io/rigid-body"; fi
+          # Fallback for local testing (rare): derive from github.repository
+          # owner/name, e.g. "owner/repo" → "https://owner.github.io/repo".
+          if [ -z "$BASE_URL" ]; then
+            REPO="${{ github.repository }}"
+            OWNER="${REPO%%/*}"
+            NAME="${REPO#*/}"
+            BASE_URL="https://${OWNER}.github.io/${NAME}"
+          fi
           BASE_URL="${BASE_URL%/}"
 
           for page in "${PAGES[@]}"; do
-            echo "Exporting $page ..."
+            echo "Exporting ${SERVE_BASE}${page} ..."
             if [ "$page" = "/" ]; then
               outfile="_site/index.html"
             else
               mkdir -p "_site${page}"
               outfile="_site${page}/index.html"
             fi
-            if ! curl -sf -o "$outfile" "http://127.0.0.1:8080${page}"; then
-              echo "ERROR: Failed to export $page"
+            if ! curl -sf -o "$outfile" "http://127.0.0.1:8080${SERVE_BASE}${page}"; then
+              echo "ERROR: Failed to export ${SERVE_BASE}${page}"
               kill $SERVER_PID 2>/dev/null || true
               exit 1
             fi

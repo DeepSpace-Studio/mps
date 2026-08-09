@@ -10,9 +10,11 @@ use crate::i18n::{t, langs};
 const CSS: &str = include_str!("site.css");
 
 /// Root layout — wraps all pages with HTML skeleton, header, nav, footer.
-/// Language switcher uses dioxus-i18n's I18n context (set_language).
+/// Rendered inside `Router::<Route>` in lib.rs::app(), so `<Link>` components
+/// here have access to the router context. The current page is rendered via
+/// `Outlet::<Route>` (Dioxus 0.7 router pattern).
 #[component]
-pub fn Layout(children: Element) -> Element {
+pub fn Layout() -> Element {
     let mut i18n = i18n();
 
     let mut switch_lang = move |lang: unic_langid::LanguageIdentifier| {
@@ -58,7 +60,7 @@ pub fn Layout(children: Element) -> Element {
         }
 
         main { class: "mps-main",
-            { children }
+            Outlet::<Route> {}
         }
 
         footer { class: "mps-footer",

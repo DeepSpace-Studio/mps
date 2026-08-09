@@ -1,6 +1,8 @@
 use dioxus::prelude::*;
 use dioxus_i18n::t;
 
+use crate::metrics::TEST_COUNT;
+
 /// Quickstart page — 5-step setup guide
 pub fn Quickstart() -> Element {
     let steps = [
@@ -26,11 +28,11 @@ pub fn Quickstart() -> Element {
 
             { steps.iter().map(|(num, title_key, desc_key)| rsx! {
                 div { class: "step-row",
-                    div { class: "step-circle", { num } }
+                    div { class: "step-circle", { *num } }
                     h3 { class: "step-title", { t!(title_key) } }
                 }
                 div { class: "step-body",
-                    p { class: "p-lead", { t!(desc_key) } }
+                    p { class: "p-lead", { t!(desc_key, tests: TEST_COUNT) } }
                 }
             })}
         }

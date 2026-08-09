@@ -11,9 +11,6 @@ table tr:hover td { background: #1a1a3e; }
 .callout { background: #0f1a2e; border-left: 4px solid #4a9eff; padding: 14px 18px; border-radius: 4px; margin: 20px 0; font-size: 14px; color: #bbb; }
 .callout strong { color: #fff; }
 .callout .hi { color: #4a9eff; font-family: monospace; }
-[data-lang]:not(html):not([data-lang="zh"]) { display: none; }
-html[data-lang="en"] [data-lang="zh"] { display: none; }
-html[data-lang="zh"] [data-lang="en"] { display: none; }
 @media (max-width: 768px) { .mps-main { padding: 20px 12px; } }
 
 /* ---- Reusable component classes (replaces 567 inline styles) ---- */

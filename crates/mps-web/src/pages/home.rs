@@ -103,14 +103,14 @@ pub fn Home() -> Element {
                 { t!("home-section-formula-modules", count: FORMULA_MODULE_COUNT) }
             }
             div { class: "mini-stat-grid",
-                div { class: "stat-card", span { class: "num", "88" }, span { class: "label", "Spaceflight" } }
-                div { class: "stat-card", span { class: "num", "23" }, span { class: "label", "Nuclear" } }
-                div { class: "stat-card", span { class: "num", "26" }, span { class: "label", "Mechanics" } }
-                div { class: "stat-card", span { class: "num", "19" }, span { class: "label", "Astrophysics" } }
-                div { class: "stat-card", span { class: "num", "23" }, span { class: "label", "Relativity" } }
-                div { class: "stat-card", span { class: "num", "20" }, span { class: "label", "Quantum" } }
-                div { class: "stat-card", span { class: "num", "16" }, span { class: "label", "Electromagnetism" } }
-                div { class: "stat-card", span { class: "num", "18" }, span { class: "label", "Fluid Dynamics" } }
+                div { class: "stat-card", span { class: "num", "88" }, span { class: "label", { t!("formula-cat-spaceflight") } } }
+                div { class: "stat-card", span { class: "num", "23" }, span { class: "label", { t!("formula-cat-nuclear") } } }
+                div { class: "stat-card", span { class: "num", "26" }, span { class: "label", { t!("formula-cat-mechanics") } } }
+                div { class: "stat-card", span { class: "num", "19" }, span { class: "label", { t!("formula-cat-astrophysics") } } }
+                div { class: "stat-card", span { class: "num", "23" }, span { class: "label", { t!("formula-cat-relativity") } } }
+                div { class: "stat-card", span { class: "num", "20" }, span { class: "label", { t!("formula-cat-quantum") } } }
+                div { class: "stat-card", span { class: "num", "16" }, span { class: "label", { t!("formula-cat-electromagnetism") } } }
+                div { class: "stat-card", span { class: "num", "18" }, span { class: "label", { t!("formula-cat-fluid") } } }
             }
         }
 

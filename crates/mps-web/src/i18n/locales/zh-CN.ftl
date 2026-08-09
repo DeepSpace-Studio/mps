@@ -44,7 +44,7 @@ home-mod-cosmos-desc = CosmosWorld、Verlet 轨道积分、n-body 互引力、�
 home-mod-physics-title = 物理系统
 home-mod-physics-desc = 引力、地形、力注册表、事件系统、空气动力学、流体
 home-mod-formula-title = 领域公式
-home-mod-formula-desc = 28 模块 — 航天、天体物理、核物理、相对论、量子等
+home-mod-formula-desc = 33 模块 — 航天、天体物理、核物理、相对论、量子等
 home-mod-integration-title = 集成方案
 home-mod-integration-desc = Arena 共享内存、JNI/FFM 绑定、Java 生态
 home-mod-reference-title = 参考资料
@@ -65,6 +65,16 @@ home-feat-jni-desc = Java 21 JNI 全绑定 ({ $count } 方法)。共享内存 Ar
 
 home-callout = 全部公式位于独立 crate { $crate } — 纯 Rust 实现，不依赖 Rapier 或 WorldHandle。
 
+# ---- Formula mini-stat labels (home module grid) ----
+formula-cat-spaceflight = 航天
+formula-cat-nuclear = 核物理
+formula-cat-mechanics = 力学
+formula-cat-astrophysics = 天体物理
+formula-cat-relativity = 相对论
+formula-cat-quantum = 量子
+formula-cat-electromagnetism = 电磁学
+formula-cat-fluid = 流体力学
+
 # ---- Quickstart page ----
 quickstart-tag = / 快速入门
 quickstart-title = 快速入门
@@ -76,7 +86,7 @@ quickstart-step2-desc = git clone 后进入 rigid-body 目录。
 quickstart-step3-title = 构建核心库
 quickstart-step3-desc = cargo build --workspace 编译全部 crate。
 quickstart-step4-title = 运行测试
-quickstart-step4-desc = cargo test --workspace 执行 685 项集成测试。
+quickstart-step4-desc = cargo test --workspace 执行 { $tests } 项集成测试。
 quickstart-step5-title = 生成 C 头文件
 quickstart-step5-desc = cargo build -p mps-core 触发 cbindgen 生成 rigid_body.h。
 

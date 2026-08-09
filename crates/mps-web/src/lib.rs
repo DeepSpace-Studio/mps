@@ -1,4 +1,4 @@
-// MPS Web — Dioxus 0.6 + dioxus-i18n (Fluent)
+// MPS Web — Dioxus 0.7 + dioxus-i18n (Fluent)
 
 #![allow(non_snake_case, unused)]
 
@@ -13,6 +13,7 @@ use dioxus::prelude::*;
 use dioxus_i18n::prelude::*;
 use unic_langid::langid;
 
+use layouts::Layout;
 use pages::api::Api;
 use pages::architecture::Architecture;
 use pages::arena::Arena;
@@ -28,10 +29,14 @@ use pages::not_found::NotFound;
 use pages::quickstart::Quickstart;
 use pages::voxel::Voxel;
 
-/// Route enum — Dioxus 0.6 Routable derive auto-generates parsing/rendering.
+/// Route enum — Dioxus 0.7 Routable derive auto-generates parsing/rendering.
+/// `#[layout(Layout)]` wraps every variant in layouts::Layout; the current
+/// route's component is rendered wherever Layout places `Outlet::<Route>`.
+/// `#[end_layout]` must be attached to the last variant covered by the layout.
 #[derive(Routable, Clone, PartialEq, Debug)]
 #[rustfmt::skip]
 pub enum Route {
+    #[layout(Layout)]
     #[route("/")]
     Home {},
     #[route("/quickstart")]
@@ -59,6 +64,7 @@ pub enum Route {
     #[route("/api")]
     Api {},
     #[route("/404")]
+    #[end_layout]
     NotFound {},
 }
 
@@ -72,9 +78,7 @@ fn app() -> Element {
     });
 
     rsx! {
-        layouts::Layout {
-            Router::<Route> {}
-        }
+        Router::<Route> {}
     }
 }
 

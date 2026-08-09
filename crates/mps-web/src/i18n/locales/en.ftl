@@ -44,7 +44,7 @@ home-mod-cosmos-desc = CosmosWorld, Verlet orbit integration, n-body gravity, pe
 home-mod-physics-title = Physics Systems
 home-mod-physics-desc = Gravity, terrain, force registry, events, aerodynamics, fluid
 home-mod-formula-title = Domain Formulas
-home-mod-formula-desc = 28 modules — spaceflight, astrophysics, nuclear, relativity, quantum, etc.
+home-mod-formula-desc = 33 modules — spaceflight, astrophysics, nuclear, relativity, quantum, etc.
 home-mod-integration-title = Integration
 home-mod-integration-desc = Arena shared memory, JNI/FFM bindings, Java ecosystem
 home-mod-reference-title = Reference
@@ -65,6 +65,16 @@ home-feat-jni-desc = Java 21 JNI full binding ({ $count } methods). Shared-memor
 
 home-callout = All formulas live in a standalone crate { $crate } — pure Rust, no Rapier or WorldHandle dependency.
 
+# ---- Formula mini-stat labels (home module grid) ----
+formula-cat-spaceflight = Spaceflight
+formula-cat-nuclear = Nuclear
+formula-cat-mechanics = Mechanics
+formula-cat-astrophysics = Astrophysics
+formula-cat-relativity = Relativity
+formula-cat-quantum = Quantum
+formula-cat-electromagnetism = Electromagnetism
+formula-cat-fluid = Fluid Dynamics
+
 # ---- Quickstart page ----
 quickstart-tag = / QUICKSTART
 quickstart-title = Quickstart
@@ -76,7 +86,7 @@ quickstart-step2-desc = git clone and enter the rigid-body directory.
 quickstart-step3-title = Build the Core Library
 quickstart-step3-desc = cargo build --workspace compiles all crates.
 quickstart-step4-title = Run Tests
-quickstart-step4-desc = cargo test --workspace executes 685 integration tests.
+quickstart-step4-desc = cargo test --workspace executes { $tests } integration tests.
 quickstart-step5-title = Generate C Headers
 quickstart-step5-desc = cargo build -p mps-core triggers cbindgen to generate rigid_body.h.
 
