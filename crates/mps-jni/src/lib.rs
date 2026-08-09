@@ -177,6 +177,26 @@ fn sd(shape_type: jint, a: jdouble, b: jdouble, c: jdouble, d: jdouble) -> Shape
     }
 }
 
+/// Convert a (possibly non-unit) quaternion `q = (i, j, k, w)` into Rapier's
+/// builder-rotation convention: an axis-angle encoded as a `Vec3` whose
+/// direction is the rotation axis and whose magnitude is the rotation angle
+/// in radians. This mirrors `Rotation3::scaled_axis_angle()`.
+///
+/// Returns `(0, 0, 0)` for the identity / near-identity case so that bizzare
+/// callers passing `(0,0,0,1)` end up with no rotation rather than NaNs.
+fn quat_to_axis_angle(q: Quat) -> Vec3 {
+    // angle = 2 * acos(|w|)
+    let w = if q.w > 1.0 { 1.0 } else if q.w < -1.0 { -1.0 } else { q.w };
+    let angle = 2.0 * w.acos();
+    let s = (1.0 - w * w).sqrt();
+    // s tiny ⇒ (near-)identity quaternion; pick zero rotation to stay finite.
+    if s < 1e-12 {
+        return Vec3 { x: 0.0, y: 0.0, z: 0.0 };
+    }
+    let k = angle / s;
+    Vec3 { x: q.i * k, y: q.j * k, z: q.k * k }
+}
+
 macro_rules! jni {
     (@ty long) => { jlong };
     (@ty boolean) => { jbyte };
@@ -198,7 +218,7 @@ macro_rules! jni {
     (@default bool_array) => { std::ptr::null_mut() };
     ($ret:ident $method:ident ( $($kind:ident $arg:ident),* ) $body:block) => {
         #[unsafe(export_name = concat!(
-            "Java_org_polaris2023_mps_1rigid_1body_RigidBodyNative_",
+            "Java_org_polaris2023_mps_rapier_RapierNative_",
             stringify!($method)
         ))]
         #[allow(non_snake_case)]
@@ -224,7 +244,7 @@ macro_rules! jni_e_c {
     (@default $kind:ident) => { jni!(@default $kind) };
     ($ret:ident $method:ident ( $($kind:ident $arg:ident),* ) $body:block) => {
         #[unsafe(export_name = concat!(
-            "Java_org_polaris2023_mps_1rigid_1body_RigidBodyNative_",
+            "Java_org_polaris2023_mps_rapier_RapierNative_",
             stringify!($method)
         ))]
         #[allow(non_snake_case)]
@@ -246,7 +266,7 @@ jni!(boolean abiSupportsJni() { abi::abi_supports_jni().0 as jbyte });
 jni!(int abiLastErrorCode() { er::last_error_code() as jint });
 jni!(void abiClearLastError() { er::last_error_clear(); });
 
-#[unsafe(export_name = "Java_org_polaris2023_mps_1rigid_1body_RigidBodyNative_abiLastErrorMessage")]
+#[unsafe(export_name = "Java_org_polaris2023_mps_rapier_RapierNative_abiLastErrorMessage")]
 #[allow(non_snake_case)]
 pub extern "system" fn abiLastErrorMessage(env: JNIEnv, _class: jclass) -> jstring {
     catch_unwind(AssertUnwindSafe(|| {
@@ -402,7 +422,14 @@ jni!(void voxelObbBuildStats(double cx, double cy, double cz, double hx, double 
 });
 
 jni!(void colliderBuilderSetTranslation(long builder, double x, double y, double z) { col::collider_builder_set_translation(m::<CBH>(builder), v3(x, y, z)); });
-jni!(void colliderBuilderSetRotation(long builder, double x, double y, double z) { col::collider_builder_set_rotation(m::<CBH>(builder), v3(x, y, z)); });
+jni!(void colliderBuilderSetRotation(long builder, double qi, double qj, double qk, double qw) {
+    // Rapier's builder-level `set_rotation` consumes an axis-angle `Vec3`,
+    // but Java/ColliderBody callers pass a unit quaternion (i, j, k, w).
+    // Convert quaternion → axis-angle (axis * angle) here so the existing
+    // FFI `collider_builder_set_rotation(builder, Vec3)` can be reused and
+    // Java keeps its (x, y, z, w) quaternion signature — see SKILL §FFI.
+    col::collider_builder_set_rotation(m::<CBH>(builder), quat_to_axis_angle(qt(qi, qj, qk, qw)))
+});
 jni!(void colliderBuilderSetPose(long builder, double x, double y, double z, double qi, double qj, double qk, double qw) { col::collider_builder_set_pose(m::<CBH>(builder), v3(x, y, z), qt(qi, qj, qk, qw)); });
 jni!(void colliderBuilderSetSensor(long builder, int sensor) { col::collider_builder_set_sensor(m::<CBH>(builder), jb(sensor)); });
 jni!(void colliderBuilderSetFriction(long builder, double friction) { col::collider_builder_set_friction(m::<CBH>(builder), friction); });
