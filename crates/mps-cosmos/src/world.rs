@@ -15,8 +15,12 @@ use crate::gravity::{
     CelestialSource, NBodySource, celestial_acceleration, gm_from_mass,
 };
 use crate::orbit::BodyState;
-use crate::perturbation::{atmospheric_drag_force, solar_pressure_force};
-use mps_formula::celestial_data::AU;
+use crate::perturbation::{
+    atmospheric_drag_force, dynamical_friction_force, solar_pressure_force, solar_wind_pressure_force,
+};
+use mps_formula::celestial_data::{AU, G};
+use mps_formula::astrophysics::{hill_sphere_radius, roche_limit_report};
+use mps_formula::ffi::RocheLimitReport;
 use rapier3d::prelude::{
     BroadPhaseBvh, CCDSolver, ColliderSet, ImpulseJointSet, IntegrationParameters, IslandManager,
     MultibodyJointSet, NarrowPhase, PhysicsPipeline, RigidBodyBuilder, RigidBodyHandle,
@@ -38,6 +42,20 @@ pub struct PerturbationConfig {
     pub optical_area: f64,
     /// 是否施加太阳光压。
     pub enable_solar: bool,
+    /// 太阳风质子数密度（n / m³），典型 5e6（1 AU 处静态太阳风）。
+    pub solar_wind_proton_density: f64,
+    /// 太阳风整体速度（m/s），典型 400–800。
+    pub solar_wind_speed: f64,
+    /// 迎风（太阳风方向）有效面积（m²）。
+    pub solar_wind_area: f64,
+    /// 是否施加太阳风动压。
+    pub enable_solar_wind: bool,
+    /// 背景介质密度（kg/m³），用于 Chandrasekhar 动力学摩擦。
+    pub friction_background_density: f64,
+    /// 库仑对数 ln Λ，典型 2–10。
+    pub friction_coulomb_log: f64,
+    /// 是否施加动力学摩擦。
+    pub enable_dynamical_friction: bool,
 }
 
 impl Default for PerturbationConfig {
@@ -49,6 +67,13 @@ impl Default for PerturbationConfig {
             reflectivity: 1.3,
             optical_area: 0.0,
             enable_solar: false,
+            solar_wind_proton_density: 0.0,
+            solar_wind_speed: 0.0,
+            solar_wind_area: 0.0,
+            enable_solar_wind: false,
+            friction_background_density: 0.0,
+            friction_coulomb_log: 0.0,
+            enable_dynamical_friction: false,
         }
     }
 }
@@ -422,6 +447,81 @@ impl CosmosWorld {
         b.set_additional_mass(total_to_add, true);
         b.recompute_mass_properties_from_colliders(&self.colliders);
         Some(old)
+    }
+
+    /// 对本世界中的刚体计算"中心天体对其的洛希极限"报告。洛希极限 = 行星
+    /// 表面对卫星潮汐力等于卫星自引力的距离；卫星在此距离内会被撕碎。
+    ///
+    /// 主星数据完全由 [`set_central_body`] 注册过的中心天体推导：`equatorial_radius`
+    /// 取作主星半径；`GM`/`G`/`((4/3)·π·R³)` 反算出主星平均密度。卫星密度因
+    /// `RigidBody` 自身不含此信息，**必须由调用方提供**（`secondary_density`，
+    /// kg/m³，由您对刚体几何/物质模型的认知决定）。
+    ///
+    /// 轨道距离取刚体当前位置到世界原点的模长 —— 与 `celestial_acceleration`
+    /// 把中心天体放在世界原点的约定一致。
+    ///
+    /// 返回 `None` 当：
+    /// - 未设 `central_body`，或其 `equatorial_radius`/`gm` 非正/退化；
+    /// - 刚体不存在；
+    /// - `secondary_density` 非有限正数。
+    ///
+    /// **不改推进** —— 仅做查询。期盼在越过极限时施加潮汐拉扯的物理效应，
+    /// 应另行加力律；该函数为上层提供"距离是否已越界"的决策依据。
+    pub fn roche_limit_for(
+        &self,
+        handle: RigidBodyHandle,
+        secondary_density: f64,
+    ) -> Option<RocheLimitReport> {
+        let central = self.central_body?;
+        let body = self.bodies.get(handle)?;
+        let primary_radius = central.equatorial_radius;
+        if primary_radius <= 0.0 || central.gm <= 0.0 {
+            return None;
+        }
+        if !secondary_density.is_finite() || secondary_density <= 0.0 {
+            return None;
+        }
+        // 主星平均密度 ρ = M / V = (GM/G) / ((4/3)·π·R³)
+        let primary_mass = central.gm / G;
+        let primary_density =
+            primary_mass / ((4.0 / 3.0) * std::f64::consts::PI * primary_radius.powi(3));
+        let orbital_distance = body.translation().length();
+        roche_limit_report(
+            primary_radius,
+            primary_density,
+            secondary_density,
+            orbital_distance,
+        )
+    }
+
+    /// 计算围绕该刚体的 Hill 球半径——其引力主导区域，是与 `roche_limit_for`
+    /// 互补的另一判据：Roche 极限告知"卫星被主星潮汐撕碎"的距离，
+    /// Hill 球告知"主星之外的引力主导范围"（适合判断小卫星/航天器能否稳定
+    /// 围绕该刚体运行而不被主星剥离）。
+    ///
+    /// `r_H ≈ a · (1 - e) · (m_sec / (3·m_pri))^(1/3)`。
+    ///
+    /// 主星质量 m_pri 由 `set_central_body` 注册的天体 `GM/G` 反算；卫星质量
+    /// m_sec 取自刚体本身；半长轴 a 与离心率 e 由调用方提供——CosmosWorld
+    /// 直推轨道，不维护开普勒根数，故需用户态（如基于 `body_state` 通过
+    /// `mps_formula::spaceflight::state_to_elements` 反算后传入）。
+    ///
+    /// 返回 `None` 当未设 `central_body` / 刚体不存在 / `a` 或 `e` 非法 /
+    /// `gm`≤0 / 刚体质量≤0。
+    pub fn hill_radius_for(
+        &self,
+        handle: RigidBodyHandle,
+        semi_major_axis: f64,
+        eccentricity: f64,
+    ) -> Option<f64> {
+        let central = self.central_body?;
+        let body = self.bodies.get(handle)?;
+        let body_mass = body.mass();
+        if central.gm <= 0.0 || body_mass <= 0.0 {
+            return None;
+        }
+        let primary_mass = central.gm / G;
+        hill_sphere_radius(primary_mass, body_mass, semi_major_axis, eccentricity)
     }
 
     /// 取刚体完整状态切片（用于轨道诊断）。
@@ -896,6 +996,31 @@ impl CosmosWorld {
                         cfg.reflectivity,
                         AU,
                     );
+                }
+                // 太阳风动压：沿用与光压相同的「太阳→物体」几何方向。
+                if cfg.enable_solar_wind && cfg.solar_wind_area > 0.0 {
+                    let sun_to_body = pos - self.sun_position;
+                    if let Some(f) = solar_wind_pressure_force(
+                        sun_to_body,
+                        vel,
+                        cfg.solar_wind_proton_density,
+                        cfg.solar_wind_speed,
+                        cfg.solar_wind_area,
+                    ) {
+                        total_force += f;
+                    }
+                }
+                // Chandrasekhar 动力学摩擦：背景介质的引力拖尾，反速度方向。
+                if cfg.enable_dynamical_friction
+                    && cfg.friction_background_density > 0.0
+                    && let Some(f) = dynamical_friction_force(
+                        mass,
+                        cfg.friction_background_density,
+                        vel,
+                        cfg.friction_coulomb_log,
+                    )
+                {
+                    total_force += f;
                 }
             }
 

@@ -296,7 +296,11 @@ pub extern "C" fn cosmos_world_insert_body(
     })
 }
 
-/// 设置某刚体的环境扰动配置（大气阻力 + 太阳光压）。返回 1 / 0。
+/// 设置某刚体的环境扰动配置（大气阻力 + 太阳光压 + 太阳风动压 +
+/// Chandrasekhar 动力学摩擦）。返回 1 / 0。
+///
+/// `sun_position` 通过 `cosmos_world_set_sun_position` 单独设置；太阳风方向
+/// 复用 `sun_position → 刚体位置` 的世界方向。
 #[unsafe(no_mangle)]
 pub extern "C" fn cosmos_world_set_perturbation(
     world: *mut CosmosWorld,
@@ -307,6 +311,13 @@ pub extern "C" fn cosmos_world_set_perturbation(
     reflectivity: f64,
     optical_area: f64,
     enable_solar: i32,
+    solar_wind_proton_density: f64,
+    solar_wind_speed: f64,
+    solar_wind_area: f64,
+    enable_solar_wind: i32,
+    friction_background_density: f64,
+    friction_coulomb_log: f64,
+    enable_dynamical_friction: i32,
 ) -> u8 {
     ffi_guard(0, || {
         let w = match unsafe { world.as_mut() } { Some(t) => t, None => return 0, };
@@ -319,6 +330,13 @@ pub extern "C" fn cosmos_world_set_perturbation(
                 reflectivity,
                 optical_area,
                 enable_solar: enable_solar != 0,
+                solar_wind_proton_density,
+                solar_wind_speed,
+                solar_wind_area,
+                enable_solar_wind: enable_solar_wind != 0,
+                friction_background_density,
+                friction_coulomb_log,
+                enable_dynamical_friction: enable_dynamical_friction != 0,
             },
         );
         1
@@ -409,6 +427,25 @@ pub extern "C" fn cosmos_body_mass(world: *const CosmosWorld, body: u64) -> f64 
     ffi_guard(f64::NAN, || {
         let w = match unsafe { world.as_ref() } { Some(t) => t, None => return f64::NAN, };
         w.body_mass(unpack_handle(body)).unwrap_or(f64::NAN)
+    })
+}
+
+/// Hill 球半径（m）：刚体作为卫星时其自引力主导范围，与 Roche 极限互补。
+///
+/// 主星质量由 `cosmos_world_set_central_body` 注册的天体 GM/G 反算；卫星质量
+/// 取自刚体本身；`semi_major_axis`（m）与 `eccentricity`（0..=1）由调用方提
+/// 供。`NaN` 表示无 `central_body` / 句柄无效 / 参数非法。
+#[unsafe(no_mangle)]
+pub extern "C" fn cosmos_hill_radius_for(
+    world: *const CosmosWorld,
+    body: u64,
+    semi_major_axis: f64,
+    eccentricity: f64,
+) -> f64 {
+    ffi_guard(f64::NAN, || {
+        let w = match unsafe { world.as_ref() } { Some(t) => t, None => return f64::NAN, };
+        w.hill_radius_for(unpack_handle(body), semi_major_axis, eccentricity)
+            .unwrap_or(f64::NAN)
     })
 }
 

@@ -1220,7 +1220,11 @@ jni!(long cosmosWorldInsertBody(long world, long builder) {
     pack_handle(w.insert_body(b))
 });
 
-// 设置某刚体的环境扰动配置（大气阻力 + 太阳光压）。
+// 设置某刚体的环境扰动配置（大气阻力 + 太阳光压 + 太阳风动压 +
+// Chandrasekhar 动力学摩擦 —— 本次扩 11 参数是新接口 moonshoot4：太阳风与
+// 动摩擦签名向后兼容 由 ..Default::default() 保证 zero 即关闭）。
+// 旧 Kotlin 端用 9-arg `cosmosWorldSetPerturbation(legacy)`，新加扩展参数走
+// `cosmosWorldSetPerturbationExt` 可控开启太阳风/动摩擦等 扩展。
 jni!(boolean cosmosWorldSetPerturbation(
     long world, long body,
     double drag_coefficient, double area, int enable_drag,
@@ -1231,6 +1235,31 @@ jni!(boolean cosmosWorldSetPerturbation(
     w.set_perturbation(unpack_handle(body), mps_cosmos::world::PerturbationConfig {
         drag_coefficient, area, enable_drag: enable_drag != 0,
         reflectivity, optical_area, enable_solar: enable_solar != 0,
+        ..Default::default()
+    });
+    Bool::TRUE.0 as jbyte
+});
+
+// 扩展版：开启所有 4 类环境扰动力（呼 参见 cosmos_world_set_perturbation。
+// 旧版仅大气阻力和光压；此为后加的太阳风动压与 Chandrasekhar 动力学摩擦）。
+jni!(boolean cosmosWorldSetPerturbationExt(
+    long world, long body,
+    double drag_coefficient, double area, int enable_drag,
+    double reflectivity, double optical_area, int enable_solar,
+    double solar_wind_proton_density, double solar_wind_speed,
+    double solar_wind_area, int enable_solar_wind,
+    double friction_background_density, double friction_coulomb_log,
+    int enable_dynamical_friction
+) {
+    let w = unsafe { (world as *mut CosmosWorld).as_mut() };
+    let Some(w) = w else { return Bool::FALSE.0 as jbyte; };
+    w.set_perturbation(unpack_handle(body), mps_cosmos::world::PerturbationConfig {
+        drag_coefficient, area, enable_drag: enable_drag != 0,
+        reflectivity, optical_area, enable_solar: enable_solar != 0,
+        solar_wind_proton_density, solar_wind_speed, solar_wind_area,
+        enable_solar_wind: enable_solar_wind != 0,
+        friction_background_density, friction_coulomb_log,
+        enable_dynamical_friction: enable_dynamical_friction != 0,
     });
     Bool::TRUE.0 as jbyte
 });

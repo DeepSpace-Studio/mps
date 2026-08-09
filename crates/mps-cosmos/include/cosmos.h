@@ -133,7 +133,11 @@ uint64_t cosmos_world_insert_body_as_gravity_source(struct CosmosWorld *world,
 uint64_t cosmos_world_insert_body(struct CosmosWorld *world, RigidBodyBuilder *builder);
 
 /**
- * 设置某刚体的环境扰动配置（大气阻力 + 太阳光压）。返回 1 / 0。
+ * 设置某刚体的环境扰动配置（大气阻力 + 太阳光压 + 太阳风动压 +
+ * Chandrasekhar 动力学摩擦）。返回 1 / 0。
+ *
+ * `sun_position` 通过 `cosmos_world_set_sun_position` 单独设置；太阳风方向
+ * 复用 `sun_position → 刚体位置` 的世界方向。
  */
 uint8_t cosmos_world_set_perturbation(struct CosmosWorld *world,
                                       uint64_t body,
@@ -142,7 +146,14 @@ uint8_t cosmos_world_set_perturbation(struct CosmosWorld *world,
                                       int32_t enable_drag,
                                       double reflectivity,
                                       double optical_area,
-                                      int32_t enable_solar);
+                                      int32_t enable_solar,
+                                      double solar_wind_proton_density,
+                                      double solar_wind_speed,
+                                      double solar_wind_area,
+                                      int32_t enable_solar_wind,
+                                      double friction_background_density,
+                                      double friction_coulomb_log,
+                                      int32_t enable_dynamical_friction);
 
 /**
  * 推进一步，返回一个 `int` 编码的 `StepResult`：
@@ -175,6 +186,18 @@ int32_t cosmos_body_linvel_out(const struct CosmosWorld *world, uint64_t body, V
  * 取刚体质量（kg）。`NaN` 表示句柄无效 / world 为 null。
  */
 double cosmos_body_mass(const struct CosmosWorld *world, uint64_t body);
+
+/**
+ * Hill 球半径（m）：刚体作为卫星时其自引力主导范围，与 Roche 极限互补。
+ *
+ * 主星质量由 `cosmos_world_set_central_body` 注册的天体 GM/G 反算；卫星质量
+ * 取自刚体本身；`semi_major_axis`（m）与 `eccentricity`（0..=1）由调用方提
+ * 供。`NaN` 表示无 `central_body` / 句柄无效 / 参数非法。
+ */
+double cosmos_hill_radius_for(const struct CosmosWorld *world,
+                              uint64_t body,
+                              double semi_major_axis,
+                              double eccentricity);
 
 /**
  * 当前动态刚体数量。

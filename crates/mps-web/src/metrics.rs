@@ -9,9 +9,9 @@
 
 /// Total number of `#[test]` items in `mps-test`, as a `&'static str` so it
 /// can be inserted into `view!` literals directly (`{ (TEST_COUNT) }`).
-pub const TEST_COUNT: &str = "704";
+pub const TEST_COUNT: &str = "707";
 /// Total number of `jni!(`/`jni_e_c!(` method entries in `mps-jni`.
-pub const JNI_METHOD_COUNT: &str = "311";
+pub const JNI_METHOD_COUNT: &str = "312";
 /// Total number of `pub extern "C" fn` declarations in `mps-core/rapier`.
 pub const CORE_FFI_COUNT: &str = "488";
 

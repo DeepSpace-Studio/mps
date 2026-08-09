@@ -561,3 +561,255 @@ fn irregular_n_body_near_field_induces_non_radial_acceleration() {
         "y 分量（近场 点模型）= -GM·r/d³：ay={ay} 期望≈{expected_vy} (5% 容差)");
     let _ = RigidBodyHandle;
 }
+
+/// 洛希极限（公式层纯函数 + 太空层查询 API）回归。
+///
+/// 公式 `roche_limit` 之前一直被埋在 FFI 函数 `astro_roche_limit` 体里——没有
+/// 可被 crate 内部复用的纯 Rust 入口。太空层 `CosmosWorld` 因此也无法调用它
+/// （跨 crate 走 FFI 是反模式）。本测试同时覆盖两层的新增能力：
+/// 1. **公式层**：`mps_formula::astrophysics::roche_limit` 与 `roche_limit_report`
+///    作为纯函数被抽出后仍给出与旧 FFI 等价的数值，并保留非有限/非正的 None 语义。
+/// 2. **太空层**：`CosmosWorld::roche_limit_for` 用 `set_central_body` 注册过的
+///    天体反算主星密度、再喂给公式纯函数；置刚体于两侧（分别在极限内 / 外）
+///    验证 `inside_fluid_limit` 与 `inside_rigid_limit`。
+#[test]
+fn roche_limit_formula_and_cosmos_end_to_end() {
+    use mps_formula::astrophysics::{roche_limit, roche_limit_report};
+    use mps_formula::ffi::Bool;
+    use rapier3d::prelude::RigidBodyHandle;
+
+    // 公式层：密度比 5.0（主星比卫星密 5 倍），主星半径 1.0
+    // → ratio = 5^(1/3) ≈ 1.70998
+    // → fluid ≈ 2.44 × 1.70998 = 4.172, rigid ≈ 1.26 × 1.70998 = 2.155
+    let (fluid, rigid) = roche_limit(1.0, 5.0, 1.0).unwrap();
+    assert!((fluid - 2.44 * 5.0f64.cbrt()).abs() < 1e-12, "fluid {fluid}");
+    assert!((rigid - 1.26 * 5.0f64.cbrt()).abs() < 1e-12, "rigid {rigid}");
+    assert!(fluid > rigid, "fluid > rigid (2.44 > 1.26 系数)");
+
+    // 越界断言：在距 orbital=2.0（< rigid 2.155 < fluid 4.17）应"隔离刚体极限 + 
+    // 流体极限"双重判 inner 判为 true（r=2.0 同时 < rigid 与 fluid）。
+    let report = roche_limit_report(1.0, 5.0, 1.0, 2.0).unwrap();
+    assert_eq!(report.fluid_roche_limit, fluid);
+    assert_eq!(report.rigid_roche_limit, rigid);
+    assert_eq!(report.inside_fluid_limit, Bool::TRUE);
+    assert_eq!(report.inside_rigid_limit, Bool::TRUE);
+
+    // 非法输入 → None（公式层被污染不会让调用方拿到 NaN）
+    assert!(roche_limit(0.0, 5.0, 1.0).is_none(), "primary_radius=0");
+    assert!(roche_limit(-1.0, 5.0, 1.0).is_none(), "primary_radius<0");
+    assert!(roche_limit(f64::NAN, 5.0, 1.0).is_none(), "NaN radius");
+    assert!(roche_limit_report(1.0, 5.0, 1.0, -3.0).is_none(), "dist<0");
+    assert!(roche_limit_report(1.0, 5.0, 1.0, f64::INFINITY).is_none(), "inf dist");
+
+    // 太空层端到端：以地球为中心天体，放一个低轨刚体位于赤道
+    // 地球：GM = 3.986e14, equatorial_radius ≈ 6378137 m。可推密度约 5515 kg/m³。
+    // 卫星假定为液态水状（1000 kg/m³，松散分布——典型适配流体极限模型）。
+    // 流体极限将在≈1.7×地球半径处。把"刚体"放在地球表面正上方
+    //（orbital = equatorial_radius，远小于 fluid ≈ 5219km/...）。
+    let earth = get_celestial_body(CelestialBodyId::Earth);
+    let r_earth = earth.equatorial_radius;
+    let rho_pri = (earth.gm
+        / mps_formula::celestial_data::G)
+        / ((4.0 / 3.0) * std::f64::consts::PI * r_earth.powi(3));
+    // 算解析流体极限，便于稍后核验 CosmosWorld 是否复算一致
+    let expected_fluid = 2.44 * r_earth * (rho_pri / 1000.0).cbrt();
+    let expected_rigid = 1.26 * r_earth * (rho_pri / 1000.0).cbrt();
+
+    let mut world = CosmosWorld::new(CosmosWorldConfig {
+        gravity: Vector::ZERO,
+        dt: 1.0,
+        orbit_integration: OrbitIntegration::Verlet,
+        ..CosmosWorldConfig::default()
+    });
+    world.set_central_body(Some(earth));
+
+    // (a) 刚体在 1.5×R_earth：落在刚体极限 expected_rigid (~2.21 R_earth) 与流体极限
+    //     expected_fluid (~4.31 R_earth) 双侧内 → 两个 inside 都判 true。
+    let inner = world.insert_body(satellite_builder(
+        1.0,
+        Vector::new(1.5 * r_earth, 0.0, 0.0),
+        Vector::ZERO,
+        0.1,
+    ));
+
+    // (b) 刚体放 2×expected_fluid 处 → 远在两极限外，inside_* 都判 false。
+    let outer = world.insert_body(satellite_builder(
+        1.0,
+        Vector::new(2.0 * expected_fluid, 0.0, 0.0),
+        Vector::ZERO,
+        0.1,
+    ));
+
+    let rep_inner = world
+        .roche_limit_for(inner, 1000.0)
+        .expect("inner: central_body + body 都有效");
+    let rep_outer = world
+        .roche_limit_for(outer, 1000.0)
+        .expect("outer: central_body + body 都有效");
+
+    // 数值核验：流体极限与解析公式一致（通过 G/π 反算主星密度）
+    let inner_fluid = rep_inner.fluid_roche_limit;
+    let inner_rigid = rep_inner.rigid_roche_limit;
+    assert!(
+        (inner_fluid - expected_fluid).abs() / expected_fluid < 1e-9,
+        "CosmosWorld 流体极限 {inner_fluid} 应≈{expected_fluid}"
+    );
+    assert!(
+        (inner_rigid - expected_rigid).abs() / expected_rigid < 1e-9,
+        "CosmosWorld 刚体极限 {inner_rigid} 应≈{expected_rigid}"
+    );
+    assert!(inner_rigid < inner_fluid);
+
+    // 1.5×R_earth < expected_rigid (~2.21 R_earth) < expected_fluid (~4.31 R_earth)
+    // → 在 1.5R 处双双 inside。
+    assert_eq!(rep_inner.inside_fluid_limit, Bool::TRUE);
+    assert_eq!(rep_inner.inside_rigid_limit, Bool::TRUE);
+
+    // 2×expected_fluid 远在极限外
+    assert_eq!(rep_outer.inside_fluid_limit, Bool::FALSE);
+    assert_eq!(rep_outer.inside_rigid_limit, Bool::FALSE);
+
+    // 未设 central_body → roche_limit_for 返回 None（无主星，无法算）
+    let mut world_no_earth = CosmosWorld::new(CosmosWorldConfig::default());
+    let h = world_no_earth.insert_body(satellite_builder(1.0, Vector::ZERO, Vector::ZERO, 0.1));
+    assert!(
+        world_no_earth.roche_limit_for(h, 1000.0).is_none(),
+        "无 central_body 应返回 None"
+    );
+
+    // 非法 secondary_density → None
+    assert!(world.roche_limit_for(inner, 0.0).is_none(), "density=0");
+    assert!(world.roche_limit_for(inner, -1.0).is_none(), "density<0");
+    assert!(world.roche_limit_for(inner, f64::NAN).is_none(), "NaN density");
+
+    // 有效但刚体不存在 → None
+    let bogus = RigidBodyHandle::from_raw_parts(u32::MAX, u32::MAX);
+    assert!(world.roche_limit_for(bogus, 1000.0).is_none(), "不存在的刚体");
+
+    let _ = RigidBodyHandle;
+}
+
+/// Hill 球（天体力学界中 Roche 极限的姊妹判据）回归：先 lock 公式层
+/// `hill_sphere_radius` 的解析数值；再 verify `CosmosWorld::hill_radius_for`
+/// 用 central_body 反算主星质量、刚体本身取质量，得到与公式一致的结果。
+///
+/// `r_H = a · (1 - e) · (m_sec / (3·m_pri))^(1/3)`。
+#[test]
+fn hill_sphere_formula_and_cosmos_world_consistent() {
+    use mps_formula::astrophysics::hill_sphere_radius;
+    use rapier3d::prelude::RigidBodyHandle;
+
+    // 公式层：典型月球-地球体系
+    //  M_earth ≈ 5.972e24 kg；M_moon ≈ 7.342e22 kg
+    //  a = 3.844e8 m；e = 0.0549
+    let (m_pri, m_sec, a, e) = (5.972e24, 7.342e22, 3.844e8, 0.0549);
+    let r_h = hill_sphere_radius(m_pri, m_sec, a, e).unwrap();
+    let expect = a * (1.0 - e) * (m_sec / (3.0 * m_pri)).cbrt();
+    assert!((r_h - expect).abs() / expect < 1e-12, "r_h={r_h} expect={expect}");
+
+    // 边界：e 钳到 0..=1；非法输入 → None
+    assert!(hill_sphere_radius(0.0, 1.0, 1.0, 0.0).is_none(), "M_pri=0");
+    assert!(hill_sphere_radius(1.0, 0.0, 1.0, 0.0).is_none(), "m_sec=0");
+    assert!(hill_sphere_radius(1.0, 1.0, 0.0, 0.0).is_none(), "a=0");
+    assert!(hill_sphere_radius(1.0, 1.0, 1.0, f64::NAN).is_none(), "e=NaN");
+    // e>1 钳置 1 → 退化到零（(1-e)=0）
+    assert_eq!(hill_sphere_radius(1.0, 1.0, 1.0, 5.0).unwrap(), 0.0);
+    // e<0 钳置 0 → 等价 e=0
+    let r_h_neg = hill_sphere_radius(1.0, 1.0, 1.0, -0.3).unwrap();
+    let r_h_zero = hill_sphere_radius(1.0, 1.0, 1.0, 0.0).unwrap();
+    assert_eq!(r_h_neg, r_h_zero);
+
+    // 太空层：地球 central_body + 1000kg 刚体在 LEO 半径 7e6 m 处
+    let earth = get_celestial_body(CelestialBodyId::Earth);
+    let primary_mass = earth.gm / mps_formula::celestial_data::G;
+    let mut world = CosmosWorld::new(CosmosWorldConfig {
+        gravity: Vector::ZERO,
+        dt: 1.0,
+        ..CosmosWorldConfig::default()
+    });
+    world.set_central_body(Some(earth));
+    let h = world.insert_body(satellite_builder(
+        1000.0,
+        Vector::new(7.0e6, 0.0, 0.0),
+        Vector::ZERO,
+        0.1,
+    ));
+    // cosmos 不维护根数；caller 提供 a 与 e
+    let cosmos_r_h = world.hill_radius_for(h, 7.0e6, 0.0).unwrap();
+    let expect2 = 7.0e6 * (1000.0 / (3.0 * primary_mass)).cbrt();
+    assert!(
+        (cosmos_r_h - expect2).abs() / expect2 < 1e-9,
+        "cosmos hill {cosmos_r_h} expect {expect2}"
+    );
+    // 无 central_body / 无效刚体 / 非法 a → None
+    let mut world2 = CosmosWorld::new(CosmosWorldConfig::default());
+    let h2 = world2.insert_body(satellite_builder(1.0, Vector::ZERO, Vector::ZERO, 0.1));
+    assert!(world2.hill_radius_for(h2, 1e6, 0.0).is_none(), "无 central_body");
+    let bogus = RigidBodyHandle::from_raw_parts(u32::MAX, u32::MAX);
+    assert!(world.hill_radius_for(bogus, 1e6, 0.0).is_none(), "bogus handle");
+    assert!(world.hill_radius_for(h, -1.0, 0.0).is_none(), "a<0");
+}
+
+/// 太空层扰动力单元回归：直接调用 perturbation 模块的两个新力函数，
+/// 对比 baseline（无扰动）确认 sign / 量级正确。比端到端跑 1000 步更稳。
+#[test]
+fn perturbation_solar_wind_and_dynamical_friction_unit() {
+    use mps_cosmos::perturbation::{dynamical_friction_force, solar_wind_pressure_force};
+
+    // ===== 太阳风动压 =====
+    // 物体在 +x，太阳在原点 → sun_to_body = +x，风沿 +x 推（远离太阳）。
+    // 静态物体（velocity=0），proton_density=5e6 n/m³, v_sw=450 m/s, area=50m²。
+    // P = ρ·v² = (5e6 · m_proton)·(450)² ≈ 1.69e-9 Pa · 1e9 = 1.69 nPa → 1.69e-9 Pa
+    // F = P·A = 1.69e-9 · 50 ≈ 8.45e-8 N，方向 +x。
+    let f_sw = solar_wind_pressure_force(
+        Vector::new(1.0e11, 0.0, 0.0),
+        Vector::ZERO,
+        5.0e6,
+        450.0,
+        50.0,
+    )
+    .expect("solar wind: 参数合法应返回 Some");
+    assert!(f_sw.x > 0.0, "太阳风应沿 +x：F_sw.x={}", f_sw.x);
+    assert!(f_sw.x.is_finite());
+    // 量级核验：1.69e-9 Pa · 50 m² ≈ 8.45e-8 N
+    let expect_pa = 5.0e6 * 1.6726219e-27 * 450.0f64 * 450.0;
+    let expect_force = expect_pa * 50.0;
+    assert!(
+        (f_sw.x - expect_force).abs() / expect_force < 1e-2,
+        "量级核验：F_sw.x={0} expect≈={expect_force}",
+        f_sw.x,
+    );
+
+    // 顺风而行（同方向）→ 无力
+    let body_w = Vector::new(1.0e11, 0.0, 0.0);
+    let strong_tail = solar_wind_pressure_force(body_w, Vector::new(450.0, 0.0, 0.0), 5.0e6, 100.0, 50.0);
+    assert!(strong_tail.is_none(), "顺风速度 ≥ 风速 → None");
+    // 无效参数 → None
+    assert!(solar_wind_pressure_force(body_w, Vector::ZERO, 0.0, 100.0, 50.0).is_none());
+    assert!(solar_wind_pressure_force(body_w, Vector::ZERO, 5e6, 0.0, 50.0).is_none());
+    assert!(solar_wind_pressure_force(body_w, Vector::ZERO, 5e6, 100.0, 0.0).is_none());
+
+    // ===== 动力学摩擦 =====
+    // 物体以 +y 方向 7000 m/s 穿过密度 1e-20 kg/m³ 的介质，lnΛ=5，质量 1000 kg。
+    let vel = Vector::new(0.0, 7000.0, 0.0);
+    let f_df = dynamical_friction_force(1000.0, 1.0e-20, vel, 5.0)
+        .expect("dynamical friction: 参数合法应返回 Some");
+    // 反速度方向 → 应是 -y 分量
+    assert!(f_df.y < 0.0, "动摩擦应反速度（-y）：F_df.y={}", f_df.y);
+    assert!(f_df.x.abs() < 1e-25, "纯 +y 速度 → 摩擦应仅在 -y");
+    // 量级核验：a_mag = 4π G² M ρ lnΛ/v² = 4π · (6.6743e-11)² · 1000 · 1e-20 · 5 / 7000²
+    let g = 6.67430e-11_f64;
+    let a_mag_expect = 4.0 * std::f64::consts::PI * g * g * 1000.0 * 1.0e-20 * 5.0 / (7000.0 * 7000.0);
+    let f_mag_expect = a_mag_expect * 1000.0; // 力 = m·a_df
+    assert!(
+        (f_df.y.abs() - f_mag_expect).abs() / f_mag_expect < 1e-3,
+        "量级：|F_df.y|={0} expect≈={f_mag_expect}",
+        f_df.y.abs(),
+    );
+    // 速度为零 → None（公式 1/v² 发散）
+    assert!(dynamical_friction_force(1000.0, 1.0e-20, Vector::ZERO, 5.0).is_none());
+    // 其它非法 → None
+    assert!(dynamical_friction_force(0.0, 1.0e-20, vel, 5.0).is_none(), "m=0");
+    assert!(dynamical_friction_force(1000.0, 0.0, vel, 5.0).is_none(), "ρ=0");
+    assert!(dynamical_friction_force(1000.0, 1.0e-20, vel, 0.0).is_none(), "lnΛ=0");
+}

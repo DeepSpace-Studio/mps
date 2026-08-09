@@ -6,6 +6,8 @@
 
 use mps_formula::celestial_data::{CelestialBody, SOLAR_PRESSURE_AT_1AU};
 use mps_formula::ffi::Vec3;
+use mps_formula::galactic_dynamics as gd;
+use mps_formula::heliophysics as hph;
 use mps_formula::spaceflight;
 use rapier3d::prelude::Vector;
 
@@ -99,6 +101,97 @@ pub fn solar_pressure_force(
     // 距离平方反比衰减：实际光压 = P · (1AU / r)²；用 r2 省一次 sqrt。
     let pressure = SOLAR_PRESSURE_AT_1AU * (au * au) / r2;
     -dir * (pressure * area * reflectivity)
+}
+
+/// 太阳风等离子体动压产生的力（N），沿风向推航天器。
+///
+/// 模型：`F = P_sw · A_eff · d̂`，其中 `P_sw = ρ · v_rel²` 是太阳风（质子数
+/// 密度 × m_p × 整体速度²）作用于物体的动压，由
+/// [`heliophysics::solar_wind_dynamic_pressure`] 计算（返回 nPa，本函数换算到
+/// Pa 后乘以有效面积以得 N）。`d̂` 取自太阳指向航天器的方向——即风自太阳
+/// 向外辐射的世界方向，与 `solar_pressure_force` 共用同一几何约定。
+///
+/// 物体自身速度沿风向的分量被减去，得到相对风压；物体顺风而行
+///（v_rel ≤ 0）感受不到力。
+///
+/// 接入 `mps-formula` 的 [`heliophysics::solar_wind_dynamic_pressure`]。
+///
+/// Inputs:
+/// - `sun_to_body`        — 太阳指物体的位置向量（决定风向与距离）
+/// - `body_velocity`      — 物体在惯性系的速度（m/s）
+/// - `proton_density`     — 太阳风质子数密度（n / m³）
+/// - `solar_wind_speed`   — 太阳风整体速度（m/s，世界系）
+/// - `effective_area`     — 迎风有效面积（m²）
+pub fn solar_wind_pressure_force(
+    sun_to_body: Vector,
+    body_velocity: Vector,
+    proton_density: f64,
+    solar_wind_speed: f64,
+    effective_area: f64,
+) -> Option<Vector> {
+    // 早退：参数无意义时直接零。
+    if proton_density <= 0.0
+        || solar_wind_speed <= 0.0
+        || effective_area <= 0.0
+    {
+        return None;
+    }
+    let r2 = sun_to_body.length_squared();
+    if r2 < 1.0 || !r2.is_finite() {
+        return None;
+    }
+    let r = r2.sqrt();
+    let dir = sun_to_body / r; // 太阳 → 物体 的单位向量（风自太阳辐射的方向）
+
+    // 沿风向的相对速度：v_rel = v_sw - v_body·d̂。物体顺风而行则压为 0。
+    let v_rel = solar_wind_speed - body_velocity.dot(dir);
+    if v_rel <= 0.0 || !v_rel.is_finite() {
+        return None;
+    }
+    // 公式要求 km/s。
+    let v_rel_kms = v_rel * 1.0e-3;
+    // nPa → Pa。
+    let pressure_pa = hph::solar_wind_dynamic_pressure(proton_density, v_rel_kms)? * 1.0e-9;
+    Some(dir * (pressure_pa * effective_area))
+}
+
+/// Chandrasekhar 动力学摩擦产生的力（N）。当一颗卫星穿过背景弥散介质（如星
+/// 系盘中的暗物质晕或星际介质）时，介质粒子的引力拖尾对卫星施加反向减速力：
+/// `F = -m_sat · a_df · v̂`，其中
+/// `a_df = 4π G² M ρ ln Λ / v²` 由
+/// [`galactic_dynamics::chandrasekhar_dynamical_friction`] 给出。
+///
+/// 与 mps-core 的 `DynamicalFrictionForceLaw` 等价，但 cosmos 自行复用
+/// mps-formula 纯函数（不介入 mps-core 的 C ABI / 力律登记表）。
+///
+/// Inputs:
+/// - `body_mass`          — 卫星质量（kg）；a_df 是**自身质量无关**，
+///   故力 = m·a_df，质量进入合力系数
+/// - `background_density` — 背景介质密度 ρ（kg/m³）
+/// - `velocity`           — 卫星相对背景介质的速度（m/s）
+/// - `coulomb_log`        — 库仑对数 ln Λ（典型 2–10）
+pub fn dynamical_friction_force(
+    body_mass: f64,
+    background_density: f64,
+    velocity: Vector,
+    coulomb_log: f64,
+) -> Option<Vector> {
+    if body_mass <= 0.0 || background_density <= 0.0 || coulomb_log <= 0.0 {
+        return None;
+    }
+    let speed = velocity.length();
+    if speed <= 0.0 || !speed.is_finite() {
+        // 速度为零 / 退化时摩擦无定义（公式 1/v² 发散），返回 None。
+        return None;
+    }
+    let a_mag = gd::chandrasekhar_dynamical_friction(
+        body_mass,
+        background_density,
+        speed,
+        coulomb_log,
+    )?;
+    // 反向于速度方向施加。
+    Some(velocity / speed * (-a_mag) * body_mass)
 }
 
 #[inline]
