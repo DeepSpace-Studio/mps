@@ -118,45 +118,47 @@ table tr:hover td { background: #1a1a3e; }
 .ring-outer .orbit-spin { animation: spin-ccw 38s linear infinite; }
 @keyframes spin-cw  { from { transform: rotate(0deg);   } to { transform: rotate(360deg);  } }
 @keyframes spin-ccw { from { transform: rotate(0deg);   } to { transform: rotate(-360deg); } }
-/* Planet-wrap: anchored at orbit center (top:50% left:50% = orbit center);
-   displaced to the ring radius by transform. Counter-rotates so labels
-   remain upright while the carrier ring spins. */
+/* Planet-wrap: counter-rotates so labels remain upright while the carrier
+   ring spins. NOTE: this element's animation OPERATES `transform` itself, so
+   any static `transform` on the same element (e.g. translateX(radius)) is
+   overridden at runtime — the radial offset MUST live on a nested element
+   (`.planet-pos` below) that has no animation of its own. */
 .planet-wrap { position: absolute; top: 50%; left: 50%; width: 0; height: 0; will-change: transform; }
 .ring-inner .planet-wrap { animation: spin-ccw 22s linear infinite; }
 .ring-outer .planet-wrap { animation: spin-cw 38s linear infinite; }
-/* Per-planet initial angular position around its ring (12 o'clock = 0deg).
-   Each is placed at the ring radius via radial translate; the counter
-   rotation in .planet-wrap keeps text upright as the parent carries it. */
+/* `.planet-pos` = nested offset layer. No animation → static `transform`
+   applies. Static rotation sets the planet's initial angular slot on its
+   ring; counter-rotation cancels the parent carrier's spin so the label
+   stays upright as the ring sweeps around.
+   NOTE: the :nth-of-type index is on the PARENT .planet-wrap (which is a
+   direct child of .orbit-spin, so its siblings are ordered 1..7 around
+   the ring) — NOT on .planet-pos itself (each .planet-wrap has exactly
+   one .planet-pos, so .planet-pos:nth-of-type would always be 1 and every
+   planet would collapse onto the 0° slot). Select via
+   `.planet-wrap:nth-of-type(N) > .planet-pos`. */
+.planet-pos { position: absolute; top: 0; left: 0; width: 0; height: 0; }
+.ring-inner .planet-wrap:nth-of-type(1) > .planet-pos { transform: rotate(0deg)   translateX(150px) rotate(0deg);   }
+.ring-inner .planet-wrap:nth-of-type(2) > .planet-pos { transform: rotate(51deg)  translateX(150px) rotate(-51deg);  }
+.ring-inner .planet-wrap:nth-of-type(3) > .planet-pos { transform: rotate(103deg) translateX(150px) rotate(-103deg); }
+.ring-inner .planet-wrap:nth-of-type(4) > .planet-pos { transform: rotate(154deg) translateX(150px) rotate(-154deg); }
+.ring-inner .planet-wrap:nth-of-type(5) > .planet-pos { transform: rotate(206deg) translateX(150px) rotate(-206deg); }
+.ring-inner .planet-wrap:nth-of-type(6) > .planet-pos { transform: rotate(257deg) translateX(150px) rotate(-257deg); }
+.ring-inner .planet-wrap:nth-of-type(7) > .planet-pos { transform: rotate(309deg) translateX(150px) rotate(-309deg); }
+.ring-outer .planet-wrap:nth-of-type(1) > .planet-pos { transform: rotate(26deg)  translateX(280px) rotate(-26deg);  }
+.ring-outer .planet-wrap:nth-of-type(2) > .planet-pos { transform: rotate(77deg)  translateX(280px) rotate(-77deg);  }
+.ring-outer .planet-wrap:nth-of-type(3) > .planet-pos { transform: rotate(128deg) translateX(280px) rotate(-128deg); }
+.ring-outer .planet-wrap:nth-of-type(4) > .planet-pos { transform: rotate(180deg) translateX(280px) rotate(-180deg); }
+.ring-outer .planet-wrap:nth-of-type(5) > .planet-pos { transform: rotate(231deg) translateX(280px) rotate(-231deg); }
+.ring-outer .planet-wrap:nth-of-type(6) > .planet-pos { transform: rotate(283deg) translateX(280px) rotate(-283deg); }
+.ring-outer .planet-wrap:nth-of-type(7) > .planet-pos { transform: rotate(334deg) translateX(280px) rotate(-334deg); }
+/* The planet ball itself. `transform: translate(-50%, -50%)` centers the
+   60×60 circle on the .planet-pos anchor (a 0×0 point displaced to the
+   ring radius above). No animation here, so the static transform sticks. */
 .planet { position: absolute; transform: translate(-50%, -50%); display: inline-flex; align-items: center; justify-content: center; width: 60px; height: 60px; border-radius: 50%; color: #fff; font-size: 11px; font-weight: 600; text-decoration: none; background: radial-gradient(circle at 35% 30%, #2a3a6c, #16213e 70%, #0d1428); border: 1px solid rgba(78,158,255,.4); box-shadow: 0 0 14px rgba(78,158,255,.25); transition: transform .2s, box-shadow .2s; white-space: nowrap; }
 .planet.p-primary   { width: 60px; height: 60px; font-size: 11px; }
 .planet.p-secondary { width: 46px; height: 46px; font-size: 10px; background: radial-gradient(circle at 35% 30%, #3a2a4c, #1a1430 70%, #0d0814); border-color: rgba(180,120,255,.35); box-shadow: 0 0 10px rgba(180,120,255,.2); }
 .planet:hover { transform: translate(-50%, -50%) scale(1.18); box-shadow: 0 0 28px rgba(78,158,255,.7); z-index: 10; }
 .planet.active { border-color: #ffc850; box-shadow: 0 0 24px rgba(255,200,80,.6); }
-/* Per-planet rotation offsets → 7 evenly distributed inner, 7 outer.
-   Set on the .planet-wrap (not .planet) so it stays put as the carrier
-   rotates. Each planet-wrap gets its own keyframe via inline rotation;
-   we use static rotate() baked into a `data-deg` and counter-rotate.
-   Simpler approach: position via nth-of-type using fixed angles below. */
-.ring-inner .planet-wrap:nth-of-type(1) { transform: rotate(0deg)   translateX(150px) rotate(0deg);   }
-.ring-inner .planet-wrap:nth-of-type(2) { transform: rotate(51deg)  translateX(150px) rotate(-51deg);  }
-.ring-inner .planet-wrap:nth-of-type(3) { transform: rotate(103deg) translateX(150px) rotate(-103deg); }
-.ring-inner .planet-wrap:nth-of-type(4) { transform: rotate(154deg) translateX(150px) rotate(-154deg); }
-.ring-inner .planet-wrap:nth-of-type(5) { transform: rotate(206deg) translateX(150px) rotate(-206deg); }
-.ring-inner .planet-wrap:nth-of-type(6) { transform: rotate(257deg) translateX(150px) rotate(-257deg); }
-.ring-inner .planet-wrap:nth-of-type(7) { transform: rotate(309deg) translateX(150px) rotate(-309deg); }
-.ring-outer .planet-wrap:nth-of-type(1) { transform: rotate(26deg)  translateX(280px) rotate(-26deg);  }
-.ring-outer .planet-wrap:nth-of-type(2) { transform: rotate(77deg)  translateX(280px) rotate(-77deg);  }
-.ring-outer .planet-wrap:nth-of-type(3) { transform: rotate(128deg) translateX(280px) rotate(-128deg); }
-.ring-outer .planet-wrap:nth-of-type(4) { transform: rotate(180deg) translateX(280px) rotate(-180deg); }
-.ring-outer .planet-wrap:nth-of-type(5) { transform: rotate(231deg) translateX(280px) rotate(-231deg); }
-.ring-outer .planet-wrap:nth-of-type(6) { transform: rotate(283deg) translateX(280px) rotate(-283deg); }
-.ring-outer .planet-wrap:nth-of-type(7) { transform: rotate(334deg) translateX(280px) rotate(-334deg); }
-/* NOTE on counter-rotation: the static rotate(-φ) keeps the planet's text
-   upright at frame 0, but since the carrier (.orbit-spin) animates, the
-   planet still rotates with the ring. To keep text always upright under
-   rotating carrier, we let the planet-wrap itself counter-animate (the
-   .planet-wrap animation above provides that). The static transform here
-   sets the initial radial position only. */
 /* Star (home) at galaxy center — pulsing glow */
 .star { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 5; width: 72px; height: 72px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: radial-gradient(circle, #fff8dc 6%, #ffb050 35%, rgba(255,120,20,.25) 75%, transparent 100%); color: #fff; font-size: 28px; text-decoration: none; animation: pulse 4s ease-in-out infinite; }
 .star-label { position: absolute; top: 78%; left: 50%; transform: translateX(-50%); font-size: 10px; font-family: monospace; color: #ffc850; text-shadow: 0 0 4px rgba(0,0,0,.8); white-space: nowrap; }
