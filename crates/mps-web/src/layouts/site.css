@@ -87,30 +87,96 @@ table tr:hover td { background: #1a1a3e; }
 .text-hl { color: #e0e0e0; }
 .link { color: #4a9eff; text-decoration: none; }
 
-/* Nav bar */
-.mps-nav { display: flex; gap: 2px; flex-wrap: wrap; align-items: center; }
-.mps-nav a { color: #bbb; padding: 8px 14px; font-size: 13px; border-radius: 4px; text-decoration: none; }
-.mps-nav a:hover { background: #333; }
-.mps-nav a.active { background: #4a9eff; color: #fff; }
-.mps-header { background: #1a1a2e; border-bottom: 1px solid #333; padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+/* ===== Orbital nav: minimal top bar + galaxy + bottom sheet ===== */
+/* Replaces the old 14-link flex nav that wrapped to 3 rows + the broken
+   use_signal dropdown (no hydration bundle → onclick never fired).
+   All interaction is <a href> navigation + pure CSS animation. */
 
-/* "更多" dropdown — collapses the 7 secondary nav entries under a single
-   button so the header stops wrapping at desktop widths. Pure Dioxus signal,
-   no JS; the panel is hidden via SSR when the signal is false. */
-.nav-dropdown { position: relative; display: inline-block; }
-.nav-dropdown-btn { color: #bbb; background: transparent; border: 1px solid #444; cursor: pointer; padding: 8px 14px; font-size: 13px; border-radius: 4px; font-family: inherit; display: inline-flex; align-items: center; gap: 4px; }
-.nav-dropdown-btn:hover, .nav-dropdown-btn.is-open { background: #333; color: #fff; }
-.nav-dropdown-btn .caret { font-size: 10px; transition: transform 0.15s; }
-.nav-dropdown-btn.is-open .caret { transform: rotate(180deg); }
-.nav-dropdown-menu { position: absolute; top: calc(100% + 6px); left: 0; min-width: 160px; background: #1a1a2e; border: 1px solid #444; border-radius: 6px; padding: 6px; z-index: 50; box-shadow: 0 8px 24px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 2px; }
-.nav-dropdown-menu a { color: #bbb; padding: 8px 12px; font-size: 13px; border-radius: 4px; text-decoration: none; white-space: nowrap; }
-.nav-dropdown-menu a:hover { background: #333; color: #fff; }
-.nav-dropdown-menu a.active { background: #4a9eff; color: #fff; }
-.mps-brand { display: flex; align-items: center; gap: 12px; color: #fff; text-decoration: none; font-size: 18px; font-weight: 600; }
-.mps-brand-badge { background: #4a9eff; color: #1a1a2e; padding: 4px 10px; border-radius: 4px; font-weight: 700; letter-spacing: 1px; }
-.mps-brand-ver { color: #999; font-weight: 400; font-size: 14px; }
+.orbital-header { background: #1a1a2e; border-bottom: 1px solid #333; padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.orbital-brand { display: flex; align-items: center; gap: 12px; color: #fff; text-decoration: none; font-size: 16px; font-weight: 600; }
+.orbital-brand-badge { background: #4a9eff; color: #1a1a2e; padding: 4px 10px; border-radius: 4px; font-weight: 700; letter-spacing: 1px; font-size: 13px; }
+.orbital-brand-ver { color: #999; font-weight: 400; font-size: 13px; font-family: monospace; }
+.orbital-lang-group { display: flex; gap: 6px; }
+.orbital-lang { color: #888; padding: 4px 10px; font-size: 12px; border-radius: 999px; text-decoration: none; border: 1px solid #333; transition: all .15s; }
+.orbital-lang:hover { color: #fff; border-color: #4a9eff; }
+.orbital-lang.is-active { background: #4a9eff; color: #1a1a2e; border-color: #4a9eff; font-weight: 600; }
+.orbital-back { color: #4a9eff; padding: 6px 14px; font-size: 13px; border-radius: 999px; text-decoration: none; border: 1px solid rgba(78,158,255,.4); background: rgba(78,158,255,.08); }
+.orbital-back:hover { background: rgba(78,158,255,.2); }
+
+/* ===== Galaxy system (home page) — pure CSS orbital animation ===== */
+/* Star at center = Home (the index). Two rings of planets = 14 pages. */
+.starfield { position: relative; min-height: 680px; overflow: hidden; background: radial-gradient(ellipse at 50% 45%, #141433 0%, #0a0a1a 70%); margin: -20px -20px 20px; border-radius: 12px; border: 1px solid #222; }
+.galaxy { position: absolute; top: 50%; left: 50%; width: 0; height: 0; }
+/* Orbit rings — dashed circles to visualize track */
+.orbit { position: absolute; top: 0; left: 0; border-radius: 50%; border: 1px dashed rgba(78,158,255,.18); transform: translate(-50%, -50%); pointer-events: none; }
+.ring-inner { width: 300px; height: 300px; }
+.ring-outer { width: 560px; height: 560px; }
+/* Orbit-spin = the rotating carrier. animation: spin @keyframes.
+   Will-change transform tells the compositor to put it on its own layer. */
+.orbit-spin { position: absolute; inset: 0; border-radius: 50%; will-change: transform; }
+.ring-inner .orbit-spin { animation: spin-cw 22s linear infinite; }
+.ring-outer .orbit-spin { animation: spin-ccw 38s linear infinite; }
+@keyframes spin-cw  { from { transform: rotate(0deg);   } to { transform: rotate(360deg);  } }
+@keyframes spin-ccw { from { transform: rotate(0deg);   } to { transform: rotate(-360deg); } }
+/* Planet-wrap: anchored at orbit center (top:50% left:50% = orbit center);
+   displaced to the ring radius by transform. Counter-rotates so labels
+   remain upright while the carrier ring spins. */
+.planet-wrap { position: absolute; top: 50%; left: 50%; width: 0; height: 0; will-change: transform; }
+.ring-inner .planet-wrap { animation: spin-ccw 22s linear infinite; }
+.ring-outer .planet-wrap { animation: spin-cw 38s linear infinite; }
+/* Per-planet initial angular position around its ring (12 o'clock = 0deg).
+   Each is placed at the ring radius via radial translate; the counter
+   rotation in .planet-wrap keeps text upright as the parent carries it. */
+.planet { position: absolute; transform: translate(-50%, -50%); display: inline-flex; align-items: center; justify-content: center; width: 60px; height: 60px; border-radius: 50%; color: #fff; font-size: 11px; font-weight: 600; text-decoration: none; background: radial-gradient(circle at 35% 30%, #2a3a6c, #16213e 70%, #0d1428); border: 1px solid rgba(78,158,255,.4); box-shadow: 0 0 14px rgba(78,158,255,.25); transition: transform .2s, box-shadow .2s; white-space: nowrap; }
+.planet.p-primary   { width: 60px; height: 60px; font-size: 11px; }
+.planet.p-secondary { width: 46px; height: 46px; font-size: 10px; background: radial-gradient(circle at 35% 30%, #3a2a4c, #1a1430 70%, #0d0814); border-color: rgba(180,120,255,.35); box-shadow: 0 0 10px rgba(180,120,255,.2); }
+.planet:hover { transform: translate(-50%, -50%) scale(1.18); box-shadow: 0 0 28px rgba(78,158,255,.7); z-index: 10; }
+.planet.active { border-color: #ffc850; box-shadow: 0 0 24px rgba(255,200,80,.6); }
+/* Per-planet rotation offsets → 7 evenly distributed inner, 7 outer.
+   Set on the .planet-wrap (not .planet) so it stays put as the carrier
+   rotates. Each planet-wrap gets its own keyframe via inline rotation;
+   we use static rotate() baked into a `data-deg` and counter-rotate.
+   Simpler approach: position via nth-of-type using fixed angles below. */
+.ring-inner .planet-wrap:nth-of-type(1) { transform: rotate(0deg)   translateX(150px) rotate(0deg);   }
+.ring-inner .planet-wrap:nth-of-type(2) { transform: rotate(51deg)  translateX(150px) rotate(-51deg);  }
+.ring-inner .planet-wrap:nth-of-type(3) { transform: rotate(103deg) translateX(150px) rotate(-103deg); }
+.ring-inner .planet-wrap:nth-of-type(4) { transform: rotate(154deg) translateX(150px) rotate(-154deg); }
+.ring-inner .planet-wrap:nth-of-type(5) { transform: rotate(206deg) translateX(150px) rotate(-206deg); }
+.ring-inner .planet-wrap:nth-of-type(6) { transform: rotate(257deg) translateX(150px) rotate(-257deg); }
+.ring-inner .planet-wrap:nth-of-type(7) { transform: rotate(309deg) translateX(150px) rotate(-309deg); }
+.ring-outer .planet-wrap:nth-of-type(1) { transform: rotate(26deg)  translateX(280px) rotate(-26deg);  }
+.ring-outer .planet-wrap:nth-of-type(2) { transform: rotate(77deg)  translateX(280px) rotate(-77deg);  }
+.ring-outer .planet-wrap:nth-of-type(3) { transform: rotate(128deg) translateX(280px) rotate(-128deg); }
+.ring-outer .planet-wrap:nth-of-type(4) { transform: rotate(180deg) translateX(280px) rotate(-180deg); }
+.ring-outer .planet-wrap:nth-of-type(5) { transform: rotate(231deg) translateX(280px) rotate(-231deg); }
+.ring-outer .planet-wrap:nth-of-type(6) { transform: rotate(283deg) translateX(280px) rotate(-283deg); }
+.ring-outer .planet-wrap:nth-of-type(7) { transform: rotate(334deg) translateX(280px) rotate(-334deg); }
+/* NOTE on counter-rotation: the static rotate(-φ) keeps the planet's text
+   upright at frame 0, but since the carrier (.orbit-spin) animates, the
+   planet still rotates with the ring. To keep text always upright under
+   rotating carrier, we let the planet-wrap itself counter-animate (the
+   .planet-wrap animation above provides that). The static transform here
+   sets the initial radial position only. */
+/* Star (home) at galaxy center — pulsing glow */
+.star { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 5; width: 72px; height: 72px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: radial-gradient(circle, #fff8dc 6%, #ffb050 35%, rgba(255,120,20,.25) 75%, transparent 100%); color: #fff; font-size: 28px; text-decoration: none; animation: pulse 4s ease-in-out infinite; }
+.star-label { position: absolute; top: 78%; left: 50%; transform: translateX(-50%); font-size: 10px; font-family: monospace; color: #ffc850; text-shadow: 0 0 4px rgba(0,0,0,.8); white-space: nowrap; }
+@keyframes pulse { 0%, 100% { box-shadow: 0 0 30px rgba(255,160,60,.35), inset 0 0 12px rgba(255,200,100,.4); } 50% { box-shadow: 0 0 64px rgba(255,160,60,.65), inset 0 0 24px rgba(255,200,100,.6); } }
+/* Starfield backdrop dots — pure CSS via multiple radial-gradients on container */
+.starfield::before { content: ""; position: absolute; inset: 0; background-image: radial-gradient(1px 1px at 20px 30px, rgba(255,255,255,.5), transparent), radial-gradient(1px 1px at 80px 120px, rgba(255,255,255,.35), transparent), radial-gradient(1px 1px at 200px 80px, rgba(255,255,255,.4), transparent), radial-gradient(2px 2px at 350px 200px, rgba(78,158,255,.3), transparent), radial-gradient(1px 1px at 500px 60px, rgba(255,255,255,.3), transparent), radial-gradient(1px 1px at 600px 350px, rgba(255,255,255,.4), transparent), radial-gradient(2px 2px at 700px 200px, rgba(180,120,255,.3), transparent); background-size: 700px 400px; pointer-events: none; opacity: .7; }
+@media (prefers-reduced-motion: reduce) {
+  .orbit-spin, .planet-wrap { animation: none !important; }
+  .star { animation: none !important; }
+}
+
+/* ===== Bottom sheet modal (all non-home pages) ===== */
+.page-sheet { position: fixed; inset: 0; bottom: -100%; background: #0a0a1a; overflow-y: auto; border-top: 2px solid #4a9eff; box-shadow: 0 -20px 60px rgba(0,0,0,.7); transition: transform .45s cubic-bezier(.22, 1, .36, 1); z-index: 100; display: flex; flex-direction: column; }
+.page-sheet.open { transform: translateY(100%); }
+.modal-close { position: sticky; top: 12px; align-self: flex-end; margin: 12px 20px 0; padding: 8px 16px; background: rgba(78,158,255,.12); color: #4a9eff; border: 1px solid rgba(78,158,255,.4); border-radius: 999px; text-decoration: none; font-size: 13px; font-weight: 600; z-index: 110; }
+.modal-close:hover { background: rgba(78,158,255,.25); }
+.mps-main-sheet { padding-top: 8px; }
+
 .mps-footer { text-align: center; padding: 24px 20px; border-top: 1px solid #333; color: #666; font-size: 12px; margin-top: 40px; }
-.lang-select { background: #333; color: #ddd; border: 1px solid #555; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+.mps-main-home { /* home: galaxy shown via pages::home; main padding same as default */ }
 
 /* Formula mini-cards (formula.rs 28-module grid) */
 .formula-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }

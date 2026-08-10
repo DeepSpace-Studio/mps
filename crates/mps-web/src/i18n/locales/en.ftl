@@ -18,6 +18,22 @@ nav-ffm = FFM
 nav-api = API
 nav-more = More ▾
 
+# ── Short labels for galaxy planet buttons (≈60px diameter, 2-4 chars ideal) ──
+nav-planet-home = Home
+nav-planet-quickstart = Start
+nav-planet-architecture = Arch
+nav-planet-gravity = Gravity
+nav-planet-integrators = Integr
+nav-planet-formula = Formula
+nav-planet-api = API
+nav-planet-voxel = Voxel
+nav-planet-events = Events
+nav-planet-arena = Arena
+nav-planet-batch = Batch
+nav-planet-cosmos = Cosmos
+nav-planet-jni = JNI
+nav-planet-ffm = FFM
+
 # ---- Language switcher ----
 lang-zh = 中文
 lang-en = English

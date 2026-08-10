@@ -1,6 +1,5 @@
 use dioxus::prelude::*;
 use dioxus_i18n::prelude::*;
-use unic_langid::langid;
 
 use crate::Route;
 use crate::i18n::{langs, t};
@@ -9,108 +8,68 @@ use crate::metrics::VERSION;
 /// Global CSS for the entire site — dark theme, responsive grid, no inline styles.
 const CSS: &str = include_str!("site.css");
 
-/// Root layout — wraps all pages with HTML skeleton, header, nav, footer.
-/// Rendered inside `Router::<Route>` in lib.rs::app(), so `<Link>` components
-/// here have access to the router context. The current page is rendered via
-/// `Outlet::<Route>` (Dioxus 0.7 router pattern).
+/// Root layout — wraps all pages with HTML skeleton, header, footer.
+///
+/// Orbital nav architecture (pure CSS, SSR-works):
+///   - Home (`/`) renders the galaxy: star (the home index) at center + 2
+///     rotating orbits holding 7 primary + 7 secondary pages as planets.
+///     The home page body (hero / metrics / directory) renders *underneath*
+///     the starfield.
+///   - Every other page renders as a bottom sheet modal (`.page-sheet.open`)
+///     that slides up from below with a "× 返回星图" close anchor pointing
+///     back at `/`. Pure `<a href>` navigation — no client hydration needed.
+///
+/// `onClick`/`onchange` handlers were removed because the SSR build ships
+/// no Dioxus client JS bundle, so those events never bind in the browser.
+/// All interactivity is anchor navigation + CSS animations (@keyframes).
+/// `use_route::<Route>()` is SSR-safe (Dioxus resolves it during render).
 #[component]
 pub fn Layout() -> Element {
-    let mut i18n = i18n();
+    let i18n = i18n();
+    let route: Route = use_route();
 
-    let mut switch_lang = move |lang: unic_langid::LanguageIdentifier| {
-        i18n.set_language(lang);
-    };
+    // Home → galaxy page; everything else → bottom sheet modal.
+    let is_home = matches!(route, Route::Home {});
 
-    // "More" dropdown open/close state — pure Dioxus signal, no JS.
-    // Collapses the 7 secondary nav entries (Voxel / Events / Arena /
-    // Batch / Cosmos / JNI / FFM) so the top nav no longer wraps at
-    // typical desktop widths. Closes on toggle, on selection, or on
-    // outside-click via the onblur handler on the wrapper.
-    let mut more_open = use_signal(|| false);
-    let more_btn_class = format!(
-        "nav-dropdown-btn{}",
-        if more_open() { " is-open" } else { "" }
-    );
+    // Active-language class bits for the two language links — precomputed
+    // because rsx! format-arg parsing does not accept inline `if … { "…" }`
+    // inside a class string literal.
+    let zh_active = if i18n.language() == "zh-CN" { " is-active" } else { "" };
+    let en_active = if i18n.language() == "en" { " is-active" } else { "" };
 
     rsx! {
         style { {CSS} }
 
-        header { class: "mps-header",
-            a { class: "mps-brand", href: "/",
-                span { class: "mps-brand-badge", "MPS" }
-                span { class: "mps-brand-ver", "PHYSICS / {VERSION}" }
+        // ── Minimal top bar: brand + language links + back-to-galaxy ──────
+        // Language switching is anchor-based (?lang=en) so it works under
+        // SSR without any JS. The page reloads with the new locale.
+        header { class: "orbital-header",
+            a { class: "orbital-brand", href: "/",
+                span { class: "orbital-brand-badge", "MPS" }
+                span { class: "orbital-brand-ver", "PHYSICS / {VERSION}" }
             }
-            nav { class: "mps-nav",
-                // ── Primary nav (always visible) ───────────────────────────
-                Link { to: Route::Home {}, class: "nav-link", { t!("nav-home") } }
-                Link { to: Route::Quickstart {}, class: "nav-link", { t!("nav-quickstart") } }
-                Link { to: Route::Architecture {}, class: "nav-link", { t!("nav-architecture") } }
-                Link { to: Route::Gravity {}, class: "nav-link", { t!("nav-gravity") } }
-                Link { to: Route::Integrators {}, class: "nav-link", { t!("nav-integrators") } }
-                Link { to: Route::Formula {}, class: "nav-link", { t!("nav-formula") } }
-                Link { to: Route::Api {}, class: "nav-link", { t!("nav-api") } }
-
-                // ── Secondary nav (collapsible "More" dropdown) ────────────
-                div {
-                    class: "nav-dropdown",
-                    onblur: move |_| more_open.set(false),
-                    button {
-                        class: "{more_btn_class}",
-                        onclick: move |_| more_open.set(!more_open()),
-                        { t!("nav-more") }
-                        span { class: "caret", "▾" }
-                    }
-                    if more_open() {
-                        div { class: "nav-dropdown-menu",
-                            Link { to: Route::Voxel {}, class: "nav-link",
-                                onclick: move |_| more_open.set(false),
-                                { t!("nav-voxel") }
-                            }
-                            Link { to: Route::Events {}, class: "nav-link",
-                                onclick: move |_| more_open.set(false),
-                                { t!("nav-events") }
-                            }
-                            Link { to: Route::Arena {}, class: "nav-link",
-                                onclick: move |_| more_open.set(false),
-                                { t!("nav-arena") }
-                            }
-                            Link { to: Route::Batch {}, class: "nav-link",
-                                onclick: move |_| more_open.set(false),
-                                { t!("nav-batch") }
-                            }
-                            Link { to: Route::Cosmos {}, class: "nav-link",
-                                onclick: move |_| more_open.set(false),
-                                { t!("nav-cosmos") }
-                            }
-                            Link { to: Route::Jni {}, class: "nav-link",
-                                onclick: move |_| more_open.set(false),
-                                { t!("nav-jni") }
-                            }
-                            Link { to: Route::Ffm {}, class: "nav-link",
-                                onclick: move |_| more_open.set(false),
-                                { t!("nav-ffm") }
-                            }
-                        }
-                    }
-                }
+            div { class: "orbital-lang-group",
+                a { class: "orbital-lang{zh_active}", href: "/?lang=zh-CN", "中" }
+                a { class: "orbital-lang{en_active}", href: "/?lang=en", "EN" }
             }
-            div {
-                select {
-                    class: "lang-select",
-                    value: "{i18n.language()}",
-                    onchange: move |e: Event<FormData>| {
-                        if let Some(lang) = langs::parse(&e.value()) {
-                            switch_lang(lang);
-                        }
-                    },
-                    option { value: "zh-CN", "中文" }
-                    option { value: "en", "English" }
-                }
+            if !is_home {
+                a { class: "orbital-back", href: "/", "⌂ 返回星图" }
             }
         }
 
-        main { class: "mps-main",
-            Outlet::<Route> {}
+        // ── Home: galaxy (rendered by home.rs via Outlet) ────────────────
+        // ── Other: bottom sheet modal wrapping the page content ───────────
+        if is_home {
+            main { class: "mps-main mps-main-home",
+                Outlet::<Route> {}
+            }
+        } else {
+            div { class: "page-sheet open",
+                a { class: "modal-close", href: "/", "× 返回星图" }
+                main { class: "mps-main mps-main-sheet",
+                    Outlet::<Route> {}
+                }
+            }
         }
 
         footer { class: "mps-footer",

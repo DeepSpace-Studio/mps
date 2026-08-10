@@ -18,6 +18,22 @@ nav-ffm = FFM
 nav-api = API
 nav-more = 更多 ▾
 
+# ── 短标签,用于星系行星球的圆形按钮内(每球 ≈ 60px 直径,字数 2-4 最佳) ──
+nav-planet-home = 首页
+nav-planet-quickstart = 入门
+nav-planet-architecture = 架构
+nav-planet-gravity = 引力
+nav-planet-integrators = 积分
+nav-planet-formula = 公式
+nav-planet-api = API
+nav-planet-voxel = 体素
+nav-planet-events = 事件
+nav-planet-arena = Arena
+nav-planet-batch = 批量
+nav-planet-cosmos = 太空
+nav-planet-jni = JNI
+nav-planet-ffm = FFM
+
 # ---- Language switcher ----
 lang-zh = 中文
 lang-en = English

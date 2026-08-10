@@ -7,9 +7,121 @@ use crate::metrics::{
     JNI_METHOD_COUNT, TEST_COUNT,
 };
 
-/// Home page — MPS Physics System overview
+/// Home page — MPS Physics System overview.
+///
+/// Layout: a galaxy (= the home page index = the "sun") + 13 orbiting planets
+/// representing every other page. Pure CSS orbital animation drives the rings;
+/// every planet is a `<Link>` rendering as `<a href>` so navigation works
+/// under pure SSR with no client hydration bundle. The original hero / metric
+/// / directory / features content is preserved below the starfield.
 pub fn Home() -> Element {
     rsx! {
+        // ── Galaxy (embedded inside the home page) ───────────────────────
+        div { class: "starfield",
+            div { class: "galaxy",
+                // Inner ring: visible dashed circle + rotating carrier that holds 7 planets.
+                div { class: "orbit ring-inner",
+                    div { class: "orbit-spin",
+                        div { class: "planet-wrap",
+                            Link { to: Route::Home {},
+                                class: "planet p-primary active",
+                                { t!("nav-planet-home") }
+                            }
+                        }
+                        div { class: "planet-wrap",
+                            Link { to: Route::Quickstart {},
+                                class: "planet p-primary",
+                                { t!("nav-planet-quickstart") }
+                            }
+                        }
+                        div { class: "planet-wrap",
+                            Link { to: Route::Architecture {},
+                                class: "planet p-primary",
+                                { t!("nav-planet-architecture") }
+                            }
+                        }
+                        div { class: "planet-wrap",
+                            Link { to: Route::Gravity {},
+                                class: "planet p-primary",
+                                { t!("nav-planet-gravity") }
+                            }
+                        }
+                        div { class: "planet-wrap",
+                            Link { to: Route::Integrators {},
+                                class: "planet p-primary",
+                                { t!("nav-planet-integrators") }
+                            }
+                        }
+                        div { class: "planet-wrap",
+                            Link { to: Route::Formula {},
+                                class: "planet p-primary",
+                                { t!("nav-planet-formula") }
+                            }
+                        }
+                        div { class: "planet-wrap",
+                            Link { to: Route::Api {},
+                                class: "planet p-primary",
+                                { t!("nav-planet-api") }
+                            }
+                        }
+                    }
+                }
+
+                // Outer ring: same pattern, 7 secondary pages, slower counter-spin.
+                div { class: "orbit ring-outer",
+                    div { class: "orbit-spin",
+                        div { class: "planet-wrap",
+                            Link { to: Route::Voxel {},
+                                class: "planet p-secondary",
+                                { t!("nav-planet-voxel") }
+                            }
+                        }
+                        div { class: "planet-wrap",
+                            Link { to: Route::Events {},
+                                class: "planet p-secondary",
+                                { t!("nav-planet-events") }
+                            }
+                        }
+                        div { class: "planet-wrap",
+                            Link { to: Route::Arena {},
+                                class: "planet p-secondary",
+                                { t!("nav-planet-arena") }
+                            }
+                        }
+                        div { class: "planet-wrap",
+                            Link { to: Route::Batch {},
+                                class: "planet p-secondary",
+                                { t!("nav-planet-batch") }
+                            }
+                        }
+                        div { class: "planet-wrap",
+                            Link { to: Route::Cosmos {},
+                                class: "planet p-secondary",
+                                { t!("nav-planet-cosmos") }
+                            }
+                        }
+                        div { class: "planet-wrap",
+                            Link { to: Route::Jni {},
+                                class: "planet p-secondary",
+                                { t!("nav-planet-jni") }
+                            }
+                        }
+                        div { class: "planet-wrap",
+                            Link { to: Route::Ffm {},
+                                class: "planet p-secondary",
+                                { t!("nav-planet-ffm") }
+                            }
+                        }
+                    }
+                }
+
+                // ── The Sun (Home index) — central, glows, click → home ──
+                Link { to: Route::Home {}, class: "star", "★",
+                    span { class: "star-label", "MPS" }
+                }
+            }
+        }
+
         div { class: "hero",
             div { class: "hero-tag", { t!("home-hero-tag") } }
             h1 { class: "hero-title", { t!("home-hero-title") } }
