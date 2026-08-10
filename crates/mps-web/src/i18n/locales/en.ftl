@@ -16,6 +16,7 @@ nav-cosmos = Cosmos
 nav-jni = JNI
 nav-ffm = FFM
 nav-api = API
+nav-more = More ▾
 
 # ---- Language switcher ----
 lang-zh = 中文

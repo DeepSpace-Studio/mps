@@ -88,11 +88,24 @@ table tr:hover td { background: #1a1a3e; }
 .link { color: #4a9eff; text-decoration: none; }
 
 /* Nav bar */
-.mps-nav { display: flex; gap: 2px; flex-wrap: wrap; }
+.mps-nav { display: flex; gap: 2px; flex-wrap: wrap; align-items: center; }
 .mps-nav a { color: #bbb; padding: 8px 14px; font-size: 13px; border-radius: 4px; text-decoration: none; }
 .mps-nav a:hover { background: #333; }
 .mps-nav a.active { background: #4a9eff; color: #fff; }
 .mps-header { background: #1a1a2e; border-bottom: 1px solid #333; padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+
+/* "更多" dropdown — collapses the 7 secondary nav entries under a single
+   button so the header stops wrapping at desktop widths. Pure Dioxus signal,
+   no JS; the panel is hidden via SSR when the signal is false. */
+.nav-dropdown { position: relative; display: inline-block; }
+.nav-dropdown-btn { color: #bbb; background: transparent; border: 1px solid #444; cursor: pointer; padding: 8px 14px; font-size: 13px; border-radius: 4px; font-family: inherit; display: inline-flex; align-items: center; gap: 4px; }
+.nav-dropdown-btn:hover, .nav-dropdown-btn.is-open { background: #333; color: #fff; }
+.nav-dropdown-btn .caret { font-size: 10px; transition: transform 0.15s; }
+.nav-dropdown-btn.is-open .caret { transform: rotate(180deg); }
+.nav-dropdown-menu { position: absolute; top: calc(100% + 6px); left: 0; min-width: 160px; background: #1a1a2e; border: 1px solid #444; border-radius: 6px; padding: 6px; z-index: 50; box-shadow: 0 8px 24px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 2px; }
+.nav-dropdown-menu a { color: #bbb; padding: 8px 12px; font-size: 13px; border-radius: 4px; text-decoration: none; white-space: nowrap; }
+.nav-dropdown-menu a:hover { background: #333; color: #fff; }
+.nav-dropdown-menu a.active { background: #4a9eff; color: #fff; }
 .mps-brand { display: flex; align-items: center; gap: 12px; color: #fff; text-decoration: none; font-size: 18px; font-weight: 600; }
 .mps-brand-badge { background: #4a9eff; color: #1a1a2e; padding: 4px 10px; border-radius: 4px; font-weight: 700; letter-spacing: 1px; }
 .mps-brand-ver { color: #999; font-weight: 400; font-size: 14px; }

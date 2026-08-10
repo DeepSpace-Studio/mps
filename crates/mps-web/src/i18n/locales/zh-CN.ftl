@@ -16,6 +16,7 @@ nav-cosmos = 太空
 nav-jni = JNI
 nav-ffm = FFM
 nav-api = API
+nav-more = 更多 ▾
 
 # ---- Language switcher ----
 lang-zh = 中文

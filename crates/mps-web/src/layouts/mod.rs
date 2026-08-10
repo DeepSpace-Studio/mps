@@ -21,6 +21,17 @@ pub fn Layout() -> Element {
         i18n.set_language(lang);
     };
 
+    // "More" dropdown open/close state — pure Dioxus signal, no JS.
+    // Collapses the 7 secondary nav entries (Voxel / Events / Arena /
+    // Batch / Cosmos / JNI / FFM) so the top nav no longer wraps at
+    // typical desktop widths. Closes on toggle, on selection, or on
+    // outside-click via the onblur handler on the wrapper.
+    let mut more_open = use_signal(|| false);
+    let more_btn_class = format!(
+        "nav-dropdown-btn{}",
+        if more_open() { " is-open" } else { "" }
+    );
+
     rsx! {
         style { {CSS} }
 
@@ -30,20 +41,58 @@ pub fn Layout() -> Element {
                 span { class: "mps-brand-ver", "PHYSICS / {VERSION}" }
             }
             nav { class: "mps-nav",
+                // ── Primary nav (always visible) ───────────────────────────
                 Link { to: Route::Home {}, class: "nav-link", { t!("nav-home") } }
                 Link { to: Route::Quickstart {}, class: "nav-link", { t!("nav-quickstart") } }
                 Link { to: Route::Architecture {}, class: "nav-link", { t!("nav-architecture") } }
                 Link { to: Route::Gravity {}, class: "nav-link", { t!("nav-gravity") } }
                 Link { to: Route::Integrators {}, class: "nav-link", { t!("nav-integrators") } }
                 Link { to: Route::Formula {}, class: "nav-link", { t!("nav-formula") } }
-                Link { to: Route::Voxel {}, class: "nav-link", { t!("nav-voxel") } }
-                Link { to: Route::Events {}, class: "nav-link", { t!("nav-events") } }
-                Link { to: Route::Arena {}, class: "nav-link", { t!("nav-arena") } }
-                Link { to: Route::Batch {}, class: "nav-link", { t!("nav-batch") } }
-                Link { to: Route::Cosmos {}, class: "nav-link", { t!("nav-cosmos") } }
-                Link { to: Route::Jni {}, class: "nav-link", { t!("nav-jni") } }
-                Link { to: Route::Ffm {}, class: "nav-link", { t!("nav-ffm") } }
                 Link { to: Route::Api {}, class: "nav-link", { t!("nav-api") } }
+
+                // ── Secondary nav (collapsible "More" dropdown) ────────────
+                div {
+                    class: "nav-dropdown",
+                    onblur: move |_| more_open.set(false),
+                    button {
+                        class: "{more_btn_class}",
+                        onclick: move |_| more_open.set(!more_open()),
+                        { t!("nav-more") }
+                        span { class: "caret", "▾" }
+                    }
+                    if more_open() {
+                        div { class: "nav-dropdown-menu",
+                            Link { to: Route::Voxel {}, class: "nav-link",
+                                onclick: move |_| more_open.set(false),
+                                { t!("nav-voxel") }
+                            }
+                            Link { to: Route::Events {}, class: "nav-link",
+                                onclick: move |_| more_open.set(false),
+                                { t!("nav-events") }
+                            }
+                            Link { to: Route::Arena {}, class: "nav-link",
+                                onclick: move |_| more_open.set(false),
+                                { t!("nav-arena") }
+                            }
+                            Link { to: Route::Batch {}, class: "nav-link",
+                                onclick: move |_| more_open.set(false),
+                                { t!("nav-batch") }
+                            }
+                            Link { to: Route::Cosmos {}, class: "nav-link",
+                                onclick: move |_| more_open.set(false),
+                                { t!("nav-cosmos") }
+                            }
+                            Link { to: Route::Jni {}, class: "nav-link",
+                                onclick: move |_| more_open.set(false),
+                                { t!("nav-jni") }
+                            }
+                            Link { to: Route::Ffm {}, class: "nav-link",
+                                onclick: move |_| more_open.set(false),
+                                { t!("nav-ffm") }
+                            }
+                        }
+                    }
+                }
             }
             div {
                 select {
