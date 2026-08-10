@@ -104,6 +104,7 @@ jobs:
             "/voxel"
             "/events"
             "/arena"
+            "/batch"
             "/cosmos"
             "/jni"
             "/ffm"
