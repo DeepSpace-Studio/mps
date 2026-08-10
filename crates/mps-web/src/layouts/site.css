@@ -107,8 +107,14 @@ table tr:hover td { background: #1a1a3e; }
 /* Star at center = Home (the index). Two rings of planets = 14 pages. */
 .starfield { position: relative; min-height: 680px; overflow: hidden; background: radial-gradient(ellipse at 50% 45%, #141433 0%, #0a0a1a 70%); margin: -20px -20px 20px; border-radius: 12px; border: 1px solid #222; }
 .galaxy { position: absolute; top: 50%; left: 50%; width: 0; height: 0; }
-/* Orbit rings — dashed circles to visualize track */
-.orbit { position: absolute; top: 0; left: 0; border-radius: 50%; border: 1px dashed rgba(78,158,255,.18); transform: translate(-50%, -50%); pointer-events: none; }
+/* Orbit rings — dashed circles to visualize track.
+   NOTE: do NOT set `pointer-events: none` here. That would propagate to every
+   descendant (.orbit-spin / .planet-wrap / .planet-pos / .planet) and make
+   the `<a href>` planets unclickable in the browser, even though SSR renders
+   them as real anchors. The dashed `border` on this container does not
+   intercept pointer events on its own — the ring track is non-interactive
+   by default without disabling the whole subtree. */
+.orbit { position: absolute; top: 0; left: 0; border-radius: 50%; border: 1px dashed rgba(78,158,255,.18); transform: translate(-50%, -50%); }
 .ring-inner { width: 300px; height: 300px; }
 .ring-outer { width: 560px; height: 560px; }
 /* Orbit-spin = the rotating carrier. animation: spin @keyframes.
@@ -165,9 +171,17 @@ table tr:hover td { background: #1a1a3e; }
 @keyframes pulse { 0%, 100% { box-shadow: 0 0 30px rgba(255,160,60,.35), inset 0 0 12px rgba(255,200,100,.4); } 50% { box-shadow: 0 0 64px rgba(255,160,60,.65), inset 0 0 24px rgba(255,200,100,.6); } }
 /* Starfield backdrop dots — pure CSS via multiple radial-gradients on container */
 .starfield::before { content: ""; position: absolute; inset: 0; background-image: radial-gradient(1px 1px at 20px 30px, rgba(255,255,255,.5), transparent), radial-gradient(1px 1px at 80px 120px, rgba(255,255,255,.35), transparent), radial-gradient(1px 1px at 200px 80px, rgba(255,255,255,.4), transparent), radial-gradient(2px 2px at 350px 200px, rgba(78,158,255,.3), transparent), radial-gradient(1px 1px at 500px 60px, rgba(255,255,255,.3), transparent), radial-gradient(1px 1px at 600px 350px, rgba(255,255,255,.4), transparent), radial-gradient(2px 2px at 700px 200px, rgba(180,120,255,.3), transparent); background-size: 700px 400px; pointer-events: none; opacity: .7; }
+/* Reduced-motion: slow the orbital spin drastically rather than freezing it
+   entirely, so planets are still clearly orbiting (the whole point of the
+   galaxy nav) but the motion is gentle. `none` here used to make the planets
+   look stuck — users reported "菜单按钮不会动". A 5× slowdown keeps the
+   visual metaphor while respecting the accessibility preference. */
 @media (prefers-reduced-motion: reduce) {
-  .orbit-spin, .planet-wrap { animation: none !important; }
-  .star { animation: none !important; }
+  .ring-inner .orbit-spin  { animation-duration: 110s !important; }
+  .ring-outer .orbit-spin  { animation-duration: 190s !important; }
+  .ring-inner .planet-wrap { animation-duration: 110s !important; }
+  .ring-outer .planet-wrap { animation-duration: 190s !important; }
+  .star { animation-duration: 12s !important; }
 }
 
 /* ===== Bottom sheet modal (all non-home pages) ===== */
