@@ -331,6 +331,19 @@ pub struct SharedPhysicsArena {
     pub(super) event_write: AtomicU32,
     /// Event ring read index (Java reads from this)
     pub(super) event_read: AtomicU32,
+    /// 上一帧 `flush_all_bodies` 实际写入的 body 数（即"上次的
+    /// active_count"）。M3 优化用：下一帧若 active_count 缩水到这个数
+    /// 以内，只在 `[ curr_count .. prev_count ]` 区间清零一次，省去
+    /// 旧的 `for i in curr_count..max_bodies { clear_body_slot(i); }`
+    /// 逐 slot 清零（性能分析.MD §11.3 M3 落地）。
+    /// 初始 0 —— `alloc_zeroed` 已保证全部 body slot 的 generation=0。
+    /// 用 `AtomicU32` 而非 plain `u32` 是因为 `flush_all_bodies` 接收
+    /// `&self`（arena 同时由 Java 跨线程读，结构体整体 `Sync`），与既有
+    /// `event_write` / `event_read` 一致用 `Relaxed` load/store。
+    pub(super) prev_body_active_count: AtomicU32,
+    /// 上一帧 `flush_all_colliders` 实际写入的 collider 数——同 body
+    /// 的 prev_body_active_count 语义（L4：collider 端的尾清零优化）。
+    pub(super) prev_collider_active_count: AtomicU32,
 }
 
 // SAFETY: The arena owns its allocation.  Java accesses it via memory-mapped
@@ -436,6 +449,8 @@ impl SharedPhysicsArena {
             max_events,
             event_write: AtomicU32::new(0),
             event_read: AtomicU32::new(0),
+            prev_body_active_count: AtomicU32::new(0),
+            prev_collider_active_count: AtomicU32::new(0),
         })
     }
 

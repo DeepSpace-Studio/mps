@@ -411,6 +411,25 @@ fn force_law_type_from_idx(idx: usize) -> ForceLawType {
     }
 }
 
+/// Locate or insert a `KahanVec3` accumulator keyed by `idx` inside an inline
+/// `SmallVec<[(usize, KahanVec3); 8]>` (P2.19). Linear search over a ≤8-slot
+/// list replaces the previous 34-entry `[Option<KahanVec3>; 34]` per-body
+/// stack-zinit (~1632 bytes zeroed per active body). Typical bodies touch only
+/// 1–4 force-law types, so the inline path covers the common case with zero
+/// allocation and no large memset.
+fn totals_idx_of(
+    totals: &mut SmallVec<[(usize, KahanVec3); 8]>,
+    idx: usize,
+) -> &mut KahanVec3 {
+    if let Some(pos) = totals.iter().position(|(i, _)| *i == idx) {
+        &mut totals[pos].1
+    } else {
+        totals.push((idx, KahanVec3::default()));
+        // `push` above guarantees a last element; `unwrap` is infallible here.
+        &mut totals.last_mut().unwrap().1
+    }
+}
+
 // ---------------------------------------------------------------------------
 // ForceFacade — the unified force-application surface
 // ---------------------------------------------------------------------------
@@ -625,17 +644,22 @@ impl<'a> ForceFacade<'a> {
 
         // C4: JeansEscape idx=33 — bump array to 34 slots. Mirrors NUM_FORCE_TYPES
         // exported above; both must stay in lockstep with force_law_type_idx's range.
-        const NUM_FORCE_TYPES: usize = 34;
+        // P2.19: replace `[Option<KahanVec3>; 34]` (1632 bytes stack-zmemset per
+        // active-body) with an inline `SmallVec` keyed by idx. Each body normally
+        // touches only 1–4 force-law types, so inline cap 8 covers the fast path
+        // without any per-frame stack-zinit. Linear `position()` search over a
+        // ≤8-slot list is cheaper than the previous 34-element zero-initialise.
+        let mut body_totals: SmallVec<[(usize, KahanVec3); 8]> = SmallVec::new();
         let mut drained = std::mem::take(self.body_log);
         for log in drained.iter_mut().flatten() {
             // P0.5 fix: keep using the per-body KahanVec3 accumulator — its
             // per-source-summed values merge directly into the fixed-size
             // ForceContributionTable, which is O(1) lookup vs the previous
             // BTreeMap::entry O(log N) + node allocation.
-            let mut body_totals: [Option<KahanVec3>; NUM_FORCE_TYPES] = [None; NUM_FORCE_TYPES];
+            body_totals.clear();
             for (source, f) in &log.forces {
                 let idx = force_law_type_idx(*source);
-                body_totals[idx].get_or_insert_with(KahanVec3::default).add(
+                totals_idx_of(&mut body_totals, idx).add(
                     crate::rapier::ffi::Vec3 {
                         x: f.x,
                         y: f.y,
@@ -645,7 +669,7 @@ impl<'a> ForceFacade<'a> {
             }
             for (source, f) in &log.torques {
                 let idx = force_law_type_idx(*source);
-                body_totals[idx].get_or_insert_with(KahanVec3::default).add(
+                totals_idx_of(&mut body_totals, idx).add(
                     crate::rapier::ffi::Vec3 {
                         x: f.x,
                         y: f.y,
@@ -656,11 +680,9 @@ impl<'a> ForceFacade<'a> {
             // Merge per-body per-source totals into the frame report. Each
             // touched source contributes one body to body_count and adds
             // kahan.value() to total_force (Kahan summed).
-            for (tag, maybe_kahan) in body_totals.iter().enumerate() {
-                if let Some(kahan) = maybe_kahan {
-                    let law_type = force_law_type_from_idx(tag);
-                    report.contributions.add(law_type, kahan.value(), 1);
-                }
+            for (idx, kahan) in body_totals.drain(..) {
+                let law_type = force_law_type_from_idx(idx);
+                report.contributions.add(law_type, kahan.value(), 1);
             }
         }
 

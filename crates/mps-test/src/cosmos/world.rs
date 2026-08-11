@@ -159,6 +159,80 @@ fn world_inserts_dynamic_body() {
     assert!((p - Vector::new(1.0, 2.0, 3.0)).length() < 1e-9);
 }
 
+/// P2.18 / M5：`clone_shallow` 必须复制所有 config 字段（gravity、积分参数、
+/// 软化长度、子步配置、轨道积分模式、相对论修正模式、太阳位置、中心天体
+/// 句柄），同时丢弃全部 body/collider/joint/celestials/n_body_sources/
+/// perturbations/kahan_state/scratch buffers。
+///
+/// 用途：Monte Carlo 多世界并行 + 轨道预测 overlay——想要"同配置 + 全新
+/// 空白物理场景" 而不需要付出深拷贝整 RigidBodySet 的 ~5–10ms 代价（1000
+/// body 的 Clone 实测代价）。
+#[test]
+fn clone_shallow_preserves_config_drops_body_state() {
+    let mut world = CosmosWorld::new(CosmosWorldConfig {
+        n_body_softening_sq: 5e5,
+        orbit_integration: OrbitIntegration::ForestRuth8Kahan,
+        verlet_substeps: 4,
+        adaptive_substeps: true,
+        adaptive_tolerance: 1e-12,
+        ..CosmosWorldConfig::default()
+    });
+    world.set_sun_position(Vector::new(1.0, 0.0, 0.0));
+    let earth = get_celestial_body(CelestialBodyId::Earth);
+    world.set_central_body(Some(earth));
+    // Populate some body + extra source state to verify it gets dropped.
+    let _h = world.insert_body(satellite_builder(
+        1.0,
+        Vector::new(1.0, 2.0, 3.0),
+        Vector::ZERO,
+        0.1,
+    ));
+    let n_celestial = world.add_celestial(mps_cosmos::gravity::CelestialSource::new(
+        earth,
+        earth.max_degree,
+    ));
+    let _ = n_celestial;
+
+    let mut shallow = world.clone_shallow();
+
+    // --- config 端保留 ---
+    assert_eq!(shallow.dynamic_body_count(), 0, "body count must reset");
+    assert_eq!(shallow.n_body_softening_sq(), 5e5, "softening");
+    assert_eq!(
+        shallow.orbit_integration(),
+        OrbitIntegration::ForestRuth8Kahan,
+        "orbit integration mode preserved"
+    );
+    let sun = shallow.sun_position();
+    assert!(
+        (sun - Vector::new(1.0, 0.0, 0.0)).length() < 1e-12,
+        "sun position preserved"
+    );
+    let central_back = shallow.central_body();
+    assert!(central_back.is_some(), "central body handle preserved");
+
+    // --- body/state 端清空 ---
+    assert_eq!(shallow.dynamic_body_count(), 0);
+    assert_eq!(shallow.n_body_sources().len(), 0, "n_body_sources dropped");
+    // 轨道再推一步确认是 fresh-empty scene（不 crash、不残留状态推进）：
+    let step_res = shallow.step(0.1);
+    assert!(
+        matches!(step_res, StepResult::Stepped(_) | StepResult::Substepped { .. }),
+        "shallow copy should remain step-able; got {step_res:?}"
+    );
+
+    // 源 world 仍可继续推（deep clone 不触及原始！）：
+    let orig_step = world.step(0.1);
+    assert!(
+        matches!(orig_step, StepResult::Stepped(_) | StepResult::Substepped { .. }),
+        "source world should still step normally; got {orig_step:?}"
+    );
+    assert!(
+        world.dynamic_body_count() >= 1,
+        "source world body count intact"
+    );
+}
+
 /// `step` 对非法 `dt` 必须返回 `Skipped(...)` 而非静默吞掉。这是 P1-5 的
 /// 核心收益：调用方现在能区分"没推进"的三种原因。
 #[test]

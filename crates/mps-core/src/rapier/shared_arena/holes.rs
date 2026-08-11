@@ -95,6 +95,16 @@ impl super::SharedPhysicsArena {
     /// Flush all active bodies to their arena slots.
     ///
     /// Called after `world_step` completes.
+    ///
+    /// M3 优化（性能分析.MD §11.3）：尾部不再 `for i in index..max_bodies:
+    /// clear_body_slot(i)` 把全部 `max_bodies - index` 个空 slot 都写 gen=0。
+    /// 改为只回收 `[ curr_count .. prev_count ]` 区间——即"上次被填过、
+    /// 这次变少"的那一部分；slot `[ prev_count .. max_bodies ]` 从未被填，
+    /// 上一帧首调时已是 gen=0（`alloc_zeroed` 兜底），保留即可。
+    ///
+    /// 如此稳态（计数不变）情况下每个 slot 的 gen 写入正好等于前一次，无
+    /// 多余清零；1000 active / max_bodies=4096 这种典型 MC 拓扑，每帧把
+    /// `3096 × 8B` 的清零写带宽一次直接抹掉，约 ~24KB/tick。
     pub fn flush_all_bodies(&self, bodies: &rapier3d::prelude::RigidBodySet) {
         let mut index = 0u32;
         for (handle, body) in bodies.iter() {
@@ -130,10 +140,15 @@ impl super::SharedPhysicsArena {
         // Update body count in header
         self.set_header_u32(32, index);
 
-        // Clear remaining slots
-        for i in index..self.max_bodies {
-            self.clear_body_slot(i);
+        // 回收 [ curr_count .. prev_count ]——仅上次被填过的缩水部分。
+        // slot [ prev_count .. max_bodies ] 已为 gen=0，不动。
+        let prev = self.prev_body_active_count.load(Ordering::Relaxed);
+        if index < prev {
+            for i in index..prev {
+                self.clear_body_slot(i);
+            }
         }
+        self.prev_body_active_count.store(index, Ordering::Relaxed);
     }
 
     /// Write a body handle into the handle map.
@@ -266,6 +281,12 @@ impl super::SharedPhysicsArena {
     }
 
     /// Flush all colliders after world_step.
+    ///
+    /// L4 优化（性能分析.MD §12.4）：与 M3 同形——尾部不再
+    /// `for i in index..max_colliders: clear_collider_slot(i)`，改为只
+    /// 回收 `[ curr_count .. prev_count ]`。稳态下 collider 数稳定时无
+    /// 任何多余清零写，常见 500 active / max_colliders=4096 把每帧
+    /// ~3596 × 8B ≈ 29KB/tick 的写带宽直接抹掉。
     pub fn flush_all_colliders(&self, colliders: &rapier3d::prelude::ColliderSet) {
         let mut index = 0u32;
         for (_handle, collider) in colliders.iter() {
@@ -291,8 +312,13 @@ impl super::SharedPhysicsArena {
             index += 1;
         }
         self.set_header_u32(36, index);
-        for i in index..self.max_colliders {
-            self.clear_collider_slot(i);
+        // 回收 [ curr_count .. prev_count ]——仅上次被填过的缩水部分。
+        let prev = self.prev_collider_active_count.load(Ordering::Relaxed);
+        if index < prev {
+            for i in index..prev {
+                self.clear_collider_slot(i);
+            }
         }
+        self.prev_collider_active_count.store(index, Ordering::Relaxed);
     }
 }

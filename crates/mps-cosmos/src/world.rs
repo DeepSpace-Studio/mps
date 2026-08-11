@@ -332,6 +332,65 @@ impl CosmosWorld {
         }
     }
 
+    /// P2.18 / M5: shallow clone — copies the *configuration and parameters*
+    /// (gravity, integration params, softening, central body ref, sun
+    /// position, orbit-integration mode, substep settings, relativistic
+    /// correction, kahan flag) but drops all runtime mutable body state
+    /// (bodies, colliders, joints, celestials, n_body_sources,
+    /// perturbations, kahan_state, scratch buffers).
+    ///
+    /// Produces an "all-parameters-copied, fresh-empty-physics-scene"
+    /// world, suitable for:
+    ///   - Rolling a parallel branch for Monte Carlo study
+    ///   - Spawning an "advance-the-future-N-steps" overlay while keeping
+    ///     the current world untouched (the predicted branch holds its
+    ///     own bodies you can later `insert_body` into).
+    ///   - Avoiding the ~5–10 ms deep-copy of a 1000-body `RigidBodySet`
+    ///     that the full `Clone` impl pays when the caller never needs
+    ///     to retain existing body geometry.
+    ///
+    /// Pipeline / islands / broad-phase / narrow-phase / ccd-solver are
+    /// reset via `::new()` (mirroring the `Clone` impl's stance — these
+    /// are stateless work objects rebuilt each `step`).
+    ///
+    /// **Warning**: `celestials` / `n_body_sources` are *not* preserved —
+    /// callers must re-`add_celestial` / `add_n_body` on the shallow copy
+    /// if those are still wanted (they reference body handles that would
+    /// dangle once the body set is reset to empty anyway).
+    pub fn clone_shallow(&self) -> Self {
+        Self {
+            pipeline: PhysicsPipeline::new(),
+            gravity: self.gravity,
+            integration_parameters: self.integration_parameters,
+            islands: IslandManager::new(),
+            broad_phase: BroadPhaseBvh::new(),
+            narrow_phase: NarrowPhase::new(),
+            bodies: RigidBodySet::new(),
+            colliders: ColliderSet::new(),
+            impulse_joints: ImpulseJointSet::new(),
+            multibody_joints: MultibodyJointSet::new(),
+            ccd_solver: CCDSolver::new(),
+            // celestials / n_body_sources intentionally dropped: see doc above.
+            celestials: Vec::new(),
+            n_body_sources: Vec::new(),
+            n_body_softening_sq: self.n_body_softening_sq,
+            central_body: self.central_body,
+            perturbations: Vec::new(),
+            sun_position: self.sun_position,
+            orbit_integration: self.orbit_integration,
+            verlet_substeps: self.verlet_substeps,
+            adaptive_substeps: self.adaptive_substeps,
+            adaptive_tolerance: self.adaptive_tolerance,
+            relativistic_correction: self.relativistic_correction,
+            kahan_state: Vec::new(),
+            // scratch buffers always begin empty on a fresh world (P0.2 / P1.7).
+            scratch_tasks: Vec::new(),
+            scratch_source_positions: Vec::new(),
+            scratch_source_rotations: Vec::new(),
+            scratch_collider_updates: Vec::new(),
+        }
+    }
+
     /// 设太阳位置（光压方向参考）。
     pub fn set_sun_position(&mut self, pos: Vector) {
         self.sun_position = pos;
@@ -637,6 +696,16 @@ impl CosmosWorld {
         self.sun_position
     }
 
+    /// 取轨道积分模式（P2.18：clone_shallow 测试需要 introspect）。
+    pub fn orbit_integration(&self) -> OrbitIntegration {
+        self.orbit_integration
+    }
+
+    /// 取当前中心天体引用（P2.18：clone_shallow 测试需要 introspect）。
+    pub fn central_body(&self) -> Option<&'static mps_formula::celestial_data::CelestialBody> {
+        self.central_body
+    }
+
     /// 旧路径：力注入 → rapier 推进。
     fn step_via_rapier_force(&mut self, dt: f64) {
         // 把 integration_parameters.dt 对齐到本次子步实际 dt；rapier.pipeline.step
@@ -644,15 +713,32 @@ impl CosmosWorld {
         self.integration_parameters.dt = dt;
         // 0. 每步先清掉上一轮累积的 user_force。Rapier 不会自动重置
         //    add_force 累加进去的力（见 rapier `reset_forces` 文档）。
-        for b in self.bodies.iter_mut() {
-            if b.1.is_dynamic() {
-                b.1.reset_forces(false);
-                b.1.reset_torques(false);
+        //
+        //    P1.12 / L3：复用 `scratch_tasks` 的动态体 handle 列表做 reset，避免
+        //    每子步 `for b in self.bodies.iter_mut() { if b.is_dynamic() {...} }`
+        //    把全体 body（含 fixed/kinematic）扫一遍做 `is_dynamic()` 过滤。当
+        //    `cosmosWorldStep(world, 5.0)` 拆 N 子步（MC 轨道压缩推进常用）时，
+        //    每子步从 O(total_bodies) 降到 O(dynamic_bodies) × `RigidBodySet::get_mut`
+        //    （arena-idx O(1)）。仅重置"被 `apply_forces` 写过 user_force 的动态体"，
+        //    fixed / kinematic 不会被 `add_force`，也不需要 reset。
+        //
+        //    调用顺序：`collect_dynamic_tasks` 把 scratch_tasks 落成动态体的
+        //    `(handle, pos, vel, mass, p)` 后，`inject_forces_from_collected_tasks`
+        //    复用同一份 scratch_tasks 做 force 注入 + reset。
+        self.collect_dynamic_tasks();
+        self.refresh_n_body_sources();
+        for &(handle, _, _, _, _) in &self.scratch_tasks {
+            if let Some(b) = self.bodies.get_mut(handle) {
+                b.reset_forces(false);
+                b.reset_torques(false);
             }
         }
 
-        // 1. 计算并注入每体的合力（天体引力 + n-body + 环境扰动）
-        self.apply_forces();
+        // 1. 计算并注入每体的合力（天体引力 + n-body + 环境扰动）—— 复用上方已
+        //    collected 的 scratch_tasks，不再重调 collect/refresh（L3：子步切分
+        //    下原 apply_forces 每 substep 跑两遍 collect，N=1000 卫星×4 substep ≈
+        //    8000 重复浅扫/tick；现已减半）。
+        self.inject_forces_from_collected_tasks();
 
         // 2. Rapier 推进
         self.pipeline.step(
@@ -844,10 +930,32 @@ impl CosmosWorld {
     /// 旧版本仍用空源 `gm=0` 分支，导致 RapierForce 路径下新加入的源 gm 不
     /// 跟随质量变化，引力数值与显式积子错位）。
     fn refresh_n_body_sources(&mut self) {
-        self.scratch_source_positions.clear();
-        self.scratch_source_positions.resize(self.bodies.len(), Vector::ZERO);
-        self.scratch_source_rotations.clear();
-        self.scratch_source_rotations.resize(self.bodies.len(), Rotation::IDENTITY);
+        // P2.15: avoid the previous `clear() + resize(n, ZERO/IDENTITY)` which
+        // zeroed the entire buffer every frame. We instead:
+        //   1. `truncate(bodies.len())` — drops the tail when bodies shrank
+        //      (drop happens in-place, no alloc; remaining slots retain last
+        //      frame's values which are about to be overwritten below).
+        //   2. `resize_with(bodies.len(), default)` — grows only when bodies
+        //      grew (zeroes just the *new* tail, not the whole buffer).
+        //   3. The `idx < scratch.len()` guard at the write site already covers
+        //      removed-source slots — those slots keep their old value but the
+        //      source's `gm` was just set to 0 in this same iteration, so the
+        //      stale position data is never read (downstream `celestial_*` /
+        //      `n_body_*` multiply by `gm`).
+        // On a stable or shrinking `bodies.len()` (steady state — the common
+        // case), neither truncate nor resize_with does any element writes: the
+        // previous full-buffer `clear()+resize(n)` zero-fill is eliminated.
+        let bodies_len = self.bodies.len();
+        self.scratch_source_positions.truncate(bodies_len);
+        if self.scratch_source_positions.len() < bodies_len {
+            self.scratch_source_positions
+                .resize_with(bodies_len, || Vector::ZERO);
+        }
+        self.scratch_source_rotations.truncate(bodies_len);
+        if self.scratch_source_rotations.len() < bodies_len {
+            self.scratch_source_rotations
+                .resize_with(bodies_len, || Rotation::IDENTITY);
+        }
         for s in &mut self.n_body_sources {
             let idx = s.handle.into_raw_parts().0 as usize;
             let Some(b) = self.bodies.get(s.handle) else {
@@ -877,15 +985,18 @@ impl CosmosWorld {
         }
     }
 
-    fn apply_forces(&mut self) {
-        // 收集动态刚体 (handle, position, velocity, mass) 到复用缓冲，避免每帧
-        // `vec!` 分配。RapierForce 路径每帧（或每大 dt 子步）调一次，动态刚体
-        // 数量稳定时容量会被首帧工作集化。P0.2: 与 `explicit_substep` 共用同一
-        // 份 `collect_dynamic_tasks` + `refresh_n_body_sources` 路径，避免两份
-        // 内联代码漂移导致 RapierForce / Verlet 路径下算出不同的引力快照。
-        self.collect_dynamic_tasks();
-        self.refresh_n_body_sources();
-
+    /// 基于 `scratch_tasks` 已构建好的动态体列表 + `scratch_source_positions` /
+    /// `scratch_source_rotations` 快照做一次 force 注入。调用方必须**先**调过
+    /// [`Self::collect_dynamic_tasks`] 与 [`Self::refresh_n_body_sources`]，否则
+    /// `scratch_tasks` 是空（首次）/ stale（与 body 数不同步）。
+    ///
+    /// 不重置 user_force —— 调用方负责先 reset_forces（rapier 不会自动清掉
+    /// 上轮 `add_force` 累积量，见 rapier doc）。
+    ///
+    /// P1.12 / L3：原 `apply_forces` 的 force 注入主体；保留为独立方法以让
+    /// `step_via_rapier_force` 在 reset_forces 与力注入之间插入"按 scratch_tasks
+    /// 精准 reset dynamic bodies"步骤而无需重复 collect_dynamic_tasks。
+    fn inject_forces_from_collected_tasks(&mut self) {
         let n_tasks = self.scratch_tasks.len();
         for i in 0..n_tasks {
             let (handle, pos, vel, mass, perturbation) = self.scratch_tasks[i];
