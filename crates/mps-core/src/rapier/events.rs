@@ -830,6 +830,10 @@ pub extern "C" fn world_set_coulomb_friction_law(
 
         world.inner.events.custom_physics.write().coulomb_friction =
             if law.enabled.0 != 0 { Some(law) } else { None };
+        // P1.8: 标记 hook dirty 让 step 末端重扫 collider 的 MODIFY_SOLVER_CONTACTS bit。
+        // 状态变化发生在 FFI 外部，step 入口的 count 检测只会看到结构变化，
+        // 需此处显式标 dirty 才能捕获纯 Coulomb-enabled ↔ disabled 切换。
+        world.inner.buffers.coulomb_hook_dirty = true;
         clear_error();
         Bool::TRUE
     })
@@ -861,6 +865,8 @@ pub extern "C" fn world_clear_coulomb_friction_law(world: *mut WorldHandle) {
             return;
         };
         world.inner.events.custom_physics.write().coulomb_friction = None;
+        // P1.8: 见 world_set_coulomb_friction_law。clear 也强制下次 step 重扫。
+        world.inner.buffers.coulomb_hook_dirty = true;
         clear_error();
     })
 }

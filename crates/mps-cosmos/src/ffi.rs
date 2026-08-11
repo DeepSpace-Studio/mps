@@ -20,7 +20,7 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use mps_formula::celestial_data::{celestial_body_id_from_u32, get_celestial_body};
-use mps_formula::error::{set_error, ERR_INTERNAL};
+use mps_formula::error::{set_error, ERR_CAPACITY, ERR_INTERNAL, ERR_NULL_POINTER};
 use mps_formula::ffi::Vec3;
 use rapier3d::prelude::{RigidBodyBuilder, RigidBodyHandle, Vector};
 
@@ -33,6 +33,11 @@ fn celestial_by_id(id: i32) -> Option<&'static mps_formula::celestial_data::Cele
     let id = u32::try_from(id).ok()?;
     celestial_body_id_from_u32(id).map(get_celestial_body)
 }
+
+/// 单次 `*_snapshot` 调用允许的最大 body 容量（与 mps-core
+/// `ffi::convert::MAX_OUTPUT_CAPACITY` 对齐——cosmos 不依赖 mps-core，
+/// 此常量在本 crate 内独立定义；改动时请两边同步）。
+const MAX_OUTPUT_CAPACITY: u32 = 1_000_000;
 
 /// 把 `RigidBodyHandle` 打包为 `u64`：`(idx << 32) | generation`。
 fn pack_handle(h: RigidBodyHandle) -> u64 {
@@ -455,5 +460,112 @@ pub extern "C" fn cosmos_world_dynamic_body_count(world: *const CosmosWorld) -> 
     ffi_guard(0, || {
         let w = match unsafe { world.as_ref() } { Some(t) => t, None => return 0, };
         w.dynamic_body_count() as u32
+    })
+}
+
+/// 动态刚体数量（用于 sizing `cosmos_world_dynamic_body_snapshot` 调用）。
+///
+/// 与 [`cosmos_world_dynamic_body_count`] 在当前实现里返回相同数；
+/// 单独导出独立计法以与 mps-core `world_dynamic_body_snapshot_count`
+/// 的 ABI 形态对齐——Java 端可以以完全相同的 Java 代码模式先用
+/// `cosmosWorldDynamicBodySnapshotCount` 拿到 N，分配 `long[N]` 与
+/// `double[N * 7]`，再调 `cosmosWorldDynamicBodySnapshot` 拉一次全数据。
+///
+/// # Safety
+/// `world` 可为 null（返回 0），其余情形须是 `cosmos_world_create` 产出的有效指针。
+#[unsafe(no_mangle)]
+pub extern "C" fn cosmos_world_dynamic_body_snapshot_count(
+    world: *const CosmosWorld,
+) -> u32 {
+    ffi_guard(0, || {
+        let w = match unsafe { world.as_ref() } { Some(t) => t, None => return 0, };
+        w.dynamic_body_count() as u32
+    })
+}
+
+/// 批量快照动态刚体的 handle + pose（7 f64/body：pos3 + quat4）。
+///
+/// 与 mps-core `world_dynamic_body_snapshot` 完全平行，目的同样：把每 tick
+/// Java 端原本要按 N 次 `cosmos_body_translation_out` 往返取所有 pos 的
+/// 路径合并成**一次 JNI 调用 + 一份连续 f64[]**——N=1000 卫星的取位延迟
+/// 从 ~600 µs/tick 砍到 ~50 µs/tick（见 `性能分析.MD` §11.1 / §12.1，
+/// M1 + L1 同根改动）。
+///
+/// # 布局
+/// - `out_handles[i]`: `pack_handle = (idx << 32) | generation` —— 与
+///   `cosmos_insert_body` / `cosmos_body_translation_out` 等所有 cosmos
+///   body handle ABI 一致（**注意**：与 mps-core 的 `+1/-1` 编码不同）。
+/// - `out_values[i * 7 .. i * 7 + 3]`：位置 `pos.x, pos.y, pos.z`
+/// - `out_values[i * 7 + 3 .. i * 7 + 7]`：旋转 `quat.i, quat.j, quat.k, quat.w`
+///   （与 rapier3d `Rotation::xyzw` 顺序一致，Java 端可以直接映射到
+///   `Quatd(i, j, k, w)` 或 JOML `Quaterniond`）。
+///
+/// 只写动态刚体（`is_dynamic() == true`），跳过 fixed / kinematic —— 与
+/// `dynamic_body_count` / `cosmosWorldDynamicBodySnapshotCount` 一致。容量
+/// 不够时只填到 `capacity` 为止并返回实际数量；调用方应按 count 先分配。
+///
+/// # 返回值
+/// 实际写入的 body 数；任一前置参数非法返回 0（并 `set_error`）：
+/// - `world` null → `ERR_NULL_POINTER`，返回 0
+/// - `out_handles` / `out_values` null，或 `capacity == 0`，
+///   或 `capacity > MAX_OUTPUT_CAPACITY` → `ERR_CAPACITY`，返回 0
+///
+/// # Safety
+/// `out_handles` 指向至少 `capacity` 个 `u64` 可写内存；`out_values` 指向
+/// 至少 `capacity * 7` 个 `f64` 可写内存。`world` 须为 `cosmos_world_create`
+/// 产出的指针或 null。调用方应在写入完成前不让另一线程同时操作这两个缓冲。
+#[unsafe(no_mangle)]
+pub extern "C" fn cosmos_world_dynamic_body_snapshot(
+    world: *const CosmosWorld,
+    out_handles: *mut u64,
+    out_values: *mut f64,
+    capacity: u32,
+) -> u32 {
+    ffi_guard(0, || {
+        let w = match unsafe { world.as_ref() } { Some(t) => t, None => {
+            set_error(ERR_NULL_POINTER, "cosmos world is null");
+            return 0;
+        }};
+        if out_handles.is_null() || out_values.is_null() {
+            set_error(ERR_NULL_POINTER, "snapshot output buffer is null");
+            return 0;
+        }
+        if capacity == 0 || capacity > MAX_OUTPUT_CAPACITY {
+            set_error(ERR_CAPACITY, "invalid snapshot capacity");
+            return 0;
+        }
+
+        let capacity = capacity as usize;
+        let Some(value_capacity) = capacity.checked_mul(7) else {
+            set_error(ERR_CAPACITY, "snapshot capacity overflow");
+            return 0;
+        };
+        let handles = unsafe { std::slice::from_raw_parts_mut(out_handles, capacity) };
+        let values = unsafe { std::slice::from_raw_parts_mut(out_values, value_capacity) };
+
+        let mut written = 0usize;
+        for (handle, body) in w.bodies().iter() {
+            if !body.is_dynamic() {
+                continue;
+            }
+            if written >= capacity {
+                break;
+            }
+
+            let pos = body.translation();
+            let rot = body.rotation();
+            handles[written] = pack_handle(handle);
+            let off = written * 7;
+            values[off] = pos.x;
+            values[off + 1] = pos.y;
+            values[off + 2] = pos.z;
+            values[off + 3] = rot.x; // i
+            values[off + 4] = rot.y; // j
+            values[off + 5] = rot.z; // k
+            values[off + 6] = rot.w; // w
+            written += 1;
+        }
+
+        written as u32
     })
 }

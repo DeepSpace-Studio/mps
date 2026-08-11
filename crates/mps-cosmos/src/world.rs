@@ -21,10 +21,11 @@ use crate::perturbation::{
 use mps_formula::celestial_data::{AU, G};
 use mps_formula::astrophysics::{hill_sphere_radius, roche_limit_report};
 use mps_formula::ffi::RocheLimitReport;
+use rapier3d::math::Pose;
 use rapier3d::prelude::{
-    BroadPhaseBvh, CCDSolver, ColliderSet, ImpulseJointSet, IntegrationParameters, IslandManager,
-    MultibodyJointSet, NarrowPhase, PhysicsPipeline, RigidBodyBuilder, RigidBodyHandle,
-    RigidBodySet, Rotation, Vector,
+    BroadPhaseBvh, CCDSolver, ColliderHandle, ColliderSet, ImpulseJointSet, IntegrationParameters,
+    IslandManager, MultibodyJointSet, NarrowPhase, PhysicsPipeline, RigidBodyBuilder,
+    RigidBodyHandle, RigidBodySet, Rotation, Vector,
 };
 
 /// 单刚体的环境扰动配置。
@@ -256,6 +257,10 @@ pub struct CosmosWorld {
     /// `clear()` + 按 arena index 写入 `body.rotation()`，供不规则质量分布近场
     /// 分支把质点 `local_offset` 变到世界坐标。
     scratch_source_rotations: Vec<Rotation>,
+    /// 显式积分路径下，需把「挂在刚体上的 collider」位姿同步写回。P1.7 之前每步
+    /// `collect()` 全部有 parent 的 collider 到 `Vec::new()` 抛弃——这里改为跨步
+    /// 复用：`clear()` + push，消除每步堆分配。元素是 `(collider_handle, world_pose)`。
+    scratch_collider_updates: Vec<(ColliderHandle, Pose)>,
 }
 
 /// 一次 `step` 的诊断结果。调用方原本只能靠 `step` 的静默 return 猜
@@ -323,6 +328,7 @@ impl CosmosWorld {
             scratch_tasks: Vec::new(),
             scratch_source_positions: Vec::new(),
             scratch_source_rotations: Vec::new(),
+            scratch_collider_updates: Vec::new(),
         }
     }
 
@@ -696,22 +702,21 @@ impl CosmosWorld {
     /// 对"挂在刚体上"的 collider（`parent` 非空），其 world 位姿 =
     /// `parent_body.position * pos_wrt_parent`；这里按这条链路重算写回。
     fn sync_colliders_after_verlet(&mut self) {
+        // P1.7: 跨步复用 `scratch_collider_updates` 缓冲，避免 `Vec::new()` + `collect()`
+        // 每步堆分配。element 是 `(collider_handle, world_pose)`，后续一次性写回。
+        self.scratch_collider_updates.clear();
         // 先快照 (collider_handle, parent_handle, offset)，再写回，避开同时借用。
-        let updates: Vec<_> = self
-            .colliders
-            .iter()
-            .filter_map(|(h, co)| {
-                co.parent().and_then(|ph| {
-                    self.bodies
-                        .get(ph)
-                        .map(|b| (h, ph, b.position(), co.position_wrt_parent().copied()))
-                })
-            })
-            .collect();
-        for (handle, _parent, parent_pos, offset) in updates {
+        for (h, co) in self.colliders.iter() {
+            if let Some(ph) = co.parent()
+                && let Some(b) = self.bodies.get(ph)
+            {
+                let offset = co.position_wrt_parent().copied();
+                let world = b.position() * offset.unwrap_or_default();
+                self.scratch_collider_updates.push((h, world));
+            }
+        }
+        for (handle, world) in self.scratch_collider_updates.drain(..) {
             if let Some(co) = self.colliders.get_mut(handle) {
-                // world = parent_world * offset
-                let world = parent_pos * offset.unwrap_or_default();
                 co.set_position(world);
             }
         }
@@ -719,63 +724,14 @@ impl CosmosWorld {
 
     /// 一次显式积子子步：按 `orbit_integration` 选定积子对所有动态刚体推进 dt。
     fn explicit_substep(&mut self, dt: f64) {
-        // 1. 收集动态体快照 (handle, pos, vel, mass) 到复用缓冲。
-        //    scratch_tasks 跨子步/跨帧复用，避免每子步 `vec!`/`with_capacity`
-        //    分配（动态刚体数量稳定时容量在首子步就工作集化）。
-        self.scratch_tasks.clear();
-        let n_dynamic_hint = self.bodies.len();
-        self.scratch_tasks.reserve(n_dynamic_hint);
-        for (h, b) in self.bodies.iter() {
-            if b.is_dynamic() {
-                self.scratch_tasks
-                    .push((h, b.translation(), b.linvel(), b.mass(), None));
-            }
-        }
-        // 填充每体 perturbation（Copy）。先单独线性扫一遍 perturbations（与
-        // scratch_tasks 按 arena index 对齐），再就地写回 task.4，规避
-        // "在 iter_mut 借用内同时不可变借 self.perturbations" 的借用冲突。
-        for task in self.scratch_tasks.iter_mut() {
-            let idx = task.0.into_raw_parts().0 as usize;
-            let p = self
-                .perturbations
-                .get(idx)
-                .and_then(|c| c.as_ref())
-                .copied();
-            task.4 = p;
-        }
+        // 1. 收集动态体快照 (handle, pos, vel, mass) 到复用缓冲 +
+        //    填充每体 perturbation。P0.2: 与 `apply_forces` 共用一段热路径，
+        //    避免同步漂移到两份独立实现（曾因此 mps-cosmos 计算出的引力
+        //    和显式积子读到的引力不一致）。
+        self.collect_dynamic_tasks();
 
         // 2. n-body 源质心位置 + 姿态快照写入复用缓冲（按 arena index O(1) 查）。
-        self.scratch_source_positions.clear();
-        self.scratch_source_positions.resize(self.bodies.len(), Vector::ZERO);
-        self.scratch_source_rotations.clear();
-        self.scratch_source_rotations.resize(self.bodies.len(), Rotation::IDENTITY);
-        for s in &mut self.n_body_sources {
-            let idx = s.handle.into_raw_parts().0 as usize;
-            let Some(b) = self.bodies.get(s.handle) else {
-                // 源刚体已移除：清零引力参数（含质点 gm），位置/姿态保持占位
-                s.gm = 0.0;
-                for mp in &mut s.points {
-                    mp.gm = 0.0;
-                }
-                continue;
-            };
-            let new_gm = gm_from_mass(b.mass());
-            // 不规则源：按新质量/原 gm 比例缩放每个 MassPoint.gm（保持几何结构
-            // 不变、只是质量跟着刚体走）。
-            if !s.points.is_empty() && s.gm > 0.0 {
-                let scale = new_gm / s.gm;
-                if (scale - 1.0).abs() > 1e-12 {
-                    for mp in &mut s.points {
-                        mp.gm *= scale;
-                    }
-                }
-            }
-            s.gm = new_gm;
-            if idx < self.scratch_source_positions.len() {
-                self.scratch_source_positions[idx] = b.translation();
-                self.scratch_source_rotations[idx] = *b.rotation();
-            }
-        }
+        self.refresh_n_body_sources();
 
         // 3. 构造本子步共享的 AccelContext（含相对论修正分支开关）。
         let ctx = crate::integrator::AccelContext {
@@ -845,17 +801,28 @@ impl CosmosWorld {
         }
     }
 
-    fn apply_forces(&mut self) {
-        // 收集动态刚体 (handle, position, velocity, mass) 到复用缓冲，避免每帧
-        // `vec!` 分配。RapierForce 路径每帧（或每大 dt 子步）调一次，动态刚体
-        // 数量稳定时容量会被首帧工作集化。
+    /// 收集动态刚体快照 `(handle, pos, vel, mass, perturbation)` 到
+    /// `scratch_tasks`（跨帧复用，避免 `vec!` 分配）。同时用 arena index 把
+    /// 对应的 `perturbations` 配置就地写回 `task.4`，规避同时 mut 借用
+    /// `self.scratch_tasks` 和 immut 借用 `self.perturbations` 的冲突。
+    ///
+    /// 被 [`Self::explicit_substep`] (Verlet 积子) 和 [`Self::apply_forces`]
+    /// (RapierForce 路径) 共用。
+    fn collect_dynamic_tasks(&mut self) {
         self.scratch_tasks.clear();
+        // 动态体数量在首帧工作集化时收敛，后续帧不再增长；先 reserve 避免零散
+        // push 触发的 incremental grow。
+        let n_dynamic_hint = self.bodies.len();
+        self.scratch_tasks.reserve(n_dynamic_hint);
         for (h, b) in self.bodies.iter() {
             if b.is_dynamic() {
                 self.scratch_tasks
                     .push((h, b.translation(), b.linvel(), b.mass(), None));
             }
         }
+        // 填充每体 perturbation（Copy）。先单独线性扫一遍 perturbations（与
+        // scratch_tasks 按 arena index 对齐），再就地写回 task.4，规避
+        // "在 iter_mut 借用内同时不可变借 self.perturbations" 的借用冲突。
         for task in self.scratch_tasks.iter_mut() {
             let idx = task.0.into_raw_parts().0 as usize;
             let p = self
@@ -865,12 +832,18 @@ impl CosmosWorld {
                 .copied();
             task.4 = p;
         }
+    }
 
-        // n-body 源位置 + 姿态快照：按 arena index 直查 O(1)，替代旧的
-        // `Vec<(handle,pos)> + find` 的 O(n²) 路径（写入复用缓冲）。每步顺手按
-        // `body.mass()` 重算 `gm`（变质量场景下亮源/灰源互引力大小保持同步），
-        // 并对不规则源按比例缩放每个 `MassPoint.gm` 以同步对应的 Σ 贡献
-        // （几何由 `local_offset` 决定、大小由目前的刚体质量决定）。
+    /// n-body 源质心位置 + 姿态快照写入复用缓冲（按 arena index O(1) 查）。
+    /// 同时按 `body.mass()` 重算每源的 `gm`，并对不规则源按比例缩放每个
+    /// `MassPoint.gm`（保持几何结构不变，仅质量跟随刚体走）。
+    ///
+    /// 被 [`Self::explicit_substep`] (Verlet 积子) 和 [`Self::apply_forces`]
+    /// (RapierForce 路径) 共用 —— P0.2: 原先两处分别内联，曾出现单边更新
+    /// 漂移（explore_substep 已内联版本会跳过空源 fast-path 但 apply_forces
+    /// 旧版本仍用空源 `gm=0` 分支，导致 RapierForce 路径下新加入的源 gm 不
+    /// 跟随质量变化，引力数值与显式积子错位）。
+    fn refresh_n_body_sources(&mut self) {
         self.scratch_source_positions.clear();
         self.scratch_source_positions.resize(self.bodies.len(), Vector::ZERO);
         self.scratch_source_rotations.clear();
@@ -878,6 +851,7 @@ impl CosmosWorld {
         for s in &mut self.n_body_sources {
             let idx = s.handle.into_raw_parts().0 as usize;
             let Some(b) = self.bodies.get(s.handle) else {
+                // 源刚体已移除：清零引力参数（含质点 gm），位置/姿态保持占位
                 s.gm = 0.0;
                 for mp in &mut s.points {
                     mp.gm = 0.0;
@@ -885,6 +859,8 @@ impl CosmosWorld {
                 continue;
             };
             let new_gm = gm_from_mass(b.mass());
+            // 不规则源：按新质量/原 gm 比例缩放每个 MassPoint.gm（保持几何结构
+            // 不变、只是质量跟着刚体走）。
             if !s.points.is_empty() && s.gm > 0.0 {
                 let scale = new_gm / s.gm;
                 if (scale - 1.0).abs() > 1e-12 {
@@ -899,6 +875,16 @@ impl CosmosWorld {
                 self.scratch_source_rotations[idx] = *b.rotation();
             }
         }
+    }
+
+    fn apply_forces(&mut self) {
+        // 收集动态刚体 (handle, position, velocity, mass) 到复用缓冲，避免每帧
+        // `vec!` 分配。RapierForce 路径每帧（或每大 dt 子步）调一次，动态刚体
+        // 数量稳定时容量会被首帧工作集化。P0.2: 与 `explicit_substep` 共用同一
+        // 份 `collect_dynamic_tasks` + `refresh_n_body_sources` 路径，避免两份
+        // 内联代码漂移导致 RapierForce / Verlet 路径下算出不同的引力快照。
+        self.collect_dynamic_tasks();
+        self.refresh_n_body_sources();
 
         let n_tasks = self.scratch_tasks.len();
         for i in 0..n_tasks {
@@ -1071,6 +1057,7 @@ impl Clone for CosmosWorld {
             scratch_tasks: Vec::new(),
             scratch_source_positions: Vec::new(),
             scratch_source_rotations: Vec::new(),
+            scratch_collider_updates: Vec::new(),
         }
     }
 }

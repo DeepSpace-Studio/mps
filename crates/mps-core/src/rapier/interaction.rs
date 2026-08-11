@@ -39,8 +39,9 @@ const MIN_GRAVITY_DISTANCE: f64 = 0.01;
 ///
 /// Force on body i from body j:  Fᵢ = G · mᵢ · mⱼ / r² · r̂
 ///
-/// Uses the O(n²) direct method; for large N (> 1000) prefer the Barnes-Hut
-/// implementation in `astrophysics.rs`.
+/// Uses the O(n²) upper-triangular direct method (Newton III: F_ij = -F_ji,
+/// so only half the pairs are evaluated); for large N (> 1000) prefer the
+/// Barnes-Hut implementation in `astrophysics.rs`.
 ///
 /// Bodies without explicit mass (e.g. no colliders, or mass set via
 /// additional properties) are included; we use the body's reported mass
@@ -68,33 +69,41 @@ pub fn pairwise_gravity(
     let mut total_force = KahanVec3::default();
     let mut gravity_body_count = 0u32;
 
-    // O(n²) pairwise — for large N, use Barnes-Hut from astrophysics.rs
-    for i in 0..bodies.len() {
-        let (hi, mi, pi) = (bodies[i].0, bodies[i].1, bodies[i].2);
-        let mut net_force = Vector::ZERO;
+    // P0.4 fix: upper-triangular O(n²) — Newton III F_ij = -F_ji.
+    // Halves the iteration count vs the previous full-matrix traversal and
+    // matches the registered-law path (NewtonianGravityForceLaw::apply()).
+    // For large n > 1000 prefer Barnes-Hut from astrophysics.rs.
+    let n = bodies.len();
+    // Per-body accumulated force (auto-win: avoid push/drop churn by reusing one Vec).
+    let mut net_forces: Vec<Vector> = vec![Vector::ZERO; n];
 
-        for (j, &(_, mj, pj)) in bodies.iter().enumerate() {
-            if i == j {
-                continue;
-            }
-            let offset = pj - pi;
+    for i in 0..n {
+        let mi = bodies[i].1;
+        let pi = bodies[i].2;
+        for j in (i + 1)..n {
+            let mj = bodies[j].1;
+            let offset = bodies[j].2 - pi;
             let dist_sq = offset.length_squared();
             let dist = dist_sq.sqrt().max(MIN_GRAVITY_DISTANCE);
             // F = G * mᵢ * mⱼ / r² * r̂  =  G * mᵢ * mⱼ / r³ * r
             let force_mag = G * mi * mj / (dist_sq * dist);
-            net_force += offset * force_mag;
+            let f_ij = offset * force_mag;
+            net_forces[i] += f_ij;
+            net_forces[j] -= f_ij; // Newton III: equal and opposite on body j
         }
+    }
 
-        if net_force != Vector::ZERO
-            && let Some(body) = world.bodies.get_mut(hi)
+    for (i, (hi, _, _)) in bodies.iter().enumerate() {
+        if net_forces[i] != Vector::ZERO
+            && let Some(body) = world.bodies.get_mut(*hi)
         {
-            body.add_force(net_force, true);
-            total_force.add(vec3_from_rapier(net_force));
+            body.add_force(net_forces[i], true);
+            total_force.add(vec3_from_rapier(net_forces[i]));
             gravity_body_count += 1;
         }
     }
 
-    report.body_count += bodies.len() as u32;
+    report.body_count += n as u32;
     report.total_external_force = total_force.value();
     report.external_force_body_count = gravity_body_count;
 }
@@ -279,7 +288,10 @@ fn apply_coulomb_friction_forces_with_facade(
     let dynamic_mu = params.dynamic_coefficient.max(0.0);
     let threshold = params.velocity_threshold.max(0.0);
 
-    let mut friction_work: Vec<(_, _, Vector)> = Vec::new();
+    // P1 修复：复用 facade.friction_work 跨帧缓冲（与 FrameWorkBuffers.friction_work
+    // 同源），避免每帧 `Vec::new()` 分配。此函数由 apply_body_interactions_with_facade
+    // 在 Coulomb law 未注册时调用，是热路径上唯一仍走旧路径的力。
+    facade.friction_work.clear();
 
     for contact_pair in narrow_phase.contact_pairs() {
         let ch1 = contact_pair.collider1;
@@ -336,15 +348,20 @@ fn apply_coulomb_friction_forces_with_facade(
                 let friction_mag = mu * normal_force_mag;
                 let friction_force = -tangential_vel / tangential_speed * friction_mag;
 
-                friction_work.push((rb_handle1, rb_handle2, friction_force));
+                facade.friction_work.push((rb_handle1, rb_handle2, friction_force));
             }
         }
     }
 
     use crate::rapier::forces::ForceLawType;
-    for (rb1, rb2, force) in &friction_work {
-        facade.add_force(*rb1, *force, ForceLawType::CoulombFriction);
-        facade.add_force(*rb2, -*force, ForceLawType::CoulombFriction);
+    // 不能 `for ... in facade.friction_work.iter()` 同时 `facade.add_force(...)` —— 后者
+    // 需 `&mut facade` 会与对 `facade.friction_work` 的共享借用冲突。改为按索引消耗：
+    // 逐项 `(*rb1, *rb2, *force)` 读出（Copy 类型），借用立即释放，再 `add_force`。
+    let n_pairs = facade.friction_work.len();
+    for i in 0..n_pairs {
+        let (rb1, rb2, force) = facade.friction_work[i];
+        facade.add_force(rb1, force, ForceLawType::CoulombFriction);
+        facade.add_force(rb2, -force, ForceLawType::CoulombFriction);
     }
 }
 
@@ -383,30 +400,39 @@ impl ForceLaw for NewtonianGravityForceLaw {
         };
         let source = self.law_type();
 
-        // Collect only dynamic bodies with mass > 0
-        let body_data: SmallVec<[(RigidBodyHandle, f64, Vector); 64]> = facade
-            .bodies
-            .iter()
-            .filter(|(_, b)| b.is_dynamic())
-            .filter_map(|(h, b)| {
-                let mass = b.mass();
-                if mass > 0.0 {
-                    Some((h, mass, b.translation()))
-                } else {
-                    None
-                }
-            })
-            .collect();
+        // P0.3 fix: reuse persistent scratch_body_data across frames instead of
+        // allocating a fresh SmallVec every world_step. Must clear before fill.
+        let body_data: &mut SmallVec<[(RigidBodyHandle, f64, Vector); 64]> =
+            facade.scratch_body_data;
+        body_data.clear();
+        body_data.extend(
+            facade
+                .bodies
+                .iter()
+                .filter(|(_, b)| b.is_dynamic())
+                .filter_map(|(h, b)| {
+                    let mass = b.mass();
+                    if mass > 0.0 {
+                        Some((h, mass, b.translation()))
+                    } else {
+                        None
+                    }
+                }),
+        );
 
         if body_data.len() < 2 {
             return;
         }
 
-        // Newton III: compute F_ij = -F_ji, only upper triangle
-        // Use SmallVec for force accumulator (stack-allocated for ≤64 bodies)
+        // P0.3 fix: reuse persistent scratch_force_pairs as the force accumulator.
+        // Newton III: compute F_ij = -F_ji, only upper triangle (2× less iter).
+        // The accumulator is indexed positionally (i, j) so we can do += / -= on
+        // each pair in one pass before the single apply over scratch_force_pairs.
         let n = body_data.len();
-        let mut forces: SmallVec<[(RigidBodyHandle, Vector); 64]> = SmallVec::new();
-        for (h, _, _) in &body_data {
+        let forces: &mut SmallVec<[(RigidBodyHandle, Vector); 64]> =
+            facade.scratch_force_pairs;
+        forces.clear();
+        for (h, _, _) in body_data.iter() {
             forces.push((*h, Vector::ZERO));
         }
 
@@ -427,10 +453,14 @@ impl ForceLaw for NewtonianGravityForceLaw {
             }
         }
 
-        // Single pass: apply accumulated forces
-        for (handle, force) in &forces {
-            if *force != Vector::ZERO {
-                facade.add_force(*handle, *force, source);
+        // Single pass: apply accumulated forces. Read each entry by index so
+        // each immutable borrow of scratch_force_pairs ends before the mut
+        // borrow that `add_force` needs (entries are Copy).
+        let n = facade.scratch_force_pairs.len();
+        for i in 0..n {
+            let (handle, force) = facade.scratch_force_pairs[i];
+            if force != Vector::ZERO {
+                facade.add_force(handle, force, source);
             }
         }
     }
@@ -469,8 +499,9 @@ impl ForceLaw for AirDragForceLaw {
     fn apply(&self, facade: &mut ForceFacade<'_>) {
         let source = self.law_type();
 
-        // Phase 1: compute forces + max reynolds (immutable body read)
-        let mut work: SmallVec<[(RigidBodyHandle, Vector); 64]> = SmallVec::new();
+        // P0.3 fix: reuse persistent scratch_force_pairs across frames (was SmallVec::new()).
+        // Fill phase: disjoint field borrows (facade.bodies immutably, scratch_force_pairs mutably).
+        facade.scratch_force_pairs.clear();
         let mut max_re = 0.0f64;
         for (handle, body) in facade.bodies.iter() {
             if !body.is_dynamic() {
@@ -497,12 +528,15 @@ impl ForceLaw for AirDragForceLaw {
             };
 
             let force = -relative_velocity / speed * drag_magnitude;
-            work.push((handle, force));
+            facade.scratch_force_pairs.push((handle, force));
         }
 
-        // Phase 2: update facade + apply forces
+        // Apply phase: direct index access so each immutable borrow of
+        // scratch_force_pairs ends before the mut borrow that add_force needs.
         facade.update_reynolds(max_re);
-        for (handle, force) in work {
+        let n = facade.scratch_force_pairs.len();
+        for i in 0..n {
+            let (handle, force) = facade.scratch_force_pairs[i];
             facade.add_force(handle, force, source);
         }
     }
@@ -581,7 +615,8 @@ impl ForceLaw for SolarWindPressureForceLaw {
         }
         let dir_unit = dir / dir_norm_sq.sqrt();
 
-        let mut work: SmallVec<[(RigidBodyHandle, Vector); 64]> = SmallVec::new();
+        // P0.3 fix: reuse persistent scratch_force_pairs across frames (was SmallVec::new()).
+        facade.scratch_force_pairs.clear();
         for (handle, body) in facade.bodies.iter() {
             if !body.is_dynamic() {
                 continue;
@@ -604,11 +639,14 @@ impl ForceLaw for SolarWindPressureForceLaw {
             // F = P · A_eff, push is along +dir_unit (downwind).
             let force = dir_unit * (pressure_pa * self.effective_area_m2);
             if force != Vector::ZERO {
-                work.push((handle, force));
+                facade.scratch_force_pairs.push((handle, force));
             }
         }
 
-        for (handle, force) in work {
+        // Apply (direct index access so each immutable borrow ends before add_force).
+        let n = facade.scratch_force_pairs.len();
+        for i in 0..n {
+            let (handle, force) = facade.scratch_force_pairs[i];
             facade.add_force(handle, force, source);
         }
     }
@@ -654,7 +692,8 @@ impl ForceLaw for DynamicalFrictionForceLaw {
             return;
         }
 
-        let mut work: SmallVec<[(RigidBodyHandle, Vector); 64]> = SmallVec::new();
+        // P0.3 fix: reuse persistent scratch_force_pairs across frames (was SmallVec::new()).
+        facade.scratch_force_pairs.clear();
         for (handle, body) in facade.bodies.iter() {
             if !body.is_dynamic() {
                 continue;
@@ -672,11 +711,14 @@ impl ForceLaw for DynamicalFrictionForceLaw {
             // F = m · a, direction opposes v.
             let force = -v / speed * (a_mag * mass);
             if force != Vector::ZERO {
-                work.push((handle, force));
+                facade.scratch_force_pairs.push((handle, force));
             }
         }
 
-        for (handle, force) in work {
+        // Apply (direct index access so each immutable borrow ends before add_force).
+        let n = facade.scratch_force_pairs.len();
+        for i in 0..n {
+            let (handle, force) = facade.scratch_force_pairs[i];
             facade.add_force(handle, force, source);
         }
     }
@@ -739,7 +781,8 @@ impl ForceLaw for MonDGravityForceLaw {
         let dir_unit = self.direction / dir_norm_sq.sqrt();
         let accel = dir_unit * a_mag;
 
-        let mut work: SmallVec<[(RigidBodyHandle, Vector); 64]> = SmallVec::new();
+        // P0.3 fix: reuse persistent scratch_force_pairs across frames (was SmallVec::new()).
+        facade.scratch_force_pairs.clear();
         for (handle, body) in facade.bodies.iter() {
             if !body.is_dynamic() {
                 continue;
@@ -751,11 +794,14 @@ impl ForceLaw for MonDGravityForceLaw {
             let mass = body.mass().max(1.0);
             let force = accel * mass;
             if force != Vector::ZERO {
-                work.push((handle, force));
+                facade.scratch_force_pairs.push((handle, force));
             }
         }
 
-        for (handle, force) in work {
+        // Apply (direct index access so each immutable borrow ends before add_force).
+        let n = facade.scratch_force_pairs.len();
+        for i in 0..n {
+            let (handle, force) = facade.scratch_force_pairs[i];
             facade.add_force(handle, force, source);
         }
     }
@@ -826,7 +872,8 @@ impl ForceLaw for EddingtonRadiationPressureForceLaw {
         // F = L_Edd / (c · 4π · r²) · A_eff; pre-factor per r² unit.
         let prefactor = luminosity * self.effective_area_m2 / (C * 4.0 * std::f64::consts::PI);
 
-        let mut work: SmallVec<[(RigidBodyHandle, Vector); 64]> = SmallVec::new();
+        // P0.3 fix: reuse persistent scratch_force_pairs across frames (was SmallVec::new()).
+        facade.scratch_force_pairs.clear();
         for (handle, body) in facade.bodies.iter() {
             if !body.is_dynamic() {
                 continue;
@@ -841,11 +888,14 @@ impl ForceLaw for EddingtonRadiationPressureForceLaw {
             let r_hat = r_vec / r_sq.sqrt();
             let force = r_hat * (prefactor / r_sq);
             if force != Vector::ZERO {
-                work.push((handle, force));
+                facade.scratch_force_pairs.push((handle, force));
             }
         }
 
-        for (handle, force) in work {
+        // Apply (direct index access so each immutable borrow ends before add_force).
+        let n = facade.scratch_force_pairs.len();
+        for i in 0..n {
+            let (handle, force) = facade.scratch_force_pairs[i];
             facade.add_force(handle, force, source);
         }
     }
@@ -925,7 +975,8 @@ impl ForceLaw for XrayIrradiationForceLaw {
         let luminosity_w = l_solar * L_SUN;
         let prefactor = luminosity_w * self.effective_area_m2 / (C * 4.0 * std::f64::consts::PI);
 
-        let mut work: SmallVec<[(RigidBodyHandle, Vector); 64]> = SmallVec::new();
+        // P0.3 fix: reuse persistent scratch_force_pairs across frames (was SmallVec::new()).
+        facade.scratch_force_pairs.clear();
         for (handle, body) in facade.bodies.iter() {
             if !body.is_dynamic() {
                 continue;
@@ -938,11 +989,14 @@ impl ForceLaw for XrayIrradiationForceLaw {
             let r_hat = r_vec / r_sq.sqrt();
             let force = r_hat * (prefactor / r_sq);
             if force != Vector::ZERO {
-                work.push((handle, force));
+                facade.scratch_force_pairs.push((handle, force));
             }
         }
 
-        for (handle, force) in work {
+        // Apply (direct index access so each immutable borrow ends before add_force).
+        let n = facade.scratch_force_pairs.len();
+        for i in 0..n {
+            let (handle, force) = facade.scratch_force_pairs[i];
             facade.add_force(handle, force, source);
         }
     }
@@ -1040,8 +1094,13 @@ impl ForceLaw for PulsarMagneticDipoleForceLaw {
             None => return,
         };
 
-        let mut work: SmallVec<[(RigidBodyHandle, Vector); 64]> = SmallVec::new();
-        let mut fallback: SmallVec<[(RigidBodyHandle, Vector); 64]> = SmallVec::new();
+        // P0.3 fix: reuse persistent scratch_force_pairs (work) and
+        // scratch_force_pairs_alt (fallback) across frames (were both SmallVec::new()).
+        // Fill phase: disjoint field borrows. The push targets are the two
+        // scratch scratch_force_pairs scratch_force_pairs_alt (mut); the iter
+        // is on facade.bodies (immut) — different fields so disjoint borrows stay ok.
+        facade.scratch_force_pairs.clear();
+        facade.scratch_force_pairs_alt.clear();
         let r_ns = self.ns_radius_m;
         let mu_vec = self.body_dipole_moment;
 
@@ -1076,13 +1135,17 @@ impl ForceLaw for PulsarMagneticDipoleForceLaw {
             // (Mass/inertia propagation re-enable normal add_torque with a
             // collider attached.)
             if body.mass() <= 0.0 {
-                fallback.push((handle, torque));
+                facade.scratch_force_pairs_alt.push((handle, torque));
             } else {
-                work.push((handle, torque));
+                facade.scratch_force_pairs.push((handle, torque));
             }
         }
 
-        for (handle, torque) in work {
+        // Apply normal torque path (direct index access so each immutable
+        // borrow of scratch_force_pairs ends before the mut add_torque).
+        let n = facade.scratch_force_pairs.len();
+        for i in 0..n {
+            let (handle, torque) = facade.scratch_force_pairs[i];
             facade.add_torque(handle, torque, source);
         }
         // Collider-less fallback: collider-less dynamic bodies in Rapier 0.34
@@ -1095,10 +1158,11 @@ impl ForceLaw for PulsarMagneticDipoleForceLaw {
         // add_torque path takes over, producing the correct τ/I·dt angular
         // acceleration.
         let unit_rotational_inertia = 1.0; // kg·m² assumed for collider-less bodies
-        for (handle, torque) in fallback {
+        let nfb = facade.scratch_force_pairs_alt.len();
+        for i in 0..nfb {
+            let (handle, torque) = facade.scratch_force_pairs_alt[i];
             let Some(body) = facade.bodies.get_mut(handle) else { continue; };
-            let domega =
-                body.angvel() + torque * (facade.dt / unit_rotational_inertia);
+            let domega = body.angvel() + torque * (facade.dt / unit_rotational_inertia);
             body.set_angvel(domega, true);
         }
     }
@@ -1206,7 +1270,8 @@ impl ForceLaw for JeansEscapeDragForceLaw {
             return;
         }
 
-        let mut work: SmallVec<[(RigidBodyHandle, Vector); 64]> = SmallVec::new();
+        // P0.3 fix: reuse persistent scratch_force_pairs across frames (was SmallVec::new()).
+        facade.scratch_force_pairs.clear();
         for (handle, body) in facade.bodies.iter() {
             if !body.is_dynamic() {
                 continue;
@@ -1221,11 +1286,14 @@ impl ForceLaw for JeansEscapeDragForceLaw {
             // F = p · A_eff · ê (push along +escape_direction).
             let force = dir_unit * (pressure_pa * self.effective_area_m2);
             if force != Vector::ZERO {
-                work.push((handle, force));
+                facade.scratch_force_pairs.push((handle, force));
             }
         }
 
-        for (handle, force) in work {
+        // Apply (direct index access so each immutable borrow ends before add_force).
+        let n = facade.scratch_force_pairs.len();
+        for i in 0..n {
+            let (handle, force) = facade.scratch_force_pairs[i];
             facade.add_force(handle, force, source);
         }
     }

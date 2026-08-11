@@ -39,8 +39,6 @@
 //!
 //! The report is collected automatically.
 
-use std::collections::BTreeMap;
-
 use rapier3d::prelude::{ColliderSet, NarrowPhase, RigidBodyHandle, RigidBodySet, Vector};
 use smallvec::SmallVec;
 
@@ -167,6 +165,114 @@ pub struct ForceContribution {
     pub body_count: u32,
 }
 
+/// Capacity of the fixed-size contributions table. Identical to the `idx`
+/// range produced by [`force_law_type_idx`] (slots 0..=33, with 26 reserved
+/// for `ForceLawType::Custom`). Must stay in lockstep with `NUM_FORCE_TYPES`
+/// in [`ForceFacade::drain_report`].
+pub(crate) const NUM_FORCE_TYPES: usize = 34;
+
+/// P0.5 fix: fixed-size index table replacing `BTreeMap<ForceLawType, _>`.
+///
+/// Each slot is indexed by [`force_law_type_idx`]; `None` means that force
+/// type produced no contribution this frame. The two commercially important
+/// operations (`add` / `get` / `iter`) are O(1) — the previous `BTreeMap`
+/// cost one `O(log N)` lookup plus a possible node allocation per entry.
+///
+/// Public API (`get`, `iter`, `values`, `is_empty`, `add`) mirrors the
+/// subset of `BTreeMap` semantics the codebase actually uses, so external
+/// callers (`shared_arena::holes::flush_force_breakdown`, the legacy report
+/// converter, the unit tests) stay source-compatible.
+#[derive(Clone, Debug)]
+pub struct ForceContributionTable {
+    slots: [Option<ForceContribution>; NUM_FORCE_TYPES],
+}
+
+impl Default for ForceContributionTable {
+    fn default() -> Self {
+        // Manual impl needed because arrays of size > 32 do not derive
+        // `Default` in stable Rust (const generics limitation).
+        Self {
+            slots: std::array::from_fn(|_| None),
+        }
+    }
+}
+
+impl<'a> IntoIterator for &'a ForceContributionTable {
+    type Item = (ForceLawType, &'a ForceContribution);
+    type IntoIter = ForceContributionTableIter<'a>;
+    fn into_iter(self) -> Self::IntoIter {
+        ForceContributionTableIter {
+            table: self,
+            pos: 0,
+        }
+    }
+}
+
+/// By-reference iterator over the active slots of a [`ForceContributionTable`].
+/// Pairs every active slot with the `ForceLawType` recovered from its index
+/// via [`force_law_type_from_idx`]. Used by `for … in &report.contributions`.
+pub struct ForceContributionTableIter<'a> {
+    table: &'a ForceContributionTable,
+    pos: usize,
+}
+
+impl<'a> Iterator for ForceContributionTableIter<'a> {
+    type Item = (ForceLawType, &'a ForceContribution);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.pos < NUM_FORCE_TYPES {
+            let idx = self.pos;
+            self.pos += 1;
+            if let Some(c) = self.table.slots[idx].as_ref() {
+                return Some((force_law_type_from_idx(idx), c));
+            }
+        }
+        None
+    }
+}
+
+impl ForceContributionTable {
+    pub fn get(&self, law_type: ForceLawType) -> Option<&ForceContribution> {
+        self.slots[force_law_type_idx(law_type)].as_ref()
+    }
+
+    /// Borrowing variant mirroring `BTreeMap::get` returning a `Copiable` value
+    /// (used by `to_legacy_report`). `&ForceLawType` accepted for source-compat.
+    pub fn get_copy(&self, law_type: &ForceLawType) -> Option<ForceContribution> {
+        self.slots[force_law_type_idx(*law_type)]
+    }
+
+    /// Iterate over `(ForceLawType, &ForceContribution)` for every active slot.
+    pub fn iter(&self) -> impl Iterator<Item = (ForceLawType, &ForceContribution)> {
+        self.slots.iter().enumerate().filter_map(|(idx, opt)| {
+            opt.as_ref()
+                .map(|c| (force_law_type_from_idx(idx), c))
+        })
+    }
+
+    /// Iterate over `(&ForceContribution)` for every active slot (sources removed).
+    pub fn values(&self) -> impl Iterator<Item = &ForceContribution> {
+        self.slots.iter().filter_map(Option::as_ref)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.slots.iter().all(Option::is_none)
+    }
+
+    /// Insert/merge a contribution in place. Same semantics as the previous
+    /// `self.contributions.entry(law_type).or_default()` + `+=` pattern.
+    pub fn add(&mut self, law_type: ForceLawType, force: crate::rapier::ffi::Vec3, body_count: u32) {
+        let idx = force_law_type_idx(law_type);
+        let entry = self.slots[idx].get_or_insert_with(ForceContribution::default);
+        entry.total_force = crate::rapier::ffi::Vec3 {
+            x: entry.total_force.x + force.x,
+            y: entry.total_force.y + force.y,
+            z: entry.total_force.z + force.z,
+        };
+        entry.body_count += body_count;
+    }
+}
+
 /// Aggregated force report for one simulation step.
 ///
 /// Building block for `CustomPhysicsReport` — maps each active force type to
@@ -174,7 +280,7 @@ pub struct ForceContribution {
 /// coming from.
 #[derive(Clone, Debug, Default)]
 pub struct ForceReport {
-    pub contributions: BTreeMap<ForceLawType, ForceContribution>,
+    pub contributions: ForceContributionTable,
     pub max_reynolds_number: f64,
 }
 
@@ -185,32 +291,23 @@ impl ForceReport {
         force: rapier3d::prelude::Vector,
         body_count: u32,
     ) {
-        let entry = self.contributions.entry(law_type).or_default();
-        let existing = crate::rapier::ffi::vec3_from_rapier(force);
-        entry.total_force = crate::rapier::ffi::Vec3 {
-            x: entry.total_force.x + existing.x,
-            y: entry.total_force.y + existing.y,
-            z: entry.total_force.z + existing.z,
-        };
-        entry.body_count += body_count;
+        let f = crate::rapier::ffi::vec3_from_rapier(force);
+        self.contributions.add(law_type, f, body_count);
     }
 
     /// Convert to the legacy flat `CustomPhysicsReport` struct for FFI.
     pub fn to_legacy_report(&self) -> CustomPhysicsReport {
-        let total_external =
-            self.contributions
-                .iter()
-                .fold(crate::rapier::ffi::Vec3::default(), |acc, (_, c)| {
-                    crate::rapier::ffi::Vec3 {
-                        x: acc.x + c.total_force.x,
-                        y: acc.y + c.total_force.y,
-                        z: acc.z + c.total_force.z,
-                    }
-                });
+        let total_external = self.contributions.iter().fold(
+            crate::rapier::ffi::Vec3::default(),
+            |acc, (_, c)| crate::rapier::ffi::Vec3 {
+                x: acc.x + c.total_force.x,
+                y: acc.y + c.total_force.y,
+                z: acc.z + c.total_force.z,
+            },
+        );
         let drag_contrib = self
             .contributions
-            .get(&ForceLawType::AirDrag)
-            .copied()
+            .get_copy(&ForceLawType::AirDrag)
             .unwrap_or_default();
         // external_force_body_count = max per-type body_count (each type touches
         // the same set of bodies, so max approximates unique body count)
@@ -352,6 +449,14 @@ pub struct ForceFacade<'a> {
     pub pending_forces: &'a mut SmallVec<[crate::rapier::events::PendingForce; 128]>,
     /// Persistent scratch buffer for Coulomb friction (P5 fix).
     pub friction_work: &'a mut Vec<(RigidBodyHandle, RigidBodyHandle, Vector)>,
+    /// Reusable `(handle, force)` accumulator for ForceLaw::apply() implementations.
+    /// Callers must `clear()` before use; contents are consumed by the law itself.
+    pub scratch_force_pairs: &'a mut SmallVec<[(RigidBodyHandle, Vector); 64]>,
+    /// Secondary `(handle, force)` scratch for laws needing a second accumulator
+    /// (e.g. PulsarMagneticDipole's mass-propagated vs collider-less split).
+    pub scratch_force_pairs_alt: &'a mut SmallVec<[(RigidBodyHandle, Vector); 64]>,
+    /// Reusable `(handle, mass, position)` buffer for pairwise pre-collection.
+    pub scratch_body_data: &'a mut SmallVec<[(RigidBodyHandle, f64, Vector); 64]>,
     /// Accumulated Reynolds number (shared across air drag laws).
     pub max_reynolds: f64,
 }
@@ -366,6 +471,9 @@ impl<'a> ForceFacade<'a> {
         body_log: &'a mut Vec<Option<BodyForceLog>>,
         pending_forces: &'a mut SmallVec<[crate::rapier::events::PendingForce; 128]>,
         friction_work: &'a mut Vec<(RigidBodyHandle, RigidBodyHandle, Vector)>,
+        scratch_force_pairs: &'a mut SmallVec<[(RigidBodyHandle, Vector); 64]>,
+        scratch_force_pairs_alt: &'a mut SmallVec<[(RigidBodyHandle, Vector); 64]>,
+        scratch_body_data: &'a mut SmallVec<[(RigidBodyHandle, f64, Vector); 64]>,
     ) -> Self {
         Self {
             bodies,
@@ -375,6 +483,9 @@ impl<'a> ForceFacade<'a> {
             body_log,
             pending_forces,
             friction_work,
+            scratch_force_pairs,
+            scratch_force_pairs_alt,
+            scratch_body_data,
             max_reynolds: 0.0,
         }
     }
@@ -512,10 +623,15 @@ impl<'a> ForceFacade<'a> {
             ..Default::default()
         };
 
-        // C4: JeansEscape idx=33 — bump array to 34 slots.
+        // C4: JeansEscape idx=33 — bump array to 34 slots. Mirrors NUM_FORCE_TYPES
+        // exported above; both must stay in lockstep with force_law_type_idx's range.
         const NUM_FORCE_TYPES: usize = 34;
         let mut drained = std::mem::take(self.body_log);
         for log in drained.iter_mut().flatten() {
+            // P0.5 fix: keep using the per-body KahanVec3 accumulator — its
+            // per-source-summed values merge directly into the fixed-size
+            // ForceContributionTable, which is O(1) lookup vs the previous
+            // BTreeMap::entry O(log N) + node allocation.
             let mut body_totals: [Option<KahanVec3>; NUM_FORCE_TYPES] = [None; NUM_FORCE_TYPES];
             for (source, f) in &log.forces {
                 let idx = force_law_type_idx(*source);
@@ -537,16 +653,13 @@ impl<'a> ForceFacade<'a> {
                     },
                 );
             }
+            // Merge per-body per-source totals into the frame report. Each
+            // touched source contributes one body to body_count and adds
+            // kahan.value() to total_force (Kahan summed).
             for (tag, maybe_kahan) in body_totals.iter().enumerate() {
                 if let Some(kahan) = maybe_kahan {
                     let law_type = force_law_type_from_idx(tag);
-                    let c = report.contributions.entry(law_type).or_default();
-                    c.total_force = crate::rapier::ffi::Vec3 {
-                        x: c.total_force.x + kahan.value().x,
-                        y: c.total_force.y + kahan.value().y,
-                        z: c.total_force.z + kahan.value().z,
-                    };
-                    c.body_count += 1;
+                    report.contributions.add(law_type, kahan.value(), 1);
                 }
             }
         }

@@ -36,6 +36,30 @@ pub(crate) struct FrameWorkBuffers {
     pub(crate) pending_forces: smallvec::SmallVec<[crate::rapier::events::PendingForce; 128]>,
     /// Scratch buffer for arena command → handle mapping.
     pub(crate) arena_idx_map: Vec<Option<rapier3d::prelude::RigidBodyHandle>>,
+    /// Reusable `(handle, force)` accumulator shared across ForceLaw::apply() calls.
+    /// Cleared before each law runs; avoids per-law-per-frame SmallVec::new().
+    pub(crate) scratch_force_pairs: smallvec::SmallVec<
+        [(rapier3d::prelude::RigidBodyHandle, Vector); 64],
+    >,
+    /// Secondary `(handle, force)` scratch (e.g. PulsarMagneticDipole fallback path).
+    pub(crate) scratch_force_pairs_alt: smallvec::SmallVec<
+        [(rapier3d::prelude::RigidBodyHandle, Vector); 64],
+    >,
+    /// Reusable `(handle, mass, position)` buffer for pairwise gravity pre-collection.
+    /// Avoids per-frame SmallVec allocation in NewtonianGravityForceLaw::apply().
+    pub(crate) scratch_body_data: smallvec::SmallVec<
+        [(rapier3d::prelude::RigidBodyHandle, f64, Vector); 64],
+    >,
+    /// P1.8: Coulomb hook 同步跟踪。`true` 时 `world_step` 末尾需要对一遍 collider
+    /// 把 `MODIFY_SOLVER_CONTACTS` bit 设上；扫描完成后清零、记录当时的 collider 数量，
+    /// 下次只在数量变化（新增/移除 collider）或 Coulomb law 切换时再扫。
+    pub(crate) coulomb_hook_dirty: bool,
+    /// P1.8: 上次完成 Coulomb hook 同步时的 `colliders.len()`，用于在 step 入口
+    /// 廉价判定是否有新插入/移除的 collider 破坏了既有 hook 状态。
+    pub(crate) coulomb_hook_last_collider_count: usize,
+    /// P1.9: arena handle 映射的「当前正文长度」——上一次 `arena_idx_map` rebuild
+    /// 时 `bodies.len()`。step 入口比较 `bodies.len()` 与此值，相等则跳过 clear+rebuild。
+    pub(crate) arena_idx_map_body_count: usize,
 }
 
 impl Default for FrameWorkBuffers {
@@ -45,6 +69,12 @@ impl Default for FrameWorkBuffers {
             friction_work: Vec::with_capacity(512),
             pending_forces: smallvec::SmallVec::new(),
             arena_idx_map: Vec::with_capacity(256),
+            scratch_force_pairs: smallvec::SmallVec::new(),
+            scratch_force_pairs_alt: smallvec::SmallVec::new(),
+            scratch_body_data: smallvec::SmallVec::new(),
+            coulomb_hook_dirty: true,
+            coulomb_hook_last_collider_count: 0,
+            arena_idx_map_body_count: 0,
         }
     }
 }
@@ -174,12 +204,19 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
         if let Some(ref arena) = world.inner.shared_arena {
             let commands = arena.drain_commands();
             if !commands.is_empty() {
-                // Use persistent cached index map (P3 fix: avoid per-frame Vec rebuild)
-                let idx = &mut world.inner.buffers.arena_idx_map;
-                idx.clear();
-                for (h, _) in world.inner.bodies.iter() {
-                    idx.push(Some(h));
+                // P1.9: arena_idx_map 增量更新——只在 `bodies.len()` 与上次不一致时
+                // clear+rebuild；相等时 arena handle 顺序未变（rapier 维持插入次序），
+                // 直接复用既有内容，消除每帧 O(n) rebuild。
+                let n_bodies = world.inner.bodies.len();
+                if n_bodies != world.inner.buffers.arena_idx_map_body_count {
+                    let idx = &mut world.inner.buffers.arena_idx_map;
+                    idx.clear();
+                    for (h, _) in world.inner.bodies.iter() {
+                        idx.push(Some(h));
+                    }
+                    world.inner.buffers.arena_idx_map_body_count = n_bodies;
                 }
+                let idx = &world.inner.buffers.arena_idx_map;
                 for (cmd_type, body_idx, a0, a1, a2) in commands {
                     if let Some(Some(h)) = idx.get(body_idx as usize)
                         && let Some(body) = world.inner.bodies.get_mut(*h)
@@ -265,13 +302,26 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
             }
         }
 
-        // --- Coulomb hook setup ---
+        // --- Coulomb hook setup (P1.8: dirty flag + collider count guard) ---
+        // 稳态下整段退化为 O(1)（`coulomb_hook_dirty=false` 且 collider 数量不变
+        // 时跳过遍历），只在以下触发重扫：首帧 / Coulomb law 切换（setter 把
+        // dirty 标 true）/ collider 数量变化（新增/移除）。rebuild 完毕后清零
+        // dirty、记下当次 collider 数量，下次只在结构变化时再扫。
         let custom = world.inner.events.custom_physics();
         let coulomb_active = custom
             .coulomb_friction
             .is_some_and(|law| law.enabled.0 != 0);
 
-        if coulomb_active {
+        if !coulomb_active {
+            // Coulomb 没启用：下次启用时强制扫一次（dirty 已是此处不再设回
+            // false）。last_collider_count 同步清 0，保证重启用时即便 collider
+            // 数量恰好与上次记下的相等，dirty 也会驱动扫描。
+            world.inner.buffers.coulomb_hook_dirty = true;
+            world.inner.buffers.coulomb_hook_last_collider_count = 0;
+        } else if world.inner.buffers.coulomb_hook_dirty
+            || world.inner.colliders.len()
+                != world.inner.buffers.coulomb_hook_last_collider_count
+        {
             let hook_bit = ActiveHooks::MODIFY_SOLVER_CONTACTS;
             for (_, collider) in world.inner.colliders.iter_mut() {
                 let current = collider.active_hooks();
@@ -279,6 +329,9 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
                     collider.set_active_hooks(current | hook_bit);
                 }
             }
+            world.inner.buffers.coulomb_hook_last_collider_count =
+                world.inner.colliders.len();
+            world.inner.buffers.coulomb_hook_dirty = false;
         }
 
         // --- Force facade: the single entry-point for all force application ---
@@ -287,6 +340,10 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
         let mut body_log = std::mem::take(&mut world.inner.buffers.body_log);
         let mut pending_forces = std::mem::take(&mut world.inner.buffers.pending_forces);
         let mut friction_work = std::mem::take(&mut world.inner.buffers.friction_work);
+        let mut scratch_force_pairs = std::mem::take(&mut world.inner.buffers.scratch_force_pairs);
+        let mut scratch_force_pairs_alt =
+            std::mem::take(&mut world.inner.buffers.scratch_force_pairs_alt);
+        let mut scratch_body_data = std::mem::take(&mut world.inner.buffers.scratch_body_data);
         let mut facade = ForceFacade::new(
             &mut world.inner.bodies,
             &mut world.inner.colliders,
@@ -295,6 +352,9 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
             &mut body_log,
             &mut pending_forces,
             &mut friction_work,
+            &mut scratch_force_pairs,
+            &mut scratch_force_pairs_alt,
+            &mut scratch_body_data,
         );
 
         // 1. Registered ForceLaw list (from new system)
@@ -319,6 +379,10 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
         world.inner.buffers.body_log = empty_log;
         world.inner.buffers.pending_forces = std::mem::take(facade.pending_forces);
         world.inner.buffers.friction_work = std::mem::take(facade.friction_work);
+        world.inner.buffers.scratch_force_pairs = std::mem::take(facade.scratch_force_pairs);
+        world.inner.buffers.scratch_force_pairs_alt =
+            std::mem::take(facade.scratch_force_pairs_alt);
+        world.inner.buffers.scratch_body_data = std::mem::take(facade.scratch_body_data);
         if force_report
             .contributions
             .values()

@@ -167,7 +167,7 @@ impl super::SharedPhysicsArena {
             if count >= 32 {
                 break;
             }
-            let type_tag = crate::rapier::ffi::force_law_type_tag(*law_type);
+            let type_tag = crate::rapier::ffi::force_law_type_tag(law_type);
             let offset = self.force_report_offset + count as usize * 32;
             unsafe {
                 (self.ptr.add(offset) as *mut f64).write_unaligned(contrib.total_force.x);

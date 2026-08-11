@@ -207,6 +207,7 @@ macro_rules! jni {
     (@ty double_array) => { jdoubleArray };
     (@ty long_array) => { jlongArray };
     (@ty bool_array) => { jbooleanArray };
+    (@ty String) => { jstring };
     (@default long) => { 0 };
     (@default boolean) => { 0 };
     (@default byte_array) => { std::ptr::null_mut() };
@@ -1362,5 +1363,49 @@ jni!(int cosmosWorldDynamicBodyCount(long world) {
     w.dynamic_body_count() as jint
 });
 
+// 动态刚体数量（用于 sizing cosmosWorldDynamicBodySnapshot：先拿到 N
+// 再在 Java 端分配 `long[N]` 与 `double[N * 7]` 直接 buffer）。与 mps-core
+// `worldDynamicBodySnapshotCount` ABI 平行（见 性能分析.MD §11.1/§12.1，
+// M1 + L1 落地基线）。
+jni!(int cosmosWorldDynamicBodySnapshotCount(long world) {
+    let w = unsafe { (world as *const CosmosWorld).as_ref() };
+    let Some(w) = w else { return 0; };
+    w.dynamic_body_count() as jint
+});
+
+// 批量快照动态刚体 handle + pose（7 f64/body：pos3 + quat4）。详见
+// mps-cosmos `cosmos_world_dynamic_body_snapshot` 文档。
+//
+// **签名平行 mps-core `worldDynamicBodySnapshot`**：`long world, long
+// out_handles, long out_values, int capacity` —— `out_handles` / `out_values`
+// 是 Java 端用 `Unsafe.allocateMemory` / `ByteBuffer.allocateDirect` 分配的
+// **native 直接内存指针**（不是 jbyteArray / jdoubleArray）。这样：
+//   - 0 JNI env 拷贝，1 次连续 native memcpy；
+//   - 0 Java heap 短命对象，0 minor GC 压力（性能分析.MD §11.2 / M2 的诉求
+//     在此形态下自动满足）；
+//   - Java 端可映射到 `MappedByteBuffer` 或 `MemorySegment` (Java 22+ FFM
+//     路径)，与 mps-core 路径用同一份代码模板。
+//
+// Java 端推荐用法（替代 N 次 cosmosBodyTranslationOut 往返）：
+//   int n = cosmosWorldDynamicBodySnapshotCount(world);
+//   long handlesPtr = Unsafe.allocateMemory(n * 8L);
+//   long valuesPtr  = Unsafe.allocateMemory(n * 7L * 8);
+//   int written = cosmosWorldDynamicBodySnapshot(world, handlesPtr, valuesPtr, n);
+//   // values[i*7..i*7+3] = pos, values[i*7+3..i*7+7] = quat(i,j,k,w)
+//
+// 容量非法 / world null 时返回 0；失败原因由 abiLastErrorCode() 报告。
+jni!(int cosmosWorldDynamicBodySnapshot(
+        long world,
+        long out_handles,
+        long out_values,
+        int capacity
+    ) {
+    mps_cosmos::ffi::cosmos_world_dynamic_body_snapshot(
+        world as isize as *const CosmosWorld,
+        out_handles as isize as *mut u64,
+        out_values as isize as *mut f64,
+        u32_from_jint(capacity),
+    ) as jint
+});
 
 

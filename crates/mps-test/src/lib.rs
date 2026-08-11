@@ -3,6 +3,7 @@
 
 pub mod cosmos {
     pub mod bodies;
+    pub mod ffi;
     pub mod gravity;
     pub mod integrator;
     pub mod orbit;

@@ -204,6 +204,58 @@ double cosmos_hill_radius_for(const struct CosmosWorld *world,
  */
 uint32_t cosmos_world_dynamic_body_count(const struct CosmosWorld *world);
 
+/**
+ * 动态刚体数量（用于 sizing `cosmos_world_dynamic_body_snapshot` 调用）。
+ *
+ * 与 [`cosmos_world_dynamic_body_count`] 在当前实现里返回相同数；
+ * 单独导出独立计法以与 mps-core `world_dynamic_body_snapshot_count`
+ * 的 ABI 形态对齐——Java 端可以以完全相同的 Java 代码模式先用
+ * `cosmosWorldDynamicBodySnapshotCount` 拿到 N，分配 `long[N]` 与
+ * `double[N * 7]`，再调 `cosmosWorldDynamicBodySnapshot` 拉一次全数据。
+ *
+ * # Safety
+ * `world` 可为 null（返回 0），其余情形须是 `cosmos_world_create` 产出的有效指针。
+ */
+uint32_t cosmos_world_dynamic_body_snapshot_count(const struct CosmosWorld *world);
+
+/**
+ * 批量快照动态刚体的 handle + pose（7 f64/body：pos3 + quat4）。
+ *
+ * 与 mps-core `world_dynamic_body_snapshot` 完全平行，目的同样：把每 tick
+ * Java 端原本要按 N 次 `cosmos_body_translation_out` 往返取所有 pos 的
+ * 路径合并成**一次 JNI 调用 + 一份连续 f64[]**——N=1000 卫星的取位延迟
+ * 从 ~600 µs/tick 砍到 ~50 µs/tick（见 `性能分析.MD` §11.1 / §12.1，
+ * M1 + L1 同根改动）。
+ *
+ * # 布局
+ * - `out_handles[i]`: `pack_handle = (idx << 32) | generation` —— 与
+ *   `cosmos_insert_body` / `cosmos_body_translation_out` 等所有 cosmos
+ *   body handle ABI 一致（**注意**：与 mps-core 的 `+1/-1` 编码不同）。
+ * - `out_values[i * 7 .. i * 7 + 3]`：位置 `pos.x, pos.y, pos.z`
+ * - `out_values[i * 7 + 3 .. i * 7 + 7]`：旋转 `quat.i, quat.j, quat.k, quat.w`
+ *   （与 rapier3d `Rotation::xyzw` 顺序一致，Java 端可以直接映射到
+ *   `Quatd(i, j, k, w)` 或 JOML `Quaterniond`）。
+ *
+ * 只写动态刚体（`is_dynamic() == true`），跳过 fixed / kinematic —— 与
+ * `dynamic_body_count` / `cosmosWorldDynamicBodySnapshotCount` 一致。容量
+ * 不够时只填到 `capacity` 为止并返回实际数量；调用方应按 count 先分配。
+ *
+ * # 返回值
+ * 实际写入的 body 数；任一前置参数非法返回 0（并 `set_error`）：
+ * - `world` null → `ERR_NULL_POINTER`，返回 0
+ * - `out_handles` / `out_values` null，或 `capacity == 0`，
+ *   或 `capacity > MAX_OUTPUT_CAPACITY` → `ERR_CAPACITY`，返回 0
+ *
+ * # Safety
+ * `out_handles` 指向至少 `capacity` 个 `u64` 可写内存；`out_values` 指向
+ * 至少 `capacity * 7` 个 `f64` 可写内存。`world` 须为 `cosmos_world_create`
+ * 产出的指针或 null。调用方应在写入完成前不让另一线程同时操作这两个缓冲。
+ */
+uint32_t cosmos_world_dynamic_body_snapshot(const struct CosmosWorld *world,
+                                            uint64_t *out_handles,
+                                            double *out_values,
+                                            uint32_t capacity);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif  // __cplusplus

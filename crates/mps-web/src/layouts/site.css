@@ -115,11 +115,21 @@ table tr:hover td { background: #1a1a3e; }
    intercept pointer events on its own — the ring track is non-interactive
    by default without disabling the whole subtree. */
 .orbit { position: absolute; top: 0; left: 0; border-radius: 50%; border: 1px dashed rgba(78,158,255,.18); transform: translate(-50%, -50%); }
-.ring-inner { width: 300px; height: 300px; }
-.ring-outer { width: 560px; height: 560px; }
 /* Orbit-spin = the rotating carrier. animation: spin @keyframes.
-   Will-change transform tells the compositor to put it on its own layer. */
+   Will-change transform tells the compositor to put it on its own layer.
+   z-index is set on .orbit (the ring container), NOT on .orbit-spin, because
+   `.orbit` has `transform: translate(-50%, -50%)` which creates a stacking
+   context — z-index on .orbit-spin only orders things WITHIN that ring's
+   context, not against the other ring. Without z-index here, ring-outer
+   (larger, 560×560) comes later in the DOM and stacks ABOVE ring-inner
+   (300×300); the outer .orbit-spin's 560×560 box then covers the central
+   area where inner planets sit, intercepting their clicks (browser's
+   elementFromPoint returns .orbit-spin instead of the inner .planet anchor).
+   Setting ring-inner z-index > ring-outer z-index puts the whole inner ring
+   — including its 7 clickable inner planets — on top of the outer ring. */
 .orbit-spin { position: absolute; inset: 0; border-radius: 50%; will-change: transform; }
+.ring-inner { width: 300px; height: 300px; z-index: 2; }
+.ring-outer { width: 560px; height: 560px; z-index: 1; }
 .ring-inner .orbit-spin { animation: spin-cw 22s linear infinite; }
 .ring-outer .orbit-spin { animation: spin-ccw 38s linear infinite; }
 @keyframes spin-cw  { from { transform: rotate(0deg);   } to { transform: rotate(360deg);  } }

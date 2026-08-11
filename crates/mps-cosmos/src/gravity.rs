@@ -18,6 +18,10 @@ use rapier3d::prelude::{RigidBodyHandle, Rotation, Vector};
 
 /// 一个注册到世界中的天体引力源。
 ///
+/// 硬上限：带谐展开最多 J2..J6 五项，存栈上即可，避免每子步每体每源 `vec!`。
+/// P1.11 起在 `CelestialSource::new` 用作预过滤缓冲长度。
+const MAX_ZONAL: usize = 5;
+
 /// `max_sh_degree` 限制球谐展开的最高阶；实际还会被 `body.max_degree` 约束。
 #[derive(Clone, Copy)]
 pub struct CelestialSource {
@@ -26,14 +30,34 @@ pub struct CelestialSource {
     pub max_sh_degree: u32,
     /// 是否启用本天体的引力（关闭则贡献为 0）。
     pub enabled: bool,
+    /// P1.11: 预过滤的 J2..J6 带谐系数（仅非零项），供 `celestial_acceleration`
+    /// 的 `10R..100R` 分支直接 `&zonal[..n]` 取用，避免每次调用都构造
+    /// `[f64; 5]` + filter。保留 j2..j6 的原始出现序；`j_zonal_n` 是写入项数。
+    /// 多数天体只有 j2 ≠ 0 → `n=1, zonals=[j2, 0, 0, 0, 0]`。
+    pub j_zonal_zonals: [f64; MAX_ZONAL],
+    /// 预过滤 J 系数的有效长度（≤ MAX_ZONAL）。
+    pub j_zonal_n: u8,
 }
 
 impl CelestialSource {
     pub fn new(body: &'static CelestialBody, max_sh_degree: u32) -> Self {
+        // P1.11: 一次性把 body 的 j2..j6 过滤掉零项，填入 `j_zonal_zonals[..n]`。
+        // 旧 `celestial_acceleration` 每次调用都要做这件事，现在下沉到构造期。
+        let raw = [body.j2, body.j3, body.j4, body.j5, body.j6];
+        let mut zonal = [0.0_f64; MAX_ZONAL];
+        let mut n = 0u8;
+        for j in raw.iter().copied() {
+            if j != 0.0 {
+                zonal[n as usize] = j;
+                n += 1;
+            }
+        }
         Self {
             body,
             max_sh_degree,
             enabled: true,
+            j_zonal_zonals: zonal,
+            j_zonal_n: n,
         }
     }
 }
@@ -138,9 +162,6 @@ impl NBodySource {
     }
 }
 
-/// 硬上限：带谐展开最多 J2..J6 五项，存栈上即可，避免每子步每体每源 `vec!`。
-const MAX_ZONAL: usize = 5;
-
 /// 自适应选择最匹配的引力模型并返回在该 `position` 处的引力加速度。
 ///
 /// 选择规则（沿用旧 `mps-core` 的自适应天体重力分支）：
@@ -184,26 +205,20 @@ pub fn celestial_acceleration(position: Vector, source: &CelestialSource) -> Vec
     {
         spherical_harmonics_acceleration(pos, source.body, source.max_sh_degree)
     } else if normalized_altitude < 100.0 {
-        // J2..J6：原实现 `vec!` 逐项 filter 分配，本路径在 FR8 每子步 9 leapfrog
-        // ×天体数×体数都会触发，改为栈上数组 + 计数，无堆分配。
-        let raw = [
-            source.body.j2,
-            source.body.j3,
-            source.body.j4,
-            source.body.j5,
-            source.body.j6,
-        ];
-        let mut buf = [0.0_f64; MAX_ZONAL];
-        let mut n = 0;
-        for j in raw.iter().copied() {
-            if j != 0.0 {
-                buf[n] = j;
-                n += 1;
-            }
-        }
-        zonal_harmonics_acceleration(pos, gm, r_eq, &buf[..n])
+        // P1.11: J2..J6 过滤改读 `source.j_zonal_zonals[..j_zonal_n]`（`new()` 时
+        // 预计算）而非每次调用都重建 `[f64; 5]` + filter。FR8 每子步 15 次 accel
+        // 评估 × N 个天体 × N 个体 → 累计每步上千次调用，省掉若干栈写。
+        zonal_harmonics_acceleration(
+            pos,
+            gm,
+            r_eq,
+            &source.j_zonal_zonals[..source.j_zonal_n as usize],
+        )
     } else {
-        // >100R：点质量 + J2。同样避免 `vec![]` / `vec![j2]` 分配。
+        // >100R：点质量 + J2。本分支只用 j2（忽略 j3..j6），无堆分配。
+        // 注：不能用 `source.j_zonal_zonals[..]`，因为预过滤数组在 j2=0 时会把
+        // 后续非零 jn 顶到首项（new() 实现只过滤了"非零"序，保留了 j2..j6 的出现序）；
+        // 此分支严格只想要"j2 或 空集"。
         let j2 = source.body.j2;
         let buf = [j2];
         let slice = if j2 != 0.0 { &buf[..] } else { &[][..] };
