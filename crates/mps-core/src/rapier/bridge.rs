@@ -27,6 +27,8 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::slice;
 
+use rayon::prelude::*;
+
 // ---------------------------------------------------------------------------
 // Direct ByteBuffer — zero-copy bulk data transfer
 // ---------------------------------------------------------------------------
@@ -209,30 +211,36 @@ pub fn bulk_body_snapshot_to_direct_buffer(
         None => return 0,
     };
 
-    let mut written = 0usize;
-    for (_handle, body) in world.inner.bodies.iter() {
-        if written >= capacity_bodies as usize {
-            break;
-        }
-        let translation = body.translation();
-        let rotation = body.rotation();
-        let linvel = body.linvel();
-        let angvel = body.angvel();
-        let offset = written * 13;
-        out[offset] = translation.x;
-        out[offset + 1] = translation.y;
-        out[offset + 2] = translation.z;
-        out[offset + 3] = rotation.x;
-        out[offset + 4] = rotation.y;
-        out[offset + 5] = rotation.z;
-        out[offset + 6] = rotation.w;
-        out[offset + 7] = linvel.x;
-        out[offset + 8] = linvel.y;
-        out[offset + 9] = linvel.z;
-        out[offset + 10] = angvel.x;
-        out[offset + 11] = angvel.y;
-        out[offset + 12] = angvel.z;
-        written += 1;
+    let capacity = capacity_bodies as usize;
+
+    // Collect body handles (cheap shared read), then compute each body's
+    // 13-f64 snapshot in parallel. Bodies are read-only here and each output
+    // slot `out[i*13..i*13+13]` is disjoint, so the parallel map is race-free;
+    // the final `copy_from_slice` back into the caller-owned buffer is serial.
+    let handles: Vec<_> = world
+        .inner
+        .bodies
+        .iter()
+        .map(|(h, _)| h.clone())
+        .take(capacity)
+        .collect();
+    let snapshots: Vec<[f64; 13]> = handles
+        .into_par_iter()
+        .map(|h| {
+            let body = &world.inner.bodies[h];
+            let t = body.translation();
+            let r = body.rotation();
+            let lv = body.linvel();
+            let av = body.angvel();
+            [
+                t.x, t.y, t.z, r.x, r.y, r.z, r.w, lv.x, lv.y, lv.z, av.x, av.y, av.z,
+            ]
+        })
+        .collect();
+
+    let written = snapshots.len().min(capacity);
+    for (i, snap) in snapshots.iter().enumerate().take(written) {
+        out[i * 13..i * 13 + 13].copy_from_slice(snap);
     }
     written as i32
 }

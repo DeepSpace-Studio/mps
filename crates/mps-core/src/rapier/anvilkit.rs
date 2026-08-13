@@ -27,11 +27,13 @@ pub(crate) struct AnvilKitAppState {
 }
 
 #[derive(Component, Clone, Copy)]
+#[allow(dead_code)] // `handle` is written when the component is inserted; read path lands with the reverse-lookup API.
 struct BodyLink {
     handle: RigidBodyHandleRaw,
 }
 
 #[derive(Component, Clone, Copy)]
+#[allow(dead_code)]
 struct ColliderLink {
     handle: ColliderHandleRaw,
 }
@@ -241,7 +243,7 @@ impl AnvilKitAppState {
         for (entity, transform, body_type, pending_collider, pending_material) in entities {
             let translation = vec3_from_glam(transform.translation);
             let rotation = quat_from_glam(transform.rotation);
-            let body_handle = if let Some(handle) = self.entity_to_body.get(&entity).copied() {
+            let body_handle = if let Some(handle) = self.entity_to_body.get(&entity).map(|r| *r) {
                 handle
             } else {
                 let body = RigidBodyBuilder::new(body_type_from_raw(match body_type {
@@ -585,7 +587,7 @@ pub extern "C" fn anvilkit_app_remove_constraint(
         let Some(world) = (unsafe { world.as_mut() }) else {
             return Bool::FALSE;
         };
-        let Some(handle) = app.inner.constraint_to_joint.remove(&constraint_id) else {
+        let Some((_, handle)) = app.inner.constraint_to_joint.remove(&constraint_id) else {
             return Bool::FALSE;
         };
         crate::rapier::joints::world_remove_impulse_joint(world, handle, wake_up)
