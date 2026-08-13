@@ -50,8 +50,7 @@ mod tests {
     }
 
     fn sibling_crate_dir(subdir: &str) -> PathBuf {
-        let manifest = option_env!("CARGO_MANIFEST_DIR")
-            .expect("CARGO_MANIFEST_DIR is set by cargo during build/test");
+        let manifest = env!("CARGO_MANIFEST_DIR");
         let manifest = PathBuf::from(manifest);
         let crates_root = manifest
             .parent()
@@ -63,21 +62,27 @@ mod tests {
         let dir = sibling_crate_dir("mps-test/src");
         let mut count = 0;
         for path in collect_rs_files(&dir) {
-            let Ok(content) = fs::read_to_string(&path) else { continue };
-            count += content.lines().filter(|line| line.trim() == "#[test]").count();
+            let Ok(content) = fs::read_to_string(&path) else {
+                continue;
+            };
+            count += content
+                .lines()
+                .filter(|line| line.trim() == "#[test]")
+                .count();
         }
         count
     }
 
     fn count_jni_methods() -> usize {
         let lib = sibling_crate_dir("mps-jni/src/lib.rs");
-        let Ok(content) = fs::read_to_string(&lib) else { return 0 };
+        let Ok(content) = fs::read_to_string(&lib) else {
+            return 0;
+        };
         content
             .lines()
             .filter(|line| {
                 let t = line.trim();
-                !t.starts_with("//")
-                    && (t.contains("jni!(") || t.contains("jni_e_c!("))
+                !t.starts_with("//") && (t.contains("jni!(") || t.contains("jni_e_c!("))
             })
             .count()
     }
@@ -86,7 +91,9 @@ mod tests {
         let dir = sibling_crate_dir("mps-core/src/rapier");
         let mut count = 0;
         for path in collect_rs_files(&dir) {
-            let Ok(content) = fs::read_to_string(&path) else { continue };
+            let Ok(content) = fs::read_to_string(&path) else {
+                continue;
+            };
             for line in content.lines() {
                 let t = line.trim_start();
                 if (t.starts_with("pub extern \"C\"")
@@ -112,20 +119,18 @@ mod tests {
         let mut out = std::collections::BTreeMap::new();
         for line in content.lines() {
             // Look for `pub const NAME: &str = "VALUE";`
-            if let Some(rest) = line.trim_start().strip_prefix("pub const ") {
-                if let Some(colon_idx) = rest.find(':') {
-                    let name = rest[..colon_idx].trim().to_string();
-                    if let Some(eq_idx) = rest[colon_idx..].find('=') {
-                        let rhs = &rest[colon_idx + eq_idx + 1..];
-                        // Extract "..."; find first `"` and last `"`.
-                        if let (Some(start), Some(end)) =
-                            (rhs.find('"'), rhs.rfind('"'))
-                        {
-                            if end > start {
-                                let value = rhs[start + 1..end].to_string();
-                                out.insert(name, value);
-                            }
-                        }
+            if let Some(rest) = line.trim_start().strip_prefix("pub const ")
+                && let Some(colon_idx) = rest.find(':')
+            {
+                let name = rest[..colon_idx].trim().to_string();
+                if let Some(eq_idx) = rest[colon_idx..].find('=') {
+                    let rhs = &rest[colon_idx + eq_idx + 1..];
+                    // Extract "..."; find first `"` and last `"`.
+                    if let (Some(start), Some(end)) = (rhs.find('"'), rhs.rfind('"'))
+                        && end > start
+                    {
+                        let value = rhs[start + 1..end].to_string();
+                        out.insert(name, value);
                     }
                 }
             }
@@ -154,11 +159,10 @@ mod tests {
                  then commit the generated file (OPTIMIZATION.md §N3)."
             );
         }
-        let expected_keys: BTreeSet<String> =
-            ["TEST_COUNT", "JNI_METHOD_COUNT", "CORE_FFI_COUNT"]
-                .into_iter()
-                .map(String::from)
-                .collect();
+        let expected_keys: BTreeSet<String> = ["TEST_COUNT", "JNI_METHOD_COUNT", "CORE_FFI_COUNT"]
+            .into_iter()
+            .map(String::from)
+            .collect();
         let actual_keys: BTreeSet<String> = metrics.keys().cloned().collect();
         let missing: BTreeSet<String> = expected_keys.difference(&actual_keys).cloned().collect();
         if !missing.is_empty() {

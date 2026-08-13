@@ -20,10 +20,10 @@
 #![cfg(test)]
 
 use mps_cosmos::bodies::satellite_builder;
-use mps_cosmos::world::{CosmosWorld, CosmosWorldConfig, OrbitIntegration, RelativisticCorrection};
 use mps_cosmos::ffi::{
     cosmos_world_dynamic_body_snapshot, cosmos_world_dynamic_body_snapshot_count,
 };
+use mps_cosmos::world::{CosmosWorld, CosmosWorldConfig, OrbitIntegration, RelativisticCorrection};
 use rapier3d::prelude::Vector;
 
 /// 默认 cosmos 配置（不注册任何天体 / sun；用于快照计数 + 拍平布局的纯结构性测试）。
@@ -60,13 +60,21 @@ fn snapshot_count_matches_world_dynamic_body_count() {
     assert_eq!(cosmos_world_dynamic_body_snapshot_count(&world), 0);
 
     // 插入 3 个体（前两个动态卫星 + 第三个固定体）。
-    let _sat1 = world.insert_body(
-        satellite_builder(1.0, Vector::new(1.0, 0.0, 0.0), Vector::ZERO, 0.1),
-    );
-    let _sat2 = world.insert_body(
-        satellite_builder(2.0, Vector::new(2.0, 0.0, 0.0), Vector::ZERO, 0.1),
-    );
-    let _ = world.insert_body(mps_cosmos::bodies::fixed_body_builder(Vector::new(0.0, 0.0, 0.0)));
+    let _sat1 = world.insert_body(satellite_builder(
+        1.0,
+        Vector::new(1.0, 0.0, 0.0),
+        Vector::ZERO,
+        0.1,
+    ));
+    let _sat2 = world.insert_body(satellite_builder(
+        2.0,
+        Vector::new(2.0, 0.0, 0.0),
+        Vector::ZERO,
+        0.1,
+    ));
+    let _ = world.insert_body(mps_cosmos::bodies::fixed_body_builder(Vector::new(
+        0.0, 0.0, 0.0,
+    )));
 
     // 只数动态体（fixed 不算），与 `world.dynamic_body_count()` 一致。
     assert_eq!(cosmos_world_dynamic_body_snapshot_count(&world), 2);
@@ -75,17 +83,24 @@ fn snapshot_count_matches_world_dynamic_body_count() {
 #[test]
 fn snapshot_writes_pos_and_handles_in_expected_layout() {
     let mut world = empty_world();
-    let sat1 = world.insert_body(
-        satellite_builder(1.0, Vector::new(10.0, 20.0, 30.0), Vector::ZERO, 0.1),
-    );
-    let sat2 = world.insert_body(
-        satellite_builder(2.0, Vector::new(40.0, 50.0, 60.0), Vector::ZERO, 0.1),
-    );
+    let sat1 = world.insert_body(satellite_builder(
+        1.0,
+        Vector::new(10.0, 20.0, 30.0),
+        Vector::ZERO,
+        0.1,
+    ));
+    let sat2 = world.insert_body(satellite_builder(
+        2.0,
+        Vector::new(40.0, 50.0, 60.0),
+        Vector::ZERO,
+        0.1,
+    ));
 
     // 预分配：2 体 × 7 f64 + 2 个 u64 handle。
     let mut handles = vec![0u64; 2];
     let mut values = vec![0f64; 2 * 7];
-    let n = cosmos_world_dynamic_body_snapshot(&world, handles.as_mut_ptr(), values.as_mut_ptr(), 2);
+    let n =
+        cosmos_world_dynamic_body_snapshot(&world, handles.as_mut_ptr(), values.as_mut_ptr(), 2);
     assert_eq!(n, 2, "snapshot should write both bodies");
 
     // handle 还原后应能映射回 RigidBodyHandle（与 per-body 路径一致）。
@@ -109,16 +124,20 @@ fn snapshot_writes_pos_and_handles_in_expected_layout() {
 fn snapshot_truncates_to_capacity_without_overflow() {
     let mut world = empty_world();
     for i in 0..5 {
-        let _ = world.insert_body(
-            satellite_builder(1.0, Vector::new(i as f64, 0.0, 0.0), Vector::ZERO, 0.1),
-        );
+        let _ = world.insert_body(satellite_builder(
+            1.0,
+            Vector::new(i as f64, 0.0, 0.0),
+            Vector::ZERO,
+            0.1,
+        ));
     }
     assert_eq!(cosmos_world_dynamic_body_snapshot_count(&world), 5);
 
     // 容量 3：只能写入 3 个体，不超出缓冲。
     let mut handles = vec![u64::MAX; 5];
     let mut values = vec![f64::NAN; 5 * 7];
-    let n = cosmos_world_dynamic_body_snapshot(&world, handles.as_mut_ptr(), values.as_mut_ptr(), 3);
+    let n =
+        cosmos_world_dynamic_body_snapshot(&world, handles.as_mut_ptr(), values.as_mut_ptr(), 3);
     assert_eq!(n, 3);
     // 未写入部分保持 sentinel（"未污染 capacity 之外"——FFI 不应越界写入）。
     assert_eq!(handles[3], u64::MAX);
@@ -169,39 +188,50 @@ fn snapshot_round_trip_against_per_body_translation_out() {
     use mps_formula::ffi::Vec3;
 
     let mut world = empty_world();
-    let h1 = world.insert_body(
-        satellite_builder(1.0, Vector::new(1.5, 2.5, 3.5), Vector::ZERO, 0.1),
-    );
-    let h2 = world.insert_body(
-        satellite_builder(2.0, Vector::new(-4.0, 0.5, 7.2), Vector::ZERO, 0.1),
-    );
+    let h1 = world.insert_body(satellite_builder(
+        1.0,
+        Vector::new(1.5, 2.5, 3.5),
+        Vector::ZERO,
+        0.1,
+    ));
+    let h2 = world.insert_body(satellite_builder(
+        2.0,
+        Vector::new(-4.0, 0.5, 7.2),
+        Vector::ZERO,
+        0.1,
+    ));
 
     // per-body 路径：循环 N 次取 pos。
-    let mut per_body_pos = [Vec3 { x: 0.0, y: 0.0, z: 0.0 }; 2];
+    let mut per_body_pos = [Vec3 {
+        x: 0.0,
+        y: 0.0,
+        z: 0.0,
+    }; 2];
     let pack = |h: rapier3d::prelude::RigidBodyHandle| -> u64 {
         let (idx, generation) = h.into_raw_parts();
         ((idx as u64) << 32) | (generation as u64)
     };
     // FFI 签名是 `out: *mut Vec3`——这里直接传裸指针，C-ABI 入口在 panic=abort
     // 防护下不会 UB（`world` 也是 `*const CosmosWorld`，Rust 引用强转裸指针对齐）。
-    let _ = cosmos_body_translation_out(
-        &world as *const _,
-        pack(h1),
-        &mut per_body_pos[0] as *mut _,
-    );
-    let _ = cosmos_body_translation_out(
-        &world as *const _,
-        pack(h2),
-        &mut per_body_pos[1] as *mut _,
-    );
+    let _ =
+        cosmos_body_translation_out(&world as *const _, pack(h1), &mut per_body_pos[0] as *mut _);
+    let _ =
+        cosmos_body_translation_out(&world as *const _, pack(h2), &mut per_body_pos[1] as *mut _);
 
     // batch 路径：一次拉。
     let mut handles = vec![0u64; 2];
     let mut values = vec![0f64; 2 * 7];
-    let n = cosmos_world_dynamic_body_snapshot(&world, handles.as_mut_ptr(), values.as_mut_ptr(), 2);
+    let n =
+        cosmos_world_dynamic_body_snapshot(&world, handles.as_mut_ptr(), values.as_mut_ptr(), 2);
     assert_eq!(n, 2);
 
     // 两个 body 的 pos 必须无误差相等。
-    assert_eq!(values[0..3], [per_body_pos[0].x, per_body_pos[0].y, per_body_pos[0].z]);
-    assert_eq!(values[7..10], [per_body_pos[1].x, per_body_pos[1].y, per_body_pos[1].z]);
+    assert_eq!(
+        values[0..3],
+        [per_body_pos[0].x, per_body_pos[0].y, per_body_pos[0].z]
+    );
+    assert_eq!(
+        values[7..10],
+        [per_body_pos[1].x, per_body_pos[1].y, per_body_pos[1].z]
+    );
 }

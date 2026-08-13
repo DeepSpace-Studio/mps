@@ -2250,7 +2250,9 @@ pub extern "C" fn world_set_eddington_radiation_pressure_law_flag(
     world: *mut WorldHandle,
     law: EddingtonRadiationPressureLaw,
 ) -> u8 {
-    ffi_guard(0, || world_set_eddington_radiation_pressure_law(world, law).0)
+    ffi_guard(0, || {
+        world_set_eddington_radiation_pressure_law(world, law).0
+    })
 }
 
 /// Clear the Eddington radiation-pressure law on a world.
@@ -2461,20 +2463,22 @@ pub extern "C" fn world_clear_pulsar_magnetic_dipole_law(world: *mut WorldHandle
 /// `world` must be a valid world pointer returned by `world_create`; a null
 /// pointer fails with `ERR_NULL_POINTER`.
 #[unsafe(no_mangle)]
-pub extern "C" fn world_set_jeans_escape_law(
-    world: *mut WorldHandle,
-    law: JeansEscapeLaw,
-) -> Bool {
+pub extern "C" fn world_set_jeans_escape_law(world: *mut WorldHandle, law: JeansEscapeLaw) -> Bool {
     ffi_guard(Bool::FALSE, || {
         let Some(world) = (unsafe { world.as_mut() }) else {
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        if !law.n_exo.is_finite() || law.n_exo <= 0.0
-            || !law.temperature.is_finite() || law.temperature <= 0.0
-            || !law.escape_parameter.is_finite() || law.escape_parameter < 0.0
-            || !law.mass_kg.is_finite() || law.mass_kg <= 0.0
-            || !law.effective_area_m2.is_finite() || law.effective_area_m2 <= 0.0
+        if !law.n_exo.is_finite()
+            || law.n_exo <= 0.0
+            || !law.temperature.is_finite()
+            || law.temperature <= 0.0
+            || !law.escape_parameter.is_finite()
+            || law.escape_parameter < 0.0
+            || !law.mass_kg.is_finite()
+            || law.mass_kg <= 0.0
+            || !law.effective_area_m2.is_finite()
+            || law.effective_area_m2 <= 0.0
             || !vec3_finite(law.escape_direction)
         {
             set_error(ERR_INVALID_ARGUMENT, "invalid Jeans escape law");

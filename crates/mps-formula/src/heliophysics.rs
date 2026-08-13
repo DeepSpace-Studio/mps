@@ -22,15 +22,8 @@ const OMEGA_SUN: f64 = 2.0 * core::f64::consts::PI / (25.05 * 86_400.0);
 /// Panels/panels drawing of the spiral: `tan(ψ) = -ω · r / v_sw`.  Returns
 /// the angle in the half-open `[-π/2, 0]` range because `r, v_sw, ω > 0`.
 /// For a default Carrington/sidereal value use [`solar_wind_parker_angle_au`].
-pub fn solar_wind_parker_spiral_angle(
-    radius_au: f64,
-    v_sw: f64,
-    omega_sun: f64,
-) -> Option<f64> {
-    if !finite_positive(radius_au)
-        || !finite_positive(v_sw)
-        || !finite_positive(omega_sun)
-    {
+pub fn solar_wind_parker_spiral_angle(radius_au: f64, v_sw: f64, omega_sun: f64) -> Option<f64> {
+    if !finite_positive(radius_au) || !finite_positive(v_sw) || !finite_positive(omega_sun) {
         set_error(ERR_INVALID_ARGUMENT, "bad Parker spiral args");
         return None;
     }

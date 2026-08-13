@@ -24,8 +24,8 @@
 
 use rapier3d::math::Pose;
 use rapier3d::prelude::{
-    ActiveEvents, ActiveHooks, ColliderBuilder, ColliderHandle,
-    InteractionGroups, RigidBodyHandle, SharedShape,
+    ActiveEvents, ActiveHooks, ColliderBuilder, ColliderHandle, InteractionGroups, RigidBodyHandle,
+    SharedShape,
 };
 
 use crate::rapier::error::{
@@ -183,7 +183,6 @@ impl Box3DPreset {
             angular_damping: 0.02,
             ccd_substeps: 2,
             solver_iterations: 8,
-            ..Self::box3d_default()
         }
     }
 }
@@ -294,12 +293,8 @@ impl ColliderBatch {
                 // Already round — replace border_radius with erosion_margin.
                 SharedShape::round_cuboid(desc.a, desc.b, desc.c, erosion_margin)
             }
-            SHAPE_CYLINDER => {
-                SharedShape::round_cylinder(desc.a, desc.b, erosion_margin)
-            }
-            SHAPE_ROUND_CYLINDER => {
-                SharedShape::round_cylinder(desc.a, desc.b, erosion_margin)
-            }
+            SHAPE_CYLINDER => SharedShape::round_cylinder(desc.a, desc.b, erosion_margin),
+            SHAPE_ROUND_CYLINDER => SharedShape::round_cylinder(desc.a, desc.b, erosion_margin),
             SHAPE_CONE => SharedShape::round_cone(desc.a, desc.b, erosion_margin),
             SHAPE_ROUND_CONE => SharedShape::round_cone(desc.a, desc.b, erosion_margin),
             // Ball, Capsule, and others don't benefit from border rounding.
@@ -313,7 +308,10 @@ impl ColliderBatch {
     /// Returns `false` (and sets the error slot) if the request is invalid.
     fn push_request(&mut self, req: &ColliderRequest) -> bool {
         if !shape_desc_valid(req.shape) {
-            set_error(ERR_INVALID_ARGUMENT, "batch request: invalid shape descriptor");
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "batch request: invalid shape descriptor",
+            );
             return false;
         }
         if !vec3_finite(req.translation) || !quat_finite(req.rotation) {
@@ -409,9 +407,15 @@ impl ColliderBatch {
                 .cmp(&kb.friction)
                 .then(ka.restitution.cmp(&kb.restitution))
                 .then(ka.density.cmp(&kb.density))
-                .then(ka.collision_groups_memberships.cmp(&kb.collision_groups_memberships))
+                .then(
+                    ka.collision_groups_memberships
+                        .cmp(&kb.collision_groups_memberships),
+                )
                 .then(ka.collision_groups_filter.cmp(&kb.collision_groups_filter))
-                .then(ka.solver_groups_memberships.cmp(&kb.solver_groups_memberships))
+                .then(
+                    ka.solver_groups_memberships
+                        .cmp(&kb.solver_groups_memberships),
+                )
                 .then(ka.solver_groups_filter.cmp(&kb.solver_groups_filter))
                 .then(ka.is_sensor.cmp(&kb.is_sensor))
                 .then(ka.active_events.cmp(&kb.active_events))
@@ -634,14 +638,11 @@ pub extern "C" fn world_batch_add_colliders(
             return 0;
         }
 
-        let requests_slice =
-            unsafe { std::slice::from_raw_parts(requests, count as usize) };
+        let requests_slice = unsafe { std::slice::from_raw_parts(requests, count as usize) };
         let handles = world.inner.batch_add_colliders(requests_slice, &preset);
 
         let written = handles.len().min(out_capacity as usize);
-        let out = unsafe {
-            std::slice::from_raw_parts_mut(out_handles, out_capacity as usize)
-        };
+        let out = unsafe { std::slice::from_raw_parts_mut(out_handles, out_capacity as usize) };
         out[..written].copy_from_slice(&handles[..written]);
 
         written as u32
@@ -679,14 +680,11 @@ pub extern "C" fn world_merge_static_shapes(
             return 0;
         }
 
-        let requests_slice =
-            unsafe { std::slice::from_raw_parts(requests, count as usize) };
+        let requests_slice = unsafe { std::slice::from_raw_parts(requests, count as usize) };
         let handles = world.inner.merge_static_shapes(requests_slice, &preset);
 
         let written = handles.len().min(out_capacity as usize);
-        let out = unsafe {
-            std::slice::from_raw_parts_mut(out_handles, out_capacity as usize)
-        };
+        let out = unsafe { std::slice::from_raw_parts_mut(out_handles, out_capacity as usize) };
         out[..written].copy_from_slice(&handles[..written]);
 
         written as u32
@@ -696,17 +694,17 @@ pub extern "C" fn world_merge_static_shapes(
 /// Convenience: get the Box3D default-feel preset.
 #[unsafe(no_mangle)]
 pub extern "C" fn box3d_preset_default() -> Box3DPreset {
-    ffi_guard(Box3DPreset::default(), || Box3DPreset::box3d_default())
+    ffi_guard(Box3DPreset::default(), Box3DPreset::box3d_default)
 }
 
 /// Convenience: get the Box3D sticky-feel preset (high friction, no bounce).
 #[unsafe(no_mangle)]
 pub extern "C" fn box3d_preset_sticky() -> Box3DPreset {
-    ffi_guard(Box3DPreset::default(), || Box3DPreset::box3d_sticky())
+    ffi_guard(Box3DPreset::default(), Box3DPreset::box3d_sticky)
 }
 
 /// Convenience: get the Box3D bouncy-feel preset (low friction, high restitution).
 #[unsafe(no_mangle)]
 pub extern "C" fn box3d_preset_bouncy() -> Box3DPreset {
-    ffi_guard(Box3DPreset::default(), || Box3DPreset::box3d_bouncy())
+    ffi_guard(Box3DPreset::default(), Box3DPreset::box3d_bouncy)
 }

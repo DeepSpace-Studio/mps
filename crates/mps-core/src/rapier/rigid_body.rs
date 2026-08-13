@@ -1102,7 +1102,10 @@ pub extern "C" fn rigid_body_add_force_at_local_point(
             return Bool::FALSE;
         }
         if body.body_type() != RigidBodyType::Dynamic {
-            set_error(ERR_INVALID_ARGUMENT, "relative force only works on dynamic bodies");
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "relative force only works on dynamic bodies",
+            );
             return Bool::FALSE;
         }
 
@@ -1135,11 +1138,17 @@ pub extern "C" fn rigid_body_add_torque_at_local_point(
             return Bool::FALSE;
         };
         if !vec3_finite(torque) || !vec3_finite(_local_point) {
-            set_error(ERR_INVALID_ARGUMENT, "non-finite body torque or local point");
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "non-finite body torque or local point",
+            );
             return Bool::FALSE;
         }
         if body.body_type() != RigidBodyType::Dynamic {
-            set_error(ERR_INVALID_ARGUMENT, "relative torque only works on dynamic bodies");
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "relative torque only works on dynamic bodies",
+            );
             return Bool::FALSE;
         }
 
@@ -1161,7 +1170,9 @@ pub extern "C" fn rigid_body_add_force_at_local_point_flag(
     local_point: Vec3,
     wake_up: Bool,
 ) -> u8 {
-    ffi_guard(0, || rigid_body_add_force_at_local_point(world, handle, force, local_point, wake_up).0)
+    ffi_guard(0, || {
+        rigid_body_add_force_at_local_point(world, handle, force, local_point, wake_up).0
+    })
 }
 
 /// # Safety
@@ -1176,7 +1187,9 @@ pub extern "C" fn rigid_body_add_torque_at_local_point_flag(
     local_point: Vec3,
     wake_up: Bool,
 ) -> u8 {
-    ffi_guard(0, || rigid_body_add_torque_at_local_point(world, handle, torque, local_point, wake_up).0)
+    ffi_guard(0, || {
+        rigid_body_add_torque_at_local_point(world, handle, torque, local_point, wake_up).0
+    })
 }
 
 /// # Safety

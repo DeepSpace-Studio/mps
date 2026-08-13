@@ -65,4 +65,3 @@ fn to_ffi(v: Vector) -> mps_formula::ffi::Vec3 {
         z: v.z,
     }
 }
-

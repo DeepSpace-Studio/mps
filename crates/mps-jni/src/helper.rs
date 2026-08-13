@@ -55,9 +55,8 @@ pub fn jbytearray_to_array(env: &JNIEnv, data: jbyteArray) -> Option<Vec<u8>> {
     //   `get_byte_array_region`（JNI 会写入 len 个 i8 字节到 buf 中）。
     //   写入的字节完全覆盖原先 uninit 部分；成功后我们立即 `assume_init`，所以
     //   'uninit bytes no longer observable'。
-    let i8_slice: &mut [i8] = unsafe {
-        std::slice::from_raw_parts_mut(uninit.as_mut_ptr() as *mut i8, len)
-    };
+    let i8_slice: &mut [i8] =
+        unsafe { std::slice::from_raw_parts_mut(uninit.as_mut_ptr() as *mut i8, len) };
     match env.get_byte_array_region(&*data, 0, i8_slice) {
         Ok(()) => {
             // SAFETY: `get_byte_array_region` 已为每个 slot 写入 i8 字节，因此

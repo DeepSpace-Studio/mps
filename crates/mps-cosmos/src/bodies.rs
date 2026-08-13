@@ -44,4 +44,3 @@ pub fn satellite_builder(
 pub fn fixed_body_builder(position: Vector) -> RigidBodyBuilder {
     RigidBodyBuilder::fixed().translation(position)
 }
-

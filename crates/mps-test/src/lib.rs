@@ -25,8 +25,8 @@ pub mod rapier {
     pub mod collider;
     pub mod continuum;
     pub mod control_theory;
-    pub mod cosmology;
     pub mod controller;
+    pub mod cosmology;
     pub mod crbtree;
     pub mod dop;
     pub mod electromagnetism;
@@ -36,8 +36,8 @@ pub mod rapier {
     pub mod fluid;
     pub mod forces;
     pub mod fracture;
-    pub mod gravitational_models;
     pub mod galactic_dynamics;
+    pub mod gravitational_models;
     pub mod heliophysics;
     pub mod high_energy_astro;
     pub mod integrators;
@@ -49,8 +49,8 @@ pub mod rapier {
     pub mod neural;
     pub mod nuclear;
     pub mod physchem;
-    pub mod plasma;
     pub mod planetary_science;
+    pub mod plasma;
     pub mod quantum;
     pub mod query;
     pub mod relativity;

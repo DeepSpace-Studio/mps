@@ -38,18 +38,15 @@ pub(crate) struct FrameWorkBuffers {
     pub(crate) arena_idx_map: Vec<Option<rapier3d::prelude::RigidBodyHandle>>,
     /// Reusable `(handle, force)` accumulator shared across ForceLaw::apply() calls.
     /// Cleared before each law runs; avoids per-law-per-frame SmallVec::new().
-    pub(crate) scratch_force_pairs: smallvec::SmallVec<
-        [(rapier3d::prelude::RigidBodyHandle, Vector); 64],
-    >,
+    pub(crate) scratch_force_pairs:
+        smallvec::SmallVec<[(rapier3d::prelude::RigidBodyHandle, Vector); 64]>,
     /// Secondary `(handle, force)` scratch (e.g. PulsarMagneticDipole fallback path).
-    pub(crate) scratch_force_pairs_alt: smallvec::SmallVec<
-        [(rapier3d::prelude::RigidBodyHandle, Vector); 64],
-    >,
+    pub(crate) scratch_force_pairs_alt:
+        smallvec::SmallVec<[(rapier3d::prelude::RigidBodyHandle, Vector); 64]>,
     /// Reusable `(handle, mass, position)` buffer for pairwise gravity pre-collection.
     /// Avoids per-frame SmallVec allocation in NewtonianGravityForceLaw::apply().
-    pub(crate) scratch_body_data: smallvec::SmallVec<
-        [(rapier3d::prelude::RigidBodyHandle, f64, Vector); 64],
-    >,
+    pub(crate) scratch_body_data:
+        smallvec::SmallVec<[(rapier3d::prelude::RigidBodyHandle, f64, Vector); 64]>,
     /// P1.8: Coulomb hook 同步跟踪。`true` 时 `world_step` 末尾需要对一遍 collider
     /// 把 `MODIFY_SOLVER_CONTACTS` bit 设上；扫描完成后清零、记录当时的 collider 数量，
     /// 下次只在数量变化（新增/移除 collider）或 Coulomb law 切换时再扫。
@@ -193,7 +190,10 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
         // while an init-time event call holds the producer cache — stepping
         // would race its exclusive access.
         let Some(_step_guard) = world.inner.events.step_guard() else {
-            set_error(ERR_UNSUPPORTED, "world_step during event ring/callback init");
+            set_error(
+                ERR_UNSUPPORTED,
+                "world_step during event ring/callback init",
+            );
             return;
         };
 
@@ -319,8 +319,7 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
             world.inner.buffers.coulomb_hook_dirty = true;
             world.inner.buffers.coulomb_hook_last_collider_count = 0;
         } else if world.inner.buffers.coulomb_hook_dirty
-            || world.inner.colliders.len()
-                != world.inner.buffers.coulomb_hook_last_collider_count
+            || world.inner.colliders.len() != world.inner.buffers.coulomb_hook_last_collider_count
         {
             let hook_bit = ActiveHooks::MODIFY_SOLVER_CONTACTS;
             for (_, collider) in world.inner.colliders.iter_mut() {
@@ -329,8 +328,7 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
                     collider.set_active_hooks(current | hook_bit);
                 }
             }
-            world.inner.buffers.coulomb_hook_last_collider_count =
-                world.inner.colliders.len();
+            world.inner.buffers.coulomb_hook_last_collider_count = world.inner.colliders.len();
             world.inner.buffers.coulomb_hook_dirty = false;
         }
 
@@ -1102,7 +1100,10 @@ pub extern "C" fn world_set_relative_force_enabled(
             set_error(ERR_INVALID_ARGUMENT, "non-finite local point");
             return Bool::FALSE;
         }
-        world.inner.relative_force.insert(handle, (enabled.0 != 0, local_point));
+        world
+            .inner
+            .relative_force
+            .insert(handle, (enabled.0 != 0, local_point));
         clear_error();
         Bool::TRUE
     })
@@ -1128,11 +1129,11 @@ pub extern "C" fn world_get_relative_force_enabled(
             return Bool::FALSE;
         };
         let enabled = world
-                    .inner
-                    .relative_force
-                    .get(&handle)
-                    .map(|v| v.0)
-                    .unwrap_or(false);
+            .inner
+            .relative_force
+            .get(&handle)
+            .map(|v| v.0)
+            .unwrap_or(false);
         clear_error();
         Bool(enabled as u8)
     })
@@ -1158,11 +1159,11 @@ pub extern "C" fn world_get_relative_force_local_point(
             return Vec3::default();
         };
         let local_point = world
-                    .inner
-                    .relative_force
-                    .get(&handle)
-                    .map(|v| v.1)
-                    .unwrap_or(Vec3::default());
+            .inner
+            .relative_force
+            .get(&handle)
+            .map(|v| v.1)
+            .unwrap_or(Vec3::default());
         clear_error();
         local_point
     })

@@ -12,7 +12,7 @@ use crate::math::{finite, finite_positive};
 /// Speed of light in vacuum [m/s].
 const SPEED_OF_LIGHT: f64 = 299_792_458.0;
 /// Parsec in metres (1 pc = 648000/π AU; 1 AU = 1.495978707e11 m).
-const METRES_PER_PARSEC: f64 = 3.0856775814913673e16;
+const METRES_PER_PARSEC: f64 = 3.085_677_581_491_367e16;
 /// Metres per megaparsec.
 const METRES_PER_MEGAPARSEC: f64 = 1.0e6 * METRES_PER_PARSEC;
 
@@ -65,10 +65,7 @@ pub fn einstein_de_sitter_age(hubble_constant: f64) -> Option<f64> {
 /// regime (`D < c / H0`).  Inputs: `hubble_constant` [km/s/Mpc],
 /// `distance_mpc` [Mpc]; returns `v` [km/s].
 pub fn hubble_flow_velocity(hubble_constant: f64, distance_mpc: f64) -> Option<f64> {
-    if !finite_positive(hubble_constant)
-        || !finite(distance_mpc)
-        || distance_mpc < 0.0
-    {
+    if !finite_positive(hubble_constant) || !finite(distance_mpc) || distance_mpc < 0.0 {
         set_error(ERR_INVALID_ARGUMENT, "bad Hubble flow args");
         return None;
     }

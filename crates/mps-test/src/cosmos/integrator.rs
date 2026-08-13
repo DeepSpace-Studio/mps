@@ -17,7 +17,7 @@ use mps_formula::celestial_data::{CelestialBodyId, get_celestial_body};
 #[cfg(test)]
 use mps_formula::spaceflight::kepler_period;
 #[cfg(test)]
-use rapier3d::prelude::{Rotation, RigidBodySet, Vector};
+use rapier3d::prelude::{RigidBodySet, Rotation, Vector};
 
 #[test]
 fn verlet_circle_orbit_closes_tight() {
@@ -37,7 +37,13 @@ fn verlet_circle_orbit_closes_tight() {
             .build(),
     );
     let sat_hdl = bodies.insert(
-        satellite_builder(1000.0, Vector::new(r, 0.0, 0.0), Vector::new(0.0, v, 0.0), 1.0).build(),
+        satellite_builder(
+            1000.0,
+            Vector::new(r, 0.0, 0.0),
+            Vector::new(0.0, v, 0.0),
+            1.0,
+        )
+        .build(),
     );
     let n_body_sources = vec![NBodySource::monopole(earth_hdl, gm_from_mass(5.972e24))];
 

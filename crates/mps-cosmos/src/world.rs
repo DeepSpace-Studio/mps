@@ -11,15 +11,14 @@
 //! 累加「天体引力 + n-body 互引力 + 环境扰动力」的合**力**（加速度 × 质量），
 //! 然后交给 `PhysicsPipeline::step` 完成 Rapier 的常规积分/约束求解。
 
-use crate::gravity::{
-    CelestialSource, NBodySource, celestial_acceleration, gm_from_mass,
-};
+use crate::gravity::{CelestialSource, NBodySource, celestial_acceleration, gm_from_mass};
 use crate::orbit::BodyState;
 use crate::perturbation::{
-    atmospheric_drag_force, dynamical_friction_force, solar_pressure_force, solar_wind_pressure_force,
+    atmospheric_drag_force, dynamical_friction_force, solar_pressure_force,
+    solar_wind_pressure_force,
 };
-use mps_formula::celestial_data::{AU, G};
 use mps_formula::astrophysics::{hill_sphere_radius, roche_limit_report};
+use mps_formula::celestial_data::{AU, G};
 use mps_formula::ffi::RocheLimitReport;
 use rapier3d::math::Pose;
 use rapier3d::prelude::{
@@ -442,8 +441,12 @@ impl CosmosWorld {
         bounding_radius: f64,
     ) {
         let total_gm = gm_from_mass(total_mass);
-        self.n_body_sources
-            .push(NBodySource::irregular(handle, total_gm, points, bounding_radius));
+        self.n_body_sources.push(NBodySource::irregular(
+            handle,
+            total_gm,
+            points,
+            bounding_radius,
+        ));
     }
 
     /// 设置某刚体的环境扰动配置。
@@ -862,15 +865,24 @@ impl CosmosWorld {
             match mode {
                 OrbitIntegration::Verlet => {
                     let a0 = crate::integrator::total_acceleration(
-                        pos, vel, mass, handle, &ctx, perturbation.as_ref(),
+                        pos,
+                        vel,
+                        mass,
+                        handle,
+                        &ctx,
+                        perturbation.as_ref(),
                     );
-                    crate::integrator::verlet_step(
-                        body, a0, &ctx, mass, handle, perturbation, dt,
-                    );
+                    crate::integrator::verlet_step(body, a0, &ctx, mass, handle, perturbation, dt);
                 }
                 OrbitIntegration::Yoshida4 | OrbitIntegration::ForestRuth8 => {
                     crate::integrator::explicit_highorder_step(
-                        body, mass, handle, perturbation, &ctx, dt, mode,
+                        body,
+                        mass,
+                        handle,
+                        perturbation,
+                        &ctx,
+                        dt,
+                        mode,
                     );
                 }
                 OrbitIntegration::Yoshida4Kahan | OrbitIntegration::ForestRuth8Kahan => {
@@ -879,7 +891,14 @@ impl CosmosWorld {
                         continue;
                     };
                     crate::integrator::explicit_highorder_kahan_step(
-                        body, state, mass, handle, perturbation, &ctx, dt, mode,
+                        body,
+                        state,
+                        mass,
+                        handle,
+                        perturbation,
+                        &ctx,
+                        dt,
+                        mode,
                     );
                 }
                 OrbitIntegration::RapierForce => unreachable!("RapierForce 不走显式路径"),
@@ -1020,7 +1039,8 @@ impl CosmosWorld {
                     if src_idx == exclude || src.gm <= 0.0 {
                         continue;
                     }
-                    let r_j = self.scratch_source_positions
+                    let r_j = self
+                        .scratch_source_positions
                         .get(src_idx)
                         .copied()
                         .unwrap_or(Vector::ZERO);

@@ -1079,18 +1079,13 @@ pub fn schwarzschild_effective_potential(r: f64, rs: f64, angular_momentum: f64)
 /// - `f_min`      — lower band edge [Hz] (e.g. 20 Hz for LIGO O4)
 /// - `f_max`      — upper band edge [Hz] (e.g. 400 Hz for post-merger cutoff)
 /// - `noise_psd`  — flat single-sided noise PSD `S_n` at the band centre
-///                  [Hz^-1] (e.g. 1e-46 for early-aLIGO at 100 Hz)
+///   [Hz^-1] (e.g. 1e-46 for early-aLIGO at 100 Hz)
 ///
 /// Returns the matched-filter SNR (dimensionless).  Note: real LIGO uses a
 /// shaped PSD curve, not a single number; this is a compact closed-form
 /// estimate that generalises naturally when integrated against an actual
 /// PSD curve later (see PHYSICS_EXPANSION_PLAN.md W6 follow-up).
-pub fn gw_inspiral_snr(
-    strain_rss: f64,
-    f_min: f64,
-    f_max: f64,
-    noise_psd: f64,
-) -> Option<f64> {
+pub fn gw_inspiral_snr(strain_rss: f64, f_min: f64, f_max: f64, noise_psd: f64) -> Option<f64> {
     if !finite_positive(strain_rss)
         || !finite_positive(f_min)
         || !finite_positive(f_max)
@@ -1134,9 +1129,6 @@ pub fn gw_inspiral_time_to_coalescence(chirp_mass_kg: f64, f_gw_hz: f64) -> Opti
     let f_pow = f_gw_hz.powf(8.0 / 3.0);
     let m_pow = chirp_mass_kg.powf(5.0 / 3.0);
     let numerator = 5.0 / 256.0 * SPEED_OF_LIGHT.powi(5);
-    let denominator = G.powf(5.0 / 3.0)
-        * core::f64::consts::PI.powf(8.0 / 3.0)
-        * f_pow
-        * m_pow;
+    let denominator = G.powf(5.0 / 3.0) * core::f64::consts::PI.powf(8.0 / 3.0) * f_pow * m_pow;
     Some(numerator / denominator)
 }

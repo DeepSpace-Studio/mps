@@ -66,9 +66,14 @@ fn circular_leo_orbit_period_matches_kepler() {
     world.add_n_body(earth_hdl, 5.972e24);
 
     let sat = world.insert_body(
-        satellite_builder(1000.0, Vector::new(r, 0.0, 0.0), Vector::new(0.0, v, 0.0), 1.0)
-            .linear_damping(0.0)
-            .angular_damping(0.0),
+        satellite_builder(
+            1000.0,
+            Vector::new(r, 0.0, 0.0),
+            Vector::new(0.0, v, 0.0),
+            1.0,
+        )
+        .linear_damping(0.0)
+        .angular_damping(0.0),
     );
 
     for _ in 0..steps {
@@ -128,10 +133,15 @@ fn circular_leo_verlet_path_closes_tighter_than_rapier() {
     world.add_n_body(earth_hdl, 5.972e24);
 
     let h = world.insert_body(
-        satellite_builder(1000.0, Vector::new(r, 0.0, 0.0), Vector::new(0.0, v, 0.0), 1.0)
-            .linear_damping(0.0)
-            .angular_damping(0.0)
-            .gravity_scale(0.0), // 关键：避免 rapier.step 再加全局重力
+        satellite_builder(
+            1000.0,
+            Vector::new(r, 0.0, 0.0),
+            Vector::new(0.0, v, 0.0),
+            1.0,
+        )
+        .linear_damping(0.0)
+        .angular_damping(0.0)
+        .gravity_scale(0.0), // 关键：避免 rapier.step 再加全局重力
     );
 
     for _ in 0..steps {
@@ -217,14 +227,20 @@ fn clone_shallow_preserves_config_drops_body_state() {
     // 轨道再推一步确认是 fresh-empty scene（不 crash、不残留状态推进）：
     let step_res = shallow.step(0.1);
     assert!(
-        matches!(step_res, StepResult::Stepped(_) | StepResult::Substepped { .. }),
+        matches!(
+            step_res,
+            StepResult::Stepped(_) | StepResult::Substepped { .. }
+        ),
         "shallow copy should remain step-able; got {step_res:?}"
     );
 
     // 源 world 仍可继续推（deep clone 不触及原始！）：
     let orig_step = world.step(0.1);
     assert!(
-        matches!(orig_step, StepResult::Stepped(_) | StepResult::Substepped { .. }),
+        matches!(
+            orig_step,
+            StepResult::Stepped(_) | StepResult::Substepped { .. }
+        ),
         "source world should still step normally; got {orig_step:?}"
     );
     assert!(
@@ -470,8 +486,8 @@ fn default_softening_bounds_close_encounter() {
 /// 速度增量不会随之放大；本测试通过测速度增量的比例≈10× 来捕获这种回归。
 #[test]
 fn n_body_source_gm_tracks_live_body_mass() {
-    use rapier3d::prelude::RigidBodyHandle;
     use mps_formula::celestial_data::G;
+    use rapier3d::prelude::RigidBodyHandle;
     let r = 1000.0_f64;
     let m0 = 1.0e7_f64; // 初始源质量 (kg)
     let m1 = 1.0e8_f64; // 10× 后的源质量 (kg)
@@ -528,8 +544,14 @@ fn n_body_source_gm_tracks_live_body_mass() {
     let (mut w1, a1, b1) = make_world(m0);
     // 通过新增的 set_body_mass 把 A 的刚体质量翻到 m1（旧注册源质量不变）。
     let old_mass = w1.set_body_mass(a1, m1).expect("A exists");
-    assert!((old_mass - m0).abs() / m0 < 1e-12, "set_body_mass 返回旧质量");
-    assert!((w1.body_mass(a1).unwrap() - m1).abs() / m1 < 1e-12, "A 质量已变 m1");
+    assert!(
+        (old_mass - m0).abs() / m0 < 1e-12,
+        "set_body_mass 返回旧质量"
+    );
+    assert!(
+        (w1.body_mass(a1).unwrap() - m1).abs() / m1 < 1e-12,
+        "A 质量已变 m1"
+    );
     w1.step(1.0);
     let vx1 = w1.body_linvel(b1).unwrap().x;
     let expected_a1 = G * m1 / (r * r);
@@ -542,7 +564,10 @@ fn n_body_source_gm_tracks_live_body_mass() {
 
     // ratio（均为负值相除得正）应近似 m1/m0 = 10。
     let ratio = vx1 / vx0;
-    assert!((ratio - 10.0).abs() < 0.4, "速度增量比 vx1/vx0={ratio} 应≈10 (= m1/m0)");
+    assert!(
+        (ratio - 10.0).abs() < 0.4,
+        "速度增量比 vx1/vx0={ratio} 应≈10 (= m1/m0)"
+    );
 }
 
 /// 不规则 N 体近场：非对称质量分布产生**非径向**加速度。
@@ -565,17 +590,23 @@ fn irregular_n_body_near_field_induces_non_radial_acceleration() {
     use mps_formula::celestial_data::G;
     use rapier3d::prelude::RigidBodyHandle;
 
-    let m_total: f64 = 1.0e6;     // 源总质量 kg
-    let a: f64 = 100.0;           // 两团块离质心 m
-    let r: f64 = 55.0;            // 探测点离源质心 m（→ 必在近场分支内）
+    let m_total: f64 = 1.0e6; // 源总质量 kg
+    let a: f64 = 100.0; // 两团块离质心 m
+    let r: f64 = 55.0; // 探测点离源质心 m（→ 必在近场分支内）
     // 非对称质量分布：3/4 M 在 (+a,0,0)，1/4 M 在 (-a,0,0)
     let heavier = 3.0 * m_total / 4.0;
     let lighter = m_total / 4.0;
     let points = vec![
-        MassPoint { local_offset: Vector::new(a, 0.0, 0.0), gm: G * heavier },
-        MassPoint { local_offset: Vector::new(-a, 0.0, 0.0), gm: G * lighter },
+        MassPoint {
+            local_offset: Vector::new(a, 0.0, 0.0),
+            gm: G * heavier,
+        },
+        MassPoint {
+            local_offset: Vector::new(-a, 0.0, 0.0),
+            gm: G * lighter,
+        },
     ];
-    let bounding = a + 1.0;       // 边界球略大于 a，含两点
+    let bounding = a + 1.0; // 边界球略大于 a，含两点
 
     let mut world = CosmosWorld::new(CosmosWorldConfig {
         gravity: Vector::ZERO,
@@ -616,12 +647,22 @@ fn irregular_n_body_near_field_induces_non_radial_acceleration() {
     // velocity-Verlet 单步 v(dt)=a0·dt/2 + a1·dt/2；源锁定，dt 内位移 ≪ √(a²+r²)，
     // 故 a1≈a0，整步后 v ≈ a0·dt（不是 dt/2）。这才是 expected_vx 的正确放大系数。
     let expected_vx = expected_ax * dt;
-    assert!(expected_ax.abs() > 1e-12, "预期非零 +x 加速度分量（非径向）");
-    assert!((v.x - expected_vx).abs() / expected_vx.abs() < 0.05,
-        "非径向 x 分量：vx={vx} 期望≈{expected_vx} (5% 容差)", vx = v.x);
+    assert!(
+        expected_ax.abs() > 1e-12,
+        "预期非零 +x 加速度分量（非径向）"
+    );
+    assert!(
+        (v.x - expected_vx).abs() / expected_vx.abs() < 0.05,
+        "非径向 x 分量：vx={vx} 期望≈{expected_vx} (5% 容差)",
+        vx = v.x
+    );
 
     // 关键非径向信号——纯 monopole 模型必给 vx=0，本测试 vx>0 即证明近场质点求和起效。
-    assert!(v.x.abs() > 0.0, "vx 应非零（非径向分量），实为 {vx}", vx = v.x);
+    assert!(
+        v.x.abs() > 0.0,
+        "vx 应非零（非径向分量），实为 {vx}",
+        vx = v.x
+    );
 
     // y 分量解析：两点都在 (±a,0,0)，场点 (0,r,0)，到每点距离 d=√(a²+r²)，每点的 y
     // 拉力 = G·mᵢ·(-r,0,0?）的 y 分量；求和 ay = G·r·(-(3M/4) - (M/4))/d³ = -G·M·r/d³。
@@ -631,8 +672,10 @@ fn irregular_n_body_near_field_induces_non_radial_acceleration() {
     let expected_ay = -G * m_total * r / d_cubed_for_y;
     let expected_vy = expected_ay * dt;
     let ay = v.y;
-    assert!((ay - expected_vy).abs() / expected_vy.abs() < 0.05,
-        "y 分量（近场 点模型）= -GM·r/d³：ay={ay} 期望≈{expected_vy} (5% 容差)");
+    assert!(
+        (ay - expected_vy).abs() / expected_vy.abs() < 0.05,
+        "y 分量（近场 点模型）= -GM·r/d³：ay={ay} 期望≈{expected_vy} (5% 容差)"
+    );
     let _ = RigidBodyHandle;
 }
 
@@ -656,11 +699,17 @@ fn roche_limit_formula_and_cosmos_end_to_end() {
     // → ratio = 5^(1/3) ≈ 1.70998
     // → fluid ≈ 2.44 × 1.70998 = 4.172, rigid ≈ 1.26 × 1.70998 = 2.155
     let (fluid, rigid) = roche_limit(1.0, 5.0, 1.0).unwrap();
-    assert!((fluid - 2.44 * 5.0f64.cbrt()).abs() < 1e-12, "fluid {fluid}");
-    assert!((rigid - 1.26 * 5.0f64.cbrt()).abs() < 1e-12, "rigid {rigid}");
+    assert!(
+        (fluid - 2.44 * 5.0f64.cbrt()).abs() < 1e-12,
+        "fluid {fluid}"
+    );
+    assert!(
+        (rigid - 1.26 * 5.0f64.cbrt()).abs() < 1e-12,
+        "rigid {rigid}"
+    );
     assert!(fluid > rigid, "fluid > rigid (2.44 > 1.26 系数)");
 
-    // 越界断言：在距 orbital=2.0（< rigid 2.155 < fluid 4.17）应"隔离刚体极限 + 
+    // 越界断言：在距 orbital=2.0（< rigid 2.155 < fluid 4.17）应"隔离刚体极限 +
     // 流体极限"双重判 inner 判为 true（r=2.0 同时 < rigid 与 fluid）。
     let report = roche_limit_report(1.0, 5.0, 1.0, 2.0).unwrap();
     assert_eq!(report.fluid_roche_limit, fluid);
@@ -673,7 +722,10 @@ fn roche_limit_formula_and_cosmos_end_to_end() {
     assert!(roche_limit(-1.0, 5.0, 1.0).is_none(), "primary_radius<0");
     assert!(roche_limit(f64::NAN, 5.0, 1.0).is_none(), "NaN radius");
     assert!(roche_limit_report(1.0, 5.0, 1.0, -3.0).is_none(), "dist<0");
-    assert!(roche_limit_report(1.0, 5.0, 1.0, f64::INFINITY).is_none(), "inf dist");
+    assert!(
+        roche_limit_report(1.0, 5.0, 1.0, f64::INFINITY).is_none(),
+        "inf dist"
+    );
 
     // 太空层端到端：以地球为中心天体，放一个低轨刚体位于赤道
     // 地球：GM = 3.986e14, equatorial_radius ≈ 6378137 m。可推密度约 5515 kg/m³。
@@ -682,8 +734,7 @@ fn roche_limit_formula_and_cosmos_end_to_end() {
     //（orbital = equatorial_radius，远小于 fluid ≈ 5219km/...）。
     let earth = get_celestial_body(CelestialBodyId::Earth);
     let r_earth = earth.equatorial_radius;
-    let rho_pri = (earth.gm
-        / mps_formula::celestial_data::G)
+    let rho_pri = (earth.gm / mps_formula::celestial_data::G)
         / ((4.0 / 3.0) * std::f64::consts::PI * r_earth.powi(3));
     // 算解析流体极限，便于稍后核验 CosmosWorld 是否复算一致
     let expected_fluid = 2.44 * r_earth * (rho_pri / 1000.0).cbrt();
@@ -754,11 +805,17 @@ fn roche_limit_formula_and_cosmos_end_to_end() {
     // 非法 secondary_density → None
     assert!(world.roche_limit_for(inner, 0.0).is_none(), "density=0");
     assert!(world.roche_limit_for(inner, -1.0).is_none(), "density<0");
-    assert!(world.roche_limit_for(inner, f64::NAN).is_none(), "NaN density");
+    assert!(
+        world.roche_limit_for(inner, f64::NAN).is_none(),
+        "NaN density"
+    );
 
     // 有效但刚体不存在 → None
     let bogus = RigidBodyHandle::from_raw_parts(u32::MAX, u32::MAX);
-    assert!(world.roche_limit_for(bogus, 1000.0).is_none(), "不存在的刚体");
+    assert!(
+        world.roche_limit_for(bogus, 1000.0).is_none(),
+        "不存在的刚体"
+    );
 
     let _ = RigidBodyHandle;
 }
@@ -779,13 +836,19 @@ fn hill_sphere_formula_and_cosmos_world_consistent() {
     let (m_pri, m_sec, a, e) = (5.972e24, 7.342e22, 3.844e8, 0.0549);
     let r_h = hill_sphere_radius(m_pri, m_sec, a, e).unwrap();
     let expect = a * (1.0 - e) * (m_sec / (3.0 * m_pri)).cbrt();
-    assert!((r_h - expect).abs() / expect < 1e-12, "r_h={r_h} expect={expect}");
+    assert!(
+        (r_h - expect).abs() / expect < 1e-12,
+        "r_h={r_h} expect={expect}"
+    );
 
     // 边界：e 钳到 0..=1；非法输入 → None
     assert!(hill_sphere_radius(0.0, 1.0, 1.0, 0.0).is_none(), "M_pri=0");
     assert!(hill_sphere_radius(1.0, 0.0, 1.0, 0.0).is_none(), "m_sec=0");
     assert!(hill_sphere_radius(1.0, 1.0, 0.0, 0.0).is_none(), "a=0");
-    assert!(hill_sphere_radius(1.0, 1.0, 1.0, f64::NAN).is_none(), "e=NaN");
+    assert!(
+        hill_sphere_radius(1.0, 1.0, 1.0, f64::NAN).is_none(),
+        "e=NaN"
+    );
     // e>1 钳置 1 → 退化到零（(1-e)=0）
     assert_eq!(hill_sphere_radius(1.0, 1.0, 1.0, 5.0).unwrap(), 0.0);
     // e<0 钳置 0 → 等价 e=0
@@ -818,9 +881,15 @@ fn hill_sphere_formula_and_cosmos_world_consistent() {
     // 无 central_body / 无效刚体 / 非法 a → None
     let mut world2 = CosmosWorld::new(CosmosWorldConfig::default());
     let h2 = world2.insert_body(satellite_builder(1.0, Vector::ZERO, Vector::ZERO, 0.1));
-    assert!(world2.hill_radius_for(h2, 1e6, 0.0).is_none(), "无 central_body");
+    assert!(
+        world2.hill_radius_for(h2, 1e6, 0.0).is_none(),
+        "无 central_body"
+    );
     let bogus = RigidBodyHandle::from_raw_parts(u32::MAX, u32::MAX);
-    assert!(world.hill_radius_for(bogus, 1e6, 0.0).is_none(), "bogus handle");
+    assert!(
+        world.hill_radius_for(bogus, 1e6, 0.0).is_none(),
+        "bogus handle"
+    );
     assert!(world.hill_radius_for(h, -1.0, 0.0).is_none(), "a<0");
 }
 
@@ -856,7 +925,8 @@ fn perturbation_solar_wind_and_dynamical_friction_unit() {
 
     // 顺风而行（同方向）→ 无力
     let body_w = Vector::new(1.0e11, 0.0, 0.0);
-    let strong_tail = solar_wind_pressure_force(body_w, Vector::new(450.0, 0.0, 0.0), 5.0e6, 100.0, 50.0);
+    let strong_tail =
+        solar_wind_pressure_force(body_w, Vector::new(450.0, 0.0, 0.0), 5.0e6, 100.0, 50.0);
     assert!(strong_tail.is_none(), "顺风速度 ≥ 风速 → None");
     // 无效参数 → None
     assert!(solar_wind_pressure_force(body_w, Vector::ZERO, 0.0, 100.0, 50.0).is_none());
@@ -873,7 +943,8 @@ fn perturbation_solar_wind_and_dynamical_friction_unit() {
     assert!(f_df.x.abs() < 1e-25, "纯 +y 速度 → 摩擦应仅在 -y");
     // 量级核验：a_mag = 4π G² M ρ lnΛ/v² = 4π · (6.6743e-11)² · 1000 · 1e-20 · 5 / 7000²
     let g = 6.67430e-11_f64;
-    let a_mag_expect = 4.0 * std::f64::consts::PI * g * g * 1000.0 * 1.0e-20 * 5.0 / (7000.0 * 7000.0);
+    let a_mag_expect =
+        4.0 * std::f64::consts::PI * g * g * 1000.0 * 1.0e-20 * 5.0 / (7000.0 * 7000.0);
     let f_mag_expect = a_mag_expect * 1000.0; // 力 = m·a_df
     assert!(
         (f_df.y.abs() - f_mag_expect).abs() / f_mag_expect < 1e-3,
@@ -883,7 +954,16 @@ fn perturbation_solar_wind_and_dynamical_friction_unit() {
     // 速度为零 → None（公式 1/v² 发散）
     assert!(dynamical_friction_force(1000.0, 1.0e-20, Vector::ZERO, 5.0).is_none());
     // 其它非法 → None
-    assert!(dynamical_friction_force(0.0, 1.0e-20, vel, 5.0).is_none(), "m=0");
-    assert!(dynamical_friction_force(1000.0, 0.0, vel, 5.0).is_none(), "ρ=0");
-    assert!(dynamical_friction_force(1000.0, 1.0e-20, vel, 0.0).is_none(), "lnΛ=0");
+    assert!(
+        dynamical_friction_force(0.0, 1.0e-20, vel, 5.0).is_none(),
+        "m=0"
+    );
+    assert!(
+        dynamical_friction_force(1000.0, 0.0, vel, 5.0).is_none(),
+        "ρ=0"
+    );
+    assert!(
+        dynamical_friction_force(1000.0, 1.0e-20, vel, 0.0).is_none(),
+        "lnΛ=0"
+    );
 }

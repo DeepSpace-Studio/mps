@@ -27,15 +27,8 @@ use crate::math::finite;
 ///
 /// Uses RK4 with step h = 1e-3; near-zero ξ=dxis handled by the series
 /// initial condition `θ(0)=1, θ'(0)=0`, θ ≈ 1 - ξ²/6 + ... for small ξ.
-pub fn lane_emden_solve(
-    polytropic_index: f64,
-    samples: u32,
-) -> Option<(f64, Vec<f64>, f64)> {
-    if !finite(polytropic_index)
-        || polytropic_index < 0.0
-        || samples == 0
-        || samples > 10_000
-    {
+pub fn lane_emden_solve(polytropic_index: f64, samples: u32) -> Option<(f64, Vec<f64>, f64)> {
+    if !finite(polytropic_index) || polytropic_index < 0.0 || samples == 0 || samples > 10_000 {
         set_error(ERR_INVALID_ARGUMENT, "bad Lane-Emden solve args");
         return None;
     }
@@ -73,7 +66,7 @@ pub fn lane_emden_solve(
         xi += h;
 
         i += 1;
-        if i % stride == 0 && profile.len() < samples as usize {
+        if i.is_multiple_of(stride) && profile.len() < samples as usize {
             profile.push(theta);
         }
     }
@@ -110,9 +103,12 @@ pub fn cepheid_period_luminosity(period_days: f64) -> Option<f64> {
 /// normalisation constant (~0.001-0.01 typical scale), `l0_solar` initial
 /// luminosity in solar units.  Returns the luminosity in solar luminosities.
 pub fn white_dwarf_mestel_luminosity(t_cool_gyr: f64, t0_gyr: f64, l0_solar: f64) -> Option<f64> {
-    if !finite(t_cool_gyr) || t_cool_gyr <= 0.0
-        || !finite(t0_gyr) || t0_gyr <= 0.0
-        || !finite(l0_solar) || l0_solar <= 0.0
+    if !finite(t_cool_gyr)
+        || t_cool_gyr <= 0.0
+        || !finite(t0_gyr)
+        || t0_gyr <= 0.0
+        || !finite(l0_solar)
+        || l0_solar <= 0.0
     {
         set_error(ERR_INVALID_ARGUMENT, "bad Mestel cooling args");
         return None;

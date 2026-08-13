@@ -29,12 +29,36 @@ mod tests {
     fn err_codes_are_identical_across_formula_and_core() {
         let cases: [(&str, u32, u32); 7] = [
             ("ERR_OK", formula_err::ERR_OK, core_err::ERR_OK),
-            ("ERR_NULL_POINTER", formula_err::ERR_NULL_POINTER, core_err::ERR_NULL_POINTER),
-            ("ERR_INVALID_ARGUMENT", formula_err::ERR_INVALID_ARGUMENT, core_err::ERR_INVALID_ARGUMENT),
-            ("ERR_NOT_FOUND", formula_err::ERR_NOT_FOUND, core_err::ERR_NOT_FOUND),
-            ("ERR_CAPACITY", formula_err::ERR_CAPACITY, core_err::ERR_CAPACITY),
-            ("ERR_UNSUPPORTED", formula_err::ERR_UNSUPPORTED, core_err::ERR_UNSUPPORTED),
-            ("ERR_INTERNAL", formula_err::ERR_INTERNAL, core_err::ERR_INTERNAL),
+            (
+                "ERR_NULL_POINTER",
+                formula_err::ERR_NULL_POINTER,
+                core_err::ERR_NULL_POINTER,
+            ),
+            (
+                "ERR_INVALID_ARGUMENT",
+                formula_err::ERR_INVALID_ARGUMENT,
+                core_err::ERR_INVALID_ARGUMENT,
+            ),
+            (
+                "ERR_NOT_FOUND",
+                formula_err::ERR_NOT_FOUND,
+                core_err::ERR_NOT_FOUND,
+            ),
+            (
+                "ERR_CAPACITY",
+                formula_err::ERR_CAPACITY,
+                core_err::ERR_CAPACITY,
+            ),
+            (
+                "ERR_UNSUPPORTED",
+                formula_err::ERR_UNSUPPORTED,
+                core_err::ERR_UNSUPPORTED,
+            ),
+            (
+                "ERR_INTERNAL",
+                formula_err::ERR_INTERNAL,
+                core_err::ERR_INTERNAL,
+            ),
         ];
         for (name, formula_val, core_val) in cases {
             assert_eq!(

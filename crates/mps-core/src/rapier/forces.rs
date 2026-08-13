@@ -244,10 +244,10 @@ impl ForceContributionTable {
 
     /// Iterate over `(ForceLawType, &ForceContribution)` for every active slot.
     pub fn iter(&self) -> impl Iterator<Item = (ForceLawType, &ForceContribution)> {
-        self.slots.iter().enumerate().filter_map(|(idx, opt)| {
-            opt.as_ref()
-                .map(|c| (force_law_type_from_idx(idx), c))
-        })
+        self.slots
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, opt)| opt.as_ref().map(|c| (force_law_type_from_idx(idx), c)))
     }
 
     /// Iterate over `(&ForceContribution)` for every active slot (sources removed).
@@ -261,7 +261,12 @@ impl ForceContributionTable {
 
     /// Insert/merge a contribution in place. Same semantics as the previous
     /// `self.contributions.entry(law_type).or_default()` + `+=` pattern.
-    pub fn add(&mut self, law_type: ForceLawType, force: crate::rapier::ffi::Vec3, body_count: u32) {
+    pub fn add(
+        &mut self,
+        law_type: ForceLawType,
+        force: crate::rapier::ffi::Vec3,
+        body_count: u32,
+    ) {
         let idx = force_law_type_idx(law_type);
         let entry = self.slots[idx].get_or_insert_with(ForceContribution::default);
         entry.total_force = crate::rapier::ffi::Vec3 {
@@ -297,14 +302,16 @@ impl ForceReport {
 
     /// Convert to the legacy flat `CustomPhysicsReport` struct for FFI.
     pub fn to_legacy_report(&self) -> CustomPhysicsReport {
-        let total_external = self.contributions.iter().fold(
-            crate::rapier::ffi::Vec3::default(),
-            |acc, (_, c)| crate::rapier::ffi::Vec3 {
-                x: acc.x + c.total_force.x,
-                y: acc.y + c.total_force.y,
-                z: acc.z + c.total_force.z,
-            },
-        );
+        let total_external =
+            self.contributions
+                .iter()
+                .fold(crate::rapier::ffi::Vec3::default(), |acc, (_, c)| {
+                    crate::rapier::ffi::Vec3 {
+                        x: acc.x + c.total_force.x,
+                        y: acc.y + c.total_force.y,
+                        z: acc.z + c.total_force.z,
+                    }
+                });
         let drag_contrib = self
             .contributions
             .get_copy(&ForceLawType::AirDrag)
@@ -417,10 +424,7 @@ fn force_law_type_from_idx(idx: usize) -> ForceLawType {
 /// stack-zinit (~1632 bytes zeroed per active body). Typical bodies touch only
 /// 1–4 force-law types, so the inline path covers the common case with zero
 /// allocation and no large memset.
-fn totals_idx_of(
-    totals: &mut SmallVec<[(usize, KahanVec3); 8]>,
-    idx: usize,
-) -> &mut KahanVec3 {
+fn totals_idx_of(totals: &mut SmallVec<[(usize, KahanVec3); 8]>, idx: usize) -> &mut KahanVec3 {
     if let Some(pos) = totals.iter().position(|(i, _)| *i == idx) {
         &mut totals[pos].1
     } else {
@@ -659,23 +663,19 @@ impl<'a> ForceFacade<'a> {
             body_totals.clear();
             for (source, f) in &log.forces {
                 let idx = force_law_type_idx(*source);
-                totals_idx_of(&mut body_totals, idx).add(
-                    crate::rapier::ffi::Vec3 {
-                        x: f.x,
-                        y: f.y,
-                        z: f.z,
-                    },
-                );
+                totals_idx_of(&mut body_totals, idx).add(crate::rapier::ffi::Vec3 {
+                    x: f.x,
+                    y: f.y,
+                    z: f.z,
+                });
             }
             for (source, f) in &log.torques {
                 let idx = force_law_type_idx(*source);
-                totals_idx_of(&mut body_totals, idx).add(
-                    crate::rapier::ffi::Vec3 {
-                        x: f.x,
-                        y: f.y,
-                        z: f.z,
-                    },
-                );
+                totals_idx_of(&mut body_totals, idx).add(crate::rapier::ffi::Vec3 {
+                    x: f.x,
+                    y: f.y,
+                    z: f.z,
+                });
             }
             // Merge per-body per-source totals into the frame report. Each
             // touched source contributes one body to body_count and adds

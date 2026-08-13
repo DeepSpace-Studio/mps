@@ -1,7 +1,9 @@
 //! `mps_cosmos::perturbation` 测试 —— 迁移自 `crates/mps-cosmos/src/perturbation.rs`。
 
 #[cfg(test)]
-use mps_cosmos::perturbation::{atmosphere_density_at, atmospheric_drag_force, solar_pressure_force};
+use mps_cosmos::perturbation::{
+    atmosphere_density_at, atmospheric_drag_force, solar_pressure_force,
+};
 #[cfg(test)]
 use mps_formula::celestial_data::{AU, CelestialBodyId, get_celestial_body};
 #[cfg(test)]

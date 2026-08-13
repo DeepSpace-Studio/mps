@@ -19,26 +19,22 @@
 // Re-exported so submodules see them via `use super::*;`.  Using a single
 // `X` re-export keeps *this* module's namespace lean (no unused-import
 // warnings even when only one submodule actually references a given type).
-pub(crate) use std::f64::consts::{PI, TAU};
-pub(crate) use rapier3d::prelude::Vector;
 pub(crate) use crate::rapier::error::{
-    ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, clear_error,
-    ffi_guard, set_error,
+    ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, clear_error, ffi_guard, set_error,
 };
 pub(crate) use crate::rapier::ffi::{
-    AirlockDepressurization, AtomicOxygenErosion, BangOffBangProfile,
-    BatteryEquivalentCircuit, Bool, ChemicalReactionRate, CmgExchange,
-    CmgRobustInverse, Co2MassBalance, CollisionProbability, ContactForceModel,
-    CwDerivative, CwState, DhTransform, FlexibleModeDerivative,
-    FluidLoopHeatTransfer, FriisLink, GnssObservation, HallThrusterPerformance,
-    HohmannTransfer, LeastSquaresAttitude, ManipulatorDynamics,
-    MassProperties, OrbitalElements, Quat, QuaternionDerivative,
-    RadarMeasurement, RadiatorPower, RigidBodyEulerDerivative,
-    RigidBodyHandleRaw, ScalarKalman, Sgp4SecularRates,
-    SloshPendulumDerivative, SolarPanelPower, StateVector, ThermalBalance,
-    VariationalState, Vec3, WorldHandle, unpack_rigid_body_handle,
-    vec3_finite, vec3_from_rapier, vec3_to_rapier,
+    AirlockDepressurization, AtomicOxygenErosion, BangOffBangProfile, BatteryEquivalentCircuit,
+    Bool, ChemicalReactionRate, CmgExchange, CmgRobustInverse, Co2MassBalance,
+    CollisionProbability, ContactForceModel, CwDerivative, CwState, DhTransform,
+    FlexibleModeDerivative, FluidLoopHeatTransfer, FriisLink, GnssObservation,
+    HallThrusterPerformance, HohmannTransfer, LeastSquaresAttitude, ManipulatorDynamics,
+    MassProperties, OrbitalElements, Quat, QuaternionDerivative, RadarMeasurement, RadiatorPower,
+    RigidBodyEulerDerivative, RigidBodyHandleRaw, ScalarKalman, Sgp4SecularRates,
+    SloshPendulumDerivative, SolarPanelPower, StateVector, ThermalBalance, VariationalState, Vec3,
+    WorldHandle, unpack_rigid_body_handle, vec3_finite, vec3_from_rapier, vec3_to_rapier,
 };
+pub(crate) use rapier3d::prelude::Vector;
+pub(crate) use std::f64::consts::{PI, TAU};
 
 // Numeric constants reused across submodules.
 pub(crate) const EPS: f64 = 1.0e-12;

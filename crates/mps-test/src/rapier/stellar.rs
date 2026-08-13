@@ -15,10 +15,7 @@ mod tests {
     fn lane_emden_n0_xi_zero_matches_sqrt_6() {
         // n=0 analytical: θ = 1 - ξ²/6 → θ=0 at ξ = √6 ≈ 2.449.
         let (xi_zero, _profile, _) = lane_emden_solve(0.0, 64).unwrap();
-        assert!(
-            (xi_zero - 2.44949).abs() < 1.0e-3,
-            "xi_zero={xi_zero}"
-        );
+        assert!((xi_zero - 2.44949).abs() < 1.0e-3, "xi_zero={xi_zero}");
     }
 
     #[test]
@@ -49,7 +46,10 @@ mod tests {
     fn white_dwarf_mestel_cooling_decreases_with_time() {
         let l_young = white_dwarf_mestel_luminosity(0.001, 0.0005, 1.0).unwrap();
         let l_old = white_dwarf_mestel_luminosity(10.0, 0.0005, 1.0).unwrap();
-        assert!(l_old > 0.0 && l_young > l_old, "young={l_young} old={l_old}");
+        assert!(
+            l_old > 0.0 && l_young > l_old,
+            "young={l_young} old={l_old}"
+        );
     }
 
     #[test]

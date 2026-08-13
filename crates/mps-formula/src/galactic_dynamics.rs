@@ -21,14 +21,14 @@ const G_UNITS: f64 = 4.302e-3;
 ///
 /// Inputs:
 /// - `velocity_dispersion` [km/s]               — gas or stellar velocity
-///                                                dispersion in the radial
-///                                                direction
+///   dispersion in the radial
+///   direction
 /// - `epicyclic_freq`     [(km/s)/pc]           — κ = (4 Ω² + R · dΩ²/dR)^1/2;
-///                                                must use the same length
-///                                                unit as `G_UNITS` (pc) for Q
-///                                                to be dimensionless.  Solar
-///                                                neighborhood κ ≈ 37
-///                                                (km/s)/kpc = 0.037 (km/s)/pc.
+///   must use the same length
+///   unit as `G_UNITS` (pc) for Q
+///   to be dimensionless.  Solar
+///   neighborhood κ ≈ 37
+///   (km/s)/kpc = 0.037 (km/s)/pc.
 /// - `surface_density`    [Msun/pc²]            — Σ of the disk component
 pub fn toomre_q(
     velocity_dispersion: f64,
@@ -42,10 +42,7 @@ pub fn toomre_q(
         set_error(ERR_INVALID_ARGUMENT, "bad Toomre Q args");
         return None;
     }
-    Some(
-        velocity_dispersion * epicyclic_freq
-            / (core::f64::consts::PI * G_UNITS * surface_density),
-    )
+    Some(velocity_dispersion * epicyclic_freq / (core::f64::consts::PI * G_UNITS * surface_density))
 }
 
 /// Dynamical friction (Chandrasekhar 1943) deceleration of a massive body `M`
@@ -78,8 +75,7 @@ pub fn chandrasekhar_dynamical_friction(
         return None;
     }
     Some(
-        4.0 * core::f64::consts::PI * G * G * mass_kg * background_density_kg_m3
-            * coulomb_log
+        4.0 * core::f64::consts::PI * G * G * mass_kg * background_density_kg_m3 * coulomb_log
             / (velocity_ms * velocity_ms),
     )
 }
@@ -95,10 +91,7 @@ pub fn chandrasekhar_dynamical_friction(
 /// - `mond_a_zero`            — a_0 in m/s² (typical 1.2e-10)
 ///
 /// Returns the MOND-corrected acceleration in m/s².
-pub fn mond_acceleration(
-    newtonian_acceleration: f64,
-    mond_a_zero: f64,
-) -> Option<f64> {
+pub fn mond_acceleration(newtonian_acceleration: f64, mond_a_zero: f64) -> Option<f64> {
     if !finite_positive(newtonian_acceleration) || !finite_positive(mond_a_zero) {
         set_error(ERR_INVALID_ARGUMENT, "bad MOND accel args");
         return None;
@@ -109,7 +102,7 @@ pub fn mond_acceleration(
 /// Free-fall (dynamical) timescale `t_ff = sqrt(3π / (32 G ρ))` of a uniform
 /// density cloud undergoing gravitational collapse.  Inputs:
 /// - `density_kg_m3` — ρ in kg/m³
-/// Returns seconds until collapse.
+///   Returns seconds until collapse.
 pub fn free_fall_timescale(density_kg_m3: f64) -> Option<f64> {
     const G: f64 = 6.67430e-11;
     if !finite_positive(density_kg_m3) {
@@ -126,7 +119,7 @@ pub fn free_fall_timescale(density_kg_m3: f64) -> Option<f64> {
 /// - `ionising_photon_rate` — ṅ_ion (s^-1; O star ~ 1e49 s^-1)
 /// - `recombination_coeff` — α_B (m³ s^-1; case B ≈ 2.6e-19 at 1e4 K)
 /// - `hydrogen_density`    — n_H (m^-3)
-/// Returns the Strömgren sphere radius in metres.
+///   Returns the Strömgren sphere radius in metres.
 pub fn stromgren_radius(
     ionising_photon_rate: f64,
     recombination_coeff: f64,

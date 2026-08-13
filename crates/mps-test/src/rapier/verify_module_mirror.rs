@@ -89,8 +89,7 @@ mod tests {
     /// crate) and steps up two levels to reach the workspace root, then down
     /// into the requested sibling crate.
     fn sibling_crate_src(subdir: &str) -> PathBuf {
-        let manifest = option_env!("CARGO_MANIFEST_DIR")
-            .expect("CARGO_MANIFEST_DIR is set by cargo during build/test");
+        let manifest = env!("CARGO_MANIFEST_DIR");
         // crates/mpd-test -> crates/<sibling>
         let manifest = PathBuf::from(manifest);
         let crates_root = manifest
@@ -117,8 +116,7 @@ mod tests {
         // Union of all module names that live on the production side (either
         // core::rapier or formula). list_entries already strips `.rs` so all
         // keys are bare module names; the bool flags the directory shape.
-        let mut expected: std::collections::BTreeSet<String> =
-            std::collections::BTreeSet::new();
+        let mut expected: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
         expected.extend(test_rapier.keys().cloned());
         expected.extend(core_rapier.keys().cloned());
         expected.extend(formula_src.keys().cloned());
@@ -249,9 +247,7 @@ mod tests {
         // §N1 morphology alignment (cosmos side, same rules as rapier above)
         let shape_mismatch_hard: Vec<String> = test_cosmos
             .iter()
-            .filter(|(name, is_dir)| {
-                cosmos_src.get(*name).copied() == Some(false) && **is_dir
-            })
+            .filter(|(name, is_dir)| cosmos_src.get(*name).copied() == Some(false) && **is_dir)
             .map(|(n, _)| n.clone())
             .collect();
 

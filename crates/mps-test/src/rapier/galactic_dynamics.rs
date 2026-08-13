@@ -27,13 +27,7 @@ mod tests {
         // G Earlier check: a_df = 4π G² M ρ ln Λ / v²
         // M = 1e9 Msun ≈ 2e39 kg, ρ ≈ 1e-22 kg/m³ (galaxy halo neighborhood),
         // v = 200 km/s = 2e5 m/s, ln Λ = 10
-        let a = chandrasekhar_dynamical_friction(
-            2.0e39,
-            1.0e-22,
-            2.0e5,
-            10.0,
-        )
-        .unwrap();
+        let a = chandrasekhar_dynamical_friction(2.0e39, 1.0e-22, 2.0e5, 10.0).unwrap();
         assert!(a.is_finite() && a > 0.0, "a={a}");
     }
 

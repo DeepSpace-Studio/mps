@@ -20,7 +20,7 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use mps_formula::celestial_data::{celestial_body_id_from_u32, get_celestial_body};
-use mps_formula::error::{set_error, ERR_CAPACITY, ERR_INTERNAL, ERR_NULL_POINTER};
+use mps_formula::error::{ERR_CAPACITY, ERR_INTERNAL, ERR_NULL_POINTER, set_error};
 use mps_formula::ffi::Vec3;
 use rapier3d::prelude::{RigidBodyBuilder, RigidBodyHandle, Vector};
 
@@ -245,8 +245,14 @@ pub extern "C" fn cosmos_world_add_celestial(
     max_sh_degree: u32,
 ) -> i32 {
     ffi_guard(-1, || {
-        let w = match unsafe { world.as_mut() } { Some(t) => t, None => return -1, };
-        let body = match celestial_by_id(celestial_id) { Some(t) => t, None => return -1, };
+        let w = match unsafe { world.as_mut() } {
+            Some(t) => t,
+            None => return -1,
+        };
+        let body = match celestial_by_id(celestial_id) {
+            Some(t) => t,
+            None => return -1,
+        };
         let src = CelestialSource::new(body, max_sh_degree);
         w.add_celestial(src) as i32
     })
@@ -255,13 +261,12 @@ pub extern "C" fn cosmos_world_add_celestial(
 /// 把已插入的刚体登记为 n-body 互引力质点源（给定质量 kg）。
 /// `body` 是 `cosmos_world_insert_body` 返回的 packed handle。返回 1 / 0。
 #[unsafe(no_mangle)]
-pub extern "C" fn cosmos_world_add_n_body(
-    world: *mut CosmosWorld,
-    body: u64,
-    mass: f64,
-) -> u8 {
+pub extern "C" fn cosmos_world_add_n_body(world: *mut CosmosWorld, body: u64, mass: f64) -> u8 {
     ffi_guard(0, || {
-        let w = match unsafe { world.as_mut() } { Some(t) => t, None => return 0, };
+        let w = match unsafe { world.as_mut() } {
+            Some(t) => t,
+            None => return 0,
+        };
         w.add_n_body(unpack_handle(body), mass);
         1
     })
@@ -276,7 +281,10 @@ pub extern "C" fn cosmos_world_insert_body_as_gravity_source(
     mass: f64,
 ) -> u64 {
     ffi_guard(0, || {
-        let w = match unsafe { world.as_mut() } { Some(t) => t, None => return 0, };
+        let w = match unsafe { world.as_mut() } {
+            Some(t) => t,
+            None => return 0,
+        };
         if builder.is_null() {
             return 0;
         }
@@ -292,7 +300,10 @@ pub extern "C" fn cosmos_world_insert_body(
     builder: *mut RigidBodyBuilder,
 ) -> u64 {
     ffi_guard(0, || {
-        let w = match unsafe { world.as_mut() } { Some(t) => t, None => return 0, };
+        let w = match unsafe { world.as_mut() } {
+            Some(t) => t,
+            None => return 0,
+        };
         if builder.is_null() {
             return 0;
         }
@@ -325,7 +336,10 @@ pub extern "C" fn cosmos_world_set_perturbation(
     enable_dynamical_friction: i32,
 ) -> u8 {
     ffi_guard(0, || {
-        let w = match unsafe { world.as_mut() } { Some(t) => t, None => return 0, };
+        let w = match unsafe { world.as_mut() } {
+            Some(t) => t,
+            None => return 0,
+        };
         w.set_perturbation(
             unpack_handle(body),
             crate::world::PerturbationConfig {
@@ -357,7 +371,10 @@ pub extern "C" fn cosmos_world_set_perturbation(
 #[unsafe(no_mangle)]
 pub extern "C" fn cosmos_world_step(world: *mut CosmosWorld, dt: f64) -> i32 {
     ffi_guard(-2, || {
-        let w = match unsafe { world.as_mut() } { Some(t) => t, None => return -2, };
+        let w = match unsafe { world.as_mut() } {
+            Some(t) => t,
+            None => return -2,
+        };
         match w.step(dt) {
             StepResult::Stepped(n) => ((n * 1000.0).round() as i64).max(1) as i32,
             StepResult::Substepped { .. } => -1,
@@ -373,7 +390,10 @@ pub extern "C" fn cosmos_world_step(world: *mut CosmosWorld, dt: f64) -> i32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn cosmos_world_step_n(world: *mut CosmosWorld, dt: f64, n: u32) -> i32 {
     ffi_guard(1, || {
-        let w = match unsafe { world.as_mut() } { Some(t) => t, None => return 1, };
+        let w = match unsafe { world.as_mut() } {
+            Some(t) => t,
+            None => return 1,
+        };
         match w.step_n(dt, n) {
             Ok(()) => 0,
             Err(StepSkipReason::NonFinite) => 1,
@@ -392,7 +412,10 @@ pub extern "C" fn cosmos_body_translation_out(
     out: *mut Vec3,
 ) -> i32 {
     ffi_guard(0, || {
-        let w = match unsafe { world.as_ref() } { Some(t) => t, None => return 0, };
+        let w = match unsafe { world.as_ref() } {
+            Some(t) => t,
+            None => return 0,
+        };
         let Some(p) = w.body_translation(unpack_handle(body)) else {
             return 0;
         };
@@ -413,7 +436,10 @@ pub extern "C" fn cosmos_body_linvel_out(
     out: *mut Vec3,
 ) -> i32 {
     ffi_guard(0, || {
-        let w = match unsafe { world.as_ref() } { Some(t) => t, None => return 0, };
+        let w = match unsafe { world.as_ref() } {
+            Some(t) => t,
+            None => return 0,
+        };
         let Some(v) = w.body_linvel(unpack_handle(body)) else {
             return 0;
         };
@@ -430,7 +456,10 @@ pub extern "C" fn cosmos_body_linvel_out(
 #[unsafe(no_mangle)]
 pub extern "C" fn cosmos_body_mass(world: *const CosmosWorld, body: u64) -> f64 {
     ffi_guard(f64::NAN, || {
-        let w = match unsafe { world.as_ref() } { Some(t) => t, None => return f64::NAN, };
+        let w = match unsafe { world.as_ref() } {
+            Some(t) => t,
+            None => return f64::NAN,
+        };
         w.body_mass(unpack_handle(body)).unwrap_or(f64::NAN)
     })
 }
@@ -448,7 +477,10 @@ pub extern "C" fn cosmos_hill_radius_for(
     eccentricity: f64,
 ) -> f64 {
     ffi_guard(f64::NAN, || {
-        let w = match unsafe { world.as_ref() } { Some(t) => t, None => return f64::NAN, };
+        let w = match unsafe { world.as_ref() } {
+            Some(t) => t,
+            None => return f64::NAN,
+        };
         w.hill_radius_for(unpack_handle(body), semi_major_axis, eccentricity)
             .unwrap_or(f64::NAN)
     })
@@ -458,7 +490,10 @@ pub extern "C" fn cosmos_hill_radius_for(
 #[unsafe(no_mangle)]
 pub extern "C" fn cosmos_world_dynamic_body_count(world: *const CosmosWorld) -> u32 {
     ffi_guard(0, || {
-        let w = match unsafe { world.as_ref() } { Some(t) => t, None => return 0, };
+        let w = match unsafe { world.as_ref() } {
+            Some(t) => t,
+            None => return 0,
+        };
         w.dynamic_body_count() as u32
     })
 }
@@ -474,11 +509,12 @@ pub extern "C" fn cosmos_world_dynamic_body_count(world: *const CosmosWorld) -> 
 /// # Safety
 /// `world` 可为 null（返回 0），其余情形须是 `cosmos_world_create` 产出的有效指针。
 #[unsafe(no_mangle)]
-pub extern "C" fn cosmos_world_dynamic_body_snapshot_count(
-    world: *const CosmosWorld,
-) -> u32 {
+pub extern "C" fn cosmos_world_dynamic_body_snapshot_count(world: *const CosmosWorld) -> u32 {
     ffi_guard(0, || {
-        let w = match unsafe { world.as_ref() } { Some(t) => t, None => return 0, };
+        let w = match unsafe { world.as_ref() } {
+            Some(t) => t,
+            None => return 0,
+        };
         w.dynamic_body_count() as u32
     })
 }
@@ -522,10 +558,13 @@ pub extern "C" fn cosmos_world_dynamic_body_snapshot(
     capacity: u32,
 ) -> u32 {
     ffi_guard(0, || {
-        let w = match unsafe { world.as_ref() } { Some(t) => t, None => {
-            set_error(ERR_NULL_POINTER, "cosmos world is null");
-            return 0;
-        }};
+        let w = match unsafe { world.as_ref() } {
+            Some(t) => t,
+            None => {
+                set_error(ERR_NULL_POINTER, "cosmos world is null");
+                return 0;
+            }
+        };
         if out_handles.is_null() || out_values.is_null() {
             set_error(ERR_NULL_POINTER, "snapshot output buffer is null");
             return 0;

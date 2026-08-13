@@ -130,10 +130,7 @@ pub fn solar_wind_pressure_force(
     effective_area: f64,
 ) -> Option<Vector> {
     // 早退：参数无意义时直接零。
-    if proton_density <= 0.0
-        || solar_wind_speed <= 0.0
-        || effective_area <= 0.0
-    {
+    if proton_density <= 0.0 || solar_wind_speed <= 0.0 || effective_area <= 0.0 {
         return None;
     }
     let r2 = sun_to_body.length_squared();
@@ -184,12 +181,8 @@ pub fn dynamical_friction_force(
         // 速度为零 / 退化时摩擦无定义（公式 1/v² 发散），返回 None。
         return None;
     }
-    let a_mag = gd::chandrasekhar_dynamical_friction(
-        body_mass,
-        background_density,
-        speed,
-        coulomb_log,
-    )?;
+    let a_mag =
+        gd::chandrasekhar_dynamical_friction(body_mass, background_density, speed, coulomb_log)?;
     // 反向于速度方向施加。
     Some(velocity / speed * (-a_mag) * body_mass)
 }

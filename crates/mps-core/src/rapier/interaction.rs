@@ -22,7 +22,9 @@
 
 use rapier3d::prelude::Vector;
 
-use crate::rapier::ffi::{AirDragLaw, CustomPhysicsReport, vec3_finite, vec3_from_rapier, vec3_to_rapier};
+use crate::rapier::ffi::{
+    AirDragLaw, CustomPhysicsReport, vec3_finite, vec3_from_rapier, vec3_to_rapier,
+};
 use crate::rapier::math::KahanVec3;
 
 // ---------------------------------------------------------------------------
@@ -348,7 +350,9 @@ fn apply_coulomb_friction_forces_with_facade(
                 let friction_mag = mu * normal_force_mag;
                 let friction_force = -tangential_vel / tangential_speed * friction_mag;
 
-                facade.friction_work.push((rb_handle1, rb_handle2, friction_force));
+                facade
+                    .friction_work
+                    .push((rb_handle1, rb_handle2, friction_force));
             }
         }
     }
@@ -429,8 +433,7 @@ impl ForceLaw for NewtonianGravityForceLaw {
         // The accumulator is indexed positionally (i, j) so we can do += / -= on
         // each pair in one pass before the single apply over scratch_force_pairs.
         let n = body_data.len();
-        let forces: &mut SmallVec<[(RigidBodyHandle, Vector); 64]> =
-            facade.scratch_force_pairs;
+        let forces: &mut SmallVec<[(RigidBodyHandle, Vector); 64]> = facade.scratch_force_pairs;
         forces.clear();
         for (h, _, _) in body_data.iter() {
             forces.push((*h, Vector::ZERO));
@@ -856,9 +859,12 @@ impl ForceLaw for EddingtonRadiationPressureForceLaw {
         // SPEED_OF_LIGHT in m/s (matches mps-formula::high_energy_astro).
         const C: f64 = 299_792_458.0;
 
-        if !self.mass_kg.is_finite() || self.mass_kg <= 0.0
-            || !self.opacity.is_finite() || self.opacity <= 0.0
-            || !self.effective_area_m2.is_finite() || self.effective_area_m2 <= 0.0
+        if !self.mass_kg.is_finite()
+            || self.mass_kg <= 0.0
+            || !self.opacity.is_finite()
+            || self.opacity <= 0.0
+            || !self.effective_area_m2.is_finite()
+            || self.effective_area_m2 <= 0.0
             || !vec3_finite(vec3_from_rapier(self.source_position))
         {
             return;
@@ -955,10 +961,14 @@ impl ForceLaw for XrayIrradiationForceLaw {
         const C: f64 = 299_792_458.0;
         const L_SUN: f64 = 3.828e26; // W
 
-        if !self.k_t_eff_kev.is_finite() || self.k_t_eff_kev <= 0.0
-            || !self.r_in_km.is_finite() || self.r_in_km <= 0.0
-            || !self.spectral_hardening.is_finite() || self.spectral_hardening <= 0.0
-            || !self.effective_area_m2.is_finite() || self.effective_area_m2 <= 0.0
+        if !self.k_t_eff_kev.is_finite()
+            || self.k_t_eff_kev <= 0.0
+            || !self.r_in_km.is_finite()
+            || self.r_in_km <= 0.0
+            || !self.spectral_hardening.is_finite()
+            || self.spectral_hardening <= 0.0
+            || !self.effective_area_m2.is_finite()
+            || self.effective_area_m2 <= 0.0
             || !vec3_finite(vec3_from_rapier(self.source_position))
         {
             return;
@@ -1067,10 +1077,14 @@ impl ForceLaw for PulsarMagneticDipoleForceLaw {
     fn apply(&self, facade: &mut ForceFacade<'_>) {
         let source = self.law_type();
 
-        if !self.moment_of_inertia.is_finite() || self.moment_of_inertia <= 0.0
-            || !self.ns_radius_m.is_finite() || self.ns_radius_m <= 0.0
-            || !self.period_ms.is_finite() || self.period_ms <= 0.0
-            || !self.period_derivative.is_finite() || self.period_derivative <= 0.0
+        if !self.moment_of_inertia.is_finite()
+            || self.moment_of_inertia <= 0.0
+            || !self.ns_radius_m.is_finite()
+            || self.ns_radius_m <= 0.0
+            || !self.period_ms.is_finite()
+            || self.period_ms <= 0.0
+            || !self.period_derivative.is_finite()
+            || self.period_derivative <= 0.0
             || !vec3_finite(vec3_from_rapier(self.pulsar_position))
             || !vec3_finite(vec3_from_rapier(self.spin_axis))
             || !vec3_finite(vec3_from_rapier(self.body_dipole_moment))
@@ -1161,7 +1175,9 @@ impl ForceLaw for PulsarMagneticDipoleForceLaw {
         let nfb = facade.scratch_force_pairs_alt.len();
         for i in 0..nfb {
             let (handle, torque) = facade.scratch_force_pairs_alt[i];
-            let Some(body) = facade.bodies.get_mut(handle) else { continue; };
+            let Some(body) = facade.bodies.get_mut(handle) else {
+                continue;
+            };
             let domega = body.angvel() + torque * (facade.dt / unit_rotational_inertia);
             body.set_angvel(domega, true);
         }
@@ -1236,11 +1252,16 @@ impl ForceLaw for JeansEscapeDragForceLaw {
         let dir_unit = dir / dir_norm_sq.sqrt();
 
         // Validate scalars up front so the formula call is a clean `Some`.
-        if !self.n_exo.is_finite() || self.n_exo <= 0.0
-            || !self.temperature.is_finite() || self.temperature <= 0.0
-            || !self.escape_parameter.is_finite() || self.escape_parameter < 0.0
-            || !self.mass_kg.is_finite() || self.mass_kg <= 0.0
-            || !self.effective_area_m2.is_finite() || self.effective_area_m2 <= 0.0
+        if !self.n_exo.is_finite()
+            || self.n_exo <= 0.0
+            || !self.temperature.is_finite()
+            || self.temperature <= 0.0
+            || !self.escape_parameter.is_finite()
+            || self.escape_parameter < 0.0
+            || !self.mass_kg.is_finite()
+            || self.mass_kg <= 0.0
+            || !self.effective_area_m2.is_finite()
+            || self.effective_area_m2 <= 0.0
         {
             return;
         }
@@ -1258,8 +1279,7 @@ impl ForceLaw for JeansEscapeDragForceLaw {
 
         // Thermal speed at the exobase [m/s].
         const BOLTZMANN: f64 = 1.380649e-23;
-        let v_thermal =
-            (2.0 * BOLTZMANN * self.temperature / self.mass_kg).sqrt();
+        let v_thermal = (2.0 * BOLTZMANN * self.temperature / self.mass_kg).sqrt();
         if !v_thermal.is_finite() || v_thermal <= 0.0 {
             return;
         }

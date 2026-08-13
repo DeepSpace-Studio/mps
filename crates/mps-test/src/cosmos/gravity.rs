@@ -8,7 +8,7 @@ use mps_cosmos::gravity::{
 #[cfg(test)]
 use mps_formula::celestial_data::{CelestialBodyId, get_celestial_body};
 #[cfg(test)]
-use rapier3d::prelude::{Rotation, RigidBodyHandle, Vector};
+use rapier3d::prelude::{RigidBodyHandle, Rotation, Vector};
 
 #[test]
 fn earth_surface_gravity_is_about_9_8() {

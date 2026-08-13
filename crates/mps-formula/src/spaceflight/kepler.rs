@@ -421,12 +421,7 @@ pub fn tsiolkovsky_delta_v(
 ///
 /// Example: GPS Block II "24/3/2" shell → idx=17 gives (240°, 105°).
 pub fn walker_delta_layout(t: u32, p: u32, f: u32, idx: u32) -> Option<(f64, f64)> {
-    if t == 0
-        || p == 0
-        || p > t
-        || f >= p
-        || idx >= t
-    {
+    if t == 0 || p == 0 || p > t || f >= p || idx >= t {
         return None;
     }
     let s = t / p;
@@ -468,8 +463,12 @@ pub fn sun_synchronous_inclination(
 ) -> Option<f64> {
     const J2: f64 = 1.082626173e-3;
     let a = altitude_km + radius_earth_km;
-    if !finite(&[radius_earth_km, altitude_km, mu_km3_s2, raan_precession_rate_rad_s])
-        || radius_earth_km <= 0.0
+    if !finite(&[
+        radius_earth_km,
+        altitude_km,
+        mu_km3_s2,
+        raan_precession_rate_rad_s,
+    ]) || radius_earth_km <= 0.0
         || altitude_km < 0.0
         || mu_km3_s2 <= 0.0
         || raan_precession_rate_rad_s == 0.0
@@ -486,7 +485,7 @@ pub fn sun_synchronous_inclination(
         return None;
     }
     let cos_i = -raan_precession_rate_rad_s / denom;
-    if cos_i < -1.0 || cos_i > 1.0 {
+    if !(-1.0..=1.0).contains(&cos_i) {
         return None; // no real inclination exists for this combination
     }
     Some(cos_i.acos().to_degrees())
@@ -501,4 +500,3 @@ pub fn sun_synchronous_inclination(
 pub fn molniya_critical_elements() -> (f64, f64) {
     (63.4, 270.0)
 }
-

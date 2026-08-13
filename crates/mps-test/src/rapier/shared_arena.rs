@@ -459,10 +459,7 @@ mod tests {
     /// body 不至于马上 asleep；arena 单测里不需要真实物理）。返回 handle。
     fn insert_dynamic_body_at(world: *mut WorldHandle, x: f64, y: f64, z: f64) -> u64 {
         let builder = rigid_body_builder_create(BodyStatus::Dynamic as u32);
-        rigid_body_builder_set_translation(
-            builder,
-            Vec3 { x, y, z },
-        );
+        rigid_body_builder_set_translation(builder, Vec3 { x, y, z });
         rigid_body_builder_set_additional_mass(builder, 1.0);
         let body = rigid_body_builder_build(builder);
         world_insert_rigid_body(world, body)
@@ -500,7 +497,9 @@ mod tests {
             world_create_shared_arena(world, 16, 16, 32, 32, &mut addr, &mut size),
             Bool::TRUE
         );
-        let arena = ArenaView { ptr: addr as *mut u8 };
+        let arena = ArenaView {
+            ptr: addr as *mut u8,
+        };
 
         // 插入 3 个 dynamic body
         let _h0 = insert_dynamic_body_at(world, 0.0, 5.0, 0.0);
@@ -550,7 +549,9 @@ mod tests {
             world_create_shared_arena(world, 16, 16, 32, 32, &mut addr, &mut size),
             Bool::TRUE
         );
-        let arena = ArenaView { ptr: addr as *mut u8 };
+        let arena = ArenaView {
+            ptr: addr as *mut u8,
+        };
 
         let _h0 = insert_dynamic_body_at(world, 0.0, 5.0, 0.0);
         let h1 = insert_dynamic_body_at(world, 1.0, 5.0, 0.0);
@@ -564,10 +565,7 @@ mod tests {
         // 迭代器在下次 step 时输出 2 个 body（slot 0 + 原 slot 2 的 body
         // 被复用为 slot 1）。无论怎么复用，总活跃数=2，所以 new_prev=2，
         // 被清零的区间正好是 [2..3] —— 索引 2 的那个 slot。
-        assert_eq!(
-            world_remove_rigid_body(world, h1, Bool::FALSE),
-            Bool::TRUE
-        );
+        assert_eq!(world_remove_rigid_body(world, h1, Bool::FALSE), Bool::TRUE);
 
         // 在 step 前 snapshot slot 2 / slot 3 的 gen
         let slot2 = arena.body_slot(2);
@@ -618,7 +616,9 @@ mod tests {
             world_create_shared_arena(world, 8, 16, 32, 32, &mut addr, &mut size),
             Bool::TRUE
         );
-        let arena = ArenaView { ptr: addr as *mut u8 };
+        let arena = ArenaView {
+            ptr: addr as *mut u8,
+        };
 
         let c0 = insert_ball_collider(world);
         let c1 = insert_ball_collider(world);
@@ -644,7 +644,10 @@ mod tests {
         assert_eq!(arena.u32_at(OFF_COLLIDER_COUNT), 4);
         // slot 3 应该被 flush_collider 写入过 —— gen > 0 且 even
         let g3 = arena.u64_at(slot3);
-        assert!(g3 > 0 && g3 & 1 == 0, "slot 3 collider gen {g3} not even-positive");
+        assert!(
+            g3 > 0 && g3 & 1 == 0,
+            "slot 3 collider gen {g3} not even-positive"
+        );
 
         // 删除一个 collider（c0）。active 应降到 3。
         assert_eq!(world_remove_collider(world, c0, Bool::FALSE), Bool::TRUE);
@@ -665,7 +668,11 @@ mod tests {
             "after removing one collider, active should be ≤ 3, got {active_after}"
         );
         // 同时 collider slot 4 始终保持为 0（从未被填）
-        assert_eq!(arena.u64_at(slot4), 0, "slot 4 untouched, should stay gen=0");
+        assert_eq!(
+            arena.u64_at(slot4),
+            0,
+            "slot 4 untouched, should stay gen=0"
+        );
 
         // cleanup 还有 c1、c2 未被删，但我们 destroy world 会清理所有资源。
         let _ = c1;

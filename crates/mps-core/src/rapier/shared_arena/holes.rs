@@ -319,6 +319,7 @@ impl super::SharedPhysicsArena {
                 self.clear_collider_slot(i);
             }
         }
-        self.prev_collider_active_count.store(index, Ordering::Relaxed);
+        self.prev_collider_active_count
+            .store(index, Ordering::Relaxed);
     }
 }

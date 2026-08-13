@@ -5,22 +5,22 @@ use ljni::JNIEnv;
 use ljni::sys::{jbyte, jbyteArray, jclass, jdouble, jdoubleArray, jint, jlong, jstring};
 #[cfg(feature = "anvilkit-bridge")]
 use mps_core::rapier::anvilkit as ak;
+#[cfg(feature = "anvilkit-bridge")]
+use mps_core::rapier::ffi::AnvilKitAppHandle as AKH;
 use mps_core::rapier::ffi::{
     AabbDesc, AeroForceReport, AeroSurface, AirDragLaw, Bool, CRbTreeHandle as CRTH, Capsule,
     CharacterCollision, CharacterControllerHandle as CCH, ColliderBuilderHandle as CBH,
     ColliderHandleRaw as CRaw, CollisionEventRecord as CER, ContactForceEventRecord,
     CoulombFrictionLaw, Cylinder, DynamicalFrictionLaw, EddingtonRadiationPressureLaw,
     EffectiveCharacterMovement, Ellipsoid, ExternalForceLaw, FluidForceReport, FluidVolume,
-    HohmannTransfer, ImpulseJointHandleRaw as JRaw, InteractionGroupsDesc,
-    JointBuilderHandle as JBH, MonDGravityLaw, NewtonGravityLaw, NeuralBoundsDesc, Obb,
+    HohmannTransfer, ImpulseJointHandleRaw as JRaw, InteractionGroupsDesc, JeansEscapeLaw,
+    JointBuilderHandle as JBH, MonDGravityLaw, NeuralBoundsDesc, NewtonGravityLaw, Obb,
     PointProjection, Prism, PulsarMagneticDipoleLaw, Quat, QuaternionDerivative, QueryFilterDesc,
     RTreeHandle as RTH, RayHit, RigidBodyBuilderHandle as RBH, RigidBodyHandleRaw as RRaw,
     ScalarKalman, ShapeCastHit, ShapeCastOptionsDesc, ShapeDesc, SolarWindPressureLaw, Sphere,
-    SphericalShell, Ssv, TrajectoryEnvironment, TrajectoryForceReport, Vec3,
-    VoxelBuildStats, VoxelColliderOptions, WorldHandle as WH, JeansEscapeLaw, XrayIrradiationLaw,
+    SphericalShell, Ssv, TrajectoryEnvironment, TrajectoryForceReport, Vec3, VoxelBuildStats,
+    VoxelColliderOptions, WorldHandle as WH, XrayIrradiationLaw,
 };
-#[cfg(feature = "anvilkit-bridge")]
-use mps_core::rapier::ffi::{AnvilKitAppHandle as AKH};
 use mps_core::rapier::{
     bounds as bo, collider as col, compat as com, controller as cc, crbtree as crt, dop,
     error as er, events as ev, joints as jo, neural as neu, query as qu, rigid_body as rb,
@@ -185,16 +185,24 @@ fn sd(shape_type: jint, a: jdouble, b: jdouble, c: jdouble, d: jdouble) -> Shape
 /// Returns `(0, 0, 0)` for the identity / near-identity case so that bizzare
 /// callers passing `(0,0,0,1)` end up with no rotation rather than NaNs.
 fn quat_to_axis_angle(q: Quat) -> Vec3 {
-    // angle = 2 * acos(|w|)
-    let w = if q.w > 1.0 { 1.0 } else if q.w < -1.0 { -1.0 } else { q.w };
+    // angle = 2 * acos(|w|); clamp w to [-1, 1] so acos never sees an OOB value.
+    let w = q.w.clamp(-1.0, 1.0);
     let angle = 2.0 * w.acos();
     let s = (1.0 - w * w).sqrt();
     // s tiny ⇒ (near-)identity quaternion; pick zero rotation to stay finite.
     if s < 1e-12 {
-        return Vec3 { x: 0.0, y: 0.0, z: 0.0 };
+        return Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
     }
     let k = angle / s;
-    Vec3 { x: q.i * k, y: q.j * k, z: q.k * k }
+    Vec3 {
+        x: q.i * k,
+        y: q.j * k,
+        z: q.k * k,
+    }
 }
 
 macro_rules! jni {
@@ -542,11 +550,10 @@ jni!(long queryCastRay(long world, double ox, double oy, double oz, double dx, d
     }
     let filter_desc = query_filter_args!(flags, memberships, filter, use_groups, exclude_collider, use_exclude_collider, exclude_rigid_body, use_exclude_rigid_body);
     let hit = qu::query_cast_ray(world_ptr, v3(ox, oy, oz), v3(dx, dy, dz), max_toi, jb(solid), filter_desc);
-    if out_hit != 0 {
-        if let Some(out) = unsafe { pm::<RayHit>(out_hit).as_mut() } {
+    if out_hit != 0
+        && let Some(out) = unsafe { pm::<RayHit>(out_hit).as_mut() } {
             *out = hit;
         }
-    }
     hit.collider as jlong
 });
 
@@ -1080,10 +1087,10 @@ jni!(boolean spaceApplyGravityGradientTorqueToBody(long world, long body, double
 //                     在 ABI 上对齐（后者也是单 u64）。
 // =========================================================================
 use mps_cosmos::gravity::CelestialSource;
+use mps_cosmos::rapier3d::prelude::{RigidBodyBuilder, RigidBodyHandle, Vector};
 use mps_cosmos::world::{
     CosmosWorld, CosmosWorldConfig, OrbitIntegration, StepResult, StepSkipReason,
 };
-use mps_cosmos::rapier3d::prelude::{RigidBodyBuilder, RigidBodyHandle, Vector};
 
 /// `RigidBodyHandle` ↔ `jlong` 打包。高 32 位存 index，低 32 位存
 /// generation —— 与 `RigidBodyHandle::into_raw_parts()` 顺序一致。
@@ -1159,7 +1166,7 @@ jni!(void cosmosBuilderDestroy(long builder) {
 });
 
 // 创建一个 `CosmosWorld`。
-// 
+//
 // 参数：
 // - `dt`：积分步长（秒），合法范围 `0 < dt ≤ 30`；
 // - `solver_iterations`、`ccd_substeps`：rapier 求解器参数；
@@ -1299,7 +1306,7 @@ jni!(boolean cosmosWorldSetPerturbationExt(
 // - `-2`：`Skipped(NonFinite)`（dt 为 NaN/Inf）；
 // - `-3`：`Skipped(NonPositive)`（dt ≤ 0）；
 // - `-4`：`Skipped(TooLarge)`（dt 超过 30s 硬上限）。
-// 
+//
 // 这个"压成单 int"的设计是为了让 Java 端的常见 `if (r > 0)` 判断简单。
 jni!(int cosmosWorldStep(long world, double dt) {
     let w = unsafe { (world as *mut CosmosWorld).as_mut() };
@@ -1407,5 +1414,3 @@ jni!(int cosmosWorldDynamicBodySnapshot(
         u32_from_jint(capacity),
     ) as jint
 });
-
-

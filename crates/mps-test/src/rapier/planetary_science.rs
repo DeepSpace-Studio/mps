@@ -28,7 +28,10 @@ mod tests {
         // L=1 Lsun, inner=1.0, outer=0.36 → (1, 5/3)
         let (inner, outer) = habitable_zone_separation(1.0, 1.0, 0.36).unwrap();
         assert!((inner - 1.0).abs() < 1.0e-3);
-        assert!((outer - (1.0_f64 / 0.36_f64).sqrt()).abs() < 1.0e-3, "outer={outer}");
+        assert!(
+            (outer - (1.0_f64 / 0.36_f64).sqrt()).abs() < 1.0e-3,
+            "outer={outer}"
+        );
     }
 
     #[test]
@@ -50,19 +53,10 @@ mod tests {
         //     = 1.32e16 J/m²;  F = σ·(2000⁴-300⁴) ≈ 9.07e5 W/m²
         // ⇒ t ≈ 1.455e10 s ≈ 460 yr.
         let t = magma_ocean_solidification_timescale(
-            3000.0,
-            1200.0,
-            4.0e5,
-            2.0e6,
-            1500.0,
-            2000.0,
-            300.0,
+            3000.0, 1200.0, 4.0e5, 2.0e6, 1500.0, 2000.0, 300.0,
         )
         .unwrap();
         assert!(t.is_finite() && t > 0.0, "t={t}");
-        assert!(
-            (t - 1.455e10).abs() < 1.0e8,
-            "t={t} expected ≈1.455e10 s"
-        );
+        assert!((t - 1.455e10).abs() < 1.0e8, "t={t} expected ≈1.455e10 s");
     }
 }

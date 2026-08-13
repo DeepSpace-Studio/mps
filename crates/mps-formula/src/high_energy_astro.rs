@@ -54,7 +54,10 @@ pub fn pulsar_spin_down_luminosity(
     }
     let p_s = period_ms * 1.0e-3;
     let p_cubed = p_s * p_s * p_s;
-    Some(4.0 * core::f64::consts::PI * core::f64::consts::PI * moment_of_inertia * period_derivative / p_cubed)
+    Some(
+        4.0 * core::f64::consts::PI * core::f64::consts::PI * moment_of_inertia * period_derivative
+            / p_cubed,
+    )
 }
 
 /// Magnetic-dipole braking surface B-field strength inferred from pulsar
@@ -66,13 +69,13 @@ pub fn pulsar_spin_down_luminosity(
 /// Inputs:
 /// - `moment_of_inertia` [kg·m²]
 /// - `radius_m`          neutron-star radius in metres (canonical 1e4 m →
-///                       10 km radius)
+///   10 km radius)
 /// - `period_ms`         P in ms
 /// - `period_derivative` Ṗ in s/s
-/// Returns B in Tesla at the magnetic equator.  Matches the canonical
-/// B_s = 3.2e19·√(P·Ṗ) G to <0.1 %.  Typical neutron-star
-/// fields: 1e4 T (recycled millisecond pulsars) → 1e8 T (young pulsars) →
-/// 1e10-1e11 T (magnetars).
+///   Returns B in Tesla at the magnetic equator.  Matches the canonical
+///   B_s = 3.2e19·√(P·Ṗ) G to <0.1 %.  Typical neutron-star
+///   fields: 1e4 T (recycled millisecond pulsars) → 1e8 T (young pulsars) →
+///   1e10-1e11 T (magnetars).
 pub fn pulsar_surface_b_field(
     moment_of_inertia: f64,
     radius_m: f64,
@@ -90,10 +93,7 @@ pub fn pulsar_surface_b_field(
     const MU0: f64 = 4.0e-7 * core::f64::consts::PI; // vacuum permeability [N/A²]
     let p_s = period_ms * 1.0e-3;
     let r6 = radius_m.powi(6);
-    let b_sq = 3.0 * MU0 * SPEED_OF_LIGHT.powi(3)
-        * moment_of_inertia
-        * p_s
-        * period_derivative
+    let b_sq = 3.0 * MU0 * SPEED_OF_LIGHT.powi(3) * moment_of_inertia * p_s * period_derivative
         / (32.0 * core::f64::consts::PI.powi(3) * r6);
     Some(b_sq.sqrt())
 }
@@ -106,7 +106,7 @@ pub fn pulsar_surface_b_field(
 /// Inputs:
 /// - `mass_kg`    — accretor mass in kg (e.g. 10 Msun = 1.99e31 kg)
 /// - `opacity`    — opacity κ in m²/kg (electron scattering ≈ 0.034 m²/kg
-///                  for fully ionised H; 0.034·(1+X) for general composition)
+///   for fully ionised H; 0.034·(1+X) for general composition)
 pub fn eddington_limited_luminosity(mass_kg: f64, opacity: f64) -> Option<f64> {
     if !finite_positive(mass_kg) || !finite_positive(opacity) {
         set_error(ERR_INVALID_ARGUMENT, "bad Eddington luminosity args");
@@ -121,11 +121,7 @@ pub fn eddington_limited_luminosity(mass_kg: f64, opacity: f64) -> Option<f64> {
 /// Returns flux in erg/s (very rough closure-relation approximation, intended
 /// only for order-of-magnitude work — a complete afterglow needs multiple
 /// spectral segments and synchrotron self-absorption).
-pub fn grb_afterglow_flux_simple(
-    t_days: f64,
-    e_iso_erg: f64,
-    n_cm3: f64,
-) -> Option<f64> {
+pub fn grb_afterglow_flux_simple(t_days: f64, e_iso_erg: f64, n_cm3: f64) -> Option<f64> {
     if !finite_positive(t_days) || !finite_positive(e_iso_erg) || !finite_positive(n_cm3) {
         set_error(ERR_INVALID_ARGUMENT, "bad GRB afterglow args");
         return None;

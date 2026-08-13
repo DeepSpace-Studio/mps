@@ -166,9 +166,7 @@ mod tests {
         let world = mps_core::rapier::world::world_create(Vec3::default());
 
         // 1 kg dynamic body at rest.
-        let b = mps_core::rapier::rigid_body::rigid_body_builder_create(
-            BodyStatus::Dynamic as u32,
-        );
+        let b = mps_core::rapier::rigid_body::rigid_body_builder_create(BodyStatus::Dynamic as u32);
         mps_core::rapier::rigid_body::rigid_body_builder_set_additional_mass(b, 1.0);
         let body = mps_core::rapier::rigid_body::rigid_body_builder_build(b);
         let _h = mps_core::rapier::rigid_body::world_insert_rigid_body(world, body);
@@ -179,7 +177,11 @@ mod tests {
             SolarWindPressureLaw {
                 proton_density: 5.0e6,
                 v_sw_mps: 400.0e3, // 400 km/s in m/s
-                wind_direction: Vec3 { x: 1.0, y: 0.0, z: 0.0 },
+                wind_direction: Vec3 {
+                    x: 1.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
                 effective_area_m2: 1.0,
                 enabled: Bool::TRUE,
             },
@@ -220,13 +222,15 @@ mod tests {
     fn dynamical_friction_opposes_velocity() {
         let world = mps_core::rapier::world::world_create(Vec3::default());
 
-        let b = mps_core::rapier::rigid_body::rigid_body_builder_create(
-            BodyStatus::Dynamic as u32,
-        );
+        let b = mps_core::rapier::rigid_body::rigid_body_builder_create(BodyStatus::Dynamic as u32);
         mps_core::rapier::rigid_body::rigid_body_builder_set_additional_mass(b, 1.0e6);
         mps_core::rapier::rigid_body::rigid_body_builder_set_linvel(
             b,
-            Vec3 { x: 100.0, y: 0.0, z: 0.0 },
+            Vec3 {
+                x: 100.0,
+                y: 0.0,
+                z: 0.0,
+            },
         );
         let body = mps_core::rapier::rigid_body::rigid_body_builder_build(b);
         let _h = mps_core::rapier::rigid_body::world_insert_rigid_body(world, body);
@@ -268,14 +272,20 @@ mod tests {
     fn mond_gravity_deep_field_boost() {
         let world = mps_core::rapier::world::world_create(Vec3::default());
 
-        let b = mps_core::rapier::rigid_body::rigid_body_builder_create(
-            BodyStatus::Dynamic as u32,
-        );
+        let b = mps_core::rapier::rigid_body::rigid_body_builder_create(BodyStatus::Dynamic as u32);
         mps_core::rapier::rigid_body::rigid_body_builder_set_additional_mass_properties(
             b,
-            Vec3 { x: 0.0, y: 0.0, z: 0.0 },
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
             1.0,
-            Vec3 { x: 1.0, y: 1.0, z: 1.0 },
+            Vec3 {
+                x: 1.0,
+                y: 1.0,
+                z: 1.0,
+            },
         );
         let body = mps_core::rapier::rigid_body::rigid_body_builder_build(b);
         let _h = mps_core::rapier::rigid_body::world_insert_rigid_body(world, body);
@@ -285,9 +295,13 @@ mod tests {
         mps_core::rapier::events::world_set_mond_gravity_law(
             world,
             MonDGravityLaw {
-                newtonian_a: 1.0e-11,            // deep-field regime
+                newtonian_a: 1.0e-11, // deep-field regime
                 mond_a_zero: 1.2e-10,
-                direction: Vec3 { x: 1.0, y: 0.0, z: 0.0 }, // attractor at +x
+                direction: Vec3 {
+                    x: 1.0,
+                    y: 0.0,
+                    z: 0.0,
+                }, // attractor at +x
                 enabled: Bool::TRUE,
             },
         );
@@ -303,11 +317,7 @@ mod tests {
         );
         // MOND-boosted accel ≈ 3.464e-11 m/s² along +x; on 1 kg body ≈ same N.
         let fx = report.total_external_force.x;
-        assert!(
-            fx > 0.0,
-            "MOND gravity should pull along +x; got fx={}",
-            fx
-        );
+        assert!(fx > 0.0, "MOND gravity should pull along +x; got fx={}", fx);
         // Confirmed boost: a_MOND = sqrt(1e-11 · 1.2e-10) ≈ 3.46e-11 >> a_N.
         assert!(
             fx > 1.0e-11,
@@ -329,7 +339,11 @@ mod tests {
             SolarWindPressureLaw {
                 proton_density: -1.0, // invalid
                 v_sw_mps: 400.0e3,
-                wind_direction: Vec3 { x: 1.0, y: 0.0, z: 0.0 },
+                wind_direction: Vec3 {
+                    x: 1.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
                 effective_area_m2: 1.0,
                 enabled: Bool::TRUE,
             },
@@ -353,13 +367,15 @@ mod tests {
         let world = mps_core::rapier::world::world_create(Vec3::default());
 
         // 1 kg dynamic body at +x = 1.0 m (1 m from source).
-        let b = mps_core::rapier::rigid_body::rigid_body_builder_create(
-            BodyStatus::Dynamic as u32,
-        );
+        let b = mps_core::rapier::rigid_body::rigid_body_builder_create(BodyStatus::Dynamic as u32);
         mps_core::rapier::rigid_body::rigid_body_builder_set_additional_mass(b, 1.0);
         mps_core::rapier::rigid_body::rigid_body_builder_set_translation(
             b,
-            Vec3 { x: 1.0, y: 0.0, z: 0.0 },
+            Vec3 {
+                x: 1.0,
+                y: 0.0,
+                z: 0.0,
+            },
         );
         let body = mps_core::rapier::rigid_body::rigid_body_builder_build(b);
         let _h = mps_core::rapier::rigid_body::world_insert_rigid_body(world, body);
@@ -369,7 +385,11 @@ mod tests {
             EddingtonRadiationPressureLaw {
                 mass_kg: 1.989e31, // ~10 M_sun
                 opacity: 0.034,    // electron scattering for ionised H
-                source_position: Vec3 { x: 0.0, y: 0.0, z: 0.0 },
+                source_position: Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
                 effective_area_m2: 1.0,
                 enabled: Bool::TRUE,
             },
@@ -401,13 +421,15 @@ mod tests {
         let world = mps_core::rapier::world::world_create(Vec3::default());
 
         // 1 kg dynamic body at +x = 1.0 m (1 m from source).
-        let b = mps_core::rapier::rigid_body::rigid_body_builder_create(
-            BodyStatus::Dynamic as u32,
-        );
+        let b = mps_core::rapier::rigid_body::rigid_body_builder_create(BodyStatus::Dynamic as u32);
         mps_core::rapier::rigid_body::rigid_body_builder_set_additional_mass(b, 1.0);
         mps_core::rapier::rigid_body::rigid_body_builder_set_translation(
             b,
-            Vec3 { x: 1.0, y: 0.0, z: 0.0 },
+            Vec3 {
+                x: 1.0,
+                y: 0.0,
+                z: 0.0,
+            },
         );
         let body = mps_core::rapier::rigid_body::rigid_body_builder_build(b);
         let _h = mps_core::rapier::rigid_body::world_insert_rigid_body(world, body);
@@ -418,7 +440,11 @@ mod tests {
                 k_t_eff_kev: 1.0,
                 r_in_km: 10.0,
                 spectral_hardening: 1.7,
-                source_position: Vec3 { x: 0.0, y: 0.0, z: 0.0 },
+                source_position: Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
                 effective_area_m2: 1.0,
                 enabled: Bool::TRUE,
             },
@@ -450,9 +476,7 @@ mod tests {
     fn pulsar_magnetic_dipole_applies_torque_to_body() {
         let world = mps_core::rapier::world::world_create(Vec3::default());
 
-        let b = mps_core::rapier::rigid_body::rigid_body_builder_create(
-            BodyStatus::Dynamic as u32,
-        );
+        let b = mps_core::rapier::rigid_body::rigid_body_builder_create(BodyStatus::Dynamic as u32);
         // Rapier 0.34: collider-less dynamic body has inverse_inertia = 0
         // unless `set_additional_mass_properties` is called with a non-zero
         // principal-inertia vector.  Without this, add_torque silently
@@ -461,14 +485,22 @@ mod tests {
             b,
             Vec3::default(),
             1.0,
-            Vec3 { x: 1.0, y: 1.0, z: 1.0 },
+            Vec3 {
+                x: 1.0,
+                y: 1.0,
+                z: 1.0,
+            },
         );
         // Body at r = 20 km (twice the NS surface, so 1/r³ gives B at 2 R_ns).
         // This is the closest physically meaningful location still outside
         // the pulsar surface (r > R_ns).
         mps_core::rapier::rigid_body::rigid_body_builder_set_translation(
             b,
-            Vec3 { x: 20000.0, y: 0.0, z: 0.0 },
+            Vec3 {
+                x: 20000.0,
+                y: 0.0,
+                z: 0.0,
+            },
         );
         let body = mps_core::rapier::rigid_body::rigid_body_builder_build(b);
         let h = mps_core::rapier::rigid_body::world_insert_rigid_body(world, body);
@@ -477,12 +509,24 @@ mod tests {
             world,
             PulsarMagneticDipoleLaw {
                 moment_of_inertia: 1.0e38, // typical NS
-                ns_radius_m: 1.0e4,       // 10 km
-                period_ms: 33.4,          // Crab-like
+                ns_radius_m: 1.0e4,        // 10 km
+                period_ms: 33.4,           // Crab-like
                 period_derivative: 4.2e-13,
-                pulsar_position: Vec3 { x: 0.0, y: 0.0, z: 0.0 },
-                spin_axis: Vec3 { x: 0.0, y: 0.0, z: 1.0 },
-                body_dipole_moment: Vec3 { x: 1.0, y: 0.0, z: 0.0 },
+                pulsar_position: Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                spin_axis: Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 1.0,
+                },
+                body_dipole_moment: Vec3 {
+                    x: 1.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
                 enabled: Bool::TRUE,
             },
         );
@@ -513,13 +557,15 @@ mod tests {
         let world = mps_core::rapier::world::world_create(Vec3::default());
 
         // 1 kg dynamic body at +x = 1.0 m, velocity = (0,0,0).
-        let b = mps_core::rapier::rigid_body::rigid_body_builder_create(
-            BodyStatus::Dynamic as u32,
-        );
+        let b = mps_core::rapier::rigid_body::rigid_body_builder_create(BodyStatus::Dynamic as u32);
         mps_core::rapier::rigid_body::rigid_body_builder_set_additional_mass(b, 1.0);
         mps_core::rapier::rigid_body::rigid_body_builder_set_translation(
             b,
-            Vec3 { x: 1.0, y: 0.0, z: 0.0 },
+            Vec3 {
+                x: 1.0,
+                y: 0.0,
+                z: 0.0,
+            },
         );
         let body = mps_core::rapier::rigid_body::rigid_body_builder_build(b);
         let _h = mps_core::rapier::rigid_body::world_insert_rigid_body(world, body);
@@ -527,11 +573,15 @@ mod tests {
         mps_core::rapier::events::world_set_jeans_escape_law(
             world,
             JeansEscapeLaw {
-                n_exo: 1.0e12,        // 1e12 m⁻³
-                temperature: 1000.0,  // 1000 K
+                n_exo: 1.0e12,       // 1e12 m⁻³
+                temperature: 1000.0, // 1000 K
                 escape_parameter: 7.5,
-                mass_kg: 1.673e-27,    // H atom
-                escape_direction: Vec3 { x: 0.0, y: 0.0, z: 1.0 },
+                mass_kg: 1.673e-27, // H atom
+                escape_direction: Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 1.0,
+                },
                 effective_area_m2: 1.0,
                 enabled: Bool::TRUE,
             },

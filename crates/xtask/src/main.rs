@@ -96,7 +96,10 @@ fn count_tests(workspace_root: &Path) -> usize {
         };
         // Matches `#[test]` (possibly with arbitrary whitespace inside the
         // brackets). Trims to entire line for cheap check.
-        count += content.lines().filter(|line| line.trim() == "#[test]").count();
+        count += content
+            .lines()
+            .filter(|line| line.trim() == "#[test]")
+            .count();
     }
     count
 }
@@ -180,8 +183,7 @@ fn dump_metrics(workspace_root: &Path) -> Result<String, String> {
     );
 
     let out_path = workspace_root.join("crates/mps-web/src/metrics.rs");
-    std::fs::write(&out_path, &body)
-        .map_err(|e| format!("write {}: {e}", out_path.display()))?;
+    std::fs::write(&out_path, &body).map_err(|e| format!("write {}: {e}", out_path.display()))?;
 
     Ok(format!(
         "xtask: wrote {out}\n  TEST_COUNT       = {tests}\n  JNI_METHOD_COUNT = {jni_methods}\n  CORE_FFI_COUNT   = {core_ffi}",

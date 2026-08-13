@@ -34,8 +34,16 @@ pub fn Layout() -> Element {
     // Active-language class bits for the two language links — precomputed
     // because rsx! format-arg parsing does not accept inline `if … { "…" }`
     // inside a class string literal.
-    let zh_active = if i18n.language() == "zh-CN" { " is-active" } else { "" };
-    let en_active = if i18n.language() == "en" { " is-active" } else { "" };
+    let zh_active = if i18n.language() == "zh-CN" {
+        " is-active"
+    } else {
+        ""
+    };
+    let en_active = if i18n.language() == "en" {
+        " is-active"
+    } else {
+        ""
+    };
 
     rsx! {
         style { {CSS} }

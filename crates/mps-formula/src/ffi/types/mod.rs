@@ -4,18 +4,18 @@
 // continue to resolve byte-for-byte. The split is along section-header
 // boundaries that already existed in the original file.
 
-pub(crate) mod core;
-pub(crate) mod physics;
 pub(crate) mod chaos;
-pub(crate) mod superfluid;
-pub(crate) mod optics;
-pub(crate) mod plasma;
+pub(crate) mod core;
 pub(crate) mod events;
+pub(crate) mod optics;
+pub(crate) mod physics;
+pub(crate) mod plasma;
+pub(crate) mod superfluid;
 
-pub use core::*;
-pub use physics::*;
 pub use chaos::*;
-pub use superfluid::*;
-pub use optics::*;
-pub use plasma::*;
+pub use core::*;
 pub use events::*;
+pub use optics::*;
+pub use physics::*;
+pub use plasma::*;
+pub use superfluid::*;

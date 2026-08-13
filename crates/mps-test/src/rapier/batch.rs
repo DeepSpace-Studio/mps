@@ -91,14 +91,8 @@ mod tests {
             ball_request(4.0, 0.0, 0.0, 0.4),
         ];
         let mut handles = [0u64; 4];
-        let count = world_batch_add_colliders(
-            world,
-            requests.as_ptr(),
-            3,
-            preset,
-            handles.as_mut_ptr(),
-            4,
-        );
+        let count =
+            world_batch_add_colliders(world, requests.as_ptr(), 3, preset, handles.as_mut_ptr(), 4);
         // Same material → merged into 1 compound containing 3 balls.
         assert_eq!(count, 1);
         assert_ne!(handles[0], 0);
@@ -126,14 +120,8 @@ mod tests {
             cuboid_request(4.0, 0.0, 0.0, 0.5, 0.5, 0.5),
         ];
         let mut handles = [0u64; 4];
-        let count = world_batch_add_colliders(
-            world,
-            requests.as_ptr(),
-            3,
-            preset,
-            handles.as_mut_ptr(),
-            4,
-        );
+        let count =
+            world_batch_add_colliders(world, requests.as_ptr(), 3, preset, handles.as_mut_ptr(), 4);
         assert_eq!(count, 1, "3 compatible static cuboids should merged into 1");
         assert_ne!(handles[0], 0);
 
@@ -154,14 +142,8 @@ mod tests {
 
         let preset = Box3DPreset::box3d_default();
         let mut handles = [0u64; 1];
-        let count = world_batch_add_colliders(
-            world,
-            std::ptr::null(),
-            0,
-            preset,
-            handles.as_mut_ptr(),
-            1,
-        );
+        let count =
+            world_batch_add_colliders(world, std::ptr::null(), 0, preset, handles.as_mut_ptr(), 1);
         assert_eq!(count, 0);
 
         world_destroy(world);
@@ -261,14 +243,8 @@ mod tests {
             cuboid_request(2.0, 0.0, 0.0, 0.5, 0.5, 0.5),
         ];
         let mut handles = [0u64; 2];
-        let count = world_merge_static_shapes(
-            world,
-            requests.as_ptr(),
-            2,
-            preset,
-            handles.as_mut_ptr(),
-            2,
-        );
+        let count =
+            world_merge_static_shapes(world, requests.as_ptr(), 2, preset, handles.as_mut_ptr(), 2);
         assert_eq!(count, 1, "2 static cuboids should merge into 1 compound");
         assert_ne!(handles[0], 0);
 
@@ -343,14 +319,8 @@ mod tests {
         reqs[1].friction = 0.9;
 
         let mut handles = [0u64; 3];
-        let count = world_batch_add_colliders(
-            world,
-            reqs.as_ptr(),
-            3,
-            preset,
-            handles.as_mut_ptr(),
-            3,
-        );
+        let count =
+            world_batch_add_colliders(world, reqs.as_ptr(), 3, preset, handles.as_mut_ptr(), 3);
         // We expect 2 colliders: one compound of cuboid 0+2 (same friction 0.6),
         // one single for cuboid 1 (friction 0.9).
         assert_eq!(count, 2);
@@ -379,14 +349,8 @@ mod tests {
         ball.body_parent = 0;
         let requests = [ground, ball];
         let mut handles = [0u64; 2];
-        let count = world_batch_add_colliders(
-            world,
-            requests.as_ptr(),
-            2,
-            preset,
-            handles.as_mut_ptr(),
-            2,
-        );
+        let count =
+            world_batch_add_colliders(world, requests.as_ptr(), 2, preset, handles.as_mut_ptr(), 2);
         assert_eq!(count, 2);
 
         // Step the world — should not panic.

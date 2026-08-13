@@ -404,10 +404,7 @@ pub fn explicit_highorder_step(
 /// 累加，且不破坏辛结构。
 pub fn explicit_highorder_kahan_step(
     body: &mut RigidBody,
-    state: &mut (
-        mps_formula::math::KahanVec3,
-        mps_formula::math::KahanVec3,
-    ),
+    state: &mut (mps_formula::math::KahanVec3, mps_formula::math::KahanVec3),
     mass: f64,
     handle: RigidBodyHandle,
     perturbation: Option<crate::world::PerturbationConfig>,
@@ -423,12 +420,10 @@ pub fn explicit_highorder_kahan_step(
     // 若 body 与累加态不一致（外部 set_translation 等），以 body 为准重置累加态。
     let rapier_pos = ffi_vec3(r0);
     let rapier_vel = ffi_vec3(v0);
-    let pos_drift = (pos.x - rapier_pos.x).abs()
-        + (pos.y - rapier_pos.y).abs()
-        + (pos.z - rapier_pos.z).abs();
-    let vel_drift = (vel.x - rapier_vel.x).abs()
-        + (vel.y - rapier_vel.y).abs()
-        + (vel.z - rapier_vel.z).abs();
+    let pos_drift =
+        (pos.x - rapier_pos.x).abs() + (pos.y - rapier_pos.y).abs() + (pos.z - rapier_pos.z).abs();
+    let vel_drift =
+        (vel.x - rapier_vel.x).abs() + (vel.y - rapier_vel.y).abs() + (vel.z - rapier_vel.z).abs();
     if pos_drift > 1e-9 || vel_drift > 1e-12 {
         state.0 = mps_formula::math::KahanVec3::new(rapier_pos);
         state.1 = mps_formula::math::KahanVec3::new(rapier_vel);
@@ -455,4 +450,3 @@ pub fn explicit_highorder_kahan_step(
     body.set_translation(state.0.value_vec(), false);
     body.set_linvel(state.1.value_vec(), false);
 }
-

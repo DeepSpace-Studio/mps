@@ -1,9 +1,7 @@
 use dioxus::prelude::*;
 use dioxus_i18n::t;
 
-use crate::metrics::{
-    CORE_FFI_COUNT, FFI_COLLIDER, FFI_QUERY, FFI_RIGID_BODY, FFI_WORLD,
-};
+use crate::metrics::{CORE_FFI_COUNT, FFI_COLLIDER, FFI_QUERY, FFI_RIGID_BODY, FFI_WORLD};
 
 /// API Reference — the C ABI surface of `mps-core` as exported in
 /// `crates/mps-core/include/rigid_body.h` by cbindgen.

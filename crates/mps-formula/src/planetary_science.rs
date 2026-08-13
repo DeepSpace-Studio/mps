@@ -28,9 +28,12 @@ pub fn greenhouse_simple_temperature(
     albedo: f64,
     infrared_optical_depth: f64,
 ) -> Option<f64> {
-    if !finite(solar_irradiance) || solar_irradiance < 0.0
-        || !finite(albedo) || !(0.0..=1.0).contains(&albedo)
-        || !finite(infrared_optical_depth) || infrared_optical_depth < 0.0
+    if !finite(solar_irradiance)
+        || solar_irradiance < 0.0
+        || !finite(albedo)
+        || !(0.0..=1.0).contains(&albedo)
+        || !finite(infrared_optical_depth)
+        || infrared_optical_depth < 0.0
     {
         set_error(ERR_INVALID_ARGUMENT, "bad greenhouse temperature args");
         return None;
@@ -106,8 +109,7 @@ pub fn tidal_heating_power(
         || !finite_positive(satellite_radius_m)
         || !finite_positive(mean_motion)
         || !finite(eccentricity)
-        || eccentricity < 0.0
-        || eccentricity >= 1.0
+        || !(0.0..1.0).contains(&eccentricity)
         || !finite_positive(dissipation_q)
         || !finite_positive(semi_major_axis_m)
     {
@@ -117,8 +119,14 @@ pub fn tidal_heating_power(
     let r5 = satellite_radius_m.powi(5);
     let a6 = semi_major_axis_m.powi(6);
     Some(
-        (63.0 / 4.0) * G * primary_mass_kg * primary_mass_kg * r5 * mean_motion
-            * eccentricity * eccentricity
+        (63.0 / 4.0)
+            * G
+            * primary_mass_kg
+            * primary_mass_kg
+            * r5
+            * mean_motion
+            * eccentricity
+            * eccentricity
             / (dissipation_q * a6),
     )
 }
@@ -140,7 +148,7 @@ pub fn tidal_heating_power(
 /// - `latent_heat_per_mass`  L_lat [J/kg]
 /// - `mantle_thickness_m`    D [m]
 /// - `temperature_drop_k`    ΔT, mantle temperature decrease over
-///                           solidification [K]
+///   solidification [K]
 /// - `surface_temperature_k` T_surf [K] (must exceed `equilibrium_temp_k`)
 /// - `equilibrium_temp_k`    T_eq [K]
 ///
@@ -172,7 +180,6 @@ pub fn magma_ocean_solidification_timescale(
     let energy = mantle_density
         * mantle_thickness_m
         * (specific_heat * temperature_drop_k + latent_heat_per_mass);
-    let radiative = SIGMA_SB
-        * (surface_temperature_k.powi(4) - equilibrium_temp_k.powi(4));
+    let radiative = SIGMA_SB * (surface_temperature_k.powi(4) - equilibrium_temp_k.powi(4));
     Some(energy / radiative)
 }

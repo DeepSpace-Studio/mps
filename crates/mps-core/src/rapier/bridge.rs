@@ -221,7 +221,7 @@ pub fn bulk_body_snapshot_to_direct_buffer(
         .inner
         .bodies
         .iter()
-        .map(|(h, _)| h.clone())
+        .map(|(h, _)| h)
         .take(capacity)
         .collect();
     let snapshots: Vec<[f64; 13]> = handles

@@ -54,8 +54,8 @@ pub fn run_cbindgen(crate_dir: &Path, header_name: &str) {
 
     let header_path = include_dir.join(header_name);
 
-    let config = cbindgen::Config::from_file(crate_dir.join("cbindgen.toml"))
-        .unwrap_or_else(|err| {
+    let config =
+        cbindgen::Config::from_file(crate_dir.join("cbindgen.toml")).unwrap_or_else(|err| {
             // Fall back to defaults if the file is missing — but panic if
             // it exists but cannot be parsed (likely a TOML typo).
             if crate_dir.join("cbindgen.toml").is_file() {

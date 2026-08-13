@@ -52,8 +52,7 @@ mod tests {
         use mps_formula::spaceflight::sun_synchronous_inclination;
 
         // Earth, 600 km LEO, one-rev-per-year RAAN precession ⇒ i ≈ 97.8°.
-        let i = sun_synchronous_inclination(6378.0, 600.0, 3.986_004_418e5, 1.991e-7)
-            .unwrap();
+        let i = sun_synchronous_inclination(6378.0, 600.0, 3.986_004_418e5, 1.991e-7).unwrap();
         assert!((i - 97.79).abs() < 0.05, "i={i}");
         // NaN / invalid inputs must be rejected, not returned as Some(NaN).
         assert!(sun_synchronous_inclination(f64::NAN, 600.0, 3.986e5, 1.991e-7).is_none());
