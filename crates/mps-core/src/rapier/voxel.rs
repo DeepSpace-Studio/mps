@@ -819,9 +819,26 @@ fn create_voxels_with_options(
         return std::ptr::null_mut();
     };
 
+    // Retain an owned copy of the source grid so the collider can be edited in
+    // place / ray-picked later. Without this, `collider_voxel_edit`,
+    // `collider_set_voxels` and `collider_voxel_ray_pick` would see no cache.
+    let owned = OwnedVoxelGrid {
+        voxels: voxels.to_vec(),
+        size_x: size_x as usize,
+        size_y: size_y as usize,
+        size_z: size_z as usize,
+        voxel_size_x,
+        voxel_size_y,
+        voxel_size_z,
+        origin,
+    };
+
     Box::into_raw(Box::new(ColliderBuilderHandle {
         inner: builder,
-        voxel_source: None,
+        voxel_source: Some(VoxelCache {
+            grid: owned,
+            options,
+        }),
     }))
 }
 
@@ -1595,5 +1612,126 @@ pub extern "C" fn collider_set_voxels(
                     .into()
             }
         }
+    })
+}
+
+/// Output of `collider_voxel_ray_pick`: the voxel cell coordinate that a ray
+/// hit on a voxel collider, plus the surface normal at the hit (so the caller
+/// can derive the adjacent cell for "place on face").
+///
+/// `found` is `FALSE` when the ray missed, hit a different collider, or the
+/// resolved cell is out of the grid bounds.
+///
+/// Layout (C ABI, read by Java via `Unsafe`):
+/// `found` @0 (u8), `ix` @8, `iy` @16, `iz` @24 (i64),
+/// `nx` @32, `ny` @40, `nz` @48 (f64). `SIZEOF` = 56.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct VoxelCoord {
+    pub found: Bool,
+    pub ix: i64,
+    pub iy: i64,
+    pub iz: i64,
+    pub nx: f64,
+    pub ny: f64,
+    pub nz: f64,
+}
+
+/// Cast a ray restricted to a single voxel collider and resolve the hit back
+/// to the voxel cell coordinate in that collider's local grid.
+///
+/// Pairs with `collider_voxel_edit`: pick the cell a player's ray points at,
+/// then flip it. `origin` / `direction` / `max_toi` / `solid` mirror
+/// `query_cast_ray`. Returns `TRUE` and fills `out_block` only when the ray
+/// actually hit `collider` (a voxel collider with a retained source grid).
+///
+/// # Safety
+/// `world` must be a valid `world_create` handle; `out_block` may be null or
+/// must point to writable space for one `VoxelCoord`.
+#[unsafe(no_mangle)]
+pub extern "C" fn collider_voxel_ray_pick(
+    world: *const WorldHandle,
+    collider: ColliderHandleRaw,
+    origin: Vec3,
+    direction: Vec3,
+    max_toi: f64,
+    solid: Bool,
+    out_block: *mut VoxelCoord,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !vec3_finite(origin) || !vec3_finite(direction) || !max_toi.is_finite() || max_toi < 0.0
+        {
+            set_error(ERR_INVALID_ARGUMENT, "invalid ray parameters");
+            return Bool::FALSE;
+        }
+
+        let hit = crate::rapier::query::query_cast_ray(
+            world,
+            origin,
+            direction,
+            max_toi,
+            solid,
+            QueryFilterDesc::default(),
+        );
+        if hit.collider == 0 || hit.collider != collider {
+            if let Some(out) = unsafe { out_block.as_mut() } {
+                *out = VoxelCoord::default();
+            }
+            return Bool::FALSE;
+        }
+
+        let Some(cache) = world.inner.voxel_grids.get(&collider) else {
+            set_error(ERR_UNSUPPORTED, "collider is not a voxel collider");
+            if let Some(out) = unsafe { out_block.as_mut() } {
+                *out = VoxelCoord::default();
+            }
+            return Bool::FALSE;
+        };
+
+        let g = &cache.grid;
+        // Nudge the hit point a hair *into* the hit cell — i.e. opposite the
+        // surface normal — so a ray that lands on a cell *face* (the common
+        // case: the player aims at a block from outside) resolves to that
+        // cell instead of the empty space just past it. A nudge along the ray
+        // direction would push past the surface into the adjacent (or
+        // out-of-bounds) cell.
+        let eps = 1e-4;
+        let point = Vec3 {
+            x: origin.x + direction.x * hit.time_of_impact - hit.normal.x * eps,
+            y: origin.y + direction.y * hit.time_of_impact - hit.normal.y * eps,
+            z: origin.z + direction.z * hit.time_of_impact - hit.normal.z * eps,
+        };
+        let ix = ((point.x - g.origin.x) / g.voxel_size_x).floor() as i64;
+        let iy = ((point.y - g.origin.y) / g.voxel_size_y).floor() as i64;
+        let iz = ((point.z - g.origin.z) / g.voxel_size_z).floor() as i64;
+        if ix < 0
+            || iy < 0
+            || iz < 0
+            || ix as usize >= g.size_x
+            || iy as usize >= g.size_y
+            || iz as usize >= g.size_z
+        {
+            if let Some(out) = unsafe { out_block.as_mut() } {
+                *out = VoxelCoord::default();
+            }
+            return Bool::FALSE;
+        }
+
+        if let Some(out) = unsafe { out_block.as_mut() } {
+            *out = VoxelCoord {
+                found: Bool::TRUE,
+                ix,
+                iy,
+                iz,
+                nx: hit.normal.x,
+                ny: hit.normal.y,
+                nz: hit.normal.z,
+            };
+        }
+        Bool::TRUE
     })
 }

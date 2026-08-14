@@ -244,6 +244,28 @@ typedef struct LunarMascon {
   double radius;
 } LunarMascon;
 
+/**
+ * Output of `collider_voxel_ray_pick`: the voxel cell coordinate that a ray
+ * hit on a voxel collider, plus the surface normal at the hit (so the caller
+ * can derive the adjacent cell for "place on face").
+ *
+ * `found` is `FALSE` when the ray missed, hit a different collider, or the
+ * resolved cell is out of the grid bounds.
+ *
+ * Layout (C ABI, read by Java via `Unsafe`):
+ * `found` @0 (u8), `ix` @8, `iy` @16, `iz` @24 (i64),
+ * `nx` @32, `ny` @40, `nz` @48 (f64). `SIZEOF` = 56.
+ */
+typedef struct VoxelCoord {
+  Bool found;
+  int64_t ix;
+  int64_t iy;
+  int64_t iz;
+  double nx;
+  double ny;
+  double nz;
+} VoxelCoord;
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -5276,6 +5298,27 @@ Bool collider_set_voxels(struct WorldHandle *world,
                          int32_t dynamic_body,
                          uint32_t small_voxel_limit,
                          uint32_t mesh_voxel_limit);
+
+/**
+ * Cast a ray restricted to a single voxel collider and resolve the hit back
+ * to the voxel cell coordinate in that collider's local grid.
+ *
+ * Pairs with `collider_voxel_edit`: pick the cell a player's ray points at,
+ * then flip it. `origin` / `direction` / `max_toi` / `solid` mirror
+ * `query_cast_ray`. Returns `TRUE` and fills `out_block` only when the ray
+ * actually hit `collider` (a voxel collider with a retained source grid).
+ *
+ * # Safety
+ * `world` must be a valid `world_create` handle; `out_block` may be null or
+ * must point to writable space for one `VoxelCoord`.
+ */
+Bool collider_voxel_ray_pick(const struct WorldHandle *world,
+                             ColliderHandleRaw collider,
+                             Vec3 origin,
+                             Vec3 direction,
+                             double max_toi,
+                             Bool solid,
+                             struct VoxelCoord *out_block);
 
 /**
  * Create a new physics world.  Non-finite gravity components fall back to zero.

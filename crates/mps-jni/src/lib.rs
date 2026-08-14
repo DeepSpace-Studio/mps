@@ -479,6 +479,20 @@ jni_e_c!(boolean colliderSetVoxels(env _env, class _class, long world, long hand
     ).0 as jbyte
 });
 
+// 射线拾取：对单个 voxel collider 投射射线，反查命中的体素 (ix,iy,iz)。
+// out_block 是调用方分配的 56 字节缓冲地址（VoxelCoord C 布局）。
+jni!(boolean colliderVoxelRayPick(long world, long collider, double ox, double oy, double oz, double dx, double dy, double dz, double max_toi, int solid, long out_block) {
+    vx::collider_voxel_ray_pick(
+        m::<WH>(world),
+        collider as CRaw,
+        v3(ox, oy, oz),
+        v3(dx, dy, dz),
+        max_toi,
+        jb(solid),
+        out_block as *mut vx::VoxelCoord,
+    ).0 as jbyte
+});
+
 jni!(void colliderBuilderDestroy(long builder) { col::collider_builder_destroy(m::<CBH>(builder)); });
 
 jni_e_c!(double_array colliderGetTranslation(env _env, class _class, long world, long handle) { vec3_to_j_double_array(_env, col::collider_get_translation(cp::<WH>(world), handle as CRaw)) });
