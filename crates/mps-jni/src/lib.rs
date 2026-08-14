@@ -1,6 +1,7 @@
 mod helper;
 
 use crate::helper::jbytearray_to_array;
+use mps_bindgen_macro::{jni, jni_e_c};
 use ljni::JNIEnv;
 use ljni::sys::{jbyte, jbyteArray, jclass, jdouble, jdoubleArray, jint, jlong, jstring};
 #[cfg(feature = "anvilkit-bridge")]
@@ -269,7 +270,7 @@ macro_rules! jni_e_c {
     };
 }
 
-jni!(int abiVersion() { abi::abi_version() as jint });
+#[jni] int abiVersion() { abi::abi_version() as jint }
 jni!(boolean abiSupportsFfm() { abi::abi_supports_ffm().0 as jbyte });
 jni!(boolean abiSupportsJni() { abi::abi_supports_jni().0 as jbyte });
 jni!(int abiLastErrorCode() { er::last_error_code() as jint });
@@ -300,7 +301,7 @@ jni!(void worldStep(long world, double delta_seconds) { wo::world_step(m::<WH>(w
 
 jni!(void worldSetGravity(long world, double x, double y, double z) { wo::world_set_gravity(m::<WH>(world), v3(x, y, z)); });
 
-jni_e_c!(double_array worldGetGravity(env _env, class _class, long world) { vec3_to_j_double_array(_env, wo::world_get_gravity(cp::<WH>(world))) });
+#[jni_e_c] double_array worldGetGravity(env _env, class _class, long world) { vec3_to_j_double_array(_env, wo::world_get_gravity(cp::<WH>(world))) }
 jni!(void worldGetGravityOut(long world, long out_gravity) { wo::world_get_gravity_out(cp::<WH>(world), pm::<Vec3>(out_gravity)); });
 jni!(int worldGetRigidBodySetSize(long world) { wo::world_get_rigid_body_set_size(cp::<WH>(world)) });
 jni!(int worldGetColliderSetSize(long world) { wo::world_get_collider_set_size(cp::<WH>(world)) });

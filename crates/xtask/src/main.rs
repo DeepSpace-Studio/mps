@@ -1,43 +1,26 @@
 //! Workspace automation helper (OPTIMIZATION.md §N3).
 //!
-//! Single subcommand today: `dump-metrics` regenerates
-//! `crates/mps-web/src/metrics.rs` — a small Rust source file with `pub const
-//! TEST_COUNT`, `pub const JNI_METHOD_COUNT`, `pub const CORE_FFI_COUNT` —
-//! so `mps-web`'s `home.rs` / `architecture.rs` / `jni.rs` pages can `use
-//! crate::metrics::*` instead of hard-coding the numbers. When the numbers
-//! drift in source, CI runs `cargo run -p xtask -- dump-metrics` and commits
-//! the regenerated file, surfacing the change to reviewers.
-//!
-//! The metrics computed are intentionally the same three grabbed by the
-//! manual `grep` commands listed in `home.rs`'s NOTE comment (which the
-//! previous, manual-sync workflow relied on):
-//!
-//! | metric             | how computed here                              |
-//! |--------------------|-------------------------------------------------|
-//! | `TEST_COUNT`       | count of `#[test]` lines across `crates/mps-test/src/**/*.rs` |
-//! | `JNI_METHOD_COUNT` | count of `jni!(` or `jni_e_c!(` invocations in `crates/mps-jni/src/lib.rs` |
-//! | `CORE_FFI_COUNT`   | count of `^pub extern "C"` lines across `crates/mps-core/src/rapier/**/*.rs` |
-//!
-//! Pure-Rust cross-platform implementation (uses `walkdir`); no shell `grep`
-//! required.
-//!
-//! Usage:
-//!
-//! ```sh
-//! cargo run -p xtask -- dump-metrics
-//! ```
+//! Subcommands:
+//!   `dump-metrics`  →  regenerates `crates/mps-web/src/metrics.rs`
+//!   `gen-java`       →  scans `#[java_struct]`/`#[java_enum]` annotations and
+//!                        generates Java value classes under `test21/.../ffi/`
+
+mod gen_java;
 
 use std::path::Path;
 use std::process::ExitCode;
 
 use walkdir::WalkDir;
 
+pub(crate) const JAVA_PACKAGE_DEFAULT: &str = "org.polaris2023.mps.ffi";
+
 fn main() -> ExitCode {
     let mut args = std::env::args().skip(1);
     let Some(sub) = args.next() else {
         eprintln!(
-            "xtask: missing subcommand. Expected one of: dump-metrics\n\
-             Usage: cargo run -p xtask -- dump-metrics"
+            "xtask: missing subcommand. Expected one of: dump-metrics, gen-java\n\
+             Usage: cargo run -p xtask -- dump-metrics\n\
+             Usage: cargo run -p xtask -- gen-java [output_dir]"
         );
         return ExitCode::from(2);
     };
@@ -55,8 +38,23 @@ fn main() -> ExitCode {
                 ExitCode::from(1)
             }
         },
+        "gen-java" => {
+            let output_dir = args.next();
+            match gen_java::run(&workspace_root, output_dir.as_deref()) {
+                Ok(report) => {
+                    println!("{report}");
+                    ExitCode::from(0)
+                }
+                Err(err) => {
+                    eprintln!("xtask gen-java failed: {err}");
+                    ExitCode::from(1)
+                }
+            }
+        }
         other => {
-            eprintln!("xtask: unknown subcommand {other:?}. Expected dump-metrics.");
+            eprintln!(
+                "xtask: unknown subcommand {other:?}. Expected one of: dump-metrics, gen-java."
+            );
             ExitCode::from(2)
         }
     }

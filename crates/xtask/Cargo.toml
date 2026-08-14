@@ -4,8 +4,10 @@ version.workspace = true
 edition.workspace = true
 publish = false
 
-# Workspace automation helper. Currently a single subcommand:
+# Workspace automation helper. Subcommands:
 #   cargo run -p xtask -- dump-metrics   →  regenerates crates/mps-web/src/metrics.rs
+#   cargo run -p xtask -- gen-java       →  scans #[java_struct]/#[java_enum] annotations
+#                                            and generates Java value classes under test21/ffi/
 # See OPTIMIZATION.md §N3 for the design rationale.
 
 [[bin]]
@@ -14,3 +16,6 @@ path = "src/main.rs"
 
 [dependencies]
 walkdir = "2"
+syn = { version = "2", features = ["full", "extra-traits"] }
+proc-macro2 = "1"
+quote = "1"

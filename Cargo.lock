@@ -3689,6 +3689,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "mps-bindgen-macro"
+version = "0.1.4"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.118",
+]
+
+[[package]]
 name = "mps-build-common"
 version = "0.1.4"
 dependencies = [
@@ -3733,6 +3742,7 @@ dependencies = [
 name = "mps-formula"
 version = "0.1.4"
 dependencies = [
+ "mps-bindgen-macro",
  "rapier3d-f64",
 ]
 
@@ -3741,6 +3751,7 @@ name = "mps-jni"
 version = "0.1.4"
 dependencies = [
  "jni 0.21.1",
+ "mps-bindgen-macro",
  "mps-core",
  "mps-cosmos",
  "mps-ffm",
@@ -7169,6 +7180,9 @@ checksum = "3ae8337f8a065cfc972643663ea4279e04e7256de865aa66fe25cec5fb912d3f"
 name = "xtask"
 version = "0.1.4"
 dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.118",
  "walkdir",
 ]
 

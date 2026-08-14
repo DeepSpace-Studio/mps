@@ -1,9 +1,12 @@
+use mps_bindgen_macro::{java_enum, java_struct};
+
 pub type RigidBodyHandleRaw = u64;
 pub type ColliderHandleRaw = u64;
 pub type ImpulseJointHandleRaw = u64;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct Vec3 {
     pub x: f64,
     pub y: f64,
@@ -12,6 +15,7 @@ pub struct Vec3 {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct Quat {
     pub i: f64,
     pub j: f64,
@@ -36,6 +40,7 @@ impl From<bool> for Bool {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[java_enum(package = "org.polaris2023.mps.ffi")]
 pub enum BodyStatus {
     Dynamic = 0,
     Fixed = 1,
@@ -45,6 +50,7 @@ pub enum BodyStatus {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
+#[java_enum(package = "org.polaris2023.mps.ffi")]
 pub enum ShapeType {
     #[default]
     Ball = 0,
@@ -61,6 +67,7 @@ pub enum ShapeType {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[java_enum(package = "org.polaris2023.mps.ffi")]
 pub enum VoxelColliderMode {
     Auto = 0,
     Cuboids = 1,
@@ -70,6 +77,7 @@ pub enum VoxelColliderMode {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct VoxelColliderOptions {
     pub mode: u32,
     pub dynamic_body: Bool,
@@ -79,6 +87,7 @@ pub struct VoxelColliderOptions {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct VoxelBuildStats {
     pub cell_count: u32,
     pub solid_count: u32,
@@ -104,6 +113,7 @@ impl Default for VoxelColliderOptions {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct ShapeDesc {
     pub shape_type: u32,
     pub a: f64,
@@ -114,6 +124,7 @@ pub struct ShapeDesc {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct InteractionGroupsDesc {
     pub memberships: u32,
     pub filter: u32,
@@ -121,6 +132,7 @@ pub struct InteractionGroupsDesc {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct QueryFilterDesc {
     pub flags: u32,
     pub groups: InteractionGroupsDesc,
@@ -133,6 +145,7 @@ pub struct QueryFilterDesc {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct ShapeCastOptionsDesc {
     pub max_time_of_impact: f64,
     pub target_distance: f64,
@@ -142,6 +155,7 @@ pub struct ShapeCastOptionsDesc {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct PointProjection {
     pub point: Vec3,
     pub is_inside: Bool,
@@ -149,6 +163,7 @@ pub struct PointProjection {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct RayHit {
     pub collider: ColliderHandleRaw,
     pub time_of_impact: f64,
@@ -158,6 +173,7 @@ pub struct RayHit {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct ShapeCastHit {
     pub collider: ColliderHandleRaw,
     pub time_of_impact: f64,
@@ -170,6 +186,7 @@ pub struct ShapeCastHit {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct AabbDesc {
     pub mins: Vec3,
     pub maxs: Vec3,
@@ -177,6 +194,7 @@ pub struct AabbDesc {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct Obb {
     pub center: Vec3,
     pub half_extents: Vec3,
@@ -185,6 +203,7 @@ pub struct Obb {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct Sphere {
     pub center: Vec3,
     pub radius: f64,
@@ -192,6 +211,7 @@ pub struct Sphere {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct Capsule {
     pub a: Vec3,
     pub b: Vec3,
@@ -200,6 +220,7 @@ pub struct Capsule {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct Ssv {
     pub a: Vec3,
     pub b: Vec3,
@@ -208,6 +229,7 @@ pub struct Ssv {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct Ellipsoid {
     pub center: Vec3,
     pub radii: Vec3,
@@ -217,6 +239,7 @@ pub struct Ellipsoid {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct Prism {
     pub center: Vec3,
     pub radius: f64,
@@ -227,6 +250,7 @@ pub struct Prism {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct Cylinder {
     pub center: Vec3,
     pub radius: f64,
@@ -236,6 +260,7 @@ pub struct Cylinder {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct SphericalShell {
     pub center: Vec3,
     pub inner_radius: f64,
@@ -244,6 +269,7 @@ pub struct SphericalShell {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
+#[java_enum(package = "org.polaris2023.mps.ffi")]
 pub enum NeuralActivation {
     #[default]
     Relu = 0,
@@ -254,6 +280,7 @@ pub enum NeuralActivation {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct NeuralBoundsDesc {
     pub center: Vec3,
     pub half_extents: Vec3,
@@ -268,6 +295,7 @@ pub struct NeuralBoundsDesc {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[java_enum(package = "org.polaris2023.mps.ffi")]
 pub enum KdopPreset {
     K6 = 6,
     K14 = 14,
@@ -277,6 +305,7 @@ pub enum KdopPreset {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct EffectiveCharacterMovement {
     pub translation: Vec3,
     pub grounded: Bool,
@@ -285,6 +314,7 @@ pub struct EffectiveCharacterMovement {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct CharacterCollision {
     pub collider: ColliderHandleRaw,
     pub character_translation: Vec3,
@@ -299,6 +329,7 @@ pub struct CharacterCollision {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct CollisionEventRecord {
     pub started: Bool,
     pub collider1: ColliderHandleRaw,
@@ -309,6 +340,7 @@ pub struct CollisionEventRecord {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct ContactForceEventRecord {
     pub collider1: ColliderHandleRaw,
     pub collider2: ColliderHandleRaw,
@@ -320,6 +352,7 @@ pub struct ContactForceEventRecord {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct CoulombFrictionLaw {
     pub static_coefficient: f64,
     pub dynamic_coefficient: f64,
@@ -329,6 +362,7 @@ pub struct CoulombFrictionLaw {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct AirDragLaw {
     pub fluid_velocity: Vec3,
     pub density: f64,
@@ -342,6 +376,7 @@ pub struct AirDragLaw {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct ExternalForceLaw {
     pub buoyancy_enabled: Bool,
     pub fluid_density: f64,
@@ -370,6 +405,7 @@ pub struct ExternalForceLaw {
 /// or a larger value for game-scale simulations.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct NewtonGravityLaw {
     /// Gravitational constant (default: 6.67430e-11 N·m²/kg²).
     /// Use larger values for game-scale simulations.
@@ -408,6 +444,7 @@ impl Default for NewtonGravityLaw {
 /// disc area presented to the wind.  Push is along `wind_direction`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct SolarWindPressureLaw {
     pub proton_density: f64,
     pub v_sw_mps: f64,
@@ -423,6 +460,7 @@ pub struct SolarWindPressureLaw {
 /// the background is decelerated opposite to its velocity.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct DynamicalFrictionLaw {
     pub background_density_kg_m3: f64,
     pub coulomb_log: f64,
@@ -438,6 +476,7 @@ pub struct DynamicalFrictionLaw {
 /// boosted to `sqrt(a_N · a_0)`; otherwise the Newtonian value is used.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct MonDGravityLaw {
     pub newtonian_a: f64,
     pub mond_a_zero: f64,
@@ -457,6 +496,7 @@ pub struct MonDGravityLaw {
 /// `mps_formula::high_energy_astro::eddington_limited_luminosity`).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct EddingtonRadiationPressureLaw {
     /// Accretor mass [kg].
     pub mass_kg: f64,
@@ -482,6 +522,7 @@ pub struct EddingtonRadiationPressureLaw {
 /// `mps_formula::high_energy_astro::xray_disc_bolometric_luminosity`).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct XrayIrradiationLaw {
     /// Inner-edge effective temperature `kT_eff` [keV].
     pub k_t_eff_kev: f64,
@@ -509,6 +550,7 @@ pub struct XrayIrradiationLaw {
 /// `τ = μ × B(r)` with `B(r) = B_surf · (R_ns / r)³`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct PulsarMagneticDipoleLaw {
     /// Pulsar moment of inertia [kg·m²].
     pub moment_of_inertia: f64,
@@ -540,6 +582,7 @@ pub struct PulsarMagneticDipoleLaw {
 /// `v_thermal = √(2 k_B T / m)`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct JeansEscapeLaw {
     /// Exobase number density `n_exo` [m⁻³].
     pub n_exo: f64,

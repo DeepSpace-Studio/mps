@@ -5,7 +5,7 @@ import sun.misc.Unsafe;
 import java.lang.reflect.Field;
 import java.util.Arrays;
 
-final class NativeMemory implements AutoCloseable {
+public final class NativeMemory implements AutoCloseable {
     static final Unsafe UNSAFE = unsafe();
     static final int ADDRESS_BYTES = Long.BYTES;
 
@@ -39,39 +39,43 @@ final class NativeMemory implements AutoCloseable {
         return memory;
     }
 
-    long address() {
+    public long address() {
         if (address == 0L) {
             throw new IllegalStateException("native memory is closed");
         }
         return address;
     }
 
-    long getLong(long offset) {
+    public long getLong(long offset) {
         return UNSAFE.getLong(address() + offset);
     }
 
-    int getInt(long offset) {
+    public int getInt(long offset) {
         return UNSAFE.getInt(address() + offset);
     }
 
-    double getDouble(long offset) {
+    public double getDouble(long offset) {
         return UNSAFE.getDouble(address() + offset);
     }
 
-    boolean getBool(long offset) {
+    public boolean getBool(long offset) {
         return UNSAFE.getByte(address() + offset) != 0;
     }
 
-    void putByte(long offset, int value) {
+    public void putByte(long offset, int value) {
         UNSAFE.putByte(address() + offset, (byte) value);
     }
 
-    void putLong(long offset, long value) {
+    public void putLong(long offset, long value) {
         UNSAFE.putLong(address() + offset, value);
     }
 
-    void putDouble(long offset, double value) {
+    public void putDouble(long offset, double value) {
         UNSAFE.putDouble(address() + offset, value);
+    }
+
+    public void putInt(long offset, int value) {
+        UNSAFE.putInt(address() + offset, value);
     }
 
     /// P7: reuse a preallocated array via ThreadLocal to avoid per-read allocations.

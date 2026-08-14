@@ -8,6 +8,7 @@ crate-type = ["rlib"]
 
 [dependencies]
 rapier3d = { workspace = true }
+mps-bindgen-macro = { path = "../mps-bindgen-macro" }
 
 [features]
 default = []
