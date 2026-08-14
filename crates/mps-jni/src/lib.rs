@@ -1042,7 +1042,7 @@ jni!(long worldGetSharedArenaSize(long world) { wo::world_get_shared_arena_size(
 /// This uses `NewDirectByteBuffer` — a standard JNI API since Java 1.4.
 /// The returned ByteBuffer wraps the native arena memory directly, enabling
 /// zero-JNI reads/writes from pure `java.nio.ByteBuffer` / `java.nio.DoubleBuffer`.
-#[unsafe(export_name = "Java_org_polaris2023_mps_1rigid_1body_RigidBodyNative_worldGetArenaDirectByteBuffer")]
+#[unsafe(export_name = "Java_org_polaris2023_mps_rapier_RapierNative_worldGetArenaDirectByteBuffer")]
 #[allow(non_snake_case)]
 pub extern "system" fn worldGetArenaDirectByteBuffer(
     env: JNIEnv,
