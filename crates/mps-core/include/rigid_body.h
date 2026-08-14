@@ -1640,6 +1640,28 @@ Bool character_controller_solve_impulses(struct WorldHandle *world,
                                          double character_mass);
 
 /**
+ * # Safety
+ *
+ * `world` must be a valid world pointer and `controller` a valid pointer returned by
+ * `character_controller_create`; both must remain alive for the duration of the call.
+ *
+ * Like [`character_controller_move_shape`] but additionally samples the world's
+ * registered terrain gravity (polyhedron / DEM / lunar-mascon) at the character's
+ * current `translation` and folds the resulting free-fall displacement
+ * (`½·a·dt²`, directed along the local terrain-gravity acceleration `a`) into the
+ * desired translation.  This lets a kinematic character fall toward and stand on an
+ * irregular small-body surface instead of floating.  When no terrain-gravity law is
+ * registered the call is identical to `character_controller_move_shape`.
+ */
+EffectiveCharacterMovement character_controller_move_shape_with_terrain(const struct WorldHandle *world,
+                                                                        struct CharacterControllerHandle *controller,
+                                                                        double dt,
+                                                                        ShapeDesc shape_desc,
+                                                                        Vec3 translation,
+                                                                        Quat rotation,
+                                                                        Vec3 desired_translation);
+
+/**
  * Create an empty red-black-tree AABB index.
  *
  * # Safety
@@ -1953,6 +1975,59 @@ Bool world_set_newton_gravity_law(struct WorldHandle *world, NewtonGravityLaw la
  * Same contract as `world_set_newton_gravity_law`.
  */
 uint8_t world_set_newton_gravity_law_flag(struct WorldHandle *world, NewtonGravityLaw law);
+
+/**
+ * Register a polyhedron terrain-gravity law (Werner & Scheeres 1997) on the
+ * world.  `vertices_xyz` is a flat `[x,y,z]` array (3·n_vertices f64),
+ * `face_indices` a flat `[a,b,c]` array (3·n_faces u32), `density` the
+ * constant density (kg/m³).  Replaces any prior terrain-gravity law.
+ *
+ * # Safety
+ * `world` must be a valid world pointer; `vertices_xyz`/`face_indices` must
+ * point to readable arrays of the declared sizes.
+ */
+Bool world_register_terrain_gravity_polyhedron(struct WorldHandle *world,
+                                               const double *vertices_xyz,
+                                               uint32_t n_vertices,
+                                               const uint32_t *face_indices,
+                                               uint32_t n_faces,
+                                               double density);
+
+/**
+ * Register a DEM surface-mass-distribution terrain-gravity law (direct
+ * summation) on the world.  `dem` is a flat `[nx·ny]` height map (m above the
+ * reference ellipsoid); `resolution`/`reference_radius` define the grid (m);
+ * `surface_density` is kg/m².  Replaces any prior terrain-gravity law.
+ *
+ * # Safety
+ * `world` must be a valid world pointer; `dem` must point to `nx·ny` readable
+ * f64s.
+ */
+Bool world_register_terrain_gravity_dem(struct WorldHandle *world,
+                                        const double *dem,
+                                        uint32_t nx,
+                                        uint32_t ny,
+                                        double resolution,
+                                        double reference_radius,
+                                        double surface_density);
+
+/**
+ * Register the built-in lunar-mascon terrain-gravity law (GRAIL-derived,
+ * Plummer-softened point masses).  Replaces any prior terrain-gravity law.
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+Bool world_register_terrain_gravity_mascon(struct WorldHandle *world);
+
+/**
+ * Unregister the terrain-gravity law from the world (disables terrain
+ * gravity; uniform `world.gravity` still applies if it is non-zero).
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+Bool world_unregister_terrain_gravity(struct WorldHandle *world);
 
 /**
  * Clear the Newton gravity law on a world.

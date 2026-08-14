@@ -117,6 +117,11 @@ pub enum ForceLawType {
     /// momentum flux is `Φ · m_molecule · v_thermal` (Pa), and force is
     /// `p · A_eff · ê`.  Configured by `JeansEscapeLaw`.
     JeansEscape,
+    /// Terrain / irregular-body gravity driving the rigid-body world.  The
+    /// acceleration at each body's position is sampled from one of the
+    /// `terrain_gravity` models (polyhedron, DEM, lunar mascon) and applied as
+    /// `F = m · a` through the facade.  Configured by `TerrainGravityLaw`.
+    TerrainGravity,
     /// User-defined force registered via FFI (opaque type tag in upper 32 bits).
     Custom(u64),
 }
@@ -147,6 +152,7 @@ impl ForceLawType {
             Self::XrayIrradiation => "XrayIrradiation",
             Self::PulsarMagneticDipole => "PulsarMagneticDipole",
             Self::JeansEscape => "JeansEscape",
+            Self::TerrainGravity => "TerrainGravity",
             Self::Custom(_) => "Custom",
         }
     }
@@ -385,6 +391,10 @@ fn force_law_type_idx(ft: ForceLawType) -> usize {
         ForceLawType::PulsarMagneticDipole => 32,
         // C4: Jeans-escape drag uses idx 33.
         ForceLawType::JeansEscape => 33,
+        // Terrain gravity uses idx 14 (one of the 14–25 reserved slots that
+        // were retired with the space/trajectory/terrain transition to mps-cosmos).
+        // It does NOT shift the high-index survivors below.
+        ForceLawType::TerrainGravity => 14,
         ForceLawType::Custom(_) => 26,
     }
 }
@@ -413,7 +423,9 @@ fn force_law_type_from_idx(idx: usize) -> ForceLawType {
         31 => ForceLawType::XrayIrradiation,
         32 => ForceLawType::PulsarMagneticDipole,
         33 => ForceLawType::JeansEscape,
-        // 14–25 were retired space/trajectory/terrain variants; fall through to Custom.
+        // 14–25 were retired space/trajectory/terrain variants; 14 is now
+        // TerrainGravity, the rest still fall through to Custom.
+        14 => ForceLawType::TerrainGravity,
         _ => ForceLawType::Custom(0),
     }
 }
@@ -891,6 +903,39 @@ impl ForceRegistry {
 impl Default for ForceRegistry {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct DummyLaw {
+        enabled: bool,
+    }
+    impl ForceLaw for DummyLaw {
+        fn law_type(&self) -> ForceLawType {
+            ForceLawType::TerrainGravity
+        }
+        fn enabled(&self) -> bool {
+            self.enabled
+        }
+        fn apply(&self, _facade: &mut ForceFacade<'_>) {}
+        fn clone_box(&self) -> Box<dyn ForceLaw> {
+            Box::new(DummyLaw {
+                enabled: self.enabled,
+            })
+        }
+    }
+
+    #[test]
+    fn unregister_by_type_removes_terrain_law() {
+        let mut reg = ForceRegistry::new();
+        reg.register(Box::new(DummyLaw { enabled: true }));
+        assert_eq!(reg.find_by_type(ForceLawType::TerrainGravity).len(), 1);
+        reg.unregister_by_type(ForceLawType::TerrainGravity);
+        assert_eq!(reg.find_by_type(ForceLawType::TerrainGravity).len(), 0);
+        assert_eq!(reg.len(), 0);
     }
 }
 

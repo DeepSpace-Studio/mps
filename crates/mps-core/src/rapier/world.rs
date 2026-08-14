@@ -17,6 +17,7 @@ use crate::rapier::ffi::{
     quat_from_rapier, unpack_rigid_body_handle, vec3_finite, vec3_from_rapier, vec3_to_rapier,
 };
 use crate::rapier::forces::{BodyForceLog, ForceFacade, ForceRegistry};
+use crate::rapier::terrain_gravity::TerrainGravitySource;
 
 const MAX_STEP_SECONDS: f64 = 1.0;
 
@@ -91,6 +92,10 @@ pub struct PhysicsWorld {
     pub(crate) hooks: crate::rapier::events::CallbackPhysicsHooks,
     pub(crate) events: Arc<crate::rapier::events::CollectingEventHandler>,
     pub(crate) force_registry: ForceRegistry,
+    /// Active terrain-gravity source (polyhedron / DEM / lunar-mascon), if any.
+    /// Mirrors the registered `TerrainGravity` force law so the character
+    /// controller can sample local gravity per-frame without re-parsing the law.
+    pub(crate) terrain_gravity_source: Option<TerrainGravitySource>,
     pub(crate) shared_arena: Option<Box<crate::rapier::shared_arena::SharedPhysicsArena>>,
     /// Persistent per-frame work buffers — cleared and reused each `world_step`.
     pub(crate) buffers: FrameWorkBuffers,
@@ -124,6 +129,7 @@ impl PhysicsWorld {
             hooks: crate::rapier::events::CallbackPhysicsHooks::new(events.clone()),
             events,
             force_registry: ForceRegistry::new(),
+            terrain_gravity_source: None,
             shared_arena: None,
             buffers: FrameWorkBuffers::default(),
             #[cfg(feature = "relative-force")]
@@ -406,6 +412,20 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
             &world.inner.hooks,
             &*world.inner.events,
         );
+
+        // 4b. Clear the persistent user force/torque on every dynamic body.
+        // Rapier's `add_force` is a *persistent* force that the step does NOT
+        // clear, so a law's force (or a one-shot FFI force) keeps acting on every
+        // subsequent frame until explicitly reset.  We clear it *after* the step,
+        // once it has already been integrated into velocity — so clearing here is
+        // harmless for the frame just simulated, but stops an unregistered law (or
+        // a spent one-shot force) from acting forever.  Registered laws re-apply
+        // their force each frame inside `apply_all` above, so they stay correct.
+        for (_, body) in world.inner.bodies.iter_mut() {
+            if body.is_dynamic() {
+                body.reset_forces(false);
+            }
+        }
 
         // 5. Flush shared arena body/collider state → Java zero-JNI read
         if let Some(ref arena) = world.inner.shared_arena {

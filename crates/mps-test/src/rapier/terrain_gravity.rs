@@ -1,7 +1,10 @@
 #[cfg(test)]
 mod tests {
+    use mps_core::rapier::events::*;
     use mps_core::rapier::ffi::*;
+    use mps_core::rapier::rigid_body::*;
     use mps_core::rapier::terrain_gravity::*;
+    use mps_core::rapier::world::*;
 
     /// Create a unit cube (8 vertices, 12 triangles)
     fn unit_cube_vertices() -> Vec<f64> {
@@ -157,5 +160,159 @@ mod tests {
             "Direct and FFT should both point downward, got direct={:?} fft={:?}",
             accel_direct, accel_fft
         );
+    }
+
+    /// Terrain gravity (polyhedron model) must actually drive a dynamic body
+    /// through `world_step` — the body should accelerate toward the source even
+    /// when the world's uniform gravity is zero.
+    #[test]
+    fn terrain_gravity_polyhedron_drives_world() {
+        // Zero uniform gravity: only the terrain-gravity law acts.
+        let world = world_create(Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        });
+        assert!(!world.is_null());
+
+        // A 100 m cube (±50) of density 1000 kg/m³, centered at origin.
+        let verts: Vec<f64> = vec![
+            -50.0, -50.0, -50.0, 50.0, -50.0, -50.0, 50.0, 50.0, -50.0, -50.0, 50.0, -50.0, -50.0,
+            -50.0, 50.0, 50.0, -50.0, 50.0, 50.0, 50.0, 50.0, -50.0, 50.0, 50.0,
+        ];
+        let faces: Vec<u32> = vec![
+            0, 1, 2, 0, 2, 3, 4, 6, 5, 4, 7, 6, 0, 4, 5, 0, 5, 1, 2, 6, 7, 2, 7, 3, 0, 3, 7, 0, 7,
+            4, 1, 5, 6, 1, 6, 2,
+        ];
+        assert_eq!(
+            world_register_terrain_gravity_polyhedron(
+                world,
+                verts.as_ptr(),
+                8,
+                faces.as_ptr(),
+                12,
+                1000.0
+            ),
+            Bool::TRUE
+        );
+
+        // Dynamic body of mass 1 kg placed at (200, 0, 0), outside the cube.
+        let builder = rigid_body_builder_create(BodyStatus::Dynamic as u32);
+        rigid_body_builder_set_additional_mass_properties(
+            builder,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            1.0,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        let body = rigid_body_builder_build(builder);
+        let handle = world_insert_rigid_body(world, body);
+        assert_ne!(handle, 0);
+
+        let pose = [200.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0];
+        assert_eq!(
+            world_update_body_poses(world, [handle].as_ptr(), pose.as_ptr(), 1, Bool::TRUE),
+            1
+        );
+
+        // Step the world; terrain gravity should pull the body toward -x.
+        for _ in 0..120 {
+            world_step(world, 1.0 / 60.0);
+        }
+
+        let vel = rigid_body_get_linvel(world, handle);
+        assert!(
+            vel.x < -1e-12,
+            "body should accelerate toward the cube (negative x), got {:?}",
+            vel
+        );
+
+        world_unregister_terrain_gravity(world);
+        world_destroy(world);
+    }
+
+    /// The parameter-free lunar-mascon model must also drive a body when
+    /// registered, and `world_unregister_terrain_gravity` must stop it.
+    #[test]
+    fn terrain_gravity_mascon_drives_and_unregisters() {
+        let world = world_create(Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        });
+        assert!(!world.is_null());
+
+        // Place the body near the Imbrium mascon (index 0, ~(-8.29e5, 4.52e5, 6.31e5)).
+        let mut mc = LunarMascon {
+            center: Vec3::default(),
+            excess_mass: 0.0,
+            radius: 0.0,
+        };
+        assert!(lunar_mascon_get(0, &mut mc).0 != 0);
+        let bx = mc.center.x + 5.0e4;
+        let by = mc.center.y;
+        let bz = mc.center.z;
+
+        assert_eq!(world_register_terrain_gravity_mascon(world), Bool::TRUE);
+
+        let builder = rigid_body_builder_create(BodyStatus::Dynamic as u32);
+        rigid_body_builder_set_additional_mass_properties(
+            builder,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            1.0,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        let body = rigid_body_builder_build(builder);
+        let handle = world_insert_rigid_body(world, body);
+        assert_ne!(handle, 0);
+
+        let pose = [bx, by, bz, 0.0, 0.0, 0.0, 1.0];
+        assert_eq!(
+            world_update_body_poses(world, [handle].as_ptr(), pose.as_ptr(), 1, Bool::TRUE),
+            1
+        );
+
+        // Step with the law active: the body must pick up speed toward the mascon.
+        for _ in 0..120 {
+            world_step(world, 1.0 / 60.0);
+        }
+        let vel = rigid_body_get_linvel(world, handle);
+        let speed = (vel.x * vel.x + vel.y * vel.y + vel.z * vel.z).sqrt();
+        assert!(
+            speed > 1e-15,
+            "mascon should accelerate the body, got {:?}",
+            vel
+        );
+
+        // Unregistering must stop terrain gravity.  A post-unregister step must
+        // NOT change the (zero-uniform-gravity) velocity, because `world_step`
+        // resets persistent user forces each frame before re-applying laws.
+        assert_eq!(world_unregister_terrain_gravity(world), Bool::TRUE);
+        let v0 = rigid_body_get_linvel(world, handle);
+        world_step(world, 1.0 / 60.0);
+        let v1 = rigid_body_get_linvel(world, handle);
+        let dv = (v1.x - v0.x).abs() + (v1.y - v0.y).abs() + (v1.z - v0.z).abs();
+        assert!(
+            dv < 1e-9,
+            "after unregister, one step must not accelerate the body (dv={})",
+            dv
+        );
+
+        world_destroy(world);
     }
 }

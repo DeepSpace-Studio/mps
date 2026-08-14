@@ -11,6 +11,7 @@ use crate::rapier::ffi::{
     EffectiveCharacterMovement, Quat, ShapeDesc, Vec3, WorldHandle, pack_collider_handle,
     quat_finite, shape_desc_valid, shape_from_desc, vec3_finite, vec3_from_rapier, vec3_to_rapier,
 };
+use crate::rapier::terrain_gravity::terrain_gravity_acceleration;
 
 #[derive(Default)]
 pub(crate) struct CharacterControllerState {
@@ -397,5 +398,83 @@ pub extern "C" fn character_controller_solve_impulses(
                 controller.inner.collisions.iter(),
             );
         Bool::TRUE
+    })
+}
+
+/// # Safety
+///
+/// `world` must be a valid world pointer and `controller` a valid pointer returned by
+/// `character_controller_create`; both must remain alive for the duration of the call.
+///
+/// Like [`character_controller_move_shape`] but additionally samples the world's
+/// registered terrain gravity (polyhedron / DEM / lunar-mascon) at the character's
+/// current `translation` and folds the resulting free-fall displacement
+/// (`½·a·dt²`, directed along the local terrain-gravity acceleration `a`) into the
+/// desired translation.  This lets a kinematic character fall toward and stand on an
+/// irregular small-body surface instead of floating.  When no terrain-gravity law is
+/// registered the call is identical to `character_controller_move_shape`.
+#[unsafe(no_mangle)]
+pub extern "C" fn character_controller_move_shape_with_terrain(
+    world: *const WorldHandle,
+    controller: *mut CharacterControllerHandle,
+    dt: f64,
+    shape_desc: ShapeDesc,
+    translation: Vec3,
+    rotation: Quat,
+    desired_translation: Vec3,
+) -> EffectiveCharacterMovement {
+    ffi_guard(EffectiveCharacterMovement::default(), || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return EffectiveCharacterMovement::default();
+        };
+        let Some(controller) = (unsafe { controller.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "character controller is null");
+            return EffectiveCharacterMovement::default();
+        };
+        if !dt.is_finite()
+            || dt <= 0.0
+            || !shape_desc_valid(shape_desc)
+            || !vec3_finite(translation)
+            || !quat_finite(rotation)
+            || !vec3_finite(desired_translation)
+        {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "invalid move_shape_with_terrain arguments",
+            );
+            return EffectiveCharacterMovement::default();
+        }
+
+        // Sample the world's terrain gravity at the character's current position and
+        // add the corresponding free-fall displacement to the desired translation.
+        let mut desired = vec3_to_rapier(desired_translation);
+        if let Some(source) = &world.inner.terrain_gravity_source {
+            let accel = terrain_gravity_acceleration(source, translation);
+            desired += vec3_to_rapier(accel) * (0.5 * dt * dt);
+        }
+
+        let query = world.inner.broad_phase.as_query_pipeline(
+            world.inner.narrow_phase.query_dispatcher(),
+            &world.inner.bodies,
+            &world.inner.colliders,
+            rapier3d::prelude::QueryFilter::default(),
+        );
+        let shape = shape_from_desc(shape_desc);
+        controller.inner.collisions.clear();
+        let movement = controller.inner.controller.move_shape(
+            dt,
+            &query,
+            shape.as_ref(),
+            &crate::rapier::ffi::isometry_from_parts(translation, rotation),
+            desired,
+            |collision| controller.inner.collisions.push(collision),
+        );
+
+        EffectiveCharacterMovement {
+            translation: vec3_from_rapier(movement.translation),
+            grounded: movement.grounded.into(),
+            is_sliding_down_slope: movement.is_sliding_down_slope.into(),
+        }
     })
 }

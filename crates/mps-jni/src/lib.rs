@@ -624,6 +624,18 @@ jni!(long worldInsertDynamicCuboids(long world, double x, double y, double z, do
 jni!(long worldInsertStaticTrimesh(long world, long vertices_xyz, int vertex_xyz_len, long indices, int index_len, double friction, double restitution) {
     com::world_insert_static_trimesh(m::<WH>(world), p::<f64>(vertices_xyz), u32_from_jint(vertex_xyz_len), p::<u32>(indices), u32_from_jint(index_len), friction, restitution) as jlong
 });
+jni!(boolean worldRegisterTerrainGravityPolyhedron(long world, long vertices_xyz, int n_vertices, long face_indices, int n_faces, double density) {
+    ev::world_register_terrain_gravity_polyhedron(m::<WH>(world), p::<f64>(vertices_xyz), u32_from_jint(n_vertices), p::<u32>(face_indices), u32_from_jint(n_faces), density).0 as jbyte
+});
+jni!(boolean worldRegisterTerrainGravityDem(long world, long dem, int nx, int ny, double resolution, double reference_radius, double surface_density) {
+    ev::world_register_terrain_gravity_dem(m::<WH>(world), p::<f64>(dem), u32_from_jint(nx), u32_from_jint(ny), resolution, reference_radius, surface_density).0 as jbyte
+});
+jni!(boolean worldRegisterTerrainGravityMascon(long world) {
+    ev::world_register_terrain_gravity_mascon(m::<WH>(world)).0 as jbyte
+});
+jni!(boolean worldUnregisterTerrainGravity(long world) {
+    ev::world_unregister_terrain_gravity(m::<WH>(world)).0 as jbyte
+});
 jni!(long worldInsertStaticVoxelAabb(long world, double min_x, double min_y, double min_z, double max_x, double max_y, double max_z, double voxel_size_x, double voxel_size_y, double voxel_size_z, int mode, int small_voxel_limit, int mesh_voxel_limit, double friction, double restitution) {
     vx::world_insert_static_voxel_aabb(m::<WH>(world), aa(min_x,min_y,min_z,max_x,max_y,max_z), voxel_size_x, voxel_size_y, voxel_size_z, VoxelColliderOptions { mode: voxel_mode(mode), dynamic_body: Bool::FALSE, small_voxel_limit: u32_from_jint(small_voxel_limit), mesh_voxel_limit: u32_from_jint(mesh_voxel_limit) }, friction, restitution) as jlong
 });
@@ -655,6 +667,11 @@ jni!(void characterControllerSetSnapToGround(long controller, int enabled, doubl
 jni!(void characterControllerSetSlopeAngles(long controller, double max_climb_angle, double min_slide_angle) { cc::character_controller_set_slope_angles(m::<CCH>(controller), max_climb_angle, min_slide_angle); });
 jni!(boolean characterControllerMoveShape(long world, long controller, double dt, int shape_type, double a, double b, double c, double d, double tx, double ty, double tz, double qi, double qj, double qk, double qw, double dx, double dy, double dz, long out_movement) {
     let movement = cc::character_controller_move_shape(cp::<WH>(world), m::<CCH>(controller), dt, sd(shape_type,a,b,c,d), v3(tx,ty,tz), qt(qi,qj,qk,qw), v3(dx,dy,dz));
+    if let Some(out) = unsafe { pm::<EffectiveCharacterMovement>(out_movement).as_mut() } { *out = movement; }
+    movement.grounded.0 as jbyte
+});
+jni!(boolean characterControllerMoveShapeWithTerrain(long world, long controller, double dt, int shape_type, double a, double b, double c, double d, double tx, double ty, double tz, double qi, double qj, double qk, double qw, double dx, double dy, double dz, long out_movement) {
+    let movement = cc::character_controller_move_shape_with_terrain(cp::<WH>(world), m::<CCH>(controller), dt, sd(shape_type,a,b,c,d), v3(tx,ty,tz), qt(qi,qj,qk,qw), v3(dx,dy,dz));
     if let Some(out) = unsafe { pm::<EffectiveCharacterMovement>(out_movement).as_mut() } { *out = movement; }
     movement.grounded.0 as jbyte
 });

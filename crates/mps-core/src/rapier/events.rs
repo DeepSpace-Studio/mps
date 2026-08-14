@@ -1177,6 +1177,188 @@ pub extern "C" fn world_set_newton_gravity_law_flag(
     ffi_guard(0, || world_set_newton_gravity_law(world, law).0)
 }
 
+// ---------------------------------------------------------------------------
+// Terrain gravity law FFI
+//
+// These register a `TerrainGravityLaw` into the world's `ForceRegistry`, so
+// `world_step` applies terrain gravity to every dynamic body automatically.
+// Registering a new source replaces any previously registered terrain-gravity
+// law (same singleton semantics as `world_set_newton_gravity_law`).
+// ---------------------------------------------------------------------------
+
+/// Register a polyhedron terrain-gravity law (Werner & Scheeres 1997) on the
+/// world.  `vertices_xyz` is a flat `[x,y,z]` array (3·n_vertices f64),
+/// `face_indices` a flat `[a,b,c]` array (3·n_faces u32), `density` the
+/// constant density (kg/m³).  Replaces any prior terrain-gravity law.
+///
+/// # Safety
+/// `world` must be a valid world pointer; `vertices_xyz`/`face_indices` must
+/// point to readable arrays of the declared sizes.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_register_terrain_gravity_polyhedron(
+    world: *mut WorldHandle,
+    vertices_xyz: *const f64,
+    n_vertices: u32,
+    face_indices: *const u32,
+    n_faces: u32,
+    density: f64,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if vertices_xyz.is_null()
+            || face_indices.is_null()
+            || n_vertices == 0
+            || n_faces == 0
+            || density <= 0.0
+        {
+            set_error(ERR_INVALID_ARGUMENT, "invalid polyhedron terrain gravity");
+            return Bool::FALSE;
+        }
+        let verts = unsafe { std::slice::from_raw_parts(vertices_xyz, 3 * n_vertices as usize) };
+        let faces = unsafe { std::slice::from_raw_parts(face_indices, 3 * n_faces as usize) };
+
+        let source = crate::rapier::terrain_gravity::TerrainGravitySource::Polyhedron {
+            vertices: verts.to_vec(),
+            faces: faces.to_vec(),
+            n_vertices,
+            n_faces,
+            density,
+        };
+        use crate::rapier::forces::ForceLawType;
+        world
+            .inner
+            .force_registry
+            .unregister_by_type(ForceLawType::TerrainGravity);
+        world.inner.force_registry.register(Box::new(
+            crate::rapier::terrain_gravity::TerrainGravityLaw {
+                source: source.clone(),
+                enabled: true,
+            },
+        ));
+        world.inner.terrain_gravity_source = Some(source);
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Register a DEM surface-mass-distribution terrain-gravity law (direct
+/// summation) on the world.  `dem` is a flat `[nx·ny]` height map (m above the
+/// reference ellipsoid); `resolution`/`reference_radius` define the grid (m);
+/// `surface_density` is kg/m².  Replaces any prior terrain-gravity law.
+///
+/// # Safety
+/// `world` must be a valid world pointer; `dem` must point to `nx·ny` readable
+/// f64s.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_register_terrain_gravity_dem(
+    world: *mut WorldHandle,
+    dem: *const f64,
+    nx: u32,
+    ny: u32,
+    resolution: f64,
+    reference_radius: f64,
+    surface_density: f64,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if dem.is_null()
+            || nx == 0
+            || ny == 0
+            || resolution <= 0.0
+            || reference_radius <= 0.0
+            || surface_density <= 0.0
+        {
+            set_error(ERR_INVALID_ARGUMENT, "invalid DEM terrain gravity");
+            return Bool::FALSE;
+        }
+        let dem_slice = unsafe { std::slice::from_raw_parts(dem, (nx * ny) as usize) };
+
+        let source = crate::rapier::terrain_gravity::TerrainGravitySource::Dem {
+            dem: dem_slice.to_vec(),
+            grid: crate::rapier::terrain_gravity::TerrainGrid {
+                nx,
+                ny,
+                resolution,
+                reference_radius,
+            },
+            surface_density,
+        };
+        use crate::rapier::forces::ForceLawType;
+        world
+            .inner
+            .force_registry
+            .unregister_by_type(ForceLawType::TerrainGravity);
+        world.inner.force_registry.register(Box::new(
+            crate::rapier::terrain_gravity::TerrainGravityLaw {
+                source: source.clone(),
+                enabled: true,
+            },
+        ));
+        world.inner.terrain_gravity_source = Some(source);
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Register the built-in lunar-mascon terrain-gravity law (GRAIL-derived,
+/// Plummer-softened point masses).  Replaces any prior terrain-gravity law.
+///
+/// # Safety
+/// `world` must be a valid world pointer.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_register_terrain_gravity_mascon(world: *mut WorldHandle) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        use crate::rapier::forces::ForceLawType;
+        world
+            .inner
+            .force_registry
+            .unregister_by_type(ForceLawType::TerrainGravity);
+        world.inner.force_registry.register(Box::new(
+            crate::rapier::terrain_gravity::TerrainGravityLaw {
+                source: crate::rapier::terrain_gravity::TerrainGravitySource::Mascon,
+                enabled: true,
+            },
+        ));
+        world.inner.terrain_gravity_source =
+            Some(crate::rapier::terrain_gravity::TerrainGravitySource::Mascon);
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Unregister the terrain-gravity law from the world (disables terrain
+/// gravity; uniform `world.gravity` still applies if it is non-zero).
+///
+/// # Safety
+/// `world` must be a valid world pointer.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_unregister_terrain_gravity(world: *mut WorldHandle) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        use crate::rapier::forces::ForceLawType;
+        world
+            .inner
+            .force_registry
+            .unregister_by_type(ForceLawType::TerrainGravity);
+        world.inner.terrain_gravity_source = None;
+        clear_error();
+        Bool::TRUE
+    })
+}
+
 /// Clear the Newton gravity law on a world.
 ///
 /// # Safety
