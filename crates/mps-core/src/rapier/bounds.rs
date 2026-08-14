@@ -172,6 +172,7 @@ fn builder_from_shape(shape: Option<(Pose, SharedShape)>) -> *mut ColliderBuilde
     clear_error();
     Box::into_raw(Box::new(ColliderBuilderHandle {
         inner: ColliderBuilder::new(shape).position(pose),
+        voxel_source: None,
     }))
 }
 

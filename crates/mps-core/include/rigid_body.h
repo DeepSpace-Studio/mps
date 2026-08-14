@@ -5228,6 +5228,56 @@ RigidBodyHandleRaw world_insert_dynamic_voxel_obb(struct WorldHandle *world,
                                                   double restitution);
 
 /**
+ * Flip a single voxel cell of an already-inserted voxel collider **in place**,
+ * rebuilding its shape and keeping the same `ColliderHandleRaw`.
+ *
+ * `solid` is treated as boolean (non-zero = solid). The world must hold the
+ * voxel source grid for `handle` (i.e. the collider was built from
+ * `collider_builder_create_voxel*`). Out-of-range coordinates are a no-op that
+ * still returns `Bool::TRUE` (nothing to update). If the cell did not change,
+ * the collider is left untouched (no rebuild). When the last solid cell is
+ * removed and the grid becomes empty, the collider is removed from the world
+ * and its handle becomes invalid — callers should drop their reference.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+Bool collider_voxel_edit(struct WorldHandle *world,
+                         ColliderHandleRaw handle,
+                         int64_t x,
+                         int64_t y,
+                         int64_t z,
+                         int32_t solid);
+
+/**
+ * Overwrite the entire voxel grid of an already-inserted voxel collider **in
+ * place**, rebuilding its shape and keeping the same `ColliderHandleRaw`.
+ *
+ * This is the bulk counterpart of `collider_voxel_edit` for chunk reloads /
+ * regeneration: pass the full grid plus the same voxel sizing, origin, and
+ * build options used at creation time. When the new grid is empty the
+ * collider is removed (its handle becomes invalid).
+ *
+ * # Safety
+ * `voxels` must point to at least `size_x * size_y * size_z` readable bytes
+ * for the duration of the call. `world` must be a valid `world_create` handle.
+ */
+Bool collider_set_voxels(struct WorldHandle *world,
+                         ColliderHandleRaw handle,
+                         const uint8_t *voxels,
+                         uint32_t size_x,
+                         uint32_t size_y,
+                         uint32_t size_z,
+                         double voxel_size_x,
+                         double voxel_size_y,
+                         double voxel_size_z,
+                         Vec3 origin,
+                         uint32_t mode,
+                         int32_t dynamic_body,
+                         uint32_t small_voxel_limit,
+                         uint32_t mesh_voxel_limit);
+
+/**
  * Create a new physics world.  Non-finite gravity components fall back to zero.
  *
  * The returned pointer is owned by Rust; release it with `world_destroy`.

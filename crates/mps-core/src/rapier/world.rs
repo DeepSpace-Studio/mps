@@ -97,6 +97,13 @@ pub struct PhysicsWorld {
     /// controller can sample local gravity per-frame without re-parsing the law.
     pub(crate) terrain_gravity_source: Option<TerrainGravitySource>,
     pub(crate) shared_arena: Option<Box<crate::rapier::shared_arena::SharedPhysicsArena>>,
+    /// Per-collider voxel source grid for in-place voxel edits. Keyed by the
+    /// `ColliderHandleRaw` returned at insert time; populated only for
+    /// colliders built from a voxel builder. Empty for non-voxel colliders.
+    pub(crate) voxel_grids: std::collections::HashMap<
+        crate::rapier::ffi::ColliderHandleRaw,
+        crate::rapier::voxel::VoxelCache,
+    >,
     /// Persistent per-frame work buffers — cleared and reused each `world_step`.
     pub(crate) buffers: FrameWorkBuffers,
     /// Relative force feature: per-body enabled state and local attachment point.
@@ -131,6 +138,7 @@ impl PhysicsWorld {
             force_registry: ForceRegistry::new(),
             terrain_gravity_source: None,
             shared_arena: None,
+            voxel_grids: std::collections::HashMap::new(),
             buffers: FrameWorkBuffers::default(),
             #[cfg(feature = "relative-force")]
             relative_force: DashMap::new(),

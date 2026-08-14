@@ -242,7 +242,10 @@ pub extern "C" fn collider_builder_create_kdop(
         };
 
         clear_error();
-        Box::into_raw(Box::new(ColliderBuilderHandle { inner: builder }))
+        Box::into_raw(Box::new(ColliderBuilderHandle {
+            inner: builder,
+            voxel_source: None,
+        }))
     })
 }
 
@@ -297,6 +300,9 @@ pub extern "C" fn collider_builder_create_fdh(
         };
 
         clear_error();
-        Box::into_raw(Box::new(ColliderBuilderHandle { inner: builder }))
+        Box::into_raw(Box::new(ColliderBuilderHandle {
+            inner: builder,
+            voxel_source: None,
+        }))
     })
 }

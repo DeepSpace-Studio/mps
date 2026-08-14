@@ -13,6 +13,18 @@ use crate::rapier::ffi::{
 use rapier3d::math::{Pose, Rotation, Vector};
 use rapier3d::na::Unit;
 use rapier3d::prelude::{Array2, Collider, ColliderBuilder, SharedShape, TypedShape};
+
+// Side-channel that carries a voxel source grid from `collider_builder_build`
+// to the immediately-following `world_insert_collider*` call on the same
+// thread. The mod always builds then inserts a builder in one logical step,
+// so this is safe: `collider_builder_build` stores the cache (only present
+// for voxel builders) and the next insert consumes it. Non-voxel builders
+// leave it `None`, so inserts of ordinary colliders are unaffected.
+thread_local! {
+    #[allow(clippy::missing_const_for_thread_local)]
+    static PENDING_VOXEL_CACHE: std::cell::RefCell<Option<crate::rapier::voxel::VoxelCache>> =
+        std::cell::RefCell::new(None);
+}
 use smallvec::SmallVec;
 use std::slice;
 
@@ -45,6 +57,7 @@ fn builder_from_aabb(mins: Vec3, maxs: Vec3) -> *mut ColliderBuilderHandle {
 
     Box::into_raw(Box::new(ColliderBuilderHandle {
         inner: ColliderBuilder::cuboid(half.x, half.y, half.z).translation(vec3_to_rapier(center)),
+        voxel_source: None,
     }))
 }
 
@@ -100,7 +113,10 @@ fn builder_from_points(points: Vec<Vec3>) -> *mut ColliderBuilderHandle {
         set_error(ERR_INVALID_ARGUMENT, "convex hull computation failed");
         return std::ptr::null_mut();
     };
-    Box::into_raw(Box::new(ColliderBuilderHandle { inner: builder }))
+    Box::into_raw(Box::new(ColliderBuilderHandle {
+        inner: builder,
+        voxel_source: None,
+    }))
 }
 
 fn bounds_from_points(points: &[Vec3]) -> Option<(Vec3, Vec3)> {
@@ -126,6 +142,7 @@ fn builder_from_compound(parts: Vec<(Pose, SharedShape)>) -> *mut ColliderBuilde
     }
     Box::into_raw(Box::new(ColliderBuilderHandle {
         inner: ColliderBuilder::compound(parts),
+        voxel_source: None,
     }))
 }
 
@@ -155,6 +172,7 @@ pub extern "C" fn collider_builder_create(
 
         Box::into_raw(Box::new(ColliderBuilderHandle {
             inner: default_builder(shape_desc),
+            voxel_source: None,
         }))
     })
 }
@@ -177,6 +195,7 @@ pub extern "C" fn collider_builder_create_halfspace(normal: Vec3) -> *mut Collid
             inner: ColliderBuilder::halfspace(Unit::new_unchecked(
                 vec3_to_rapier(normal).normalize(),
             )),
+            voxel_source: None,
         }))
     })
 }
@@ -197,6 +216,7 @@ pub extern "C" fn collider_builder_create_ex(shape_desc: ShapeDesc) -> *mut Coll
 
         Box::into_raw(Box::new(ColliderBuilderHandle {
             inner: default_builder(shape_desc),
+            voxel_source: None,
         }))
     })
 }
@@ -229,6 +249,7 @@ pub extern "C" fn collider_builder_create_obb(obb: Obb) -> *mut ColliderBuilderH
                 obb.half_extents.z,
             )
             .position(isometry_from_parts(obb.center, obb.rotation)),
+            voxel_source: None,
         }))
     })
 }
@@ -250,6 +271,7 @@ pub extern "C" fn collider_builder_create_sphere(sphere: Sphere) -> *mut Collide
 
         Box::into_raw(Box::new(ColliderBuilderHandle {
             inner: ColliderBuilder::ball(sphere.radius).translation(vec3_to_rapier(sphere.center)),
+            voxel_source: None,
         }))
     })
 }
@@ -300,6 +322,7 @@ pub extern "C" fn collider_builder_create_heightmap(
 
         Box::into_raw(Box::new(ColliderBuilderHandle {
             inner: ColliderBuilder::heightfield(heightfield, sv),
+            voxel_source: None,
         }))
     })
 }
@@ -626,7 +649,12 @@ pub extern "C" fn collider_builder_build(builder: *mut ColliderBuilderHandle) ->
         }
 
         let builder = unsafe { Box::from_raw(builder) };
-        let ColliderBuilderHandle { inner } = *builder;
+        let ColliderBuilderHandle {
+            inner,
+            voxel_source,
+        } = *builder;
+        // Hand the voxel source grid (if any) to the next `world_insert_collider*`.
+        PENDING_VOXEL_CACHE.with(|slot| *slot.borrow_mut() = voxel_source);
         Box::into_raw(Box::new(inner.build()))
     })
 }
@@ -963,7 +991,14 @@ pub extern "C" fn world_insert_collider(
         }
 
         let built = unsafe { *Box::from_raw(memory_handle) };
-        pack_collider_handle(world.inner.colliders.insert(built))
+        let handle = world.inner.colliders.insert(built);
+        if let Some(cache) = PENDING_VOXEL_CACHE.with(|slot| slot.borrow_mut().take()) {
+            world
+                .inner
+                .voxel_grids
+                .insert(pack_collider_handle(handle), cache);
+        }
+        pack_collider_handle(handle)
     })
 }
 
@@ -989,11 +1024,18 @@ pub extern "C" fn world_insert_collider_with_parent(
         }
 
         let built = unsafe { *Box::from_raw(memory_handle) };
-        pack_collider_handle(world.inner.colliders.insert_with_parent(
+        let handle = world.inner.colliders.insert_with_parent(
             built,
             unpack_rigid_body_handle(parent),
             &mut world.inner.bodies,
-        ))
+        );
+        if let Some(cache) = PENDING_VOXEL_CACHE.with(|slot| slot.borrow_mut().take()) {
+            world
+                .inner
+                .voxel_grids
+                .insert(pack_collider_handle(handle), cache);
+        }
+        pack_collider_handle(handle)
     })
 }
 
@@ -1024,6 +1066,9 @@ pub extern "C" fn world_remove_collider(
             .is_some();
         if !removed {
             set_error(ERR_NOT_FOUND, "collider not found");
+        } else {
+            // Drop any stored voxel source grid for the removed collider.
+            world.inner.voxel_grids.remove(&handle);
         }
         removed.into()
     })

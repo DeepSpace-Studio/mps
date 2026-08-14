@@ -15,6 +15,9 @@ pub struct RigidBodyBuilderHandle {
 
 pub struct ColliderBuilderHandle {
     pub(crate) inner: rapier3d::prelude::ColliderBuilder,
+    /// Retained voxel source grid + options when this builder was created from
+    /// a voxel (so the resulting collider can be edited in place later).
+    pub(crate) voxel_source: Option<crate::rapier::voxel::VoxelCache>,
 }
 
 pub struct JointBuilderHandle {

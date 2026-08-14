@@ -452,6 +452,33 @@ jni!(void colliderBuilderSetContactForceEventThreshold(long builder, double thre
 
 jni!(long colliderBuilderBuild(long builder) { to_jlong(col::collider_builder_build(m::<CBH>(builder))) });
 
+// 就地体素编辑：对已插入的 voxel collider 几何原地更新，handle 不变。
+// 单格翻转最贴 Minecraft 挖/放一格；批量覆盖用于 chunk 重载。
+// 这两个函数要求 collider 是由 collider_builder_create_voxel* 创建的（world
+// 内部保留了源网格），否则返回 false 并报 ERR_UNSUPPORTED。
+jni!(boolean colliderVoxelEdit(long world, long handle, int x, int y, int z, int solid) {
+    vx::collider_voxel_edit(m::<WH>(world), handle as CRaw, x as i64, y as i64, z as i64, solid).0 as jbyte
+});
+jni_e_c!(boolean colliderSetVoxels(env _env, class _class, long world, long handle, byte_array voxels, int size_x, int size_y, int size_z, double voxel_size_x, double voxel_size_y, double voxel_size_z, double origin_x, double origin_y, double origin_z, int mode, int dynamic_body, int small_voxel_limit, int mesh_voxel_limit) {
+    let Some(values) = jbytearray_to_array(&_env, voxels) else {
+        return 0;
+    };
+    vx::collider_set_voxels(
+        m::<WH>(world),
+        handle as CRaw,
+        values.as_ptr(),
+        u32_from_jint(size_x),
+        u32_from_jint(size_y),
+        u32_from_jint(size_z),
+        voxel_size_x, voxel_size_y, voxel_size_z,
+        v3(origin_x, origin_y, origin_z),
+        shape_type(mode),
+        dynamic_body,
+        u32_from_jint(small_voxel_limit),
+        u32_from_jint(mesh_voxel_limit),
+    ).0 as jbyte
+});
+
 jni!(void colliderBuilderDestroy(long builder) { col::collider_builder_destroy(m::<CBH>(builder)); });
 
 jni_e_c!(double_array colliderGetTranslation(env _env, class _class, long world, long handle) { vec3_to_j_double_array(_env, col::collider_get_translation(cp::<WH>(world), handle as CRaw)) });
