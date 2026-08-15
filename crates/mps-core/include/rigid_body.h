@@ -4931,6 +4931,141 @@ uint32_t terrain_lunar_mascon_count(void);
  */
 Bool terrain_lunar_mascon_get(uint32_t index, struct LunarMascon *out_mascon);
 
+Bool material_mechanics_hookes_law_uniaxial(double stress, double youngs_modulus, double *out);
+
+Bool material_mechanics_stress_from_strain(double youngs_modulus, double strain, double *out);
+
+Bool material_mechanics_shear_modulus(double youngs_modulus, double poisson_ratio, double *out);
+
+Bool material_mechanics_bulk_modulus(double youngs_modulus, double poisson_ratio, double *out);
+
+Bool material_mechanics_lame_lambda(double youngs_modulus, double poisson_ratio, double *out);
+
+Bool material_mechanics_von_mises_stress(double sx,
+                                         double sy,
+                                         double sz,
+                                         double txy,
+                                         double tyz,
+                                         double tzx,
+                                         double *out);
+
+Bool material_mechanics_von_mises_yield_check(double von_mises_stress,
+                                              double yield_stress,
+                                              double *out);
+
+Bool material_mechanics_tresca_shear_stress(double sigma_1, double sigma_3, double *out);
+
+Bool material_mechanics_tresca_yield_check(double sigma_1,
+                                           double sigma_3,
+                                           double yield_stress,
+                                           double *out);
+
+Bool material_mechanics_ki_center_crack(double stress, double crack_half_length, double *out);
+
+Bool material_mechanics_ki_edge_crack(double stress, double crack_length, double *out);
+
+Bool material_mechanics_fracture_check(double stress_intensity,
+                                       double fracture_toughness,
+                                       double *out);
+
+Bool material_mechanics_critical_crack_length(double stress,
+                                              double fracture_toughness,
+                                              double *out);
+
+Bool material_mechanics_basquin_stress_amplitude(double cycles_to_failure,
+                                                 double fatigue_strength_coefficient,
+                                                 double fatigue_exponent,
+                                                 double *out);
+
+Bool material_mechanics_basquin_cycles_to_failure(double stress_amplitude,
+                                                  double fatigue_strength_coefficient,
+                                                  double fatigue_exponent,
+                                                  double *out);
+
+Bool material_mechanics_coffin_manson_strain_amplitude(double cycles_to_failure,
+                                                       double ductility_coefficient,
+                                                       double ductility_exponent,
+                                                       double *out);
+
+Bool material_mechanics_goodman_correction(double stress_amplitude,
+                                           double mean_stress,
+                                           double ultimate_tensile,
+                                           double *out);
+
+Bool material_mechanics_norton_creep_rate(double stress,
+                                          double temperature,
+                                          double a,
+                                          double n,
+                                          double activation_energy,
+                                          double gas_constant,
+                                          double *out);
+
+Bool material_mechanics_beam_bending_stress(double bending_moment,
+                                            double distance_from_neutral_axis,
+                                            double area_moment_of_inertia,
+                                            double *out);
+
+Bool material_mechanics_beam_deflection_center_point_load(double load,
+                                                          double span,
+                                                          double youngs_modulus,
+                                                          double moment_of_inertia,
+                                                          double *out);
+
+Bool material_mechanics_euler_buckling_load(double youngs_modulus,
+                                            double moment_of_inertia,
+                                            double effective_length_factor,
+                                            double column_length,
+                                            double *out);
+
+Bool material_mechanics_slenderness_ratio(double effective_length_factor,
+                                          double column_length,
+                                          double radius_of_gyration,
+                                          double *out);
+
+/**
+ * Principal stresses from a 3D stress tensor. Writes (σ₁, σ₂, σ₃) sorted
+ * descending into `out` (capacity must be ≥ 3). Returns `Bool::FALSE` on
+ * invalid input or null/short `out`.
+ */
+Bool material_mechanics_principal_stresses(double sx,
+                                           double sy,
+                                           double sz,
+                                           double txy,
+                                           double tyz,
+                                           double tzx,
+                                           double *out);
+
+/**
+ * Miner's linear damage rule: D = Σ (nᵢ / N_fᵢ). `ratios` points to
+ * `count` `f64` elements (each nᵢ/N_fᵢ). Writes the summed damage into `out`.
+ * Returns `Bool::FALSE` on null pointers, empty/short input, or invalid data.
+ */
+Bool material_mechanics_miners_damage(const double *ratios, uint32_t count, double *out);
+
+Bool thermodynamics_ideal_gas_pressure(double volume,
+                                       double moles,
+                                       double temperature,
+                                       double *out);
+
+Bool thermodynamics_ideal_gas_volume(double pressure,
+                                     double moles,
+                                     double temperature,
+                                     double *out);
+
+Bool thermodynamics_ideal_gas_temperature(double pressure,
+                                          double volume,
+                                          double moles,
+                                          double *out);
+
+Bool thermodynamics_polytropic_pressure(double p1, double v1, double v2, double gamma, double *out);
+
+Bool thermodynamics_polytropic_work(double p1,
+                                    double v1,
+                                    double p2,
+                                    double v2,
+                                    double gamma,
+                                    double *out);
+
 /**
  * Estimate the aerodynamic/gravity forces acting on a trajectory state.
  *

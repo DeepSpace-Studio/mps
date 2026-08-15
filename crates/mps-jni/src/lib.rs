@@ -13,18 +13,22 @@ use mps_core::rapier::ffi::{
     ColliderHandleRaw as CRaw, CollisionEventRecord as CER, ContactForceEventRecord,
     CoulombFrictionLaw, Cylinder, DynamicalFrictionLaw, EddingtonRadiationPressureLaw,
     EffectiveCharacterMovement, Ellipsoid, ExternalForceLaw, FluidForceReport, FluidVolume,
-    HohmannTransfer, ImpulseJointHandleRaw as JRaw, InteractionGroupsDesc, JeansEscapeLaw,
-    JointBuilderHandle as JBH, MonDGravityLaw, NeuralBoundsDesc, NewtonGravityLaw, Obb,
-    PointProjection, Prism, PulsarMagneticDipoleLaw, Quat, QuaternionDerivative, QueryFilterDesc,
-    RTreeHandle as RTH, RayHit, RigidBodyBuilderHandle as RBH, RigidBodyHandleRaw as RRaw,
-    ScalarKalman, ShapeCastHit, ShapeCastOptionsDesc, ShapeDesc, SolarWindPressureLaw, Sphere,
-    SphericalShell, Ssv, TrajectoryEnvironment, TrajectoryForceReport, Vec3, VoxelBuildStats,
-    VoxelColliderOptions, WorldHandle as WH, XrayIrradiationLaw,
+    FractureEnergyReport, FractureFragmentDesc, FractureMaterial, FractureModeReport,
+    FractureReplaceReport, GriffithReport, HohmannTransfer, ImpulseJointHandleRaw as JRaw,
+    InteractionGroupsDesc, JeansEscapeLaw, JointBuilderHandle as JBH, MinerDamageReport,
+    MolecularForceLaw, MolecularPairReport, MolecularParticle, MonDGravityLaw, NeuralBoundsDesc,
+    NewtonGravityLaw, Obb, PointProjection, Prism, PulsarMagneticDipoleLaw, Quat,
+    QuaternionDerivative, QueryFilterDesc, RTreeHandle as RTH, RayHit,
+    RigidBodyBuilderHandle as RBH, RigidBodyHandleRaw as RRaw, ScalarKalman, ShapeCastHit,
+    ShapeCastOptionsDesc, ShapeDesc, SnCurveReport, SolarWindPressureLaw, Sphere, SphericalShell,
+    Ssv, StressIntensityReport, TrajectoryEnvironment, TrajectoryForceReport, Vec3,
+    VoxelBuildStats, VoxelColliderOptions, WorldHandle as WH, XrayIrradiationLaw,
 };
 use mps_core::rapier::{
     bounds as bo, collider as col, compat as com, controller as cc, crbtree as crt, dop,
-    error as er, events as ev, joints as jo, neural as neu, query as qu, rigid_body as rb,
-    rtree as rt, spaceflight as sf, voxel as vx, world as wo,
+    error as er, events as ev, fracture as fr, joints as jo, matmech as mm, molecular as mol,
+    neural as neu, query as qu, rigid_body as rb, rtree as rt, spaceflight as sf, thermo as th,
+    voxel as vx, world as wo,
 };
 use mps_core::rapier3d::prelude::{Collider as CB, RigidBody as RB};
 use mps_ffm as abi;
@@ -922,11 +926,78 @@ jni!(boolean trajectoryApplyForcesToBody(long world, long body, double gravity_x
 });
 
 // =========================================================================
-// Molecular dynamics — Lennard-Jones & Coulomb potential calculators
+// Molecular dynamics — Lennard-Jones & Coulomb potential calculators + forces
 // =========================================================================
-use mps_core::rapier::molecular as mol_jni;
-jni!(double molecularLennardJonesPotential(double r, double epsilon, double sigma) { mol_jni::molecular_lennard_jones_potential(r, epsilon, sigma) });
-jni!(double molecularCoulombPotential(double r, double q1, double q2, double k, double eps) { mol_jni::molecular_coulomb_potential(r, q1, q2, k, eps) });
+// `mol` alias is declared in the top-level `use mps_core::rapier::{...}` block.
+jni!(double molecularLennardJonesPotential(double r, double epsilon, double sigma) { mol::molecular_lennard_jones_potential(r, epsilon, sigma) });
+jni!(double molecularCoulombPotential(double r, double q1, double q2, double k, double eps) { mol::molecular_coulomb_potential(r, q1, q2, k, eps) });
+jni!(double molecularVacuumCoulombConstant() { mol::molecular_vacuum_coulomb_constant() });
+
+// Apply intermolecular forces between two rigid bodies in the world.
+// `particle_a` / `particle_b` are `long` pointers to a `MolecularParticle`
+// byte buffer (80 bytes, C layout: position@0, velocity@24, mass@48, charge@56,
+// epsilon@64, sigma@72 — each Vec3 is 24 bytes). `out_report` is a `long`
+// pointer to a 128-byte `MolecularPairReport` buffer (displacement@0, distance@24,
+// lennard_jones_potential@32, coulomb_potential@40, total_potential@48,
+// lennard_jones_force@56, coulomb_force@80, total_force@104). The caller fills
+// the two particle buffers with Unsafe; the report buffer is written back.
+jni!(boolean molecularApplyPairForces(long world, long body_a, long body_b, long particle_a, long particle_b, double coulomb_constant, double relative_permittivity, double cutoff_radius, double softening, int lennard_jones_enabled, int coulomb_enabled, int wake_up, long out_report) {
+    mol::molecular_apply_pair_forces(
+        m::<WH>(world), body_a as RRaw, body_b as RRaw,
+        unsafe { *p::<MolecularParticle>(particle_a) }, unsafe { *p::<MolecularParticle>(particle_b) },
+        MolecularForceLaw { coulomb_constant, relative_permittivity, cutoff_radius, softening, lennard_jones_enabled: jb(lennard_jones_enabled), coulomb_enabled: jb(coulomb_enabled) },
+        jb(wake_up), pm::<MolecularPairReport>(out_report)).0 as jbyte
+});
+jni!(boolean molecularApplyPairForcesFlag(long world, long body_a, long body_b, long particle_a, long particle_b, double coulomb_constant, double relative_permittivity, double cutoff_radius, double softening, int lennard_jones_enabled, int coulomb_enabled, int wake_up, long out_report) {
+mol::molecular_apply_pair_forces_flag(
+m::<WH>(world), body_a as RRaw, body_b as RRaw,
+unsafe { *p::<MolecularParticle>(particle_a) }, unsafe { *p::<MolecularParticle>(particle_b) },
+MolecularForceLaw { coulomb_constant, relative_permittivity, cutoff_radius, softening, lennard_jones_enabled: jb(lennard_jones_enabled), coulomb_enabled: jb(coulomb_enabled) },
+jb(wake_up), pm::<MolecularPairReport>(out_report)) as jbyte
+});
+
+// =========================================================================
+// Fracture mechanics — Griffith / S-N / Miner / stress intensity / fragments
+// =========================================================================
+// All `out_report` args are `long` pointers to C-layout report buffers written
+// back to the caller (read with Unsafe). Report sizes/offsets (bytes):
+//   StressIntensityReport 24: stress_intensity@0, critical@8(u8), safety_factor@16
+//   GriffithReport        32: critical_stress@0, energy_release_rate@8, critical_er_rate@16, will_fracture@24(u8)
+//   MinerDamageReport     24: damage@0, remaining_life_fraction@8, failed@16(u8)
+//   SnCurveReport        16: cycles_to_failure@0, infinite_life@8(u8)
+//   FractureEnergyReport 32: available_energy@0, surface_energy_required@8, fragment_kinetic_energy@16, will_fracture@24(u8)
+//   FractureModeReport   24: mode@0(u32), driving_stress@8, mixed_mode_ratio@16
+//   FractureReplaceReport 12: fragment_count@0(u32), joint_count@4(u32), removed_source@8(u8)
+// `material` (fractureGriffithCriterion) is a `long` to a 40-byte FractureMaterial
+//   buffer: youngs_modulus@0, poisson_ratio@8, fracture_toughness@16, surface_energy@24, density@32.
+// `fragments` (worldReplaceBodyWithFractureFragments) is a `long` to an array of
+//   96-byte FractureFragmentDesc buffers: local_center@0, half_extents@24, initial_velocity@48,
+//   density@72, friction@80, restitution@88.
+jni!(boolean fractureStressIntensityFactor(double stress, double crack_length, double geometry_factor, double fracture_toughness, long out_report) {
+    fr::fracture_stress_intensity_factor(stress, crack_length, geometry_factor, fracture_toughness, pm::<StressIntensityReport>(out_report)).0 as jbyte
+});
+jni!(boolean fractureGriffithCriterion(double stress, double crack_length, long material, long out_report) {
+    fr::fracture_griffith_criterion(stress, crack_length, unsafe { *p::<FractureMaterial>(material) }, pm::<GriffithReport>(out_report)).0 as jbyte
+});
+jni!(boolean fractureMinerDamage(long cycle_counts, int count, long cycles_to_failure, long out_report) {
+    fr::fracture_miner_damage(p::<f64>(cycle_counts), p::<f64>(cycles_to_failure), count as u32, pm::<MinerDamageReport>(out_report)).0 as jbyte
+});
+jni!(boolean fractureSnCurveLife(double stress_amplitude, double coefficient, double exponent, double endurance_limit, long out_report) {
+    fr::fracture_sn_curve_life(stress_amplitude, coefficient, exponent, endurance_limit, pm::<SnCurveReport>(out_report)).0 as jbyte
+});
+jni!(boolean fractureEnergyRelease(double strain_energy, double new_surface_area, double surface_energy, double kinetic_energy, long out_report) {
+    fr::fracture_energy_release(strain_energy, new_surface_area, surface_energy, kinetic_energy, pm::<FractureEnergyReport>(out_report)).0 as jbyte
+});
+jni!(boolean fractureModeFromStress(double tensile_stress, double shear_stress, double compressive_stress, long out_report) {
+    fr::fracture_mode_from_stress(tensile_stress, shear_stress, compressive_stress, pm::<FractureModeReport>(out_report)).0 as jbyte
+});
+jni!(boolean worldReplaceBodyWithFractureFragments(long world, long source_body, long fragments, int fragment_count, int connect_fragments, int remove_source, long out_body_handles, long out_joint_handles, int capacity, long out_report) {
+    fr::world_replace_body_with_fracture_fragments(
+        m::<WH>(world), source_body as RRaw, p::<FractureFragmentDesc>(fragments),
+        fragment_count as u32, jb(connect_fragments), jb(remove_source),
+        pm::<RRaw>(out_body_handles), pm::<JRaw>(out_joint_handles), capacity as u32,
+        pm::<FractureReplaceReport>(out_report)).0 as jbyte
+});
 
 #[cfg(feature = "anvilkit-bridge")]
 jni!(long anvilKitAppCreate() { to_jlong(ak::anvilkit_app_create()) });
@@ -946,6 +1017,46 @@ jni!(long anvilKitAppSpawnBodyWithCollider(long app, double tx, double ty, doubl
 jni!(boolean anvilKitAppSetTransform(long app, long entity_bits, double tx, double ty, double tz, double qi, double qj, double qk, double qw) {
     ak::anvilkit_app_set_transform(m::<AKH>(app), entity_bits as u64, v3(tx, ty, tz), qt(qi, qj, qk, qw)).0 as jbyte
 });
+// =========================================================================
+// Material mechanics — Hooke / elastic moduli / yield / fracture / fatigue / beam
+// =========================================================================
+// All functions take `f64` inputs and a `long out` pointer to a caller-allocated
+// `f64` slot; the computed value is written there and the result is `boolean`
+// (false on invalid input or null out). `principal_stresses` writes 3 `f64` into
+// a 24-byte buffer; `miners_damage` reads `count` `f64` from a `ratios` buffer.
+jni!(boolean materialMechanicsHookesLawUniaxial(double stress, double youngs_modulus, long out) { mm::material_mechanics_hookes_law_uniaxial(stress, youngs_modulus, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsStressFromStrain(double youngs_modulus, double strain, long out) { mm::material_mechanics_stress_from_strain(youngs_modulus, strain, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsShearModulus(double youngs_modulus, double poisson_ratio, long out) { mm::material_mechanics_shear_modulus(youngs_modulus, poisson_ratio, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsBulkModulus(double youngs_modulus, double poisson_ratio, long out) { mm::material_mechanics_bulk_modulus(youngs_modulus, poisson_ratio, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsLameLambda(double youngs_modulus, double poisson_ratio, long out) { mm::material_mechanics_lame_lambda(youngs_modulus, poisson_ratio, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsVonMisesStress(double sx, double sy, double sz, double txy, double tyz, double tzx, long out) { mm::material_mechanics_von_mises_stress(sx, sy, sz, txy, tyz, tzx, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsVonMisesYieldCheck(double von_mises_stress, double yield_stress, long out) { mm::material_mechanics_von_mises_yield_check(von_mises_stress, yield_stress, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsTrescaShearStress(double sigma_1, double sigma_3, long out) { mm::material_mechanics_tresca_shear_stress(sigma_1, sigma_3, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsTrescaYieldCheck(double sigma_1, double sigma_3, double yield_stress, long out) { mm::material_mechanics_tresca_yield_check(sigma_1, sigma_3, yield_stress, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsKiCenterCrack(double stress, double crack_half_length, long out) { mm::material_mechanics_ki_center_crack(stress, crack_half_length, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsKiEdgeCrack(double stress, double crack_length, long out) { mm::material_mechanics_ki_edge_crack(stress, crack_length, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsFractureCheck(double stress_intensity, double fracture_toughness, long out) { mm::material_mechanics_fracture_check(stress_intensity, fracture_toughness, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsCriticalCrackLength(double stress, double fracture_toughness, long out) { mm::material_mechanics_critical_crack_length(stress, fracture_toughness, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsBasquinStressAmplitude(double cycles_to_failure, double fatigue_strength_coefficient, double fatigue_exponent, long out) { mm::material_mechanics_basquin_stress_amplitude(cycles_to_failure, fatigue_strength_coefficient, fatigue_exponent, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsBasquinCyclesToFailure(double stress_amplitude, double fatigue_strength_coefficient, double fatigue_exponent, long out) { mm::material_mechanics_basquin_cycles_to_failure(stress_amplitude, fatigue_strength_coefficient, fatigue_exponent, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsCoffinMansonStrainAmplitude(double cycles_to_failure, double ductility_coefficient, double ductility_exponent, long out) { mm::material_mechanics_coffin_manson_strain_amplitude(cycles_to_failure, ductility_coefficient, ductility_exponent, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsGoodmanCorrection(double stress_amplitude, double mean_stress, double ultimate_tensile, long out) { mm::material_mechanics_goodman_correction(stress_amplitude, mean_stress, ultimate_tensile, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsNortonCreepRate(double stress, double temperature, double a, double n, double activation_energy, double gas_constant, long out) { mm::material_mechanics_norton_creep_rate(stress, temperature, a, n, activation_energy, gas_constant, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsBeamBendingStress(double bending_moment, double distance_from_neutral_axis, double area_moment_of_inertia, long out) { mm::material_mechanics_beam_bending_stress(bending_moment, distance_from_neutral_axis, area_moment_of_inertia, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsBeamDeflectionCenterPointLoad(double load, double span, double youngs_modulus, double moment_of_inertia, long out) { mm::material_mechanics_beam_deflection_center_point_load(load, span, youngs_modulus, moment_of_inertia, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsEulerBucklingLoad(double youngs_modulus, double moment_of_inertia, double effective_length_factor, double column_length, long out) { mm::material_mechanics_euler_buckling_load(youngs_modulus, moment_of_inertia, effective_length_factor, column_length, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsSlendernessRatio(double effective_length_factor, double column_length, double radius_of_gyration, long out) { mm::material_mechanics_slenderness_ratio(effective_length_factor, column_length, radius_of_gyration, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsPrincipalStresses(double sx, double sy, double sz, double txy, double tyz, double tzx, long out) { mm::material_mechanics_principal_stresses(sx, sy, sz, txy, tyz, tzx, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsMinersDamage(long ratios, int count, long out) { mm::material_mechanics_miners_damage(p::<f64>(ratios), count as u32, pm::<f64>(out)).0 as jbyte });
+
+// =========================================================================
+// Thermodynamics — ideal gas law & polytropic processes
+// =========================================================================
+jni!(boolean thermodynamicsIdealGasPressure(double volume, double moles, double temperature, long out) { th::thermodynamics_ideal_gas_pressure(volume, moles, temperature, pm::<f64>(out)).0 as jbyte });
+jni!(boolean thermodynamicsIdealGasVolume(double pressure, double moles, double temperature, long out) { th::thermodynamics_ideal_gas_volume(pressure, moles, temperature, pm::<f64>(out)).0 as jbyte });
+jni!(boolean thermodynamicsIdealGasTemperature(double pressure, double volume, double moles, long out) { th::thermodynamics_ideal_gas_temperature(pressure, volume, moles, pm::<f64>(out)).0 as jbyte });
+jni!(boolean thermodynamicsPolytropicPressure(double p1, double v1, double v2, double gamma, long out) { th::thermodynamics_polytropic_pressure(p1, v1, v2, gamma, pm::<f64>(out)).0 as jbyte });
+jni!(boolean thermodynamicsPolytropicWork(double p1, double v1, double p2, double v2, double gamma, long out) { th::thermodynamics_polytropic_work(p1, v1, p2, v2, gamma, pm::<f64>(out)).0 as jbyte });
 #[cfg(feature = "anvilkit-bridge")]
 jni!(int anvilKitAppSyncToWorld(long app, long world) {
     ak::anvilkit_app_sync_to_world(m::<AKH>(app), m::<WH>(world)) as jint

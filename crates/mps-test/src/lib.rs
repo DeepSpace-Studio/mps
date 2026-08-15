@@ -45,6 +45,7 @@ pub mod rapier {
     pub mod joints;
     pub mod material_mechanics;
     pub mod math;
+    pub mod matmech;
     pub mod molecular;
     pub mod neural;
     pub mod nuclear;
@@ -62,6 +63,7 @@ pub mod rapier {
     pub mod stellar;
     pub mod superfluidity;
     pub mod terrain_gravity;
+    pub mod thermo;
     pub mod thermodynamics;
     pub mod topology;
     pub mod trajectory;

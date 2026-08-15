@@ -50,6 +50,8 @@ pub use mps_formula::superfluidity;
 pub mod terrain_gravity;
 pub use mps_formula::thermodynamics;
 pub use mps_formula::topology;
+pub mod matmech;
+pub mod thermo;
 pub mod trajectory;
 pub use mps_formula::transmission;
 pub mod voxel;
