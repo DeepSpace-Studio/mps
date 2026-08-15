@@ -2,9 +2,10 @@
 //! pure `mps_formula::material_mechanics` helpers (Hooke's law, elastic moduli,
 //! yield criteria, fracture mechanics, fatigue, creep, beam theory).
 //!
-//! Every function returns `Bool` (success) and writes its `Option<f64>` result
-//! into a caller-provided `*mut f64` output slot. Multi-valued results
-//! (`principal_stresses`, `miners_damage`) are documented inline.
+//! Scalar results reuse [`crate::rapier::ffi::ffi_scalar`] (null `out` →
+//! `Bool::FALSE`, `None` result → `Bool::FALSE`, otherwise writes and returns
+//! `Bool::TRUE`). Multi-valued results (`principal_stresses`, `miners_damage`)
+//! are written out explicitly.
 //!
 //! No `WorldHandle` / Rapier state is touched — these are pure calculators,
 //! mirroring the `molecular` / `fracture` FFI modules.
@@ -18,7 +19,7 @@
 
 use std::slice;
 
-use crate::rapier::ffi::Bool;
+use crate::rapier::ffi::{Bool, ffi_scalar};
 use mps_formula::material_mechanics::*;
 
 #[unsafe(no_mangle)]
@@ -27,14 +28,7 @@ pub extern "C" fn material_mechanics_hookes_law_uniaxial(
     youngs_modulus: f64,
     out: *mut f64,
 ) -> Bool {
-    let Some(v) = hookes_law_uniaxial(stress, youngs_modulus) else {
-        return Bool::FALSE;
-    };
-    if out.is_null() {
-        return Bool::FALSE;
-    }
-    unsafe { *out = v };
-    Bool::TRUE
+    ffi_scalar(out, || hookes_law_uniaxial(stress, youngs_modulus))
 }
 
 #[unsafe(no_mangle)]
@@ -43,14 +37,7 @@ pub extern "C" fn material_mechanics_stress_from_strain(
     strain: f64,
     out: *mut f64,
 ) -> Bool {
-    let Some(v) = stress_from_strain(youngs_modulus, strain) else {
-        return Bool::FALSE;
-    };
-    if out.is_null() {
-        return Bool::FALSE;
-    }
-    unsafe { *out = v };
-    Bool::TRUE
+    ffi_scalar(out, || stress_from_strain(youngs_modulus, strain))
 }
 
 #[unsafe(no_mangle)]
@@ -59,14 +46,7 @@ pub extern "C" fn material_mechanics_shear_modulus(
     poisson_ratio: f64,
     out: *mut f64,
 ) -> Bool {
-    let Some(v) = shear_modulus(youngs_modulus, poisson_ratio) else {
-        return Bool::FALSE;
-    };
-    if out.is_null() {
-        return Bool::FALSE;
-    }
-    unsafe { *out = v };
-    Bool::TRUE
+    ffi_scalar(out, || shear_modulus(youngs_modulus, poisson_ratio))
 }
 
 #[unsafe(no_mangle)]
@@ -75,14 +55,7 @@ pub extern "C" fn material_mechanics_bulk_modulus(
     poisson_ratio: f64,
     out: *mut f64,
 ) -> Bool {
-    let Some(v) = bulk_modulus(youngs_modulus, poisson_ratio) else {
-        return Bool::FALSE;
-    };
-    if out.is_null() {
-        return Bool::FALSE;
-    }
-    unsafe { *out = v };
-    Bool::TRUE
+    ffi_scalar(out, || bulk_modulus(youngs_modulus, poisson_ratio))
 }
 
 #[unsafe(no_mangle)]
@@ -91,14 +64,7 @@ pub extern "C" fn material_mechanics_lame_lambda(
     poisson_ratio: f64,
     out: *mut f64,
 ) -> Bool {
-    let Some(v) = lame_lambda(youngs_modulus, poisson_ratio) else {
-        return Bool::FALSE;
-    };
-    if out.is_null() {
-        return Bool::FALSE;
-    }
-    unsafe { *out = v };
-    Bool::TRUE
+    ffi_scalar(out, || lame_lambda(youngs_modulus, poisson_ratio))
 }
 
 #[unsafe(no_mangle)]
@@ -111,14 +77,7 @@ pub extern "C" fn material_mechanics_von_mises_stress(
     tzx: f64,
     out: *mut f64,
 ) -> Bool {
-    let Some(v) = von_mises_stress(sx, sy, sz, txy, tyz, tzx) else {
-        return Bool::FALSE;
-    };
-    if out.is_null() {
-        return Bool::FALSE;
-    }
-    unsafe { *out = v };
-    Bool::TRUE
+    ffi_scalar(out, || von_mises_stress(sx, sy, sz, txy, tyz, tzx))
 }
 
 #[unsafe(no_mangle)]
@@ -127,14 +86,9 @@ pub extern "C" fn material_mechanics_von_mises_yield_check(
     yield_stress: f64,
     out: *mut f64,
 ) -> Bool {
-    let Some(v) = von_mises_yield_check(von_mises_stress, yield_stress) else {
-        return Bool::FALSE;
-    };
-    if out.is_null() {
-        return Bool::FALSE;
-    }
-    unsafe { *out = v };
-    Bool::TRUE
+    ffi_scalar(out, || {
+        von_mises_yield_check(von_mises_stress, yield_stress)
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -143,14 +97,7 @@ pub extern "C" fn material_mechanics_tresca_shear_stress(
     sigma_3: f64,
     out: *mut f64,
 ) -> Bool {
-    let Some(v) = tresca_shear_stress(sigma_1, sigma_3) else {
-        return Bool::FALSE;
-    };
-    if out.is_null() {
-        return Bool::FALSE;
-    }
-    unsafe { *out = v };
-    Bool::TRUE
+    ffi_scalar(out, || tresca_shear_stress(sigma_1, sigma_3))
 }
 
 #[unsafe(no_mangle)]
@@ -160,14 +107,7 @@ pub extern "C" fn material_mechanics_tresca_yield_check(
     yield_stress: f64,
     out: *mut f64,
 ) -> Bool {
-    let Some(v) = tresca_yield_check(sigma_1, sigma_3, yield_stress) else {
-        return Bool::FALSE;
-    };
-    if out.is_null() {
-        return Bool::FALSE;
-    }
-    unsafe { *out = v };
-    Bool::TRUE
+    ffi_scalar(out, || tresca_yield_check(sigma_1, sigma_3, yield_stress))
 }
 
 #[unsafe(no_mangle)]
@@ -176,14 +116,7 @@ pub extern "C" fn material_mechanics_ki_center_crack(
     crack_half_length: f64,
     out: *mut f64,
 ) -> Bool {
-    let Some(v) = ki_center_crack(stress, crack_half_length) else {
-        return Bool::FALSE;
-    };
-    if out.is_null() {
-        return Bool::FALSE;
-    }
-    unsafe { *out = v };
-    Bool::TRUE
+    ffi_scalar(out, || ki_center_crack(stress, crack_half_length))
 }
 
 #[unsafe(no_mangle)]
@@ -192,14 +125,7 @@ pub extern "C" fn material_mechanics_ki_edge_crack(
     crack_length: f64,
     out: *mut f64,
 ) -> Bool {
-    let Some(v) = ki_edge_crack(stress, crack_length) else {
-        return Bool::FALSE;
-    };
-    if out.is_null() {
-        return Bool::FALSE;
-    }
-    unsafe { *out = v };
-    Bool::TRUE
+    ffi_scalar(out, || ki_edge_crack(stress, crack_length))
 }
 
 #[unsafe(no_mangle)]
@@ -208,14 +134,7 @@ pub extern "C" fn material_mechanics_fracture_check(
     fracture_toughness: f64,
     out: *mut f64,
 ) -> Bool {
-    let Some(v) = fracture_check(stress_intensity, fracture_toughness) else {
-        return Bool::FALSE;
-    };
-    if out.is_null() {
-        return Bool::FALSE;
-    }
-    unsafe { *out = v };
-    Bool::TRUE
+    ffi_scalar(out, || fracture_check(stress_intensity, fracture_toughness))
 }
 
 #[unsafe(no_mangle)]
@@ -224,14 +143,7 @@ pub extern "C" fn material_mechanics_critical_crack_length(
     fracture_toughness: f64,
     out: *mut f64,
 ) -> Bool {
-    let Some(v) = critical_crack_length(stress, fracture_toughness) else {
-        return Bool::FALSE;
-    };
-    if out.is_null() {
-        return Bool::FALSE;
-    }
-    unsafe { *out = v };
-    Bool::TRUE
+    ffi_scalar(out, || critical_crack_length(stress, fracture_toughness))
 }
 
 #[unsafe(no_mangle)]
@@ -241,18 +153,13 @@ pub extern "C" fn material_mechanics_basquin_stress_amplitude(
     fatigue_exponent: f64,
     out: *mut f64,
 ) -> Bool {
-    let Some(v) = basquin_stress_amplitude(
-        cycles_to_failure,
-        fatigue_strength_coefficient,
-        fatigue_exponent,
-    ) else {
-        return Bool::FALSE;
-    };
-    if out.is_null() {
-        return Bool::FALSE;
-    }
-    unsafe { *out = v };
-    Bool::TRUE
+    ffi_scalar(out, || {
+        basquin_stress_amplitude(
+            cycles_to_failure,
+            fatigue_strength_coefficient,
+            fatigue_exponent,
+        )
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -262,18 +169,13 @@ pub extern "C" fn material_mechanics_basquin_cycles_to_failure(
     fatigue_exponent: f64,
     out: *mut f64,
 ) -> Bool {
-    let Some(v) = basquin_cycles_to_failure(
-        stress_amplitude,
-        fatigue_strength_coefficient,
-        fatigue_exponent,
-    ) else {
-        return Bool::FALSE;
-    };
-    if out.is_null() {
-        return Bool::FALSE;
-    }
-    unsafe { *out = v };
-    Bool::TRUE
+    ffi_scalar(out, || {
+        basquin_cycles_to_failure(
+            stress_amplitude,
+            fatigue_strength_coefficient,
+            fatigue_exponent,
+        )
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -283,18 +185,9 @@ pub extern "C" fn material_mechanics_coffin_manson_strain_amplitude(
     ductility_exponent: f64,
     out: *mut f64,
 ) -> Bool {
-    let Some(v) = coffin_manson_strain_amplitude(
-        cycles_to_failure,
-        ductility_coefficient,
-        ductility_exponent,
-    ) else {
-        return Bool::FALSE;
-    };
-    if out.is_null() {
-        return Bool::FALSE;
-    }
-    unsafe { *out = v };
-    Bool::TRUE
+    ffi_scalar(out, || {
+        coffin_manson_strain_amplitude(cycles_to_failure, ductility_coefficient, ductility_exponent)
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -304,14 +197,9 @@ pub extern "C" fn material_mechanics_goodman_correction(
     ultimate_tensile: f64,
     out: *mut f64,
 ) -> Bool {
-    let Some(v) = goodman_correction(stress_amplitude, mean_stress, ultimate_tensile) else {
-        return Bool::FALSE;
-    };
-    if out.is_null() {
-        return Bool::FALSE;
-    }
-    unsafe { *out = v };
-    Bool::TRUE
+    ffi_scalar(out, || {
+        goodman_correction(stress_amplitude, mean_stress, ultimate_tensile)
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -324,15 +212,9 @@ pub extern "C" fn material_mechanics_norton_creep_rate(
     gas_constant: f64,
     out: *mut f64,
 ) -> Bool {
-    let Some(v) = norton_creep_rate(stress, temperature, a, n, activation_energy, gas_constant)
-    else {
-        return Bool::FALSE;
-    };
-    if out.is_null() {
-        return Bool::FALSE;
-    }
-    unsafe { *out = v };
-    Bool::TRUE
+    ffi_scalar(out, || {
+        norton_creep_rate(stress, temperature, a, n, activation_energy, gas_constant)
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -342,18 +224,13 @@ pub extern "C" fn material_mechanics_beam_bending_stress(
     area_moment_of_inertia: f64,
     out: *mut f64,
 ) -> Bool {
-    let Some(v) = beam_bending_stress(
-        bending_moment,
-        distance_from_neutral_axis,
-        area_moment_of_inertia,
-    ) else {
-        return Bool::FALSE;
-    };
-    if out.is_null() {
-        return Bool::FALSE;
-    }
-    unsafe { *out = v };
-    Bool::TRUE
+    ffi_scalar(out, || {
+        beam_bending_stress(
+            bending_moment,
+            distance_from_neutral_axis,
+            area_moment_of_inertia,
+        )
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -364,15 +241,9 @@ pub extern "C" fn material_mechanics_beam_deflection_center_point_load(
     moment_of_inertia: f64,
     out: *mut f64,
 ) -> Bool {
-    let Some(v) = beam_deflection_center_point_load(load, span, youngs_modulus, moment_of_inertia)
-    else {
-        return Bool::FALSE;
-    };
-    if out.is_null() {
-        return Bool::FALSE;
-    }
-    unsafe { *out = v };
-    Bool::TRUE
+    ffi_scalar(out, || {
+        beam_deflection_center_point_load(load, span, youngs_modulus, moment_of_inertia)
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -383,19 +254,14 @@ pub extern "C" fn material_mechanics_euler_buckling_load(
     column_length: f64,
     out: *mut f64,
 ) -> Bool {
-    let Some(v) = euler_buckling_load(
-        youngs_modulus,
-        moment_of_inertia,
-        effective_length_factor,
-        column_length,
-    ) else {
-        return Bool::FALSE;
-    };
-    if out.is_null() {
-        return Bool::FALSE;
-    }
-    unsafe { *out = v };
-    Bool::TRUE
+    ffi_scalar(out, || {
+        euler_buckling_load(
+            youngs_modulus,
+            moment_of_inertia,
+            effective_length_factor,
+            column_length,
+        )
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -405,15 +271,9 @@ pub extern "C" fn material_mechanics_slenderness_ratio(
     radius_of_gyration: f64,
     out: *mut f64,
 ) -> Bool {
-    let Some(v) = slenderness_ratio(effective_length_factor, column_length, radius_of_gyration)
-    else {
-        return Bool::FALSE;
-    };
-    if out.is_null() {
-        return Bool::FALSE;
-    }
-    unsafe { *out = v };
-    Bool::TRUE
+    ffi_scalar(out, || {
+        slenderness_ratio(effective_length_factor, column_length, radius_of_gyration)
+    })
 }
 
 /// Principal stresses from a 3D stress tensor. Writes (σ₁, σ₂, σ₃) sorted

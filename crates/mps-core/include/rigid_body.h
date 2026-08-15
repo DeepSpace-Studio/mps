@@ -4931,6 +4931,211 @@ uint32_t terrain_lunar_mascon_count(void);
  */
 Bool terrain_lunar_mascon_get(uint32_t index, struct LunarMascon *out_mascon);
 
+Bool acoustics_spherical_spreading_loss(double range, double *out);
+
+Bool acoustics_cylindrical_spreading_loss(double range, double *out);
+
+Bool acoustics_thorp_absorption(double frequency_khz, double *out);
+
+Bool acoustics_sabine_rt60(double volume, double surface_area, double mean_absorption, double *out);
+
+Bool acoustics_eyring_rt60(double volume, double surface_area, double mean_absorption, double *out);
+
+Bool acoustics_acoustic_impedance(double density, double sound_speed, double *out);
+
+Bool acoustics_transmission_coefficient(double z1, double z2, double *out);
+
+Bool acoustics_mass_law_tl(double frequency, double surface_density, double *out);
+
+Bool acoustics_helmholtz_resonance_frequency(double sound_speed,
+                                             double neck_area,
+                                             double cavity_volume,
+                                             double neck_length,
+                                             double *out);
+
+Bool acoustics_doppler_shift(double source_frequency,
+                             double sound_speed,
+                             double receiver_velocity,
+                             double source_velocity,
+                             Bool approach,
+                             double *out);
+
+Bool acoustics_maekawa_barrier_attenuation(double fresnel_number, double *out);
+
+Bool acoustics_active_sonar_echo_level(double source_level,
+                                       double transmission_loss,
+                                       double target_strength,
+                                       double noise_level,
+                                       double directivity_index,
+                                       double detection_threshold,
+                                       double *out);
+
+Bool astrophysics_hill_sphere_radius(double primary_mass,
+                                     double secondary_mass,
+                                     double semi_major_axis,
+                                     double eccentricity,
+                                     double *out);
+
+Bool astrophysics_lane_emden_first_zero(double polytropic_index, double *out);
+
+Bool astrophysics_mass_luminosity_relation(double mass_solar, double exponent, double *out);
+
+Bool astrophysics_eddington_luminosity(double mass, double opacity, double *out);
+
+Bool astrophysics_eddington_luminosity_solar(double mass_solar, double opacity, double *out);
+
+Bool astrophysics_hubble_velocity(double hubble_constant, double distance, double *out);
+
+Bool astrophysics_hubble_distance(double velocity, double hubble_constant, double *out);
+
+Bool astrophysics_nfw_density(double radius,
+                              double scale_radius,
+                              double characteristic_density,
+                              double *out);
+
+Bool astrophysics_nfw_enclosed_mass(double radius,
+                                    double scale_radius,
+                                    double characteristic_density,
+                                    double *out);
+
+Bool astrophysics_blackbody_spectral_radiance(double wavelength, double temperature, double *out);
+
+Bool astrophysics_wien_displacement(double temperature, double *out);
+
+Bool astrophysics_jeans_mass(double temperature,
+                             double density,
+                             double mean_molecular_weight,
+                             double *out);
+
+Bool astrophysics_jeans_length(double temperature,
+                               double density,
+                               double mean_molecular_weight,
+                               double *out);
+
+Bool astrophysics_main_sequence_lifetime(double mass_solar, double *out);
+
+Bool astrophysics_mass_radius_relation(double mass_solar, double *out);
+
+Bool astrophysics_chandrasekhar_mass_limit(double *out);
+
+Bool astrophysics_chandrasekhar_mass_kg(double *out);
+
+Bool astrophysics_mass_function(double period_seconds, double semi_amplitude, double *out);
+
+Bool astrophysics_binary_semi_major_axis(double total_mass, double period, double *out);
+
+Bool astrophysics_ss73_disk_temperature(double mass_kg,
+                                        double accretion_rate,
+                                        double radius,
+                                        double inner_radius,
+                                        double *out);
+
+Bool astrophysics_nickel56_decay_luminosity(double nickel_mass_kg, double time_days, double *out);
+
+Bool astrophysics_transit_depth(double planet_radius, double star_radius, double *out);
+
+Bool astrophysics_radial_velocity_semi_amplitude(double planet_mass_kg,
+                                                 double star_mass_kg,
+                                                 double period,
+                                                 double inclination,
+                                                 double *out);
+
+Bool astrophysics_nfw_circular_velocity(double r, double v_max, double r_scale, double *out);
+
+/**
+ * Roche fluid/rigid limits. Writes (fluid, rigid) into `out_fluid` /
+ * `out_rigid`. Returns `Bool::FALSE` on invalid input or a null output.
+ */
+Bool astrophysics_roche_limit(double primary_radius,
+                              double primary_density,
+                              double secondary_density,
+                              double *out_fluid,
+                              double *out_rigid);
+
+/**
+ * Habitable-zone inner/outer radii. Writes (inner, outer) into `out_inner` /
+ * `out_outer`. Returns `Bool::FALSE` on invalid input or a null output.
+ */
+Bool astrophysics_habitable_zone_boundaries(double star_luminosity_solar,
+                                            double *out_inner,
+                                            double *out_outer);
+
+Bool electromagnetism_poynting_magnitude_plane_wave(double e_field_magnitude, double *out);
+
+Bool electromagnetism_phase_velocity(double refractive_index, double *out);
+
+Bool electromagnetism_wavelength_in_medium(double frequency, double refractive_index, double *out);
+
+Bool electromagnetism_intrinsic_impedance(double permeability, double permittivity, double *out);
+
+Bool electromagnetism_skin_depth(double frequency,
+                                 double permeability,
+                                 double conductivity,
+                                 double *out);
+
+Bool electromagnetism_vacuum_wavelength(double frequency, double *out);
+
+Bool electromagnetism_wave_frequency(double wavelength, double *out);
+
+Bool electromagnetism_dipole_radiation_resistance(double dipole_length,
+                                                  double wavelength,
+                                                  double *out);
+
+Bool electromagnetism_half_wave_dipole_directivity(double *out);
+
+Bool electromagnetism_effective_aperture(double gain_linear, double wavelength, double *out);
+
+Bool electromagnetism_far_field_distance(double antenna_size, double wavelength, double *out);
+
+Bool electromagnetism_friis_power_received(double transmit_power,
+                                           double tx_gain,
+                                           double rx_gain,
+                                           double wavelength,
+                                           double range,
+                                           double *out);
+
+Bool electromagnetism_reflection_coefficient(double load_impedance,
+                                             double characteristic_impedance,
+                                             double *out);
+
+Bool electromagnetism_vswr(double reflection_coeff, double *out);
+
+Bool electromagnetism_return_loss(double reflection_coeff, double *out);
+
+Bool electromagnetism_quarter_wave_transformer(double z0, double z_load, double *out);
+
+Bool electromagnetism_coaxial_impedance(double inner_diameter,
+                                        double outer_diameter,
+                                        double relative_permittivity,
+                                        double *out);
+
+Bool electromagnetism_coaxial_cutoff_frequency(double inner_diameter,
+                                               double outer_diameter,
+                                               double relative_permittivity,
+                                               double *out);
+
+Bool electromagnetism_rayleigh_scattering_cross_section(double refractive_index,
+                                                        double diameter,
+                                                        double wavelength,
+                                                        double *out);
+
+Bool electromagnetism_faraday_rotation(double verdet_constant,
+                                       double magnetic_field,
+                                       double path_length,
+                                       double *out);
+
+/**
+ * Transmission-line input impedance (lossless). Writes (real, imag) into
+ * `out_real` / `out_imag`. Returns `Bool::FALSE` on invalid input or a null output.
+ */
+Bool electromagnetism_transmission_line_input_impedance(double z0,
+                                                        double z_load_real,
+                                                        double z_load_imag,
+                                                        double phase_constant,
+                                                        double length,
+                                                        double *out_real,
+                                                        double *out_imag);
+
 Bool material_mechanics_hookes_law_uniaxial(double stress, double youngs_modulus, double *out);
 
 Bool material_mechanics_stress_from_strain(double youngs_modulus, double strain, double *out);
@@ -5041,6 +5246,116 @@ Bool material_mechanics_principal_stresses(double sx,
  * Returns `Bool::FALSE` on null pointers, empty/short input, or invalid data.
  */
 Bool material_mechanics_miners_damage(const double *ratios, uint32_t count, double *out);
+
+Bool nuclear_decay_constant(double half_life, double *out);
+
+Bool nuclear_remaining_nuclei(double initial, double decay_constant, double time, double *out);
+
+Bool nuclear_activity(double decay_constant, double nuclei, double *out);
+
+Bool nuclear_half_life(double decay_constant, double *out);
+
+Bool nuclear_mean_lifetime(double decay_constant, double *out);
+
+Bool nuclear_bethe_weizsaecker_binding_energy(double mass_number,
+                                              double atomic_number,
+                                              double *out);
+
+Bool nuclear_binding_energy_per_nucleon(double mass_number, double atomic_number, double *out);
+
+Bool nuclear_reaction_q_value(double initial_mass_u, double final_mass_u, double *out);
+
+Bool nuclear_dt_fusion_energy(double *out);
+
+Bool nuclear_dd_fusion_branch1_energy(double *out);
+
+Bool nuclear_dd_fusion_branch2_energy(double *out);
+
+Bool nuclear_u235_fission_energy(double *out);
+
+Bool nuclear_four_factor_formula(double eta, double epsilon, double p, double f, double *out);
+
+Bool nuclear_reaction_rate(double macroscopic_cross_section, double neutron_flux, double *out);
+
+Bool nuclear_atomic_mass_approx(double mass_number, double binding_energy_mev, double *out);
+
+Bool nuclear_specific_activity(double decay_constant, double mass_number, double *out);
+
+Bool nuclear_half_value_layer(double linear_attenuation, double *out);
+
+Bool nuclear_dt_fusion_q_value(double *out);
+
+Bool plasma_beta(double density, double temperature, double magnetic_field, double *out);
+
+Bool plasma_gyrofrequency(double charge, double magnetic_field, double mass, double *out);
+
+Bool plasma_larmor_radius(double mass,
+                          double perpendicular_velocity,
+                          double charge,
+                          double magnetic_field,
+                          double *out);
+
+Bool plasma_mirror_ratio(double max_field, double min_field, double *out);
+
+Bool plasma_mirror_loss_cone_angle(double max_field, double min_field, double *out);
+
+Bool quantum_free_particle_energy(double wave_number, double mass, double *out);
+
+Bool quantum_de_broglie_wavelength(double mass, double velocity, double *out);
+
+Bool quantum_infinite_well_energy(uint32_t quantum_number,
+                                  double mass,
+                                  double well_width,
+                                  double *out);
+
+Bool quantum_infinite_well_wave_function(uint32_t quantum_number,
+                                         double well_width,
+                                         double x,
+                                         double *out);
+
+Bool quantum_bohr_radius(double *out);
+
+Bool quantum_hydrogen_energy_level(uint32_t quantum_number, double *out);
+
+Bool quantum_hydrogen_orbital_radius(uint32_t quantum_number, double *out);
+
+Bool quantum_hydrogen_transition_wavelength(uint32_t n1, uint32_t n2, double *out);
+
+Bool quantum_minimum_uncertainty_product(double *out);
+
+Bool quantum_fermi_golden_rule_linear(double matrix_element2,
+                                      double density_of_states,
+                                      double *out);
+
+Bool quantum_spin_orbit_energy(double n, double l, double j, double atomic_number, double *out);
+
+Bool quantum_fine_structure_constant(double *out);
+
+Bool quantum_variational_hydrogen_energy(double alpha, double *out);
+
+Bool quantum_variational_hydrogen_optimal_alpha(double *out);
+
+Bool quantum_coherent_state_photon_probability(double alpha_squared, uint32_t n, double *out);
+
+Bool quantum_spherical_harmonic_real(int32_t l, int32_t m, double theta, double phi, double *out);
+
+Bool quantum_angular_momentum_squared(double j, double *out);
+
+/**
+ * Degenerate 2×2 perturbation eigenvalues. Writes (λ₁, λ₂) into `out_e1` /
+ * `out_e2`. Returns `Bool::FALSE` on invalid input or a null output.
+ */
+Bool quantum_degenerate_perturbation_2x2(double h11,
+                                         double h12,
+                                         double h22,
+                                         double *out_e1,
+                                         double *out_e2);
+
+/**
+ * Time-evolution phase factor e^{-iEt/ℏ}. Writes (real, imag) into
+ * `out_real` / `out_imag`. Returns `Bool::FALSE` on a null output.
+ */
+Bool quantum_time_evolution_phase(double energy, double time, double *out_real, double *out_imag);
 
 Bool thermodynamics_ideal_gas_pressure(double volume,
                                        double moles,

@@ -13,8 +13,10 @@ pub mod cosmos {
 
 pub mod rapier {
     pub mod acoustics;
+    pub mod acoustics_ffi;
     pub mod aerodynamics;
     pub mod anvilkit;
+    pub mod astrocalc;
     pub mod astrophysics;
     pub mod batch;
     pub mod biomechanics;
@@ -30,6 +32,7 @@ pub mod rapier {
     pub mod crbtree;
     pub mod dop;
     pub mod electromagnetism;
+    pub mod emag;
     pub mod error;
     pub mod events;
     pub mod ffi;
@@ -49,9 +52,12 @@ pub mod rapier {
     pub mod molecular;
     pub mod neural;
     pub mod nuclear;
+    pub mod nucphys;
     pub mod physchem;
     pub mod planetary_science;
     pub mod plasma;
+    pub mod plasma_ffi;
+    pub mod qphys;
     pub mod quantum;
     pub mod query;
     pub mod relativity;
