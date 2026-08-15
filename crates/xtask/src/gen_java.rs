@@ -88,25 +88,33 @@ pub fn run(workspace_root: &Path, output_dir: Option<&str>) -> Result<String, St
         if !dir.is_dir() {
             continue;
         }
-        for entry in walkdir::WalkDir::new(dir).into_iter().filter_map(|e| e.ok()) {
+        for entry in walkdir::WalkDir::new(dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) != Some("rs") {
                 continue;
             }
-            let content =
-                std::fs::read_to_string(path).map_err(|e| format!("read {}: {e}", path.display()))?;
-            let file = syn::parse_file(&content).map_err(|e| format!("parse {}: {e}", path.display()))?;
+            let content = std::fs::read_to_string(path)
+                .map_err(|e| format!("read {}: {e}", path.display()))?;
+            let file =
+                syn::parse_file(&content).map_err(|e| format!("parse {}: {e}", path.display()))?;
 
             for item in &file.items {
                 match item {
                     Item::Struct(s) => {
-                        if has_attr(&s.attrs, "java_struct") && is_repr_c(&s.attrs) && is_pub(&s.vis) {
+                        if has_attr(&s.attrs, "java_struct")
+                            && is_repr_c(&s.attrs)
+                            && is_pub(&s.vis)
+                        {
                             let si = parse_struct(s, &structs, &enums)?;
                             structs.insert(si.name.clone(), si);
                         }
                     }
                     Item::Enum(e) => {
-                        if has_attr(&e.attrs, "java_enum") && is_repr_c(&e.attrs) && is_pub(&e.vis) {
+                        if has_attr(&e.attrs, "java_enum") && is_repr_c(&e.attrs) && is_pub(&e.vis)
+                        {
                             let ei = parse_enum(e)?;
                             enums.insert(ei.name.clone(), ei);
                         }
@@ -228,8 +236,8 @@ fn parse_struct(
 ) -> Result<StructInfo, String> {
     let name = s.ident.to_string();
     let java_name = rust_to_pascal(&name);
-    let package = attr_package(&s.attrs, "java_struct")
-        .unwrap_or_else(|| JAVA_PACKAGE_DEFAULT.to_string());
+    let package =
+        attr_package(&s.attrs, "java_struct").unwrap_or_else(|| JAVA_PACKAGE_DEFAULT.to_string());
 
     let mut fields = Vec::new();
     let mut offset: u64 = 0;
@@ -288,8 +296,8 @@ fn parse_struct(
 fn parse_enum(e: &ItemEnum) -> Result<EnumInfo, String> {
     let name = e.ident.to_string();
     let java_name = rust_to_pascal(&name);
-    let package = attr_package(&e.attrs, "java_enum")
-        .unwrap_or_else(|| JAVA_PACKAGE_DEFAULT.to_string());
+    let package =
+        attr_package(&e.attrs, "java_enum").unwrap_or_else(|| JAVA_PACKAGE_DEFAULT.to_string());
     let mut variants: Vec<(String, i64)> = Vec::new();
     for v in &e.variants {
         let vname = v.ident.to_string();
@@ -316,7 +324,11 @@ fn parse_enum(e: &ItemEnum) -> Result<EnumInfo, String> {
     })
 }
 
-fn finalize_layout(s: &mut StructInfo, _known: &BTreeMap<String, StructInfo>, _enums: &BTreeMap<String, EnumInfo>) {
+fn finalize_layout(
+    s: &mut StructInfo,
+    _known: &BTreeMap<String, StructInfo>,
+    _enums: &BTreeMap<String, EnumInfo>,
+) {
     // Already computed in parse_struct; this is a no-op placeholder for future
     // two-pass fixes (e.g., forward references).
     let _ = s;
@@ -330,9 +342,7 @@ fn classify_type(
     let r = rust.trim();
     // Array [T; N]
     if r.starts_with('[') && r.ends_with(']') {
-        let inner = r
-            .trim_start_matches('[')
-            .trim_end_matches(']');
+        let inner = r.trim_start_matches('[').trim_end_matches(']');
         // split on last ';'
         if let Some(pos) = inner.rfind(';') {
             let ty_str = inner[..pos].trim();
@@ -397,12 +407,10 @@ fn kind_java_type(kind: &FieldKind, structs: &BTreeMap<String, StructInfo>) -> S
         FieldKind::U32 | FieldKind::I32 | FieldKind::Enum(_) => "int".into(),
         FieldKind::U64 | FieldKind::I64 => "long".into(),
         FieldKind::Bool => "boolean".into(),
-        FieldKind::Struct(name) => {
-            structs
-                .get(name)
-                .map(|s| s.java_name.clone())
-                .unwrap_or_else(|| rust_to_pascal(name))
-        }
+        FieldKind::Struct(name) => structs
+            .get(name)
+            .map(|s| s.java_name.clone())
+            .unwrap_or_else(|| rust_to_pascal(name)),
         FieldKind::Array(_, _) => "double[]".into(),
     }
 }
@@ -445,7 +453,10 @@ fn rust_to_pascal(s: &str) -> String {
 fn rust_field_to_java(s: &str) -> String {
     // snake_case → camelCase for getter/setter name base
     let mut chars = s.chars();
-    let first = chars.next().map(|c| c.to_ascii_lowercase()).unwrap_or_default();
+    let first = chars
+        .next()
+        .map(|c| c.to_ascii_lowercase())
+        .unwrap_or_default();
     let rest: String = chars.collect();
     let mut out = String::new();
     out.push(first);
@@ -494,14 +505,15 @@ fn gen_enum_java(e: &EnumInfo) -> String {
 
 fn gen_struct_java(s: &StructInfo) -> String {
     let mut sb = String::new();
-    sb.push_str(
-        "// Auto-generated by `cargo run -p xtask -- gen-java`. Do NOT edit by hand.\n",
-    );
+    sb.push_str("// Auto-generated by `cargo run -p xtask -- gen-java`. Do NOT edit by hand.\n");
     sb.push_str(&format!("package {};\n\n", s.package));
     sb.push_str("import org.polaris2023.mps_rigid_body.util.NativeMemory;\n\n");
 
     sb.push_str(&format!("public final class {} {{\n", s.java_name));
-    sb.push_str(&format!("    public static final long SIZEOF = {}L;\n\n", s.size));
+    sb.push_str(&format!(
+        "    public static final long SIZEOF = {}L;\n\n",
+        s.size
+    ));
     sb.push_str("    private final NativeMemory mem;\n");
     sb.push_str("    private final long offset;\n\n");
 

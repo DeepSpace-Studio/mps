@@ -46,7 +46,7 @@
 
 use proc_macro::TokenStream;
 use quote::ToTokens;
-use syn::{parse_macro_input, DeriveInput, ItemEnum};
+use syn::{DeriveInput, ItemEnum, parse_macro_input};
 
 /// 直通注解：标记一个 `#[repr(C)]` 结构体需要生成 Java 值类。
 /// 宏体原样返回，不修改任何代码。
@@ -88,9 +88,8 @@ pub fn java_field(_attr: TokenStream, item: TokenStream) -> TokenStream {
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::{
-    parenthesized,
+    Ident, Token, parenthesized,
     parse::{Parse, ParseStream},
-    Ident, Token,
 };
 
 /// DSL 中的类型名（不是 Rust 类型，是 `jni!` 自定义记号）。
@@ -190,7 +189,12 @@ impl Parse for JniFn {
             }
         }
         let body: syn::Block = input.parse()?;
-        Ok(JniFn { ret, name, args, body })
+        Ok(JniFn {
+            ret,
+            name,
+            args,
+            body,
+        })
     }
 }
 

@@ -231,9 +231,7 @@ mod tests {
         // the y==0 plane (indices 0..3), leave the top plane (4..7) empty so we
         // can assert BOTH solid and empty reads from the same collider.
         let mut data = [0u8; 8];
-        for i in 0..4 {
-            data[i] = 1;
-        }
+        data[..4].fill(1);
         let builder = collider_builder_create_voxels(
             data.as_ptr(),
             2,
@@ -264,7 +262,10 @@ mod tests {
         // Empty cell (top-front-left, index 4).
         let mut empty_out: u8 = 1;
         let ok_empty = collider_voxel_read_cell(world, handle, 0, 1, 0, &mut empty_out);
-        assert!(ok_empty.0 != 0, "get on a valid voxel collider should succeed");
+        assert!(
+            ok_empty.0 != 0,
+            "get on a valid voxel collider should succeed"
+        );
         assert!(empty_out == 0, "cell (0,1,0) was left empty -> not solid");
 
         // Out-of-range coordinate: returns FALSE and writes 0 to the out ptr.
