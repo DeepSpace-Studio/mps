@@ -5341,6 +5341,35 @@ Bool quantum_spherical_harmonic_real(int32_t l, int32_t m, double theta, double 
 
 Bool quantum_angular_momentum_squared(double j, double *out);
 
+Bool quantum_photoelectric_threshold(double work_function, double *out);
+
+Bool quantum_photoelectric_max_kinetic(double frequency, double work_function, double *out);
+
+Bool quantum_compton_wavelength_shift(double scattering_angle, double *out);
+
+Bool quantum_compton_scattered_wavelength(double lambda, double scattering_angle, double *out);
+
+Bool quantum_rabi_oscillation_probability(double rabi_frequency,
+                                          double detuning,
+                                          double time,
+                                          double *out);
+
+Bool quantum_landau_level(int32_t quantum_number,
+                          double magnetic_field,
+                          double charge,
+                          double mass,
+                          double *out);
+
+Bool quantum_einstein_a_coefficient(double transition_frequency, double dipole_moment, double *out);
+
+Bool quantum_clebsch_gordan_allowed(double j1,
+                                    double j2,
+                                    double j3,
+                                    double m1,
+                                    double m2,
+                                    double m3,
+                                    double *out);
+
 /**
  * Degenerate 2×2 perturbation eigenvalues. Writes (λ₁, λ₂) into `out_e1` /
  * `out_e2`. Returns `Bool::FALSE` on invalid input or a null output.
@@ -5433,6 +5462,26 @@ Bool relativity_gw_inspiral_snr(double strain_rss,
                                 double *out);
 
 Bool relativity_gw_inspiral_time_to_coalescence(double chirp_mass_kg, double f_gw_hz, double *out);
+
+Bool relativity_relativistic_total_energy(double rest_mass, double lorentz_factor, double *out);
+
+Bool relativity_relativistic_momentum(double rest_mass, double speed, double *out);
+
+Bool relativity_relativistic_energy_from_momentum(double rest_mass, double momentum, double *out);
+
+Bool relativity_relativistic_aberration(double cos_theta, double beta, double *out);
+
+Bool relativity_relativistic_doppler_beaming_factor(double beta, double cos_theta, double *out);
+
+Bool relativity_photon_sphere_radius(double mass, double g, double *out);
+
+Bool relativity_hawking_temperature(double mass, double g, double *out);
+
+Bool relativity_hubble_recession_velocity(double distance, double hubble_constant, double *out);
+
+Bool relativity_hubble_distance(double redshift, double hubble_constant, double *out);
+
+Bool relativity_flat_universe_lookback_time(double redshift, double hubble_time, double *out);
 
 Bool thermodynamics_ideal_gas_pressure(double volume,
                                        double moles,

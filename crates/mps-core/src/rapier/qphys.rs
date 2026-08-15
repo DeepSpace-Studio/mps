@@ -143,6 +143,85 @@ pub extern "C" fn quantum_angular_momentum_squared(j: f64, out: *mut f64) -> Boo
     ffi_scalar(out, || angular_momentum_squared(j))
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn quantum_photoelectric_threshold(work_function: f64, out: *mut f64) -> Bool {
+    ffi_scalar(out, || photoelectric_threshold(work_function))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn quantum_photoelectric_max_kinetic(
+    frequency: f64,
+    work_function: f64,
+    out: *mut f64,
+) -> Bool {
+    ffi_scalar(out, || photoelectric_max_kinetic(frequency, work_function))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn quantum_compton_wavelength_shift(scattering_angle: f64, out: *mut f64) -> Bool {
+    ffi_scalar(out, || compton_wavelength_shift(scattering_angle))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn quantum_compton_scattered_wavelength(
+    lambda: f64,
+    scattering_angle: f64,
+    out: *mut f64,
+) -> Bool {
+    ffi_scalar(out, || {
+        compton_scattered_wavelength(lambda, scattering_angle)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn quantum_rabi_oscillation_probability(
+    rabi_frequency: f64,
+    detuning: f64,
+    time: f64,
+    out: *mut f64,
+) -> Bool {
+    ffi_scalar(out, || {
+        rabi_oscillation_probability(rabi_frequency, detuning, time)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn quantum_landau_level(
+    quantum_number: i32,
+    magnetic_field: f64,
+    charge: f64,
+    mass: f64,
+    out: *mut f64,
+) -> Bool {
+    ffi_scalar(out, || {
+        landau_level(quantum_number, magnetic_field, charge, mass)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn quantum_einstein_a_coefficient(
+    transition_frequency: f64,
+    dipole_moment: f64,
+    out: *mut f64,
+) -> Bool {
+    ffi_scalar(out, || {
+        einstein_a_coefficient(transition_frequency, dipole_moment)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn quantum_clebsch_gordan_allowed(
+    j1: f64,
+    j2: f64,
+    j3: f64,
+    m1: f64,
+    m2: f64,
+    m3: f64,
+    out: *mut f64,
+) -> Bool {
+    ffi_scalar(out, || clebsch_gordan_allowed(j1, j2, j3, m1, m2, m3))
+}
+
 /// Degenerate 2×2 perturbation eigenvalues. Writes (λ₁, λ₂) into `out_e1` /
 /// `out_e2`. Returns `Bool::FALSE` on invalid input or a null output.
 #[unsafe(no_mangle)]

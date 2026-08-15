@@ -369,4 +369,74 @@ mod tests {
         assert!(gw_inspiral_time_to_coalescence(0.0, 100.0).is_none());
         assert!(gw_inspiral_time_to_coalescence(chirp_mass, 0.0).is_none());
     }
+
+    #[test]
+    fn relativistic_kinematics_relations() {
+        // E = γmc² for a proton at v=0.8c.
+        let m = 1.672_621_923_69e-27;
+        let v = 0.8 * C;
+        let gamma = 1.0 / (1.0_f64 - 0.64).sqrt();
+        let e = relativistic_total_energy(m, gamma).unwrap();
+        assert!((e - gamma * m * C * C).abs() / e < 1.0e-12, "e={e}");
+        // p = γmv.
+        let p = relativistic_momentum(m, v).unwrap();
+        assert!((p - gamma * m * v).abs() / p < 1.0e-12, "p={p}");
+        // E = √(m²c⁴ + p²c²) must recover the same E.
+        let e2 = relativistic_energy_from_momentum(m, p).unwrap();
+        assert!((e2 - e).abs() / e < 1.0e-12, "e2={e2}");
+        assert!(relativistic_total_energy(m, 0.5).is_none()); // γ<1 invalid
+        assert!(relativistic_momentum(m, 1.5 * C).is_none()); // v≥c invalid
+    }
+
+    #[test]
+    fn relativistic_aberration_and_beaming() {
+        // At rest (β=0): aberration is identity, beaming factor = 1.
+        assert!((relativistic_aberration(0.5, 0.0).unwrap() - 0.5).abs() < 1.0e-15);
+        assert!((relativistic_doppler_beaming_factor(0.0, 0.5).unwrap() - 1.0).abs() < 1.0e-15);
+        // Head-on (θ=0, cosθ=1) moving toward source (β=0.5): δ = 1/(γ·0.5) > 1.
+        let beta = 0.5;
+        let gamma = 1.0 / (1.0_f64 - beta * beta).sqrt();
+        let d = relativistic_doppler_beaming_factor(beta, 1.0).unwrap();
+        assert!((d - 1.0 / (gamma * (1.0 - beta))).abs() < 1.0e-15, "d={d}");
+        assert!(d > 1.0);
+        assert!(relativistic_aberration(0.5, 1.0).is_none()); // β=1 invalid
+    }
+
+    #[test]
+    fn photon_sphere_and_hawking_temperature() {
+        // r_ph = 3GM/c². For the Sun (1.989e30 kg) ≈ 4.43 km.
+        let rs = rel_schwarzschild_radius(SOLAR_MASS, G);
+        let rph = photon_sphere_radius(SOLAR_MASS, G).unwrap();
+        assert!((rph - 1.5 * rs).abs() < 1.0e-6, "rph={rph}");
+        // Hawking: T = ħc³/(8πGMk_B). For a 10 M_sun BH ≈ 6.1e-9 K.
+        let t = hawking_temperature(10.0 * SOLAR_MASS, G).unwrap();
+        assert!(t > 0.0 && t < 1.0e-8, "t={t}");
+        // Smaller mass → hotter (inverse).
+        let t_small = hawking_temperature(SOLAR_MASS, G).unwrap();
+        assert!(t_small > t, "smaller mass must be hotter");
+        assert!(photon_sphere_radius(0.0, G).is_none());
+        assert!(hawking_temperature(0.0, G).is_none());
+    }
+
+    #[test]
+    fn hubble_law_and_lookback() {
+        // H0 = 70 km/s/Mpc = 70e3 / 3.086e22 = 2.268e-18 s^-1.
+        let h0 = 70e3 / 3.085_677_581e22;
+        // v = H0·d at d=1 Mpc = 3.086e22 m → v = 70 km/s.
+        let v = hubble_recession_velocity(3.085_677_581e22, h0).unwrap();
+        assert!((v - 70e3).abs() / 70e3 < 1.0e-3, "v={v}");
+        // z=0.1 → d ≈ c·z/H0.
+        let d = hubble_distance(0.1, h0).unwrap();
+        assert!((d - C * 0.1 / h0).abs() / d < 1.0e-9, "d={d}");
+        // Lookback at z=0.1 with Hubble time t_H = 1/H0 ≈ 13.97 Gyr.
+        let t_h = 1.0 / h0;
+        let t_look = flat_universe_lookback_time(0.1, t_h).unwrap();
+        let expected = (2.0 / 3.0) * t_h * (1.0 - 1.0 / 1.1_f64.sqrt());
+        assert!(
+            (t_look - expected).abs() / expected < 1.0e-12,
+            "t_look={t_look}"
+        );
+        assert!(hubble_recession_velocity(-1.0, h0).is_none());
+        assert!(flat_universe_lookback_time(-1.0, t_h).is_none());
+    }
 }

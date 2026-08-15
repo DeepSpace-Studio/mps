@@ -1132,3 +1132,133 @@ pub fn gw_inspiral_time_to_coalescence(chirp_mass_kg: f64, f_gw_hz: f64) -> Opti
     let denominator = G.powf(5.0 / 3.0) * core::f64::consts::PI.powf(8.0 / 3.0) * f_pow * m_pow;
     Some(numerator / denominator)
 }
+
+// ---------------------------------------------------------------------------
+// F. Relativistic kinematics relations
+// ---------------------------------------------------------------------------
+
+/// Relativistic total energy: E = γ·m·c².
+pub fn relativistic_total_energy(rest_mass: f64, lorentz_factor: f64) -> Option<f64> {
+    if !rest_mass.is_finite()
+        || rest_mass < 0.0
+        || !lorentz_factor.is_finite()
+        || lorentz_factor < 1.0
+    {
+        return None;
+    }
+    Some(lorentz_factor * rest_mass * SPEED_OF_LIGHT * SPEED_OF_LIGHT)
+}
+
+/// Relativistic momentum magnitude: p = γ·m·v.
+pub fn relativistic_momentum(rest_mass: f64, speed: f64) -> Option<f64> {
+    if !rest_mass.is_finite()
+        || rest_mass < 0.0
+        || !speed.is_finite()
+        || speed < 0.0
+        || speed >= SPEED_OF_LIGHT
+    {
+        return None;
+    }
+    let beta = speed / SPEED_OF_LIGHT;
+    let gamma = 1.0 / (1.0 - beta * beta).sqrt();
+    Some(gamma * rest_mass * speed)
+}
+
+/// Energy–momentum relation (inverse of invariant mass): E = √(m²c⁴ + p²c²).
+pub fn relativistic_energy_from_momentum(rest_mass: f64, momentum: f64) -> Option<f64> {
+    if !rest_mass.is_finite() || rest_mass < 0.0 || !momentum.is_finite() || momentum < 0.0 {
+        return None;
+    }
+    let c2 = SPEED_OF_LIGHT * SPEED_OF_LIGHT;
+    Some((rest_mass * rest_mass * c2 * c2 + momentum * momentum * c2).sqrt())
+}
+
+/// Relativistic aberration of light: cos θ' = (cos θ − β) / (1 − β·cos θ).
+pub fn relativistic_aberration(cos_theta: f64, beta: f64) -> Option<f64> {
+    if !cos_theta.is_finite() || !beta.is_finite() || beta.abs() >= 1.0 {
+        return None;
+    }
+    let denom = 1.0 - beta * cos_theta;
+    if denom.abs() < 1.0e-12 {
+        return None;
+    }
+    Some(((cos_theta - beta) / denom).clamp(-1.0, 1.0))
+}
+
+/// Relativistic Doppler beaming (boost) factor: δ = 1 / [γ·(1 − β·cos θ)].
+pub fn relativistic_doppler_beaming_factor(beta: f64, cos_theta: f64) -> Option<f64> {
+    if !beta.is_finite() || beta < 0.0 || beta >= 1.0 || !cos_theta.is_finite() {
+        return None;
+    }
+    let gamma = 1.0 / (1.0 - beta * beta).sqrt();
+    let denom = gamma * (1.0 - beta * cos_theta);
+    if denom.abs() < 1.0e-12 {
+        return None;
+    }
+    Some(1.0 / denom)
+}
+
+// ---------------------------------------------------------------------------
+// G. Black-hole geometry & thermodynamics
+// ---------------------------------------------------------------------------
+
+/// Photon-sphere radius (Schwarzschild): r_ph = 1.5·r_s = 3·G·M/c².
+pub fn photon_sphere_radius(mass: f64, g: f64) -> Option<f64> {
+    if !mass.is_finite() || mass <= 0.0 || !g.is_finite() || g <= 0.0 {
+        return None;
+    }
+    Some(3.0 * g * mass / (SPEED_OF_LIGHT * SPEED_OF_LIGHT))
+}
+
+const HAWKING_HBAR: f64 = 1.054_571_817e-34;
+const HAWKING_KB: f64 = 1.380_649e-23;
+
+/// Hawking temperature of a Schwarzschild black hole:
+/// T = ħ·c³ / (8·π·G·M·k_B).
+pub fn hawking_temperature(mass: f64, g: f64) -> Option<f64> {
+    if !mass.is_finite() || mass <= 0.0 || !g.is_finite() || g <= 0.0 {
+        return None;
+    }
+    Some(
+        HAWKING_HBAR * SPEED_OF_LIGHT.powi(3)
+            / (8.0 * std::f64::consts::PI * g * mass * HAWKING_KB),
+    )
+}
+
+// ---------------------------------------------------------------------------
+// H. Cosmological kinematics
+// ---------------------------------------------------------------------------
+
+/// Hubble-law recession velocity: v = H₀·d.
+pub fn hubble_recession_velocity(distance: f64, hubble_constant: f64) -> Option<f64> {
+    if !distance.is_finite()
+        || distance < 0.0
+        || !hubble_constant.is_finite()
+        || hubble_constant <= 0.0
+    {
+        return None;
+    }
+    Some(hubble_constant * distance)
+}
+
+/// Hubble-law luminosity distance from redshift (low-z): d = c·z / H₀.
+pub fn hubble_distance(redshift: f64, hubble_constant: f64) -> Option<f64> {
+    if !redshift.is_finite()
+        || redshift < 0.0
+        || !hubble_constant.is_finite()
+        || hubble_constant <= 0.0
+    {
+        return None;
+    }
+    Some(SPEED_OF_LIGHT * redshift / hubble_constant)
+}
+
+/// Flat matter-dominated universe lookback time:
+/// t_L = (2/3)·t_H·(1 − 1/√(1+z)), where t_H = 1/H₀ is the Hubble time.
+pub fn flat_universe_lookback_time(redshift: f64, hubble_time: f64) -> Option<f64> {
+    if !redshift.is_finite() || redshift < 0.0 || !hubble_time.is_finite() || hubble_time <= 0.0 {
+        return None;
+    }
+    let factor = 1.0 + redshift;
+    Some((2.0 / 3.0) * hubble_time * (1.0 - 1.0 / factor.sqrt()))
+}

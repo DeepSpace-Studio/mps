@@ -263,3 +263,105 @@ pub extern "C" fn relativity_gw_inspiral_time_to_coalescence(
         mps_formula::relativity::gw_inspiral_time_to_coalescence(chirp_mass_kg, f_gw_hz)
     })
 }
+
+#[unsafe(no_mangle)]
+pub extern "C" fn relativity_relativistic_total_energy(
+    rest_mass: f64,
+    lorentz_factor: f64,
+    out: *mut f64,
+) -> Bool {
+    ffi_scalar(out, || {
+        mps_formula::relativity::relativistic_total_energy(rest_mass, lorentz_factor)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn relativity_relativistic_momentum(
+    rest_mass: f64,
+    speed: f64,
+    out: *mut f64,
+) -> Bool {
+    ffi_scalar(out, || {
+        mps_formula::relativity::relativistic_momentum(rest_mass, speed)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn relativity_relativistic_energy_from_momentum(
+    rest_mass: f64,
+    momentum: f64,
+    out: *mut f64,
+) -> Bool {
+    ffi_scalar(out, || {
+        mps_formula::relativity::relativistic_energy_from_momentum(rest_mass, momentum)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn relativity_relativistic_aberration(
+    cos_theta: f64,
+    beta: f64,
+    out: *mut f64,
+) -> Bool {
+    ffi_scalar(out, || {
+        mps_formula::relativity::relativistic_aberration(cos_theta, beta)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn relativity_relativistic_doppler_beaming_factor(
+    beta: f64,
+    cos_theta: f64,
+    out: *mut f64,
+) -> Bool {
+    ffi_scalar(out, || {
+        mps_formula::relativity::relativistic_doppler_beaming_factor(beta, cos_theta)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn relativity_photon_sphere_radius(mass: f64, g: f64, out: *mut f64) -> Bool {
+    ffi_scalar(out, || {
+        mps_formula::relativity::photon_sphere_radius(mass, g)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn relativity_hawking_temperature(mass: f64, g: f64, out: *mut f64) -> Bool {
+    ffi_scalar(out, || {
+        mps_formula::relativity::hawking_temperature(mass, g)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn relativity_hubble_recession_velocity(
+    distance: f64,
+    hubble_constant: f64,
+    out: *mut f64,
+) -> Bool {
+    ffi_scalar(out, || {
+        mps_formula::relativity::hubble_recession_velocity(distance, hubble_constant)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn relativity_hubble_distance(
+    redshift: f64,
+    hubble_constant: f64,
+    out: *mut f64,
+) -> Bool {
+    ffi_scalar(out, || {
+        mps_formula::relativity::hubble_distance(redshift, hubble_constant)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn relativity_flat_universe_lookback_time(
+    redshift: f64,
+    hubble_time: f64,
+    out: *mut f64,
+) -> Bool {
+    ffi_scalar(out, || {
+        mps_formula::relativity::flat_universe_lookback_time(redshift, hubble_time)
+    })
+}
