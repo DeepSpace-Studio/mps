@@ -5357,6 +5357,83 @@ Bool quantum_degenerate_perturbation_2x2(double h11,
  */
 Bool quantum_time_evolution_phase(double energy, double time, double *out_real, double *out_imag);
 
+Bool relativity_kerr_horizon_radii(double mass,
+                                   double spin_parameter,
+                                   double g,
+                                   double *out_event,
+                                   double *out_cauchy);
+
+Bool relativity_kerr_ergosphere_radius(double mass,
+                                       double spin_parameter,
+                                       double polar_angle,
+                                       double g,
+                                       double *out);
+
+Bool relativity_kerr_frame_dragging_frequency(double mass,
+                                              double spin_parameter,
+                                              double r,
+                                              double theta,
+                                              double g,
+                                              double *out);
+
+Bool relativity_schwarzschild_isco(double mass, double g, double *out);
+
+Bool relativity_kerr_isco(double mass, double spin_parameter, double g, Bool prograde, double *out);
+
+Bool relativity_gravitational_redshift(double mass, double radius, double g, double *out);
+
+Bool relativity_reissner_nordstrom_horizons(double mass,
+                                            double charge,
+                                            double g,
+                                            double *out_outer,
+                                            double *out_inner);
+
+Bool relativity_gw_strain_amplitude(double distance,
+                                    double chirp_mass_kg,
+                                    double orbital_frequency,
+                                    double *out);
+
+Bool relativity_chirp_mass(double mass1, double mass2, double *out);
+
+Bool relativity_gw_frequency_derivative(double frequency, double chirp_mass_kg, double *out);
+
+Bool relativity_relativistic_doppler_longitudinal(double source_frequency,
+                                                  double relative_velocity,
+                                                  Bool approaching,
+                                                  double *out);
+
+Bool relativity_relativistic_doppler_transverse(double source_frequency,
+                                                double relative_velocity,
+                                                double *out);
+
+Bool relativity_einstein_radius(double mass_kg,
+                                double dist_lens,
+                                double dist_source,
+                                double dist_ls,
+                                double *out);
+
+Bool relativity_cosmological_redshift(double scale_factor, double *out);
+
+Bool relativity_redshift_from_wavelengths(double observed, double emitted, double *out);
+
+Bool relativity_lense_thirring_angular_frequency(double mass_kg,
+                                                 double spin_parameter,
+                                                 double orbital_radius,
+                                                 double *out);
+
+Bool relativity_schwarzschild_effective_potential(double r,
+                                                  double rs,
+                                                  double angular_momentum,
+                                                  double *out);
+
+Bool relativity_gw_inspiral_snr(double strain_rss,
+                                double f_min,
+                                double f_max,
+                                double noise_psd,
+                                double *out);
+
+Bool relativity_gw_inspiral_time_to_coalescence(double chirp_mass_kg, double f_gw_hz, double *out);
+
 Bool thermodynamics_ideal_gas_pressure(double volume,
                                        double moles,
                                        double temperature,

@@ -60,6 +60,7 @@ pub mod rapier {
     pub mod qphys;
     pub mod quantum;
     pub mod query;
+    pub mod rel;
     pub mod relativity;
     pub mod rigid_body;
     pub mod rtree;

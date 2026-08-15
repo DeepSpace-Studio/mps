@@ -57,6 +57,7 @@ pub mod matmech;
 pub mod nucphys;
 pub mod plasma_ffi;
 pub mod qphys;
+pub mod rel;
 pub mod thermo;
 pub mod trajectory;
 pub use mps_formula::transmission;
