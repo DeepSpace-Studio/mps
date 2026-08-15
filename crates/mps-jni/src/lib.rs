@@ -492,6 +492,25 @@ jni!(boolean colliderVoxelRayPick(long world, long collider, double ox, double o
         out_block as *mut vx::VoxelCoord,
     ).0 as jbyte
 });
+jni!(boolean colliderVoxelCellAtPoint(long world, long collider, double px, double py, double pz, long out_block) {
+    vx::collider_voxel_cell_at_point(
+        m::<WH>(world),
+        collider as CRaw,
+        v3(px, py, pz),
+        out_block as *mut vx::VoxelCoord,
+    ).0 as jbyte
+});
+
+// 读取单个体素格子是否实心（collider_voxel_edit 的读对偶）。
+// out_solid 是调用方分配、能被 Java `boolean` 写入的 1 字节地址。
+jni!(boolean colliderVoxelGet(long world, long collider, int x, int y, int z, long out_solid) {
+    vx::collider_voxel_read_cell(
+        m::<WH>(world),
+        collider as CRaw,
+        x as i64, y as i64, z as i64,
+        out_solid as *mut u8,
+    ).0 as jbyte
+});
 
 jni!(void colliderBuilderDestroy(long builder) { col::collider_builder_destroy(m::<CBH>(builder)); });
 

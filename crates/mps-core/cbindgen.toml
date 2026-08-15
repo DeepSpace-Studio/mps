@@ -147,5 +147,10 @@ include = [
   "Vec3",
   "VoxelColliderMode",
   "VoxelColliderOptions",
+  "VoxelCoord",
+  "VoxelGrid",
+  "VoxelBuildStats",
   "WorldHandle",
+  "collider_voxel_cell_at_point",
+  "collider_voxel_read_cell",
 ]

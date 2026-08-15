@@ -108,6 +108,8 @@ typedef struct RTreeHandle RTreeHandle;
 
 typedef struct RigidBodyBuilderHandle RigidBodyBuilderHandle;
 
+typedef struct VoxelGrid VoxelGrid;
+
 typedef struct WorldHandle WorldHandle;
 
 /**
@@ -5264,6 +5266,40 @@ RigidBodyHandleRaw world_insert_dynamic_voxel_obb(struct WorldHandle *world,
  * # Safety
  * `world` must be a valid pointer returned by `world_create`.
  */
+Bool collider_voxel_cell_at_point(const struct WorldHandle *world,
+                                  ColliderHandleRaw collider,
+                                  Vec3 point,
+                                  struct VoxelCoord *out_block);
+
+/**
+ * Read whether a single voxel cell of a voxel collider is solid (non-zero)
+ * or empty (zero) without modifying the grid.
+ *
+ * The read counterpart of `collider_voxel_edit`: `edit` writes a cell, this
+ * one reads it back. It completes the in-place voxel editing toolkit so the
+ * mod no longer has to keep its own mirror copy of the grid just to answer
+ * "is this block solid?" — needed for block-break drops / place checks /
+ * standing-on-block queries (pair it with `collider_voxel_cell_at_point` to
+ * turn a world point into a (ix,iy,iz) and then ask this fn for its state).
+ *
+ * # Output
+ * On success `out_solid` is written with the cell's solidity (non-zero if the
+ * byte at `(x,y,z)` is non-zero) and the function returns `TRUE`. On a null
+ * `world`, a non-voxel collider, or out-of-range coordinates it returns
+ * `FALSE` and writes `0` to `out_solid`.
+ *
+ * # Errors
+ * Returns `Bool::FALSE` and sets an error code for a null `world`, or a
+ * `collider` that is not backed by a voxel grid (out-of-range coordinates use
+ * `ERR_INVALID_ARGUMENT`).
+ */
+Bool collider_voxel_read_cell(const struct WorldHandle *world,
+                              ColliderHandleRaw collider,
+                              int64_t x,
+                              int64_t y,
+                              int64_t z,
+                              uint8_t *out_solid);
+
 Bool collider_voxel_edit(struct WorldHandle *world,
                          ColliderHandleRaw handle,
                          int64_t x,

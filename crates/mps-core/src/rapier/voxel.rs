@@ -1440,6 +1440,135 @@ pub extern "C" fn world_insert_dynamic_voxel_obb(
 /// # Safety
 /// `world` must be a valid pointer returned by `world_create`.
 #[unsafe(no_mangle)]
+pub extern "C" fn collider_voxel_cell_at_point(
+    world: *const WorldHandle,
+    collider: ColliderHandleRaw,
+    point: Vec3,
+    out_block: *mut VoxelCoord,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !vec3_finite(point) {
+            set_error(ERR_INVALID_ARGUMENT, "invalid point");
+            return Bool::FALSE;
+        }
+
+        let Some(cache) = world.inner.voxel_grids.get(&collider) else {
+            set_error(ERR_UNSUPPORTED, "collider is not a voxel collider");
+            if let Some(out) = unsafe { out_block.as_mut() } {
+                *out = VoxelCoord::default();
+            }
+            return Bool::FALSE;
+        };
+
+        let g = &cache.grid;
+        let ix = ((point.x - g.origin.x) / g.voxel_size_x).floor() as i64;
+        let iy = ((point.y - g.origin.y) / g.voxel_size_y).floor() as i64;
+        let iz = ((point.z - g.origin.z) / g.voxel_size_z).floor() as i64;
+        if ix < 0
+            || iy < 0
+            || iz < 0
+            || ix as usize >= g.size_x
+            || iy as usize >= g.size_y
+            || iz as usize >= g.size_z
+        {
+            if let Some(out) = unsafe { out_block.as_mut() } {
+                *out = VoxelCoord::default();
+            }
+            return Bool::FALSE;
+        }
+
+        if let Some(out) = unsafe { out_block.as_mut() } {
+            *out = VoxelCoord {
+                found: Bool::TRUE,
+                ix,
+                iy,
+                iz,
+                nx: 0.0,
+                ny: 0.0,
+                nz: 0.0,
+            };
+        }
+        Bool::TRUE
+    })
+}
+
+/// Read whether a single voxel cell of a voxel collider is solid (non-zero)
+/// or empty (zero) without modifying the grid.
+///
+/// The read counterpart of `collider_voxel_edit`: `edit` writes a cell, this
+/// one reads it back. It completes the in-place voxel editing toolkit so the
+/// mod no longer has to keep its own mirror copy of the grid just to answer
+/// "is this block solid?" — needed for block-break drops / place checks /
+/// standing-on-block queries (pair it with `collider_voxel_cell_at_point` to
+/// turn a world point into a (ix,iy,iz) and then ask this fn for its state).
+///
+/// # Output
+/// On success `out_solid` is written with the cell's solidity (non-zero if the
+/// byte at `(x,y,z)` is non-zero) and the function returns `TRUE`. On a null
+/// `world`, a non-voxel collider, or out-of-range coordinates it returns
+/// `FALSE` and writes `0` to `out_solid`.
+///
+/// # Errors
+/// Returns `Bool::FALSE` and sets an error code for a null `world`, or a
+/// `collider` that is not backed by a voxel grid (out-of-range coordinates use
+/// `ERR_INVALID_ARGUMENT`).
+#[unsafe(no_mangle)]
+pub extern "C" fn collider_voxel_read_cell(
+    world: *const WorldHandle,
+    collider: ColliderHandleRaw,
+    x: i64,
+    y: i64,
+    z: i64,
+    out_solid: *mut u8,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            if let Some(out) = unsafe { out_solid.as_mut() } {
+                *out = 0;
+            }
+            return Bool::FALSE;
+        };
+
+        let Some(cache) = world.inner.voxel_grids.get(&collider) else {
+            set_error(ERR_UNSUPPORTED, "collider is not a voxel collider");
+            if let Some(out) = unsafe { out_solid.as_mut() } {
+                *out = 0;
+            }
+            return Bool::FALSE;
+        };
+
+        let g = &cache.grid;
+        if x < 0
+            || y < 0
+            || z < 0
+            || x as usize >= g.size_x
+            || y as usize >= g.size_y
+            || z as usize >= g.size_z
+        {
+            set_error(ERR_INVALID_ARGUMENT, "cell coordinate out of range");
+            if let Some(out) = unsafe { out_solid.as_mut() } {
+                *out = 0;
+            }
+            return Bool::FALSE;
+        }
+
+        let plane = g.size_x * g.size_z;
+        let index = (y as usize) * plane + (z as usize) * g.size_x + (x as usize);
+        let solid = *g.voxels.get(index).unwrap_or(&0) != 0;
+
+        if let Some(out) = unsafe { out_solid.as_mut() } {
+            *out = u8::from(solid);
+        }
+        Bool::TRUE
+    })
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn collider_voxel_edit(
     world: *mut WorldHandle,
     handle: ColliderHandleRaw,
