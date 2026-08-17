@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use mps_formula::nuclear::*;
+    use mps_formula::disciplines::nuclear::*;
     use std::f64::consts::LN_2;
 
     // ---- decay_constant ----

@@ -18,7 +18,11 @@
 //! items are silently omitted from `rigid_body.h`.
 
 use crate::rapier::ffi::{Bool, ffi_scalar};
-use mps_formula::nuclear::*;
+// 公式入口走学科窗口 `mps_formula::disciplines::nuclear`,
+// 不直接 `use mps_formula::nuclear::*` 而绕过学科目录。
+// disciplines::nuclear re-export 包含 enrico_fermi + ernest_rutherford 全部
+// 核物理公式,实现裸函数调用接口形状不变。
+use mps_formula::disciplines::nuclear::*;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn nuclear_decay_constant(half_life: f64, out: *mut f64) -> Bool {

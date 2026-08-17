@@ -32,8 +32,6 @@ pub use self::__formulas_reexports::*;
 /// 私有 re-export 中转模块,承载全部 `pub use crate::scientists::...`。
 /// 公开层只通过上一行的 glob 暴露,以隔离 `#[allow(unused_imports)]` 的范围。
 mod __formulas_reexports {
+    pub use crate::scientists::enrico_fermi::formulas::*;
     pub use crate::scientists::ernest_rutherford::formulas::*;
-    pub use crate::scientists::marie_curie::formulas::gamma_attenuation;
-    pub use crate::scientists::marie_curie::formulas::half_value_layer;
-    pub use crate::scientists::marie_curie::formulas::specific_activity;
 }

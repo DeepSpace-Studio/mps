@@ -108,7 +108,7 @@ pub extern "C" fn aero_apply_surfaces(
         let mut active_surface_count = 0u32;
 
         for surface in surfaces {
-            let Some((force, torque)) = mps_formula::aerodynamics::compute_surface_force(
+            let Some((force, torque)) = mps_formula::disciplines::fluid::compute_surface_force(
                 *surface,
                 body_linvel,
                 body_angvel,
@@ -286,7 +286,7 @@ pub extern "C" fn aero_apply_voxel_grid(
                             lift_coefficient,
                         };
                         let Some((force, torque)) =
-                            mps_formula::aerodynamics::compute_surface_force(
+                            mps_formula::disciplines::fluid::compute_surface_force(
                                 surface,
                                 body_linvel,
                                 body_angvel,
@@ -425,7 +425,7 @@ pub extern "C" fn aero_estimate_surface_force(
             return Bool::FALSE;
         }
 
-        match mps_formula::aerodynamics::estimate_surface_force(
+        match mps_formula::disciplines::fluid::estimate_surface_force(
             body_linvel,
             body_angvel,
             body_center,
