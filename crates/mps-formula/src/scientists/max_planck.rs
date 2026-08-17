@@ -72,4 +72,79 @@ pub mod formulas {
     pub fn fine_structure_constant() -> f64 {
         1.0 / 137.035_999_084
     }
+
+    // ----- Planck's own core contributions (blackbody & natural units) -----
+
+    /// Planck constant h = ħ·2π = 6.62607015e-34 J·s (exact SI definition since 2019).
+    const PLANCK_H: f64 = 6.626_070_15e-34;
+    /// Boltzmann constant k_B = 1.380649e-23 J/K (exact SI).
+    const BOLTZMANN_K: f64 = 1.380_649e-23;
+    /// Newton's gravitational constant G = 6.67430e-11 m³/(kg·s²).
+    const G_NEWTON: f64 = 6.674_30e-11;
+
+    /// Planck–Einstein relation for the energy of a photon (Planck's quantum
+    /// hypothesis, 1900): `E = h · ν`.
+    ///
+    /// `frequency` is the photon frequency in Hz. Returns `None` for
+    /// non-finite or negative `frequency`.
+    pub fn planck_energy(frequency: f64) -> Option<f64> {
+        if !frequency.is_finite() || frequency < 0.0 {
+            return None;
+        }
+        Some(PLANCK_H * frequency)
+    }
+
+    /// Planck mass `m_p = √(ħ·c/G)` ≈ 2.176434e-8 kg, the mass scale at which
+    /// quantum-gravitational effects become order-unity.
+    pub fn planck_mass() -> f64 {
+        (REDUCED_PLANCK * COMPTON_C / G_NEWTON).sqrt()
+    }
+
+    /// Planck length `l_p = √(ħ·G/c³)` ≈ 1.616255e-35 m, the smallest length
+    /// scale where classical general relativity remains self-consistent.
+    pub fn planck_length() -> f64 {
+        (REDUCED_PLANCK * G_NEWTON / COMPTON_C.powi(3)).sqrt()
+    }
+
+    /// Planck time `t_p = √(ħ·G/c⁵)` ≈ 5.391247e-44 s, the earliest time after
+    /// the Big Bang for which the classical Big-Bang model is meaningful.
+    pub fn planck_time() -> f64 {
+        (REDUCED_PLANCK * G_NEWTON / COMPTON_C.powi(5)).sqrt()
+    }
+
+    /// Planck's blackbody spectral radiance density (energy per unit volume per
+    /// unit frequency) at frequency ν and temperature T:
+    /// `u(ν, T) = 8π·h·ν³ / c³ / (exp(h·ν / (k_B·T)) - 1)`.
+    ///
+    /// Both `frequency` and `temperature` must be finite and non-negative.
+    /// Returns `None` for invalid inputs or for the limiting special-case
+    /// `ν = 0` (where the formula is mathematically `0`); for `T = 0` the
+    /// result is `0` (no thermal photons), returned as `Some(0.0)`.
+    pub fn planck_radiation_spectral_density(frequency: f64, temperature: f64) -> Option<f64> {
+        if !frequency.is_finite()
+            || frequency < 0.0
+            || !temperature.is_finite()
+            || temperature < 0.0
+        {
+            return None;
+        }
+        if frequency == 0.0 {
+            return Some(0.0);
+        }
+        if temperature == 0.0 {
+            return Some(0.0);
+        }
+        let x = PLANCK_H * frequency / (BOLTZMANN_K * temperature);
+        // Guard against overflow in exp for very large x (Rayleigh–Jeans tail
+        // vanishes): if x is huge, the exponential dominates and the result is 0.
+        if x > 700.0 {
+            return Some(0.0);
+        }
+        let denom = x.exp() - 1.0;
+        if denom <= 0.0 || !denom.is_finite() {
+            return None;
+        }
+        let prefactor = 8.0 * PI * PLANCK_H * frequency.powi(3) / COMPTON_C.powi(3);
+        Some(prefactor / denom)
+    }
 }

@@ -40,4 +40,28 @@ pub mod formulas {
     pub fn minimum_uncertainty_product() -> f64 {
         REDUCED_PLANCK / 2.0
     }
+
+    // ----- Heisenberg's own additional relations -----
+
+    /// Minimum momentum uncertainty given a position uncertainty Δx, from the
+    /// Heisenberg relation `Δx·Δp ≥ ħ/2`: `Δp_min = ħ / (2·Δx)`.
+    ///
+    /// Returns `None` for non-finite or non-positive `delta_x`.
+    pub fn uncertainty_momentum(delta_x: f64) -> Option<f64> {
+        if !delta_x.is_finite() || delta_x <= 0.0 {
+            return None;
+        }
+        Some(REDUCED_PLANCK / (2.0 * delta_x))
+    }
+
+    /// Minimum energy uncertainty given a time uncertainty Δt, from the
+    /// energy–time uncertainty relation `ΔE·Δt ≥ ħ/2`: `ΔE_min = ħ / (2·Δt)`.
+    ///
+    /// Returns `None` for non-finite or non-positive `delta_t`.
+    pub fn uncertainty_energy_time(delta_t: f64) -> Option<f64> {
+        if !delta_t.is_finite() || delta_t <= 0.0 {
+            return None;
+        }
+        Some(REDUCED_PLANCK / (2.0 * delta_t))
+    }
 }

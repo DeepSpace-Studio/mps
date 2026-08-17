@@ -141,6 +141,8 @@ pub mod michael_faraday;
 pub mod niels_bohr;
 #[path = "osborne_reynolds.rs"]
 pub mod osborne_reynolds;
+#[path = "other.rs"]
+pub mod other;
 #[path = "paul_dirac.rs"]
 pub mod paul_dirac;
 #[path = "pierre_simon_laplace.rs"]

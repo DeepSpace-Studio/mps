@@ -60,14 +60,10 @@ pub mod formulas {
         Some(REDUCED_PLANCK * REDUCED_PLANCK * wave_number * wave_number / (2.0 * mass))
     }
 
-    /// De Broglie wavelength: lambda = h / p = h / (m * v)
-
-    pub fn de_broglie_wavelength(mass: f64, velocity: f64) -> Option<f64> {
-        if !mass.is_finite() || mass <= 0.0 || !velocity.is_finite() || velocity <= 0.0 {
-            return None;
-        }
-        Some(PLANCK / (mass * velocity))
-    }
+    /// De Broglie wavelength: λ = h / p = h / (m·v).
+    /// Shared with other quantum-mechanics founders; defined once in
+    /// `crate::scientists::other::formulas`.
+    pub use crate::scientists::other::formulas::de_broglie_wavelength;
 
     /// Infinite square well energy levels: E_n = n^2 * pi^2 * hbar^2 / (2 * m * L^2)
 
@@ -207,5 +203,42 @@ pub mod formulas {
         }
         let hbar = REDUCED_PLANCK;
         Some(hbar * hbar * j * (j + 1.0))
+    }
+
+    /// Quantum harmonic oscillator energy levels (Schrödinger equation solution):
+    /// `E_n = ħ·ω·(n + ½)`.
+    ///
+    /// `quantum_number` is a non-negative integer; `angular_frequency` is ω.
+    /// Returns `None` for non-finite or non-positive `angular_frequency`.
+    pub fn harmonic_oscillator_energy(quantum_number: u32, angular_frequency: f64) -> Option<f64> {
+        if !angular_frequency.is_finite() || angular_frequency <= 0.0 {
+            return None;
+        }
+        let n = quantum_number as f64;
+        Some(REDUCED_PLANCK * angular_frequency * (n + 0.5))
+    }
+
+    /// Probability current density for a 1-D wavefunction ψ = ψ_R + i·ψ_I:
+    /// `j = (ħ / m) · (ψ_R · ∂ψ_I/∂x − ψ_I · ∂ψ_R/∂x)`.
+    ///
+    /// `grad_psi_real`/`grad_psi_imag` are the spatial derivatives of the real
+    /// and imaginary parts. Returns `None` for non-finite or non-positive `mass`.
+    pub fn probability_current(
+        psi_real: f64,
+        psi_imag: f64,
+        grad_psi_real: f64,
+        grad_psi_imag: f64,
+        mass: f64,
+    ) -> Option<f64> {
+        if !psi_real.is_finite()
+            || !psi_imag.is_finite()
+            || !grad_psi_real.is_finite()
+            || !grad_psi_imag.is_finite()
+            || !mass.is_finite()
+            || mass <= 0.0
+        {
+            return None;
+        }
+        Some((REDUCED_PLANCK / mass) * (psi_real * grad_psi_imag - psi_imag * grad_psi_real))
     }
 }

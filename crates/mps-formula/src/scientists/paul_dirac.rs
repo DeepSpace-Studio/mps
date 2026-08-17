@@ -37,14 +37,10 @@ pub mod formulas {
         }
     }
 
-    /// De Broglie wavelength: lambda = h / p = h / (m * v)
-
-    pub fn de_broglie_wavelength(mass: f64, velocity: f64) -> Option<f64> {
-        if !mass.is_finite() || mass <= 0.0 || !velocity.is_finite() || velocity <= 0.0 {
-            return None;
-        }
-        Some(PLANCK / (mass * velocity))
-    }
+    /// De Broglie wavelength: λ = h / p = h / (m·v).
+    /// Shared with other quantum-mechanics founders; defined once in
+    /// `crate::scientists::other::formulas`.
+    pub use crate::scientists::other::formulas::de_broglie_wavelength;
 
     /// Compton wavelength shift: Δλ = (h / m_e c)·(1 − cos θ).
 
@@ -117,5 +113,23 @@ pub mod formulas {
         let triangle = (j1 - j2).abs() <= j3 + 1.0e-9 && j3 <= j1 + j2 + 1.0e-9;
         let msum = (m1 + m2 - m3).abs() < 1.0e-9;
         Some(if triangle && msum { 1.0 } else { 0.0 })
+    }
+
+    /// Relativistic energy–momentum relation from the Dirac equation:
+    /// `E = ±√(p²·c² + m²·c⁴)`.
+    ///
+    /// Returns the positive-energy (particle) root `√(p²c² + m²c⁴)`.
+    /// `momentum` and `rest_mass` must be finite and non-negative.
+    pub fn dirac_equation_energy(momentum: f64, rest_mass: f64) -> Option<f64> {
+        if !momentum.is_finite()
+            || momentum < 0.0
+            || !rest_mass.is_finite()
+            || rest_mass < 0.0
+        {
+            return None;
+        }
+        let mc2 = rest_mass * COMPTON_C * COMPTON_C;
+        let pc = momentum * COMPTON_C;
+        Some((pc * pc + mc2 * mc2).sqrt())
     }
 }

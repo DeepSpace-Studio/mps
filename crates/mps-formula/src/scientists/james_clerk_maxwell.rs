@@ -423,4 +423,65 @@ pub mod formulas {
         }
         Some(verdet_constant * magnetic_field * path_length)
     }
+
+    // ----- Maxwell's own core contributions to electromagnetism -----
+
+    /// Vacuum permeability and permittivity (SI): μ0 = 4π·10⁻⁷ H/m, ε0 = 1/(μ0·c²).
+    const MU0: f64 = 1.256_637_061_4e-6;
+    const EPSILON0: f64 = 1.0 / (MU0 * SPEED_OF_LIGHT * SPEED_OF_LIGHT);
+    const SPEED_OF_LIGHT: f64 = 299_792_458.0;
+
+    /// Maxwell's derivation of the vacuum speed of light from μ0 and ε0:
+    /// `c = 1 / √(μ0·ε0)`.
+    ///
+    /// This is the result that revealed light to be an electromagnetic wave.
+    #[allow(dead_code)]
+    pub fn maxwell_speed_of_light() -> f64 {
+        (MU0 * EPSILON0).sqrt().recip()
+    }
+
+    /// Displacement current density (Maxwell's key addition to Ampère's law):
+    /// `J_d = ε0 · ∂E/∂t`.
+    ///
+    /// `d_e_dt` is the time derivative of the electric field magnitude.
+    /// Returns `None` for non-finite input.
+    pub fn displacement_current_density(d_e_dt: f64) -> Option<f64> {
+        if !d_e_dt.is_finite() {
+            return None;
+        }
+        Some(EPSILON0 * d_e_dt)
+    }
+
+    /// Gauss's law for electricity (integral form): the electric flux through a
+    /// closed surface equals the enclosed charge divided by ε0, `Φ_E = Q / ε0`.
+    ///
+    /// Returns `None` for non-finite or non-positive `charge`.
+    pub fn gauss_law_electric_flux(charge: f64) -> Option<f64> {
+        if !charge.is_finite() || charge <= 0.0 {
+            return None;
+        }
+        Some(charge / EPSILON0)
+    }
+
+    /// Ampère–Maxwell law (corrected form): the circulation of `B` around a loop
+    /// equals `μ0·(I_enclosed + ε0·dΦE/dt)`. This function returns the
+    /// displacement-current term `μ0·ε0·d_phi_e_dt` for a given electric-flux
+    /// rate of change.
+    pub fn ampere_maxwell_displacement_term(d_phi_e_dt: f64) -> Option<f64> {
+        if !d_phi_e_dt.is_finite() {
+            return None;
+        }
+        Some(MU0 * EPSILON0 * d_phi_e_dt)
+    }
+
+    /// Energy density of an electromagnetic wave: `u = ½·(ε0·E² + B²/μ0)`.
+    ///
+    /// `e_field` and `b_field` are the magnitudes of the electric and magnetic
+    /// field. Returns `None` for non-finite input.
+    pub fn em_wave_energy_density(e_field: f64, b_field: f64) -> Option<f64> {
+        if !e_field.is_finite() || !b_field.is_finite() {
+            return None;
+        }
+        Some(0.5 * (EPSILON0 * e_field * e_field + b_field * b_field / MU0))
+    }
 }

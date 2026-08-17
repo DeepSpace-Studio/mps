@@ -64,4 +64,32 @@ pub mod formulas {
         }
         Some(1.0 / inv_lambda)
     }
+
+    // ----- Bohr's own core additional contributions -----
+
+    /// Rydberg energy (Hartree-like): `E_R = 13.6 eV`, the ionization-energy
+    /// magnitude of the hydrogen ground state in the Bohr model.
+    pub fn rydberg_energy() -> f64 {
+        13.605_693_122_994
+    }
+
+    /// Bohr magneton (atomic unit of magnetic moment):
+    /// `μ_B = e·ħ / (2·m_e) = 9.2740100783e-24 J/T`.
+    /// Electron charge e = 1.602176634e-19 C (exact SI), reduced Planck ħ,
+    /// electron rest mass m_e = 9.1093837015e-31 kg.
+    pub fn bohr_magneton() -> f64 {
+        const E_CHARGE: f64 = 1.602_176_634e-19;
+        const E_MASS: f64 = 9.109_383_701_5e-31;
+        const HBAR: f64 = 1.054_571_817e-34;
+        E_CHARGE * HBAR / (2.0 * E_MASS)
+    }
+
+    /// Bohr's quantization of angular momentum for stationary orbits:
+    /// `L_n = n·ħ` (n = 1, 2, 3, …).
+    pub fn angular_momentum_quantum(quantum_number: u32) -> Option<f64> {
+        if quantum_number == 0 {
+            return None;
+        }
+        Some(1.054_571_817e-34 * quantum_number as f64)
+    }
 }
