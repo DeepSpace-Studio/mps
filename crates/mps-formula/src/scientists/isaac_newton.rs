@@ -723,4 +723,74 @@ pub mod formulas {
             z: pm * r.z + az,
         }
     }
+
+    /// Newton's second law: force from mass and acceleration, `F = m·a`.
+    ///
+    /// Both `mass` and `acceleration` must be finite and strictly positive
+    /// (zero mass is not physical for a rigid body). Returns `None` for
+    /// non-finite or non-positive input.
+    pub fn newton_second_law(mass: f64, acceleration: f64) -> Option<f64> {
+        if !mass.is_finite() || mass <= 0.0 || !acceleration.is_finite() {
+            return None;
+        }
+        Some(mass * acceleration)
+    }
+
+    /// Newton's law of universal gravitation between two point masses:
+    /// `F = G·m₁·m₂ / r²`.
+    ///
+    /// `r` is the centre-to-centre distance. Returns `None` for non-finite,
+    /// non-positive `mass1`/`mass2` or for `r ≤ 0` (collapsed distance would
+    /// give a non-finite force). Uses the module `G` constant.
+    pub fn gravitational_force(mass1: f64, mass2: f64, distance: f64) -> Option<f64> {
+        if !mass1.is_finite()
+            || mass1 <= 0.0
+            || !mass2.is_finite()
+            || mass2 <= 0.0
+            || !distance.is_finite()
+            || distance <= 0.0
+        {
+            return None;
+        }
+        Some(G * mass1 * mass2 / (distance * distance))
+    }
+
+    /// Centripetal force required to keep a mass `m` on a circular path of
+    /// radius `r` at speed `v`: `F = m·v² / r`.
+    ///
+    /// Returns `None` for non-finite or non-positive `mass`/`radius` and
+    /// non-finite `speed`.
+    pub fn centripetal_force(mass: f64, speed: f64, radius: f64) -> Option<f64> {
+        if !mass.is_finite()
+            || mass <= 0.0
+            || !speed.is_finite()
+            || !radius.is_finite()
+            || radius <= 0.0
+        {
+            return None;
+        }
+        Some(mass * speed * speed / radius)
+    }
+
+    /// Impulse delivered by a force changing momentum: `J = m·Δv`.
+    ///
+    /// `delta_v` is the change in speed (signed). Returns `None` for
+    /// non-finite or non-positive `mass` or non-finite `delta_v`.
+    pub fn impulse_momentum(mass: f64, delta_v: f64) -> Option<f64> {
+        if !mass.is_finite() || mass <= 0.0 || !delta_v.is_finite() {
+            return None;
+        }
+        Some(mass * delta_v)
+    }
+
+    /// Free-fall time from rest through distance `height` near a body of
+    /// surface gravity `g`: `t = √(2·h / g)`.
+    ///
+    /// Returns `None` for non-finite or non-positive `height`/`gravity`.
+    pub fn free_fall_time(height: f64, gravity: f64) -> Option<f64> {
+        if !height.is_finite() || height <= 0.0 || !gravity.is_finite() || gravity <= 0.0 {
+            return None;
+        }
+        Some((2.0 * height / gravity).sqrt())
+    }
 }

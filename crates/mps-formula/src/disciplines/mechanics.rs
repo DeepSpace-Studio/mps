@@ -42,8 +42,13 @@ mod __formulas_reexports {
     pub use crate::scientists::galileo_galilei::formulas::projectile_range;
     pub use crate::scientists::isaac_newton::formulas::carlson_rd;
     pub use crate::scientists::isaac_newton::formulas::carlson_rf;
+    pub use crate::scientists::isaac_newton::formulas::centripetal_force;
     pub use crate::scientists::isaac_newton::formulas::ellipsoid_gravity;
+    pub use crate::scientists::isaac_newton::formulas::free_fall_time;
+    pub use crate::scientists::isaac_newton::formulas::gravitational_force;
+    pub use crate::scientists::isaac_newton::formulas::impulse_momentum;
     pub use crate::scientists::isaac_newton::formulas::keplerian_elements;
+    pub use crate::scientists::isaac_newton::formulas::newton_second_law;
     pub use crate::scientists::isaac_newton::formulas::normalized_legendre;
     pub use crate::scientists::isaac_newton::formulas::post_newtonian_1pn;
     pub use crate::scientists::isaac_newton::formulas::post_newtonian_2pn;
