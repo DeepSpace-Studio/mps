@@ -30,6 +30,7 @@ pub mod rapier {
     pub mod controller;
     pub mod cosmology;
     pub mod crbtree;
+    pub mod cross_validate;
     pub mod dop;
     pub mod electromagnetism;
     pub mod emag;

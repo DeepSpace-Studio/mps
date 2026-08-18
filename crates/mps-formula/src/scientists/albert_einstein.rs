@@ -21,25 +21,16 @@ pub const SCIENTIST: ScientistRecord = ScientistRecord {
 
 /// 该科学家名下的公式实现（从各域模块迁移而来）。
 pub mod formulas {
+
     use crate::error::*;
-    use crate::ffi::*;
     use crate::math::*;
+
     pub const G: f64 = 6.67430e-11;
     const HAWKING_HBAR: f64 = 1.054_571_817e-34;
     const HAWKING_KB: f64 = 1.380_649e-23;
     const METRES_PER_MEGAPARSEC: f64 = 1.0e6 * METRES_PER_PARSEC;
     const METRES_PER_PARSEC: f64 = 3.085_677_581_491_367e16;
-    const PI: f64 = std::f64::consts::PI;
     pub const SPEED_OF_LIGHT: f64 = 299_792_458.0;
-    fn clamp(x: f64, lo: f64, hi: f64) -> f64 {
-        if x < lo {
-            lo
-        } else if x > hi {
-            hi
-        } else {
-            x
-        }
-    }
 
     /// Kerr metric horizon radii.
     /// Returns (r_outer, r_inner) where r = GM/c^2 +- sqrt((GM/c^2)^2 - a^2)
@@ -636,5 +627,57 @@ pub mod formulas {
             return None;
         }
         Some(hubble_constant * distance_mpc)
+    }
+
+    fn finite_5(a: f64, b: f64, c: f64, d: f64, e: f64) -> bool {
+        a.is_finite() && b.is_finite() && c.is_finite() && d.is_finite() && e.is_finite()
+    }
+
+    /// Einstein heat capacity: C_V = 3Nk_B (θ_E/T)² e^{θ_E/T} / (e^{θ_E/T} - 1)²
+    pub fn einstein_heat_capacity(
+        temperature: f64,
+        einstein_temperature: f64,
+        n_atoms: f64,
+    ) -> Option<f64> {
+        if !finite_5(temperature, einstein_temperature, n_atoms, 0.0, 0.0)
+            || temperature <= 0.0
+            || einstein_temperature <= 0.0
+            || n_atoms <= 0.0
+        {
+            return None;
+        }
+        let r = 8.314462618;
+        let x = einstein_temperature / temperature;
+        let ex = x.exp();
+        if ex <= 1.0 {
+            return None;
+        }
+        Some(3.0 * n_atoms * r * x * x * ex / (ex - 1.0).powi(2))
+    }
+
+    const ALBERT_PLANCK_H: f64 = 6.62607015e-34;
+
+    /// Photoelectric threshold frequency: f₀ = W / h, where W is the work function.
+    /// Einstein (1905)——对光电效应的解释：光子能量必须超过金属功函数
+    /// 才能打出电子，阈值频率由 W = h·f₀ 决定。
+    pub fn photoelectric_threshold(work_function: f64) -> Option<f64> {
+        if !work_function.is_finite() || work_function <= 0.0 {
+            return None;
+        }
+        Some(work_function / ALBERT_PLANCK_H)
+    }
+
+    /// Photoelectric maximum kinetic energy (Einstein): K_max = h·f − W.
+    /// Returns 0 when the photon energy is below the work function (no emission).
+    pub fn photoelectric_max_kinetic(frequency: f64, work_function: f64) -> Option<f64> {
+        if !frequency.is_finite()
+            || frequency < 0.0
+            || !work_function.is_finite()
+            || work_function < 0.0
+        {
+            return None;
+        }
+        let k = ALBERT_PLANCK_H * frequency - work_function;
+        Some(k.max(0.0))
     }
 }

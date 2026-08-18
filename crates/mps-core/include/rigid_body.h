@@ -94,6 +94,41 @@
  */
 #define FORCE_SUMMARY_SIZE 64
 
+/**
+ * Aggregation policy applied to per-line accelerations after the
+ * cross-consistency check.
+ */
+enum CrossValidateAggregation
+#if defined(__cplusplus) || __STDC_VERSION__ >= 202311L
+  : uint8_t
+#endif // defined(__cplusplus) || __STDC_VERSION__ >= 202311L
+ {
+  /**
+   * Newton-anchored: the Newton line is the reference. Each non-Newton
+   * line contributes its difference from Newton as a *bounded* additive
+   * correction (`a += correction_blend * (a_other − a_newton)`) **only**
+   * if `|a_other − a_newton| / |a_newton| ≤ tolerance` — otherwise the
+   * line is vetoed. This is the user's requested "牛顿力学为主、其他
+   * 公式并行做验证修正、避免偏移太大" mode and is the default.
+   */
+  NewtonAnchored = 0,
+  /**
+   * Arithmetic mean of all surviving lines (vetoes excluded).
+   */
+  Mean = 1,
+  /**
+   * Median of all surviving lines (robust to a single divergent line).
+   */
+  Median = 2,
+};
+#ifndef __cplusplus
+#if __STDC_VERSION__ >= 202311L
+typedef enum CrossValidateAggregation CrossValidateAggregation;
+#else
+typedef uint8_t CrossValidateAggregation;
+#endif // __STDC_VERSION__ >= 202311L
+#endif // __cplusplus
+
 typedef struct AnvilKitAppHandle AnvilKitAppHandle;
 
 typedef struct CRbTreeHandle CRbTreeHandle;
@@ -227,6 +262,101 @@ typedef struct Box3DPreset {
    */
   uint32_t solver_iterations;
 } Box3DPreset;
+
+/**
+ * Primary attractor descriptor used by every non-MOND line.
+ */
+typedef struct CrossValidateAttractor {
+  /**
+   * Gravitational parameter GM (m³/s²).  Must be > 0 for any line except
+   * `MOND` (which is computed off the Newtonian seed).
+   */
+  double gm;
+  /**
+   * Equatorial radius (m), used by the J2/J6 line.
+   */
+  double equatorial_radius;
+  /**
+   * Zonal harmonic coefficients `[J2, J3, J4, J5, J6, ...]`.  May be empty
+   * —— the J2 line will simply skip and report zero divergence contribution.
+   */
+  double jn[6];
+  /**
+   * Rotation rate (rad/s²) used by the centrifugal term folded into the
+   * J2 line; pass 0 for a non-rotating primary.
+   */
+  double rotation_rate;
+} CrossValidateAttractor;
+
+/**
+ * Boolean flag bits selecting which formula lines run this frame.
+ *
+ * Bit `i` set ⇒ line `i` participates.  At least one bit must be set; the
+ * default (`NEWTON | J2 | QUADRUPOLE | MOND | RELATIVISTIC`) exercises all
+ * five lines for maximum cross-validation coverage.
+ */
+typedef struct CrossValidateLineMask {
+  uint64_t bits;
+} CrossValidateLineMask;
+#define CrossValidateLineMask_NEWTON (1 << 0)
+#define CrossValidateLineMask_J2 (1 << 1)
+#define CrossValidateLineMask_QUADRUPOLE (1 << 2)
+#define CrossValidateLineMask_MOND (1 << 3)
+#define CrossValidateLineMask_RELATIVISTIC (1 << 4)
+#define CrossValidateLineMask_DEFAULT ((((CrossValidateLineMask_NEWTON | CrossValidateLineMask_J2) | CrossValidateLineMask_QUADRUPOLE) | CrossValidateLineMask_MOND) | CrossValidateLineMask_RELATIVISTIC)
+
+/**
+ * Configuration for the cross-validation gravity law.
+ *
+ * Set once via the `world_set_cross_validate_gravity` FFI; the law is
+ * registered into `PhysicsWorld::force_registry` and re-applied every frame.
+ */
+typedef struct CrossValidateGravityConfig {
+  /**
+   * Primary attractor GM and figure parameters.
+   */
+  struct CrossValidateAttractor attractor;
+  /**
+   * Bitmask selecting which formula lines run.
+   */
+  struct CrossValidateLineMask mask;
+  /**
+   * Pairwise relative-difference tolerance; lines whose pairwise diff
+   * exceeds this are flagged divergent and clipped.
+   */
+  double tolerance;
+  /**
+   * Newton-anchored correction blend factor in `[0, 1]`.  Only used by
+   * `CrossValidateAggregation::NewtonAnchored`.  The accepted correction
+   * contribution from each non-Newton line is scaled by this factor so the
+   * frame-to-frame drift away from the Newton baseline stays bounded.
+   * `0.0` ⇒ pure Newton (cross-validation only, no applied correction);
+   * `1.0` ⇒ full schemaed correction once a line passes the tolerance
+   * gate.  Default `1.0 / NUM_LINES as f64` ≈ `0.2` keeps the relative
+   * drift per non-Newton line bounded.
+   */
+  double correction_blend;
+  /**
+   * Aggregation policy for the final acceleration vector applied to bodies.
+   */
+  CrossValidateAggregation aggregation;
+  /**
+   * MOND scale `a_0` (m/s²); 1.2e-10 is the canonical Milgrom value.
+   * Only used when the MOND line is enabled.
+   */
+  double mond_a_zero;
+  /**
+   * Schwarzschild radius for the relativistic line (m).  Pass 0 to
+   * auto-derive from `gm` as `rs = 2GM/c²`; ignored when the relativistic
+   * line is disabled.
+   */
+  double schwarzschild_radius_override;
+  /**
+   * Enabled flag.  When `false`, the law reports itself disabled and
+   * `apply()` is a no-op.
+   */
+  bool enabled;
+} CrossValidateGravityConfig;
 
 /**
  * A mass concentration (mascon) on the Moon's surface.
@@ -1780,6 +1910,42 @@ uint32_t crb_tree_query_aabb(const struct CRbTreeHandle *tree,
                              AabbDesc aabb,
                              uint64_t *out_ids,
                              uint32_t capacity);
+
+/**
+ * Set the cross-validation gravity law on the world.  Any previous
+ * cross-validation law (registered under `ForceLawType::NewtonianGravity`)
+ * is removed first (singleton semantics, mirroring
+ * `world_set_newton_gravity_law`).
+ */
+Bool world_set_cross_validate_gravity(struct WorldHandle *world,
+                                      struct CrossValidateGravityConfig config);
+
+/**
+ * `u8`-returning variant for environments that prefer integer returns.
+ */
+uint8_t world_set_cross_validate_gravity_flag(struct WorldHandle *world,
+                                              struct CrossValidateGravityConfig config);
+
+/**
+ * Clear the cross-validation law from the world's registry.
+ */
+void world_clear_cross_validate_gravity(struct WorldHandle *world);
+
+/**
+ * Read the last frame's cross-validation divergence pair count.
+ *
+ * Returns the number of (body, line_a, line_b) triples whose relative
+ * difference exceeded `tolerance` in the most recent `apply()` invocation.
+ * Returns 0 if the law is not registered, no `step` has run, or all
+ * lines were within tolerance.
+ */
+uint64_t world_get_cross_validate_last_divergence(const struct WorldHandle *world);
+
+/**
+ * Configuration: convenience FFI building a default Earth-ish config in one
+ * call so a Java caller does not need to populate every field by hand.
+ */
+struct CrossValidateGravityConfig world_cross_validate_default_config(void);
 
 /**
  * Create a k-DOP collider builder from a point cloud.

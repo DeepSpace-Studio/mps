@@ -21,20 +21,11 @@ pub const SCIENTIST: ScientistRecord = ScientistRecord {
 
 /// 该科学家名下的公式实现（从各域模块迁移而来）。
 pub mod formulas {
-    use crate::error::*;
     use crate::ffi::*;
     use crate::math::*;
     const EPSILON: f64 = 1.0e-12;
     const PI: f64 = std::f64::consts::PI;
-    fn clamp(x: f64, lo: f64, hi: f64) -> f64 {
-        if x < lo {
-            lo
-        } else if x > hi {
-            hi
-        } else {
-            x
-        }
-    }
+
     fn clamp01(value: f64) -> f64 {
         value.clamp(0.0, 1.0)
     }

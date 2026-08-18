@@ -21,20 +21,6 @@ pub const SCIENTIST: ScientistRecord = ScientistRecord {
 
 /// 该科学家名下的公式实现（从各域模块迁移而来）。
 pub mod formulas {
-    use crate::error::*;
-    use crate::ffi::*;
-    use crate::math::*;
-    use std::f64::consts::PI;
-    fn clamp(x: f64, lo: f64, hi: f64) -> f64 {
-        if x < lo {
-            lo
-        } else if x > hi {
-            hi
-        } else {
-            x
-        }
-    }
-
     /// PID step-size controller for adaptive integration.
     ///
     /// Based on the Gustafsson/Söderlind algorithm used in ODE solvers like

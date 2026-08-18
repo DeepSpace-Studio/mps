@@ -22,23 +22,12 @@ pub const SCIENTIST: ScientistRecord = ScientistRecord {
 /// 该科学家名下的公式实现（从各域模块迁移而来）。
 pub mod formulas {
     use crate::celestial_data::CelestialBody;
-    use crate::error::*;
     use crate::ffi::*;
     use crate::math::*;
     pub const C: f64 = 299_792_458.0;
     const C2: f64 = SPEED_OF_LIGHT * SPEED_OF_LIGHT;
     pub const G: f64 = 6.67430e-11;
-    const PI: f64 = std::f64::consts::PI;
     const SPEED_OF_LIGHT: f64 = 299_792_458.0;
-    fn clamp(x: f64, lo: f64, hi: f64) -> f64 {
-        if x < lo {
-            lo
-        } else if x > hi {
-            hi
-        } else {
-            x
-        }
-    }
 
     /// 1PN (first post-Newtonian) correction to Newtonian gravity.
     ///

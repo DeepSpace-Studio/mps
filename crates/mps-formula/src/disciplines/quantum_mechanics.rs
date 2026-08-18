@@ -39,6 +39,10 @@ pub use self::__formulas_reexports::*;
 /// 私有 re-export 中转模块,承载全部 `pub use crate::scientists::...`。
 /// 公开层只通过上一行的 glob 暴露,以隔离 `#[allow(unused_imports)]` 的范围。
 mod __formulas_reexports {
+    pub use crate::scientists::chen_ning_yang::formulas::superconducting_flux_quantum;
+    pub use crate::scientists::chen_ning_yang::formulas::weak_parity_asymmetry;
+    pub use crate::scientists::chen_ning_yang::formulas::yang_baxter_weight;
+    pub use crate::scientists::chen_ning_yang::formulas::yang_mills_coupling;
     pub use crate::scientists::enrico_fermi::formulas::*;
     pub use crate::scientists::erwin_schrodinger::formulas::angular_momentum_squared;
     pub use crate::scientists::erwin_schrodinger::formulas::coherent_state_alpha;

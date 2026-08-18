@@ -21,21 +21,9 @@ pub const SCIENTIST: ScientistRecord = ScientistRecord {
 
 /// 该科学家名下的公式实现（从各域模块迁移而来）。
 pub mod formulas {
-    use crate::error::*;
-    use crate::ffi::*;
-    use crate::math::*;
     const COMPTON_C: f64 = 299_792_458.0;
     const COMPTON_M_E: f64 = 9.109_383_701_5e-31;
     pub const PLANCK: f64 = 6.62607015e-34;
-    fn clamp(x: f64, lo: f64, hi: f64) -> f64 {
-        if x < lo {
-            lo
-        } else if x > hi {
-            hi
-        } else {
-            x
-        }
-    }
 
     /// De Broglie wavelength: λ = h / p = h / (m·v).
     /// Shared with other quantum-mechanics founders; defined once in
@@ -121,11 +109,7 @@ pub mod formulas {
     /// Returns the positive-energy (particle) root `√(p²c² + m²c⁴)`.
     /// `momentum` and `rest_mass` must be finite and non-negative.
     pub fn dirac_equation_energy(momentum: f64, rest_mass: f64) -> Option<f64> {
-        if !momentum.is_finite()
-            || momentum < 0.0
-            || !rest_mass.is_finite()
-            || rest_mass < 0.0
-        {
+        if !momentum.is_finite() || momentum < 0.0 || !rest_mass.is_finite() || rest_mass < 0.0 {
             return None;
         }
         let mc2 = rest_mass * COMPTON_C * COMPTON_C;

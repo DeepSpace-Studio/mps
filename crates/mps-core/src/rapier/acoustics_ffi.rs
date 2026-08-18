@@ -19,7 +19,11 @@
 //! items are silently omitted from `rigid_body.h`.
 
 use crate::rapier::ffi::{Bool, ffi_scalar};
-use mps_formula::acoustics::*;
+use mps_formula::disciplines::electromagnetism::{
+    acoustic_impedance, active_sonar_echo_level, cylindrical_spreading_loss, doppler_shift,
+    eyring_rt60, helmholtz_resonance_frequency, maekawa_barrier_attenuation, mass_law_tl,
+    sabine_rt60, spherical_spreading_loss, thorp_absorption, transmission_coefficient,
+};
 
 #[unsafe(no_mangle)]
 pub extern "C" fn acoustics_spherical_spreading_loss(range: f64, out: *mut f64) -> Bool {

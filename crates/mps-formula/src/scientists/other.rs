@@ -7,18 +7,11 @@
 //!
 //! 纯函数，不依赖 Rapier / `WorldHandle`。
 
-use crate::error::*;
-use crate::ffi::*;
-use crate::math::*;
-
 /// 普朗克常数 h = 6.62607015e-34 J·s（2019 SI 精确值）。
 pub const PLANCK: f64 = 6.626_070_15e-34;
 
 /// 跨科学家共享公式集合。
 pub mod formulas {
-    use crate::error::*;
-    use crate::ffi::*;
-    use crate::math::*;
     use super::PLANCK;
 
     /// 德布罗意波长（物质波）：λ = h / (m·v)。

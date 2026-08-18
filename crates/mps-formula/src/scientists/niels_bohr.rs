@@ -21,9 +21,6 @@ pub const SCIENTIST: ScientistRecord = ScientistRecord {
 
 /// 该科学家名下的公式实现（从各域模块迁移而来）。
 pub mod formulas {
-    use crate::error::*;
-    use crate::ffi::*;
-    use crate::math::*;
 
     /// Bohr radius: a0 = 4*pi*eps0 * hbar^2 / (m_e * e^2)
 

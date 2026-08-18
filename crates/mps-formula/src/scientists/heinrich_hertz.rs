@@ -21,10 +21,6 @@ pub const SCIENTIST: ScientistRecord = ScientistRecord {
 
 /// 该科学家名下的公式实现（从各域模块迁移而来）。
 pub mod formulas {
-    use crate::error::*;
-    use crate::ffi::*;
-    use crate::math::*;
-    const PI: f64 = std::f64::consts::PI;
     fn finite_3(a: f64, b: f64, c: f64) -> bool {
         a.is_finite() && b.is_finite() && c.is_finite()
     }

@@ -49,8 +49,10 @@ pub use self::george_stokes::SCIENTIST as SCIENTIST_GEORGE_STOKES;
 pub use self::hans_christian_orsted::SCIENTIST as SCIENTIST_HANS_CHRISTIAN_ORSTED;
 pub use self::heinrich_hertz::SCIENTIST as SCIENTIST_HEINRICH_HERTZ;
 pub use self::henri_poincare::SCIENTIST as SCIENTIST_HENRI_POINCARE;
+pub use self::hermann_von_helmholtz::SCIENTIST as SCIENTIST_HERMANN_VON_HELMHOLTZ;
 pub use self::isaac_newton::SCIENTIST as SCIENTIST_ISAAC_NEWTON;
 pub use self::james_clerk_maxwell::SCIENTIST as SCIENTIST_JAMES_CLERK_MAXWELL;
+pub use self::james_thomson::SCIENTIST as SCIENTIST_JAMES_THOMSON;
 pub use self::james_watt::SCIENTIST as SCIENTIST_JAMES_WATT;
 pub use self::johannes_kepler::SCIENTIST as SCIENTIST_JOHANNES_KEPLER;
 pub use self::joseph_fourier::SCIENTIST as SCIENTIST_JOSEPH_FOURIER;
@@ -65,12 +67,14 @@ pub use self::michael_faraday::SCIENTIST as SCIENTIST_MICHAEL_FARADAY;
 pub use self::niels_bohr::SCIENTIST as SCIENTIST_NIELS_BOHR;
 pub use self::osborne_reynolds::SCIENTIST as SCIENTIST_OSBORNE_REYNOLDS;
 pub use self::paul_dirac::SCIENTIST as SCIENTIST_PAUL_DIRAC;
+pub use self::peter_debye::SCIENTIST as SCIENTIST_PETER_DEBYE;
 pub use self::pierre_simon_laplace::SCIENTIST as SCIENTIST_PIERRE_SIMON_LAPLACE;
 pub use self::richard_feynman::SCIENTIST as SCIENTIST_RICHARD_FEYNMAN;
 pub use self::rudolf_clausius::SCIENTIST as SCIENTIST_RUDOLF_CLAUSIUS;
 pub use self::sadi_carnot::SCIENTIST as SCIENTIST_SADI_CARNOT;
 pub use self::satyendra_nath_bose::SCIENTIST as SCIENTIST_SATYENDRA_NATH_BOSE;
 pub use self::werner_heisenberg::SCIENTIST as SCIENTIST_WERNER_HEISENBERG;
+pub use self::willard_gibbs::SCIENTIST as SCIENTIST_WILLARD_GIBBS;
 pub use self::william_rowan_hamilton::SCIENTIST as SCIENTIST_WILLIAM_ROWAN_HAMILTON;
 pub use self::wolfgang_pauli::SCIENTIST as SCIENTIST_WOLFGANG_PAULI;
 
@@ -87,6 +91,8 @@ pub mod bernhard_riemann;
 pub mod carl_friedrich_gauss;
 #[path = "charles_augustin_de_coulomb.rs"]
 pub mod charles_augustin_de_coulomb;
+#[path = "chen_ning_yang.rs"]
+pub mod chen_ning_yang;
 #[path = "claude_louis_navier.rs"]
 pub mod claude_louis_navier;
 #[path = "daniel_bernoulli.rs"]
@@ -111,10 +117,14 @@ pub mod hans_christian_orsted;
 pub mod heinrich_hertz;
 #[path = "henri_poincare.rs"]
 pub mod henri_poincare;
+#[path = "hermann_von_helmholtz.rs"]
+pub mod hermann_von_helmholtz;
 #[path = "isaac_newton.rs"]
 pub mod isaac_newton;
 #[path = "james_clerk_maxwell.rs"]
 pub mod james_clerk_maxwell;
+#[path = "james_thomson.rs"]
+pub mod james_thomson;
 #[path = "james_watt.rs"]
 pub mod james_watt;
 #[path = "johannes_kepler.rs"]
@@ -145,6 +155,8 @@ pub mod osborne_reynolds;
 pub mod other;
 #[path = "paul_dirac.rs"]
 pub mod paul_dirac;
+#[path = "peter_debye.rs"]
+pub mod peter_debye;
 #[path = "pierre_simon_laplace.rs"]
 pub mod pierre_simon_laplace;
 #[path = "richard_feynman.rs"]
@@ -157,6 +169,8 @@ pub mod sadi_carnot;
 pub mod satyendra_nath_bose;
 #[path = "werner_heisenberg.rs"]
 pub mod werner_heisenberg;
+#[path = "willard_gibbs.rs"]
+pub mod willard_gibbs;
 #[path = "william_rowan_hamilton.rs"]
 pub mod william_rowan_hamilton;
 #[path = "wolfgang_pauli.rs"]
@@ -164,7 +178,7 @@ pub mod wolfgang_pauli;
 
 /// 收录的科学家总数。
 pub fn scientist_count() -> usize {
-    42
+    46
 }
 
 /// 收录的所有科学家记录（按 `id` 字典序）。
@@ -187,8 +201,10 @@ pub static SCIENTISTS: &[ScientistRecord] = &[
     self::hans_christian_orsted::SCIENTIST,
     self::heinrich_hertz::SCIENTIST,
     self::henri_poincare::SCIENTIST,
+    self::hermann_von_helmholtz::SCIENTIST,
     self::isaac_newton::SCIENTIST,
     self::james_clerk_maxwell::SCIENTIST,
+    self::james_thomson::SCIENTIST,
     self::james_watt::SCIENTIST,
     self::johannes_kepler::SCIENTIST,
     self::joseph_fourier::SCIENTIST,
@@ -203,12 +219,14 @@ pub static SCIENTISTS: &[ScientistRecord] = &[
     self::niels_bohr::SCIENTIST,
     self::osborne_reynolds::SCIENTIST,
     self::paul_dirac::SCIENTIST,
+    self::peter_debye::SCIENTIST,
     self::pierre_simon_laplace::SCIENTIST,
     self::richard_feynman::SCIENTIST,
     self::rudolf_clausius::SCIENTIST,
     self::sadi_carnot::SCIENTIST,
     self::satyendra_nath_bose::SCIENTIST,
     self::werner_heisenberg::SCIENTIST,
+    self::willard_gibbs::SCIENTIST,
     self::william_rowan_hamilton::SCIENTIST,
     self::wolfgang_pauli::SCIENTIST,
 ];

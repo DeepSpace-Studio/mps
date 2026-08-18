@@ -691,103 +691,46 @@ pub fn maxwell_relation_1(_temperature: f64, _volume: f64, _entropy: f64, _press
     0.0 // stub — analytical form depends on the specific EOS; use as reminder of the identity
 }
 
-/// Enthalpy: H = U + PV
-pub fn enthalpy(internal_energy: f64, pressure: f64, volume: f64) -> Option<f64> {
-    if !finite_5(internal_energy, pressure, volume, 0.0, 0.0) {
-        return None;
-    }
-    Some(internal_energy + pressure * volume)
-}
-
-/// Helmholtz free energy: F = U - TS
-pub fn helmholtz_free_energy(internal_energy: f64, temperature: f64, entropy: f64) -> Option<f64> {
-    if !finite_5(internal_energy, temperature, entropy, 0.0, 0.0) || temperature < 0.0 {
-        return None;
-    }
-    Some(internal_energy - temperature * entropy)
-}
-
-/// Gibbs free energy: G = H - TS = U + PV - TS
-pub fn gibbs_free_energy(
-    internal_energy: f64,
-    pressure: f64,
-    volume: f64,
-    temperature: f64,
-    entropy: f64,
-) -> Option<f64> {
-    if !finite_5(internal_energy, pressure, volume, temperature, entropy) || temperature < 0.0 {
-        return None;
-    }
-    Some(internal_energy + pressure * volume - temperature * entropy)
-}
+// ---------------------------------------------------------------------------
+// Enthalpy — 实现迁至 `scientists::willard_gibbs::formulas`，
+// 此处仅 `pub use` 重导出以保持 `mps_formula::thermodynamics::*` 路径稳定。
+// ---------------------------------------------------------------------------
+pub use crate::scientists::willard_gibbs::formulas::enthalpy;
 
 // ---------------------------------------------------------------------------
-// Joule-Thomson effect
+// Helmholtz free energy — 实现迁至 `scientists::hermann_von_helmholtz::formulas`，
+// 此处仅 `pub use` 重导出以保持 `mps_formula::thermodynamics::*` 路径稳定。
 // ---------------------------------------------------------------------------
+pub use crate::scientists::hermann_von_helmholtz::formulas::helmholtz_free_energy;
 
-/// Joule-Thomson coefficient: μ_JT = (∂T/∂P)_H
-/// For ideal gas: μ_JT = 0. For Van der Waals: μ_JT ≈ (1/Cp)(2a/RT - b)
-pub fn joule_thomson_coefficient(cp: f64, temperature: f64, a: f64, b: f64) -> Option<f64> {
-    if !finite_5(cp, temperature, a, b, 0.0) || cp <= 0.0 || temperature <= 0.0 {
-        return None;
-    }
-    let r = 8.314462618;
-    Some((2.0 * a / (r * temperature) - b) / cp)
-}
+// ---------------------------------------------------------------------------
+// Gibbs free energy — 实现迁至 `scientists::willard_gibbs::formulas`，
+// 此处仅 `pub use` 重导出以保持 `mps_formula::thermodynamics::*` 路径稳定。
+// ---------------------------------------------------------------------------
+pub use crate::scientists::willard_gibbs::formulas::gibbs_free_energy;
 
-/// Joule-Thomson inversion temperature: T_inv = 2a/(Rb)
-pub fn joule_thomson_inversion_temperature(a: f64, b: f64) -> Option<f64> {
-    if !finite_5(a, b, 0.0, 0.0, 0.0) || a <= 0.0 || b <= 0.0 {
-        return None;
-    }
-    let r = 8.314462618;
-    Some(2.0 * a / (r * b))
-}
+// ---------------------------------------------------------------------------
+// Joule-Thomson effect — 实现迁至 `scientists::james_thomson::formulas`，
+// 此处仅 `pub use` 重导出以保持 `mps_formula::thermodynamics::*` 路径稳定。
+// ---------------------------------------------------------------------------
+pub use crate::scientists::james_thomson::formulas::joule_thomson_coefficient;
+pub use crate::scientists::james_thomson::formulas::joule_thomson_inversion_temperature;
 
 // ---------------------------------------------------------------------------
 // Heat capacity
 // ---------------------------------------------------------------------------
 
-/// Debye heat capacity: C_V = 9Nk_B (T/θ_D)³ ∫₀^{θ_D/T} x⁴ eˣ/(eˣ-1)² dx
-/// Simplified low-T limit: C_V ≈ 12π⁴/5 Nk_B (T/θ_D)³
-pub fn debye_heat_capacity_low_t(
-    temperature: f64,
-    debye_temperature: f64,
-    n_atoms: f64,
-) -> Option<f64> {
-    if !finite_5(temperature, debye_temperature, n_atoms, 0.0, 0.0)
-        || temperature <= 0.0
-        || debye_temperature <= 0.0
-        || n_atoms <= 0.0
-    {
-        return None;
-    }
-    let r = 8.314462618;
-    let ratio = temperature / debye_temperature;
-    Some(12.0 * std::f64::consts::PI.powi(4) / 5.0 * n_atoms * r * ratio.powi(3))
-}
+// ---------------------------------------------------------------------------
+// Debye heat capacity — 实现迁至 `scientists::peter_debye::formulas`，
+// 此处仅 `pub use` 重导出以保持 `mps_formula::thermodynamics::*` 路径稳定。
+// ---------------------------------------------------------------------------
+pub use crate::scientists::peter_debye::formulas::debye_heat_capacity_low_t;
 
-/// Einstein heat capacity: C_V = 3Nk_B (θ_E/T)² e^{θ_E/T} / (e^{θ_E/T} - 1)²
-pub fn einstein_heat_capacity(
-    temperature: f64,
-    einstein_temperature: f64,
-    n_atoms: f64,
-) -> Option<f64> {
-    if !finite_5(temperature, einstein_temperature, n_atoms, 0.0, 0.0)
-        || temperature <= 0.0
-        || einstein_temperature <= 0.0
-        || n_atoms <= 0.0
-    {
-        return None;
-    }
-    let r = 8.314462618;
-    let x = einstein_temperature / temperature;
-    let ex = x.exp();
-    if ex <= 1.0 {
-        return None;
-    }
-    Some(3.0 * n_atoms * r * x * x * ex / (ex - 1.0).powi(2))
-}
+// ---------------------------------------------------------------------------
+// Einstein heat capacity — 实现迁至 `scientists::albert_einstein::formulas`，
+// 此处仅 `pub use` 重导出以保持 `mps_formula::thermodynamics::*` 路径稳定。
+// ---------------------------------------------------------------------------
+pub use crate::scientists::albert_einstein::formulas::einstein_heat_capacity;
 
 // ---------------------------------------------------------------------------
 // Refrigeration cycle

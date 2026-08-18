@@ -21,9 +21,7 @@ pub const SCIENTIST: ScientistRecord = ScientistRecord {
 
 /// 该科学家名下的公式实现（从各域模块迁移而来）。
 pub mod formulas {
-    use crate::error::*;
-    use crate::ffi::*;
-    use crate::math::*;
+
     pub const REDUCED_PLANCK: f64 = 1.054_571_817e-34;
 
     /// Heisenberg uncertainty principle check: Delta_x * Delta_p >= hbar/2

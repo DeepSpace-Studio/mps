@@ -5,7 +5,6 @@
 
 pub extern crate rapier3d;
 pub mod acoustics;
-pub mod aerodynamics;
 pub mod astrophysics;
 pub mod biomechanics;
 pub mod celestial_data;

@@ -21,9 +21,6 @@ pub const SCIENTIST: ScientistRecord = ScientistRecord {
 
 /// 该科学家名下的公式实现（从各域模块迁移而来）。
 pub mod formulas {
-    use crate::error::*;
-    use crate::ffi::*;
-    use crate::math::*;
 
     /// Faraday rotation angle: θ = V · B · L
     /// V = Verdet constant (rad/(T·m)), B = magnetic field along path (T), L = path length (m)

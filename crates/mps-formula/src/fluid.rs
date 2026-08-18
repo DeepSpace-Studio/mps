@@ -2,11 +2,6 @@
 //! george_stokes, claude_louis_navier}::formulas::*` 中。本文件保留为 re-export 兼容层，
 //! 现有调用路径 `mps_formula::fluid::<fn>` 解析到对应科学家公式定义。
 
-pub use crate::scientists::claude_louis_navier::formulas::atwood_number;
-pub use crate::scientists::claude_louis_navier::formulas::kelvin_helmholtz_growth_rate;
-pub use crate::scientists::claude_louis_navier::formulas::minor_loss_pressure_drop;
-pub use crate::scientists::claude_louis_navier::formulas::rayleigh_taylor_growth_rate;
-pub use crate::scientists::claude_louis_navier::formulas::water_hammer_pressure_surge;
 pub use crate::scientists::daniel_bernoulli::formulas::bernoulli_pressure;
 pub use crate::scientists::daniel_bernoulli::formulas::bernoulli_report;
 pub use crate::scientists::daniel_bernoulli::formulas::darcy_friction_factor;

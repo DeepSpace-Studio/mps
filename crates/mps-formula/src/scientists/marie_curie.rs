@@ -21,11 +21,6 @@ pub const SCIENTIST: ScientistRecord = ScientistRecord {
 
 /// 该科学家名下的公式实现（从各域模块迁移而来）。
 pub mod formulas {
-    use crate::error::*;
-    use crate::ffi::*;
-    use crate::math::*;
-    use crate::scientists::enrico_fermi::formulas::activity;
-    use crate::scientists::enrico_fermi::formulas::decay_constant;
 
     /// Specific activity: SA = λ · N_A / A  (Bq/g)
     /// where N_A is Avogadro's number and A is the atomic mass number

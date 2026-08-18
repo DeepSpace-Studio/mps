@@ -21,10 +21,7 @@ pub const SCIENTIST: ScientistRecord = ScientistRecord {
 
 /// 该科学家名下的公式实现（从各域模块迁移而来）。
 pub mod formulas {
-    use crate::error::*;
-    use crate::ffi::*;
-    use crate::math::*;
-    use crate::scientists::james_clerk_maxwell::formulas::wave_frequency;
+
     fn finite_4(a: f64, b: f64, c: f64, d: f64) -> bool {
         a.is_finite() && b.is_finite() && c.is_finite() && d.is_finite()
     }

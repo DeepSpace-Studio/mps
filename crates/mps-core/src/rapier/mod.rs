@@ -16,6 +16,7 @@ pub use mps_formula::control_theory;
 pub use mps_formula::disciplines::relativity as cosmology;
 pub mod controller;
 pub mod crbtree;
+pub mod cross_validate;
 pub mod dop;
 pub use mps_formula::electromagnetism;
 pub mod error;

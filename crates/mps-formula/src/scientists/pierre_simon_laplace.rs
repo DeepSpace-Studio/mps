@@ -22,14 +22,12 @@ pub const SCIENTIST: ScientistRecord = ScientistRecord {
 /// 该科学家名下的公式实现（从各域模块迁移而来）。
 pub mod formulas {
     use crate::error::*;
-    use crate::ffi::*;
     use crate::math::*;
     pub const G: f64 = 6.67430e-11;
     const HAWKING_HBAR: f64 = 1.054_571_817e-34;
     const HAWKING_KB: f64 = 1.380_649e-23;
     const METRES_PER_MEGAPARSEC: f64 = 1.0e6 * METRES_PER_PARSEC;
     const METRES_PER_PARSEC: f64 = 3.085_677_581_491_367e16;
-    const PI: f64 = std::f64::consts::PI;
     pub const SPEED_OF_LIGHT: f64 = 299_792_458.0;
 
     /// Gravitational lensing Einstein radius for point mass.

@@ -21,9 +21,6 @@ pub const SCIENTIST: ScientistRecord = ScientistRecord {
 
 /// 该科学家名下的公式实现（从各域模块迁移而来）。
 pub mod formulas {
-    use crate::error::*;
-    use crate::ffi::*;
-    use crate::math::*;
     const COMPTON_C: f64 = 299_792_458.0;
     const EINSTEIN_EPS0: f64 = 8.854_187_812_8e-12;
     const PI: f64 = std::f64::consts::PI;

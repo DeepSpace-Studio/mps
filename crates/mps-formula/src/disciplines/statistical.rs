@@ -35,6 +35,10 @@ pub use self::__formulas_reexports::*;
 /// 私有 re-export 中转模块,承载全部 `pub use crate::scientists::...`。
 /// 公开层只通过上一行的 glob 暴露,以隔离 `#[allow(unused_imports)]` 的范围。
 mod __formulas_reexports {
+    pub use crate::scientists::albert_einstein::formulas::einstein_heat_capacity;
+    pub use crate::scientists::hermann_von_helmholtz::formulas::helmholtz_free_energy;
+    pub use crate::scientists::james_thomson::formulas::joule_thomson_coefficient;
+    pub use crate::scientists::james_thomson::formulas::joule_thomson_inversion_temperature;
     pub use crate::scientists::james_watt::formulas::governor_speed;
     pub use crate::scientists::james_watt::formulas::horsepower_metric;
     pub use crate::scientists::james_watt::formulas::mechanical_efficiency;
@@ -44,20 +48,13 @@ mod __formulas_reexports {
     pub use crate::scientists::ludwig_boltzmann::formulas::carnot_efficiency;
     pub use crate::scientists::ludwig_boltzmann::formulas::carnot_refrigeration_cop;
     pub use crate::scientists::ludwig_boltzmann::formulas::clausius_clapeyron_pressure;
-    pub use crate::scientists::ludwig_boltzmann::formulas::debye_heat_capacity_low_t;
     pub use crate::scientists::ludwig_boltzmann::formulas::diesel_efficiency;
-    pub use crate::scientists::ludwig_boltzmann::formulas::einstein_heat_capacity;
-    pub use crate::scientists::ludwig_boltzmann::formulas::enthalpy;
     pub use crate::scientists::ludwig_boltzmann::formulas::entropy_change_constant_pressure;
     pub use crate::scientists::ludwig_boltzmann::formulas::entropy_change_constant_volume;
-    pub use crate::scientists::ludwig_boltzmann::formulas::gibbs_free_energy;
     pub use crate::scientists::ludwig_boltzmann::formulas::heat_pump_cop;
-    pub use crate::scientists::ludwig_boltzmann::formulas::helmholtz_free_energy;
     pub use crate::scientists::ludwig_boltzmann::formulas::ideal_gas_pressure;
     pub use crate::scientists::ludwig_boltzmann::formulas::ideal_gas_temperature;
     pub use crate::scientists::ludwig_boltzmann::formulas::ideal_gas_volume;
-    pub use crate::scientists::ludwig_boltzmann::formulas::joule_thomson_coefficient;
-    pub use crate::scientists::ludwig_boltzmann::formulas::joule_thomson_inversion_temperature;
     pub use crate::scientists::ludwig_boltzmann::formulas::maxwell_relation_1;
     pub use crate::scientists::ludwig_boltzmann::formulas::otto_efficiency;
     pub use crate::scientists::ludwig_boltzmann::formulas::polytropic_pressure;
@@ -65,6 +62,7 @@ mod __formulas_reexports {
     pub use crate::scientists::ludwig_boltzmann::formulas::reynolds_number;
     pub use crate::scientists::ludwig_boltzmann::formulas::van_der_waals_critical_point;
     pub use crate::scientists::ludwig_boltzmann::formulas::van_der_waals_pressure;
+    pub use crate::scientists::peter_debye::formulas::debye_heat_capacity_low_t;
     pub use crate::scientists::rudolf_clausius::formulas::clausius_clapeyron_pressure as clausius_clapeyron_pressure_rudolf_clausius;
     pub use crate::scientists::sadi_carnot::formulas::brayton_efficiency as brayton_efficiency_sadi_carnot;
     pub use crate::scientists::sadi_carnot::formulas::carnot_efficiency as carnot_efficiency_sadi_carnot;
@@ -72,4 +70,6 @@ mod __formulas_reexports {
     pub use crate::scientists::sadi_carnot::formulas::diesel_efficiency as diesel_efficiency_sadi_carnot;
     pub use crate::scientists::sadi_carnot::formulas::heat_pump_cop as heat_pump_cop_sadi_carnot;
     pub use crate::scientists::sadi_carnot::formulas::otto_efficiency as otto_efficiency_sadi_carnot;
+    pub use crate::scientists::willard_gibbs::formulas::enthalpy;
+    pub use crate::scientists::willard_gibbs::formulas::gibbs_free_energy;
 }
