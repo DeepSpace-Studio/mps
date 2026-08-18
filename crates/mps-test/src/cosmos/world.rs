@@ -7,13 +7,18 @@
 #[cfg(test)]
 use mps_cosmos::bodies::satellite_builder;
 #[cfg(test)]
-use mps_cosmos::integrator::{AccelContext, snapshot_source_positions, total_acceleration};
+use mps_cosmos::integrator::{
+    AccelContext, advance_highorder, advance_highorder_kahan, snapshot_source_positions,
+    total_acceleration,
+};
 #[cfg(test)]
 use mps_cosmos::world::{
     CosmosWorld, CosmosWorldConfig, OrbitIntegration, StepResult, StepSkipReason,
 };
 #[cfg(test)]
 use mps_formula::celestial_data::{CelestialBodyId, get_celestial_body};
+#[cfg(test)]
+use mps_formula::math::KahanVec3;
 #[cfg(test)]
 use mps_formula::spaceflight::kepler_period;
 #[cfg(test)]
@@ -1064,4 +1069,141 @@ fn n_body_optimized_matches_serial_reference_bit_identical() {
             "body {h:?} 优化路径速度 {vel:?} 与串行 reference {v_ref:?} 不一致"
         );
     }
+}
+
+/// 高阶 + Kahan 积子优化一致性回归：并行预计算的高阶推进 / Kahan 推进必须和
+/// 朴素串行 reference（直接调 `advance_highorder` / `advance_highorder_kahan`
+/// 纯函数）逐位一致。
+///
+/// 构造 3 体互引力世界，分别用 `Yoshida4` / `ForestRuth8` / `Yoshida4Kahan` /
+/// `ForestRuth8Kahan` 跑一次 `world.step(dt)`（走并行预计算路径），再用对应
+/// 纯函数做独立串行 reference，比对每个体终态位置/速度（Kahan 还要比对累加态）。
+/// 偏差须 < 1e-12。
+#[cfg(test)]
+fn highorder_bit_identical_helper(mode: OrbitIntegration) {
+    let dt = 0.01;
+    let mut world = CosmosWorld::new(CosmosWorldConfig {
+        gravity: Vector::ZERO,
+        dt,
+        solver_iterations: 4,
+        ccd_substeps: 4,
+        orbit_integration: mode,
+        n_body_softening_sq: 0.0,
+        central_body: None,
+        verlet_substeps: 1,
+        ..CosmosWorldConfig::default()
+    });
+
+    let defs = [
+        (
+            1.0e3,
+            Vector::new(0.0, 0.0, 0.0),
+            Vector::new(0.1, 0.0, 0.0),
+        ),
+        (
+            2.0e3,
+            Vector::new(3.0, 1.0, 0.0),
+            Vector::new(0.0, -0.2, 0.0),
+        ),
+        (
+            5.0e2,
+            Vector::new(-2.0, 4.0, 1.0),
+            Vector::new(0.0, 0.0, 0.3),
+        ),
+    ];
+    let mut handles = Vec::new();
+    let mut init = Vec::new();
+    for (m, p, v) in defs {
+        let h = world.insert_body(satellite_builder(m, p, v, 0.1));
+        world.add_n_body(h, m);
+        let b = world.bodies().get(h).unwrap();
+        init.push((h, b.translation(), b.linvel(), m));
+        handles.push(h);
+    }
+
+    let src_pos = snapshot_source_positions(world.bodies(), world.n_body_sources());
+    let n_bodies = world.bodies().len();
+    let src_rot: Vec<Rotation> = (0..n_bodies).map(|_| Rotation::IDENTITY).collect();
+    let ctx = AccelContext {
+        celestials: &[],
+        n_body_sources: world.n_body_sources(),
+        source_positions: &src_pos,
+        source_rotations: &src_rot,
+        softening_sq: 0.0,
+        central_body: None,
+        sun_position: Vector::ZERO,
+        relativistic: mps_cosmos::world::RelativisticCorrection::None,
+    };
+
+    // 串行 reference：每个体用对应纯函数推进。
+    let use_kahan = matches!(
+        mode,
+        OrbitIntegration::Yoshida4Kahan | OrbitIntegration::ForestRuth8Kahan
+    );
+    let mut ref_out = Vec::new();
+    for &(h, r0, v0, mass) in &init {
+        if use_kahan {
+            let kp = KahanVec3::new(mps_cosmos::integrator::ffi_vec3_pub(r0));
+            let kv = KahanVec3::new(mps_cosmos::integrator::ffi_vec3_pub(v0));
+            let (r1, v1, nkp, nkv) =
+                advance_highorder_kahan(mode, r0, v0, kp, kv, mass, h, None, &ctx, dt);
+            ref_out.push((h, r1, v1, Some((nkp, nkv))));
+        } else {
+            let (r1, v1) = advance_highorder(mode, r0, v0, mass, h, None, &ctx, dt);
+            ref_out.push((h, r1, v1, None));
+        }
+    }
+
+    world.step(dt);
+
+    for (h, r_ref, v_ref, k_ref) in ref_out {
+        let b = world.bodies().get(h).unwrap();
+        let pos = b.translation();
+        let vel = b.linvel();
+        assert!(
+            (pos.x - r_ref.x).abs() < 1e-12
+                && (pos.y - r_ref.y).abs() < 1e-12
+                && (pos.z - r_ref.z).abs() < 1e-12,
+            "body {h:?} 高阶优化路径位置 {pos:?} 与串行 reference {r_ref:?} 不一致"
+        );
+        assert!(
+            (vel.x - v_ref.x).abs() < 1e-12
+                && (vel.y - v_ref.y).abs() < 1e-12
+                && (vel.z - v_ref.z).abs() < 1e-12,
+            "body {h:?} 高阶优化路径速度 {vel:?} 与串行 reference {v_ref:?} 不一致"
+        );
+        if let Some((kp_ref, kv_ref)) = k_ref {
+            let idx = h.into_raw_parts().0 as usize;
+            let st = world.kahan_state_debug(idx);
+            assert!(
+                (st.0.value().x - kp_ref.value().x).abs() < 1e-12
+                    && (st.0.value().y - kp_ref.value().y).abs() < 1e-12
+                    && (st.0.value().z - kp_ref.value().z).abs() < 1e-12
+                    && (st.1.value().x - kv_ref.value().x).abs() < 1e-12
+                    && (st.1.value().y - kv_ref.value().y).abs() < 1e-12
+                    && (st.1.value().z - kv_ref.value().z).abs() < 1e-12,
+                "body {h:?} Kahan 累加态与串行 reference 不一致"
+            );
+        }
+    }
+}
+
+#[test]
+fn highorder_yoshida4_matches_serial_reference() {
+    highorder_bit_identical_helper(OrbitIntegration::Yoshida4);
+}
+
+#[test]
+fn highorder_forest_ruth8_matches_serial_reference() {
+    highorder_bit_identical_helper(OrbitIntegration::ForestRuth8);
+}
+
+#[test]
+fn highorder_yoshida4_kahan_matches_serial_reference() {
+    highorder_bit_identical_helper(OrbitIntegration::Yoshida4Kahan);
+}
+
+#[test]
+fn highorder_forest_ruth8_kahan_matches_serial_reference() {
+    highorder_bit_identical_helper(OrbitIntegration::ForestRuth8Kahan);
 }

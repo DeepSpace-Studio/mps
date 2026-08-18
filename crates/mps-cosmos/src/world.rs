@@ -881,6 +881,21 @@ impl CosmosWorld {
         &self.bodies
     }
 
+    /// 测试/诊断用：按 arena index 取 per-body Kahan 累加态（`None` 表示该槽未
+    /// 初始化，返回默认零态）。生产路径不依赖；仅供集成测试比对累加态。
+    pub fn kahan_state_debug(
+        &self,
+        idx: usize,
+    ) -> (mps_formula::math::KahanVec3, mps_formula::math::KahanVec3) {
+        self.kahan_state
+            .get(idx)
+            .and_then(|s| s.clone())
+            .unwrap_or((
+                mps_formula::math::KahanVec3::default(),
+                mps_formula::math::KahanVec3::default(),
+            ))
+    }
+
     /// 取 n-body 互引力的软化平方项（m²）。
     pub fn n_body_softening_sq(&self) -> f64 {
         self.n_body_softening_sq
@@ -1033,20 +1048,93 @@ impl CosmosWorld {
         // 评估（Verlet 每体恰好一次；高阶积子内部还会在偏移位置上重估，但首评
         // 即 a0，后续在并行预计算之外按原顺序串行，数值不变）。单线程下
         // `par_iter` 退化为顺序，无额外开销；多体场景由 rayon 自动分到多核。
+        // `mode` 须在并行块前定下来（闭包里要用它决定走哪条积子 + 是否跳过 ho）。
+        let mode = self.orbit_integration;
         let n_tasks = self.scratch_tasks.len();
-        let a0_buf: Vec<Vector> = if n_tasks == 0 {
-            Vec::new()
-        } else {
+        // 3.5 并行预计算每体的「初始加速度」与「高阶推进」(+ Kahan 推进)。
+        // 每个体的求值都只依赖冻结快照 `ctx` + 自身 (pos,vel,mass,handle,pert)
+        // 标量（+ Kahan 累加态的**拷贝**），**不读任何其它体的可变状态**——
+        // 故按体并行求值与串行逐位一致（不加、不减、不重排任何浮点运算顺序）。
+        // n-body 互引力 O(N·M) 最贵的评估（Verlet 的 a0、高阶积子的首评 + 偏移
+        // 位置重估）都在这里并行完成；单线程下 `par_iter` 退化为顺序、无额外
+        // 开销，多体场景由 rayon 自动分到多核。串行循环只做「预计算结果写回
+        // body / Kahan 态」。Kahan 模式的 per-body 累加态：首次出现按 body 当前
+        // pos/vel 初始化，之后每步由并行 advance 产出新态写回（见 3.5 + 写回段）。
+        // 先确保 `kahan_state` 足够长且本 task 槽已初始化，再把累加态拷出到
+        // `kahan_src`（纯 Copy），供并行 advance 使用。
+        let kahan_src: Vec<Option<(mps_formula::math::KahanVec3, mps_formula::math::KahanVec3)>> =
             self.scratch_tasks
+                .iter()
+                .map(|&(h, p, v, _m, _pt)| {
+                    let idx = h.into_raw_parts().0 as usize;
+                    if idx >= self.kahan_state.len() {
+                        self.kahan_state.resize(idx + 1, None);
+                    }
+                    let need_kahan = matches!(
+                        mode,
+                        OrbitIntegration::Yoshida4Kahan | OrbitIntegration::ForestRuth8Kahan
+                    );
+                    if need_kahan && self.kahan_state[idx].is_none() {
+                        self.kahan_state[idx] = Some((
+                            mps_formula::math::KahanVec3::new(crate::integrator::ffi_vec3_pub(p)),
+                            mps_formula::math::KahanVec3::new(crate::integrator::ffi_vec3_pub(v)),
+                        ));
+                    }
+                    self.kahan_state.get(idx).and_then(|s| s.clone())
+                })
+                .collect();
+        // rayon 的 `unzip` 仅支持 2 元组，这里手动收成 3 元组 vec。
+        let mut advance_buf: Vec<(
+            Vector,
+            Option<(Vector, Vector)>,
+            Option<(
+                Vector,
+                Vector,
+                mps_formula::math::KahanVec3,
+                mps_formula::math::KahanVec3,
+            )>,
+        )> = Vec::with_capacity(n_tasks);
+        if n_tasks > 0 {
+            advance_buf = self
+                .scratch_tasks
                 .par_iter()
                 .map(|&(h, pos, vel, mass, perturb)| {
-                    crate::integrator::total_acceleration(pos, vel, mass, h, &ctx, perturb.as_ref())
+                    let a0 = crate::integrator::total_acceleration(
+                        pos,
+                        vel,
+                        mass,
+                        h,
+                        &ctx,
+                        perturb.as_ref(),
+                    );
+                    // Verlet 模式只用到 a0；高阶/Kahan 推进按需计算，避免冗余的
+                    // 额外 `total_acceleration` 评估（与 a0 同输入，纯浪费）。
+                    let (ho, kaho) = if matches!(mode, OrbitIntegration::Verlet) {
+                        (None, None)
+                    } else {
+                        // 高阶推进纯函数：冻结 v0、只评估快照上加速度，与串行
+                        // 内联调用逐位一致。
+                        let ho = crate::integrator::advance_highorder(
+                            mode, pos, vel, mass, h, perturb, &ctx, dt,
+                        );
+                        // Kahan 推进纯函数：用拷贝出来的累加态，跨步补偿不重置，
+                        // 与串行 `explicit_highorder_kahan_step` 逐位一致。
+                        let kaho = match kahan_src[h.into_raw_parts().0 as usize] {
+                            Some((kp, kv)) => Some(crate::integrator::advance_highorder_kahan(
+                                mode, pos, vel, kp, kv, mass, h, perturb, &ctx, dt,
+                            )),
+                            None => None,
+                        };
+                        (Some(ho), kaho)
+                    };
+                    (a0, ho, kaho)
                 })
-                .collect()
-        };
+                .collect();
+        }
+        // `advance_buf[i]` 即每体预计算的 (a0, highorder_advance, kahan_advance)；
+        // 下面串行循环按下标取用并写回 body / Kahan 态。
 
         // 4. 选定积子：每个分支取 body、按对应积子推进、写回（Kahan 分支另缓存态）。
-        let mode = self.orbit_integration;
         // 用裸索引遍历 tasks 以避免在循环体内 `self.bodies.get_mut` 时的可变借用
         // 与 `self.kahan_state` 的可变借用冲突——按索引访问把 `self` 的多个可变
         // 字段拆开借用。tasks 内容在子步内冻结，无别名问题。
@@ -1054,22 +1142,10 @@ impl CosmosWorld {
         // 写 `kahan_state`），故允许 `needless_range_loop`。
         #[allow(clippy::needless_range_loop)]
         for i in 0..n_tasks {
-            let (handle, pos, vel, mass, perturbation) = self.scratch_tasks[i];
-            // 必要时为 Kahan 模式补齐 per-body 累加态，并从 body 当前值同步。
+            let (handle, _pos, _vel, mass, perturbation) = self.scratch_tasks[i];
             let kahan_idx = handle.into_raw_parts().0 as usize;
-            if kahan_idx >= self.kahan_state.len() {
-                self.kahan_state.resize(kahan_idx + 1, None);
-            }
-            let need_kahan = matches!(
-                mode,
-                OrbitIntegration::Yoshida4Kahan | OrbitIntegration::ForestRuth8Kahan
-            );
-            if need_kahan && self.kahan_state[kahan_idx].is_none() {
-                self.kahan_state[kahan_idx] = Some((
-                    mps_formula::math::KahanVec3::new(crate::integrator::ffi_vec3_pub(pos)),
-                    mps_formula::math::KahanVec3::new(crate::integrator::ffi_vec3_pub(vel)),
-                ));
-            }
+            // 高阶/Kahan 推进已并行预计算（见 3.5），直接取用，避免串行重复求值。
+            let (a0, ho, kahan) = &advance_buf[i];
 
             let body = match self.bodies.get_mut(handle) {
                 Some(b) => b,
@@ -1078,36 +1154,23 @@ impl CosmosWorld {
 
             match mode {
                 OrbitIntegration::Verlet => {
-                    // a0 已并行预计算（见 3.5），此处直接取用，避免串行重复求值。
-                    let a0 = a0_buf[i];
+                    let a0 = *a0;
                     crate::integrator::verlet_step(body, a0, &ctx, mass, handle, perturbation, dt);
                 }
                 OrbitIntegration::Yoshida4 | OrbitIntegration::ForestRuth8 => {
-                    crate::integrator::explicit_highorder_step(
-                        body,
-                        mass,
-                        handle,
-                        perturbation,
-                        &ctx,
-                        dt,
-                        mode,
-                    );
+                    let (r1, v1) = ho.expect("ho 预计算应已就绪").clone();
+                    body.set_translation(r1, false);
+                    body.set_linvel(v1, false);
                 }
                 OrbitIntegration::Yoshida4Kahan | OrbitIntegration::ForestRuth8Kahan => {
-                    let state = match self.kahan_state[kahan_idx].as_mut() {
-                        Some(s) => s,
-                        None => continue,
-                    };
-                    crate::integrator::explicit_highorder_kahan_step(
-                        body,
-                        state,
-                        mass,
-                        handle,
-                        perturbation,
-                        &ctx,
-                        dt,
-                        mode,
-                    );
+                    let (r1, v1, kp, kv) = kahan.expect("kahan 预计算应已就绪").clone();
+                    // 把并行 advance 产出的新 Kahan 态写回 world 缓存。
+                    if self.kahan_state.len() <= kahan_idx {
+                        self.kahan_state.resize(kahan_idx + 1, None);
+                    }
+                    self.kahan_state[kahan_idx] = Some((kp, kv));
+                    body.set_translation(r1, false);
+                    body.set_linvel(v1, false);
                 }
                 OrbitIntegration::RapierForce => unreachable!("RapierForce 不走显式路径"),
             }

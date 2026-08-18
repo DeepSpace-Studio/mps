@@ -367,6 +367,31 @@ fn run_highorder(
     }
 }
 
+/// 纯函数版高阶辛积子一步：给定当前 (pos, vel) + per-body 标量 + 冻结快照
+/// `ctx`，返回积子推进后的 (new_pos, new_vel)，**不写任何 body / 累加态**。
+///
+/// 与 [`explicit_highorder_step`] 内联的推进逻辑逐位一致——`accel_fn` 仍冻结
+/// `v0`、整步内不更新速度（速度依赖项用 v0 评估，伪位置依赖）。提取为纯函数
+/// 是为了让 `CosmosWorld::explicit_substep` 能**并行**预计算每体的高阶推进
+/// （每个体的 advance 只依赖冻结快照 + 自身标量，与其它体的可变状态无关），
+/// 再由串行循环写回；数值与串行内联调用完全一致。
+pub fn advance_highorder(
+    mode: crate::world::OrbitIntegration,
+    r0: Vector,
+    v0: Vector,
+    mass: f64,
+    handle: RigidBodyHandle,
+    perturbation: Option<crate::world::PerturbationConfig>,
+    ctx: &AccelContext,
+    dt: f64,
+) -> (Vector, Vector) {
+    let mut pos = ffi_vec3(r0);
+    let mut vel = ffi_vec3(v0);
+    let accel_fn = accel_fn_positional(ctx, handle, mass, v0, perturbation);
+    run_highorder(mode, &mut pos, &mut vel, dt, accel_fn);
+    (rapier_vec(pos), rapier_vec(vel))
+}
+
 /// 对单个动态刚体执行一步高阶辛积子（Yoshida4 或 Forest-Ruth8）。
 ///
 /// 与 [`verlet_step`] 同样的"绕过 rapier 力律、直接写回 translation/linvel"约定。
@@ -381,18 +406,95 @@ pub fn explicit_highorder_step(
     dt: f64,
     mode: crate::world::OrbitIntegration,
 ) {
-    let r0 = body.translation();
-    let v0 = body.linvel();
-    let mut pos = ffi_vec3(r0);
-    let mut vel = ffi_vec3(v0);
-    // 加速度评估冻结 v0：速度依赖项（阻力）在整步内用 v0 估算。对纯保守引力
-    // （n-body + 中心引力，无阻力）v0 不进入加速度，无影响；阻力场景下相位精度
-    // 退化为 O(dt·τ_drag)，但阻力本身非保守，辛性本就被破，可接受。需要阻力高精
-    // 长弧应改走 Verlet 路径或后续接入动态速度闭包。
-    let accel_fn = accel_fn_positional(ctx, handle, mass, v0, perturbation);
-    run_highorder(mode, &mut pos, &mut vel, dt, accel_fn);
-    body.set_translation(rapier_vec(pos), false);
-    body.set_linvel(rapier_vec(vel), false);
+    let (r1, v1) = advance_highorder(
+        mode,
+        body.translation(),
+        body.linvel(),
+        mass,
+        handle,
+        perturbation,
+        ctx,
+        dt,
+    );
+    body.set_translation(r1, false);
+    body.set_linvel(v1, false);
+}
+
+/// 高阶辛积子 + Kahan 补偿位置/速度累加版。
+///
+/// `state` 是 per-body 的 `(pos_accum, vel_accum)` Kahan 累加态，由调用方在
+/// `world` 里按 arena index 缓存。入口把 rapier body 的当前位姿同步进累加态
+/// （首次或被外部改动后），出口把补偿后的位姿写回 rapier body。
+///
+/// 高阶积子的 `v += a·dt` / `r += v·dt` 仍是普通 `+=`；这里把"积子内部生成的
+/// 增量"喂给 Kahan 累加器——即每步前快照 `(r0,v0)`，积子算完拿到 `(r1,v1)`，
+/// 用 Kahan 累加 `Δr=r1-r0`、`Δv=v1-v0`，再写回 body。数值上逼近 Kahan 全程
+/// 累加，且不破坏辛结构。
+/// 纯函数版高阶辛积子 + Kahan 补偿一步：给定当前 body (r0,v0) 与**复制**过来的
+/// per-body Kahan 累加态 `(kahan_pos, kahan_vel)`，返回积子推进后的
+/// `(new_body_pos, new_body_vel, new_kahan_pos, new_kahan_vel)`，**不写任何
+/// body / 累加态**。
+///
+/// 与 [`explicit_highorder_kahan_step`] 逐位一致：漂移检测、`KahanVec3` 跨步
+/// 补偿累加（`add` 在原有 compensation 上叠加，不重置）、写回逻辑都照搬。
+/// 提取为纯函数是为了让 `CosmosWorld::explicit_substep` 能**并行**预计算每体
+/// 的高阶 Kahan 推进（每个体只读自身 body + 自身 Kahan 态 + 冻结快照，与其它
+/// 体无关），再由串行循环把 `(r1,v1,new_kp,new_kv)` 写回；数值与串行一致。
+pub fn advance_highorder_kahan(
+    mode: crate::world::OrbitIntegration,
+    r0: Vector,
+    v0: Vector,
+    kahan_pos: mps_formula::math::KahanVec3,
+    kahan_vel: mps_formula::math::KahanVec3,
+    mass: f64,
+    handle: RigidBodyHandle,
+    perturbation: Option<crate::world::PerturbationConfig>,
+    ctx: &AccelContext,
+    dt: f64,
+) -> (
+    Vector,
+    Vector,
+    mps_formula::math::KahanVec3,
+    mps_formula::math::KahanVec3,
+) {
+    let rapier_pos = ffi_vec3(r0);
+    let rapier_vel = ffi_vec3(v0);
+    // 若 body 与累加态不一致（外部 set_translation 等），以 body 为准重置累加态。
+    let pos_drift = (kahan_pos.value().x - rapier_pos.x).abs()
+        + (kahan_pos.value().y - rapier_pos.y).abs()
+        + (kahan_pos.value().z - rapier_pos.z).abs();
+    let vel_drift = (kahan_vel.value().x - rapier_vel.x).abs()
+        + (kahan_vel.value().y - rapier_vel.y).abs()
+        + (kahan_vel.value().z - rapier_vel.z).abs();
+    let (base_pos, base_vel, kp_base, kv_base) = if pos_drift > 1e-9 || vel_drift > 1e-12 {
+        (
+            rapier_pos,
+            rapier_vel,
+            mps_formula::math::KahanVec3::new(rapier_pos),
+            mps_formula::math::KahanVec3::new(rapier_vel),
+        )
+    } else {
+        // 命中：携带原 compensation 跨步累加（不能 new(value()) 重置）。
+        (kahan_pos.value(), kahan_vel.value(), kahan_pos, kahan_vel)
+    };
+
+    let (r1, v1) = advance_highorder(
+        mode,
+        rapier_vec(base_pos),
+        rapier_vec(base_vel),
+        mass,
+        handle,
+        perturbation,
+        ctx,
+        dt,
+    );
+
+    // 增量喂给 Kahan 累加器（在原有 compensation 上叠加），逼近 Kahan 全程累加。
+    let mut kp = kp_base;
+    kp.add(ffi_vec3(r1 - rapier_vec(base_pos)));
+    let mut kv = kv_base;
+    kv.add(ffi_vec3(v1 - rapier_vec(base_vel)));
+    (r1, v1, kp, kv)
 }
 
 /// 高阶辛积子 + Kahan 补偿位置/速度累加版。
@@ -415,41 +517,20 @@ pub fn explicit_highorder_kahan_step(
     dt: f64,
     mode: crate::world::OrbitIntegration,
 ) {
-    let r0 = body.translation();
-    let v0 = body.linvel();
-    // 把外部可能直接写入 body 的位姿增量并入累加态，再以累加态为基础向前推。
-    let mut pos = state.0.value();
-    let mut vel = state.1.value();
-    // 若 body 与累加态不一致（外部 set_translation 等），以 body 为准重置累加态。
-    let rapier_pos = ffi_vec3(r0);
-    let rapier_vel = ffi_vec3(v0);
-    let pos_drift =
-        (pos.x - rapier_pos.x).abs() + (pos.y - rapier_pos.y).abs() + (pos.z - rapier_pos.z).abs();
-    let vel_drift =
-        (vel.x - rapier_vel.x).abs() + (vel.y - rapier_vel.y).abs() + (vel.z - rapier_vel.z).abs();
-    if pos_drift > 1e-9 || vel_drift > 1e-12 {
-        state.0 = mps_formula::math::KahanVec3::new(rapier_pos);
-        state.1 = mps_formula::math::KahanVec3::new(rapier_vel);
-        pos = rapier_pos;
-        vel = rapier_vel;
-    }
-
-    let accel_fn = accel_fn_positional(ctx, handle, mass, v0, perturbation);
-    run_highorder(mode, &mut pos, &mut vel, dt, accel_fn);
-
-    let delta_pos = mps_formula::ffi::Vec3 {
-        x: pos.x - state.0.value().x,
-        y: pos.y - state.0.value().y,
-        z: pos.z - state.0.value().z,
-    };
-    let delta_vel = mps_formula::ffi::Vec3 {
-        x: vel.x - state.1.value().x,
-        y: vel.y - state.1.value().y,
-        z: vel.z - state.1.value().z,
-    };
-    state.0.add(delta_pos);
-    state.1.add(delta_vel);
-
-    body.set_translation(state.0.value_vec(), false);
-    body.set_linvel(state.1.value_vec(), false);
+    let (r1, v1, kp, kv) = advance_highorder_kahan(
+        mode,
+        body.translation(),
+        body.linvel(),
+        state.0,
+        state.1,
+        mass,
+        handle,
+        perturbation,
+        ctx,
+        dt,
+    );
+    state.0 = kp;
+    state.1 = kv;
+    body.set_translation(r1, false);
+    body.set_linvel(v1, false);
 }
