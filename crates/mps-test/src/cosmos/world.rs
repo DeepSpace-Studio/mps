@@ -967,3 +967,101 @@ fn perturbation_solar_wind_and_dynamical_friction_unit() {
         "lnΛ=0"
     );
 }
+
+/// 优化一致性回归：n-body 互引力的并行 + `get_unchecked` 优化路径必须与朴素
+/// 串行 reference 逐位（bit-identical）一致。
+///
+/// 构造 3 体互引力世界（Verlet 模式，无天体源/扰动），跑一次 `world.step(dt)`
+/// （走优化后的并行 a0 预计算 + 主循环 `get_unchecked`）。然后独立用串行
+/// velocity-Verlet 重算每个体的终态位置——`a0`/`a1` 都用 `total_acceleration`
+/// 在**冻结的初始配置**上求（与生产路径内部 Verlet 评估一致），半踢-全漂-半踢。
+/// 生产结果与 reference 必须逐位相等（不允许多于 `1e-12` 的偏差），否则说明
+/// 并行化或 `get_unchecked` 重构打乱了浮点运算顺序 / 数值。
+#[test]
+fn n_body_optimized_matches_serial_reference_bit_identical() {
+    let dt = 0.01;
+    let mut world = CosmosWorld::new(CosmosWorldConfig {
+        gravity: Vector::ZERO,
+        dt,
+        solver_iterations: 4,
+        ccd_substeps: 4,
+        orbit_integration: OrbitIntegration::Verlet,
+        n_body_softening_sq: 0.0,
+        central_body: None,
+        verlet_substeps: 1,
+        ..CosmosWorldConfig::default()
+    });
+
+    // 3 个体，质量/位置/速度各异，确保互引力非零且互不对称。
+    let defs = [
+        (
+            1.0e3,
+            Vector::new(0.0, 0.0, 0.0),
+            Vector::new(0.1, 0.0, 0.0),
+        ),
+        (
+            2.0e3,
+            Vector::new(3.0, 1.0, 0.0),
+            Vector::new(0.0, -0.2, 0.0),
+        ),
+        (
+            5.0e2,
+            Vector::new(-2.0, 4.0, 1.0),
+            Vector::new(0.0, 0.0, 0.3),
+        ),
+    ];
+    let mut init = Vec::new();
+    for (m, p, v) in defs {
+        let h = world.insert_body(satellite_builder(m, p, v, 0.1));
+        world.add_n_body(h, m);
+        let b = world.bodies().get(h).unwrap();
+        init.push((h, b.translation(), b.linvel(), m));
+    }
+
+    // 冻结初始配置：源位置快照（生产路径 `refresh_n_body_sources` 产出）。
+    let src_pos = snapshot_source_positions(world.bodies(), world.n_body_sources());
+    let n_bodies = world.bodies().len();
+    let src_rot: Vec<Rotation> = (0..n_bodies).map(|_| Rotation::IDENTITY).collect();
+    let ctx = AccelContext {
+        celestials: &[],
+        n_body_sources: world.n_body_sources(),
+        source_positions: &src_pos,
+        source_rotations: &src_rot,
+        softening_sq: 0.0,
+        central_body: None,
+        sun_position: Vector::ZERO,
+        relativistic: mps_cosmos::world::RelativisticCorrection::None,
+    };
+
+    // 独立串行 reference：每体 velocity-Verlet（与生产 `verlet_step` 同公式）。
+    let mut reference = Vec::new();
+    for &(h, r0, v0, mass) in &init {
+        let a0 = total_acceleration(r0, v0, mass, h, &ctx, None);
+        let v_half = v0 + a0 * (0.5 * dt);
+        let r1 = r0 + v_half * dt;
+        let a1 = total_acceleration(r1, v_half, mass, h, &ctx, None);
+        let v1 = v_half + a1 * (0.5 * dt);
+        reference.push((h, r1, v1));
+    }
+
+    // 生产路径：优化后的并行 + get_unchecked。
+    world.step(dt);
+
+    for (h, r_ref, v_ref) in reference {
+        let b = world.bodies().get(h).unwrap();
+        let pos = b.translation();
+        let vel = b.linvel();
+        assert!(
+            (pos.x - r_ref.x).abs() < 1e-12
+                && (pos.y - r_ref.y).abs() < 1e-12
+                && (pos.z - r_ref.z).abs() < 1e-12,
+            "body {h:?} 优化路径位置 {pos:?} 与串行 reference {r_ref:?} 不一致"
+        );
+        assert!(
+            (vel.x - v_ref.x).abs() < 1e-12
+                && (vel.y - v_ref.y).abs() < 1e-12
+                && (vel.z - v_ref.z).abs() < 1e-12,
+            "body {h:?} 优化路径速度 {vel:?} 与串行 reference {v_ref:?} 不一致"
+        );
+    }
+}

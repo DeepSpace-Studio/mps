@@ -26,6 +26,7 @@ use rapier3d::prelude::{
     IslandManager, MultibodyJointSet, NarrowPhase, PhysicsPipeline, RigidBodyBuilder,
     RigidBodyHandle, RigidBodySet, Rotation, Vector,
 };
+use rayon::prelude::*;
 
 /// 单刚体的环境扰动配置。
 #[derive(Clone, Copy, Debug)]
@@ -260,6 +261,20 @@ pub struct CosmosWorld {
     /// `collect()` 全部有 parent 的 collider 到 `Vec::new()` 抛弃——这里改为跨步
     /// 复用：`clear()` + push，消除每步堆分配。元素是 `(collider_handle, world_pose)`。
     scratch_collider_updates: Vec<(ColliderHandle, Pose)>,
+
+    /// 可选的共享内存 arena（Java→Rust 零拷贝命令通道 + Rust→Java 零拷贝
+    /// 状态回读）。由 `create_shared_arena` 创建、随世界生命周期存在；`step`
+    /// 在头部 drain Java 命令、尾部 flush body 槽。`None` 时不走 arena 路径。
+    shared_arena: Option<Box<crate::arena::SharedArena>>,
+    /// arena index（`bodies` 插入序号）→ 本世界 `RigidBodyHandle` 的映射。
+    /// `bodies.len()` 变化时才增量重建（插入序稳定，故映射稳定）。
+    arena_idx_map: Vec<RigidBodyHandle>,
+    /// 上一次 `arena_idx_map` 重建时的 `bodies.len()`，用于判断是否需要重建。
+    arena_idx_map_body_count: usize,
+    /// drain 出的 per-arena-index 命令合力（AddForce），按 arena index 存储。
+    /// 显式积子路径在 `explicit_substep` 里按 `命令力/质量` 折成附加加速度注入；
+    /// RapierForce 路径直接 `add_force` 消费，不读此缓冲。每条 `step` 尾部清空。
+    arena_cmd_forces: Vec<Option<Vector>>,
 }
 
 /// 一次 `step` 的诊断结果。调用方原本只能靠 `step` 的静默 return 猜
@@ -328,6 +343,10 @@ impl CosmosWorld {
             scratch_source_positions: Vec::new(),
             scratch_source_rotations: Vec::new(),
             scratch_collider_updates: Vec::new(),
+            shared_arena: None,
+            arena_idx_map: Vec::new(),
+            arena_idx_map_body_count: 0,
+            arena_cmd_forces: Vec::new(),
         }
     }
 
@@ -387,12 +406,170 @@ impl CosmosWorld {
             scratch_source_positions: Vec::new(),
             scratch_source_rotations: Vec::new(),
             scratch_collider_updates: Vec::new(),
+            shared_arena: None,
+            arena_idx_map: Vec::new(),
+            arena_idx_map_body_count: 0,
+            arena_cmd_forces: Vec::new(),
         }
     }
 
     /// 设太阳位置（光压方向参考）。
     pub fn set_sun_position(&mut self, pos: Vector) {
         self.sun_position = pos;
+    }
+
+    /// 创建共享内存 arena（Java 零拷贝命令通道 + 状态回读）。
+    ///
+    /// 一个世界最多一个 arena；已存在则原样保留（返回 `false`）。arena 容量
+    /// 必须 >0 且不超过 [`crate::arena::MAX_ARENA_BODIES`] /
+    /// [`crate::arena::MAX_ARENA_COMMANDS`]，且总分配 ≤ 256 MiB。`step` 会
+    /// 自动 drain Java 写入的命令、并在尾部 flush body 槽供 Java 零拷贝读取。
+    ///
+    /// 返回 `true` 表示创建成功（`self.shared_arena` 现为 `Some`）。
+    pub fn create_shared_arena(&mut self, max_bodies: u32, max_commands: u32) -> bool {
+        if self.shared_arena.is_some() {
+            return false;
+        }
+        match crate::arena::SharedArena::new(max_bodies, max_commands) {
+            Some(arena) => {
+                self.shared_arena = Some(Box::new(arena));
+                self.arena_idx_map.clear();
+                self.arena_idx_map_body_count = 0;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// 销毁共享 arena（若有的话）。`None` 时是 no-op。
+    ///
+    /// **Java 侧注意**：销毁前必须先释放/解映射映射该 arena 的 `MemorySegment`，
+    /// 否则内存已释放而 Java 段仍指向它会造成 use-after-free。
+    pub fn destroy_shared_arena(&mut self) {
+        self.shared_arena = None;
+    }
+
+    /// 取 arena 基地址（无 arena 时返回 0）。供 FFI `cosmos_world_get_shared_arena_address`。
+    pub fn shared_arena_address(&self) -> u64 {
+        self.shared_arena.as_ref().map_or(0, |a| a.address())
+    }
+
+    /// 取 arena 总字节大小（无 arena 时返回 0）。供 FFI `cosmos_world_get_shared_arena_size`。
+    pub fn shared_arena_size(&self) -> u64 {
+        self.shared_arena.as_ref().map_or(0, |a| a.size() as u64)
+    }
+
+    /// Drain the arena command ring (Java→Rust) and apply each command to its
+    /// target body.  Called at the top of every `step` when an arena exists.
+    ///
+    /// Rebuilds `arena_idx_map` (arena index → `RigidBodyHandle`) incrementally:
+    /// rapier preserves insertion order, so the map only changes when the body
+    /// count changes.  The command ring is SPSC (Java producer, Rust consumer);
+    /// `drain_commands` reads `[0, cmd_write)`, dispatches each slot, and resets
+    /// `cmd_write` to 0.
+    fn drain_arena_commands(&mut self) {
+        let arena = match &self.shared_arena {
+            Some(a) => a,
+            None => return,
+        };
+        let commands = arena.drain_commands();
+        if commands.is_empty() {
+            return;
+        }
+
+        // 增量重建 arena index → handle 映射（仅 body 数变化时）。
+        let n_bodies = self.bodies.len();
+        if n_bodies != self.arena_idx_map_body_count {
+            self.arena_idx_map.clear();
+            for (h, _) in self.bodies.iter() {
+                self.arena_idx_map.push(h);
+            }
+            self.arena_idx_map_body_count = n_bodies;
+        }
+        let idx = &self.arena_idx_map;
+
+        for (cmd_type, body_index, a0, a1, a2) in commands {
+            let h = match idx.get(body_index as usize) {
+                Some(&h) => h,
+                None => continue,
+            };
+            let body = match self.bodies.get_mut(h) {
+                Some(b) => b,
+                None => continue,
+            };
+            match cmd_type {
+                // AddForce — RapierForce 路径直接 add_force；显式积子路径先攒到
+                // `arena_cmd_forces`（按 arena index），由 `explicit_substep` 折成附加
+                // 加速度注入（rapier 的 user_force 在显式路径下不参与积分）。
+                0 => {
+                    if matches!(self.orbit_integration, OrbitIntegration::RapierForce) {
+                        body.add_force(Vector::new(a0, a1, a2), true);
+                    } else {
+                        let bi = body_index as usize;
+                        if bi >= self.arena_cmd_forces.len() {
+                            self.arena_cmd_forces.resize_with(bi + 1, || None);
+                        }
+                        let existing = self.arena_cmd_forces[bi].unwrap_or(Vector::ZERO);
+                        self.arena_cmd_forces[bi] = Some(existing + Vector::new(a0, a1, a2));
+                    }
+                }
+                // AddTorque — 仅 RapierForce 路径消费（显式路径不积分角运动）。
+                1 => {
+                    body.add_torque(Vector::new(a0, a1, a2), true);
+                }
+                // SetVelocity
+                2 => {
+                    body.set_linvel(Vector::new(a0, a1, a2), true);
+                }
+                // ApplyImpulse
+                3 => {
+                    body.apply_impulse(Vector::new(a0, a1, a2), true);
+                }
+                // ApplyTorqueImpulse
+                4 => {
+                    body.apply_torque_impulse(Vector::new(a0, a1, a2), true);
+                }
+                // WakeUp
+                5 => {
+                    body.wake_up(true);
+                }
+                // Sleep
+                6 => {
+                    body.sleep();
+                }
+                // SetRotation — a0..a2 = axis·angle vector (magnitude = angle rad)
+                7 => {
+                    let axis_angle = Vector::new(a0, a1, a2);
+                    let angle = axis_angle.length();
+                    if angle > 1e-12 {
+                        let unit_axis = axis_angle / angle;
+                        body.set_rotation(Rotation::from_axis_angle(unit_axis, angle), true);
+                    }
+                }
+                // SetPose — a0..a2 = position, rotation kept
+                8 => {
+                    let pos = rapier3d::prelude::Pose::from_parts(
+                        Vector::new(a0, a1, a2),
+                        *body.rotation(),
+                    );
+                    body.set_position(pos, true);
+                }
+                // SetGravityScale — a0 = scale
+                9 => {
+                    body.set_gravity_scale(a0, true);
+                }
+                // SetLinearDamping — a0 = damping
+                10 => {
+                    body.set_linear_damping(a0);
+                }
+                // SetAngularDamping — a0 = damping
+                11 => {
+                    body.set_angular_damping(a0);
+                }
+                // Unknown command type — ignore (defensive; Java only writes known types).
+                _ => {}
+            }
+        }
     }
 
     /// 设/改 n-body 中心天体（用于环境扰动力：大气密度/太阳方向参考）。
@@ -627,7 +804,12 @@ impl CosmosWorld {
             return StepResult::Skipped(StepSkipReason::TooLarge);
         }
 
-        match self.orbit_integration {
+        // --- Arena: drain Java commands (Java→Rust zero-copy channel) ---
+        // 在物理推进之前把 Java 写入命令环的命令应用到刚体；推进结束后 flush
+        // body 槽供 Java 零拷贝回读（见本方法尾部）。
+        self.drain_arena_commands();
+
+        let result = match self.orbit_integration {
             OrbitIntegration::RapierForce => {
                 if dt > MAX_STEP_DT {
                     let substeps = (dt / MAX_STEP_DT).ceil() as u32;
@@ -649,7 +831,17 @@ impl CosmosWorld {
                 self.step_via_explicit(dt);
                 StepResult::Stepped(dt)
             }
+        };
+
+        // --- Arena: flush body slots (Rust→Java zero-copy readback) ---
+        if let Some(ref arena) = self.shared_arena {
+            arena.flush_all_bodies(&self.bodies);
         }
+
+        // 每条 step 尾部清空本步攒下的命令合力（显式路径用），避免泄漏到下步。
+        self.arena_cmd_forces.clear();
+
+        result
     }
 
     /// 批量推进 `n` 个步长，每步 `dt` 秒。等价于循环 `step(dt)`，但把 `dt`
@@ -834,12 +1026,33 @@ impl CosmosWorld {
             relativistic: self.relativistic_correction,
         };
 
+        // 3.5 并行预计算每体的初始加速度 `a0 = total_acceleration(pos, vel, ...)`。
+        // 每个体的 a0 只读冻结快照 `ctx` + 自身 (pos,vel,mass,handle,pert) 标量，
+        // **不读任何其它体的可变状态**——故按体并行求值与串行逐位一致（不加、不
+        // 减、不重排任何浮点运算顺序）。这是 n-body 互引力 O(N·M) 最贵的一次
+        // 评估（Verlet 每体恰好一次；高阶积子内部还会在偏移位置上重估，但首评
+        // 即 a0，后续在并行预计算之外按原顺序串行，数值不变）。单线程下
+        // `par_iter` 退化为顺序，无额外开销；多体场景由 rayon 自动分到多核。
+        let n_tasks = self.scratch_tasks.len();
+        let a0_buf: Vec<Vector> = if n_tasks == 0 {
+            Vec::new()
+        } else {
+            self.scratch_tasks
+                .par_iter()
+                .map(|&(h, pos, vel, mass, perturb)| {
+                    crate::integrator::total_acceleration(pos, vel, mass, h, &ctx, perturb.as_ref())
+                })
+                .collect()
+        };
+
         // 4. 选定积子：每个分支取 body、按对应积子推进、写回（Kahan 分支另缓存态）。
         let mode = self.orbit_integration;
         // 用裸索引遍历 tasks 以避免在循环体内 `self.bodies.get_mut` 时的可变借用
         // 与 `self.kahan_state` 的可变借用冲突——按索引访问把 `self` 的多个可变
         // 字段拆开借用。tasks 内容在子步内冻结，无别名问题。
-        let n_tasks = self.scratch_tasks.len();
+        // 索引遍历不可避免（同时按下标取 `scratch_tasks[i]` 与派生 `kahan_idx`
+        // 写 `kahan_state`），故允许 `needless_range_loop`。
+        #[allow(clippy::needless_range_loop)]
         for i in 0..n_tasks {
             let (handle, pos, vel, mass, perturbation) = self.scratch_tasks[i];
             // 必要时为 Kahan 模式补齐 per-body 累加态，并从 body 当前值同步。
@@ -858,20 +1071,15 @@ impl CosmosWorld {
                 ));
             }
 
-            let Some(body) = self.bodies.get_mut(handle) else {
-                continue;
+            let body = match self.bodies.get_mut(handle) {
+                Some(b) => b,
+                None => continue,
             };
 
             match mode {
                 OrbitIntegration::Verlet => {
-                    let a0 = crate::integrator::total_acceleration(
-                        pos,
-                        vel,
-                        mass,
-                        handle,
-                        &ctx,
-                        perturbation.as_ref(),
-                    );
+                    // a0 已并行预计算（见 3.5），此处直接取用，避免串行重复求值。
+                    let a0 = a0_buf[i];
                     crate::integrator::verlet_step(body, a0, &ctx, mass, handle, perturbation, dt);
                 }
                 OrbitIntegration::Yoshida4 | OrbitIntegration::ForestRuth8 => {
@@ -886,9 +1094,9 @@ impl CosmosWorld {
                     );
                 }
                 OrbitIntegration::Yoshida4Kahan | OrbitIntegration::ForestRuth8Kahan => {
-                    let Some(state) = self.kahan_state[kahan_idx].as_mut() else {
-                        // need_kahan 为 false 已经过滤；这里兜底
-                        continue;
+                    let state = match self.kahan_state[kahan_idx].as_mut() {
+                        Some(s) => s,
+                        None => continue,
                     };
                     crate::integrator::explicit_highorder_kahan_step(
                         body,
@@ -902,6 +1110,21 @@ impl CosmosWorld {
                     );
                 }
                 OrbitIntegration::RapierForce => unreachable!("RapierForce 不走显式路径"),
+            }
+
+            // 命令环注入的合力（AddForce，显式路径）：在积子推进之上叠加一个
+            // 常加速度半隐式欧拉修正（F 在本子步视为常量，与积子同阶精度）。
+            // 不改动 `integrator` 签名即可让 arena 命令力在所有显式积子模式下生效。
+            if mass > 0.0 {
+                let f = self.arena_cmd_forces.get(kahan_idx).copied().flatten();
+                if let Some(f) = f {
+                    let a_cmd = f / mass;
+                    let dv = a_cmd * dt;
+                    let v_now = body.linvel();
+                    body.set_linvel(v_now + dv, false);
+                    let r_now = body.translation();
+                    body.set_translation(r_now + a_cmd * (0.5 * dt * dt), false);
+                }
             }
         }
     }
@@ -1034,16 +1257,17 @@ impl CosmosWorld {
             if !self.n_body_sources.is_empty() {
                 let exclude = handle.into_raw_parts().0 as usize;
                 let mut acc_nb = Vector::ZERO;
+                // 与 `integrator::total_acceleration` 同款优化：源快照按 `bodies.len()`
+                // 建好、索引必在界内，用 `get_unchecked` 省掉每源每体的 `Option` +
+                // `unwrap_or` 分支；近场不规则分支（带 `points` 的源）从主 monopole
+                // 循环里摘出，主路径不再判 `!src.points.is_empty()`。
+                debug_assert!(self.scratch_source_positions.len() >= self.n_body_sources.len());
                 for src in &self.n_body_sources {
                     let src_idx = src.handle.into_raw_parts().0 as usize;
                     if src_idx == exclude || src.gm <= 0.0 {
                         continue;
                     }
-                    let r_j = self
-                        .scratch_source_positions
-                        .get(src_idx)
-                        .copied()
-                        .unwrap_or(Vector::ZERO);
+                    let r_j = unsafe { *self.scratch_source_positions.get_unchecked(src_idx) };
                     let d = r_j - pos;
                     let dist_sq = d.length_squared() + self.n_body_softening_sq;
                     if dist_sq < 1.0 {
@@ -1052,11 +1276,7 @@ impl CosmosWorld {
                     let dist = dist_sq.sqrt();
                     let near_threshold = src.near_field_threshold();
                     if !src.points.is_empty() && near_threshold > 0.0 && dist <= near_threshold {
-                        let rot = self
-                            .scratch_source_rotations
-                            .get(src_idx)
-                            .copied()
-                            .unwrap_or(crate::integrator::DEFAULT_ROT);
+                        let rot = unsafe { *self.scratch_source_rotations.get_unchecked(src_idx) };
                         for mp in &src.points {
                             if mp.gm <= 0.0 {
                                 continue;
@@ -1189,6 +1409,10 @@ impl Clone for CosmosWorld {
             scratch_source_positions: Vec::new(),
             scratch_source_rotations: Vec::new(),
             scratch_collider_updates: Vec::new(),
+            shared_arena: None,
+            arena_idx_map: Vec::new(),
+            arena_idx_map_body_count: 0,
+            arena_cmd_forces: Vec::new(),
         }
     }
 }

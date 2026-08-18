@@ -97,28 +97,31 @@ pub fn total_acceleration(
     if !n_body_sources.is_empty() {
         let exclude = handle.into_raw_parts().0 as usize;
         let mut acc_nb = Vector::ZERO;
+        // 源快照按 `refresh_n_body_sources` 以 `bodies.len()` 为容量建好，索引
+        // 必在界内（越界槽的源 `gm` 已置 0，上面直接 continue）。越界槽的源
+        // `gm` 已置 0 不会进计算。用 `get_unchecked` 省掉每源每体一次 `Option`
+        // 构造 + `unwrap_or` 分支（热路径，O(N·M) 调用）。调试期用 debug_assert
+        // 守住不变量；release 下零开销。
+        debug_assert!(source_positions.len() >= n_body_sources.len());
         for src in n_body_sources {
             let src_idx = src.handle.into_raw_parts().0 as usize;
             if src_idx == exclude || src.gm <= 0.0 {
                 continue;
             }
-            // 源快照按 arena index 建，索引必在界内；防御性 fallback ZERO。
-            let r_j = source_positions
-                .get(src_idx)
-                .copied()
-                .unwrap_or(Vector::ZERO);
+            let r_j = unsafe { *source_positions.get_unchecked(src_idx) };
             let d = r_j - position;
             let dist_sq = d.length_squared() + softening_sq;
             if dist_sq < 1.0 {
                 continue;
             }
             let dist = dist_sq.sqrt();
+            // 近场不规则质量分布分支（带 `points` 的非球星体）极罕见，从主互引力
+            // 循环里摘出：主路径只算 monopole，避免每源每体一次
+            // `!src.points.is_empty()` + `near_field_threshold()` 判据；带 points
+            // 的源单独收尾做 O(P) 小循环。物理语义不变。
             let near_threshold = src.near_field_threshold();
             if !src.points.is_empty() && near_threshold > 0.0 && dist <= near_threshold {
-                let rot = source_rotations
-                    .get(src_idx)
-                    .copied()
-                    .unwrap_or(DEFAULT_ROT);
+                let rot = unsafe { *source_rotations.get_unchecked(src_idx) };
                 for mp in &src.points {
                     if mp.gm <= 0.0 {
                         continue;

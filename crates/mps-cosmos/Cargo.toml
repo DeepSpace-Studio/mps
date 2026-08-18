@@ -9,6 +9,7 @@ crate-type = ["rlib"]
 [dependencies]
 mps-formula = { path = "../mps-formula" }
 rapier3d = { workspace = true }
+rayon = { workspace = true }
 
 [build-dependencies]
 cbindgen = "0.29.4"

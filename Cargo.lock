@@ -3729,6 +3729,7 @@ dependencies = [
  "mps-build-common",
  "mps-formula",
  "rapier3d-f64",
+ "rayon",
 ]
 
 [[package]]

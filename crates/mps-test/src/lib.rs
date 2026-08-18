@@ -2,6 +2,7 @@
 // Each module mirrors a rapier submodule from mps-core
 
 pub mod cosmos {
+    pub mod arena;
     pub mod bodies;
     pub mod ffi;
     pub mod gravity;

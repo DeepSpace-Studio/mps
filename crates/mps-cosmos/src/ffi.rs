@@ -20,7 +20,9 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use mps_formula::celestial_data::{celestial_body_id_from_u32, get_celestial_body};
-use mps_formula::error::{ERR_CAPACITY, ERR_INTERNAL, ERR_NULL_POINTER, set_error};
+use mps_formula::error::{
+    ERR_CAPACITY, ERR_INTERNAL, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, set_error,
+};
 use mps_formula::ffi::Vec3;
 use rapier3d::prelude::{RigidBodyBuilder, RigidBodyHandle, Vector};
 
@@ -400,6 +402,99 @@ pub extern "C" fn cosmos_world_step_n(world: *mut CosmosWorld, dt: f64, n: u32) 
             Err(StepSkipReason::NonPositive) => 2,
             Err(StepSkipReason::TooLarge) => 3,
         }
+    })
+}
+
+/// 创建共享内存 arena（Java 零拷贝命令通道 + 状态回读）。
+///
+/// 写入 `out_address` / `out_size`（传 `null` 可跳过对应输出）；返回的 `*mut CosmosWorld`
+/// 不变。一个世界最多一个 arena，已存在则原样保留并返回 `false`。容量必须 >0 且
+/// 不超过上限，总分配 ≤ 256 MiB。Java 侧用 `out_address`/`out_size` 把这块内存
+/// 映射成 native-order 的 `ByteBuffer`，命令环写入 + body 槽零拷贝读取都走它。
+///
+/// # Safety
+/// `world` 须为 `cosmos_world_create` 产出的有效指针或 null；`out_address` /
+/// `out_size` 若为非负则指向 8 字节可写内存。
+#[unsafe(no_mangle)]
+pub extern "C" fn cosmos_world_create_shared_arena(
+    world: *mut CosmosWorld,
+    max_bodies: u32,
+    max_commands: u32,
+    out_address: *mut u64,
+    out_size: *mut u64,
+) -> i32 {
+    ffi_guard(0, || {
+        let w = match unsafe { world.as_mut() } {
+            Some(t) => t,
+            None => {
+                set_error(ERR_NULL_POINTER, "cosmos world is null");
+                return 0;
+            }
+        };
+        if !out_address.is_null() {
+            unsafe {
+                *out_address = 0;
+            }
+        }
+        if !out_size.is_null() {
+            unsafe {
+                *out_size = 0;
+            }
+        }
+        if !w.create_shared_arena(max_bodies, max_commands) {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "arena create failed (exists or bad capacity)",
+            );
+            return 0;
+        }
+        if !out_address.is_null() {
+            unsafe {
+                *out_address = w.shared_arena_address();
+            }
+        }
+        if !out_size.is_null() {
+            unsafe {
+                *out_size = w.shared_arena_size();
+            }
+        }
+        1
+    })
+}
+
+/// 销毁共享 arena（若有的话）。`null` world 是 no-op。销毁前 Java 必须已释放映射
+/// 该 arena 的 `ByteBuffer`，否则会 use-after-free。
+///
+/// # Safety
+/// `world` 须为 `cosmos_world_create` 产出的有效指针或 null。
+#[unsafe(no_mangle)]
+pub extern "C" fn cosmos_world_destroy_shared_arena(world: *mut CosmosWorld) {
+    ffi_guard((), || {
+        if let Some(w) = unsafe { world.as_mut() } {
+            w.destroy_shared_arena();
+        }
+    })
+}
+
+/// 取 arena 基地址（无 arena 时返回 0）。供 Java 映射 `ByteBuffer` 的地址来源。
+///
+/// # Safety
+/// `world` 须为 `cosmos_world_create` 产出的有效指针或 null。
+#[unsafe(no_mangle)]
+pub extern "C" fn cosmos_world_get_shared_arena_address(world: *const CosmosWorld) -> u64 {
+    ffi_guard(0, || {
+        unsafe { world.as_ref() }.map_or(0, |w| w.shared_arena_address())
+    })
+}
+
+/// 取 arena 总字节大小（无 arena 时返回 0）。供 Java 映射 `ByteBuffer` 的容量来源。
+///
+/// # Safety
+/// `world` 须为 `cosmos_world_create` 产出的有效指针或 null。
+#[unsafe(no_mangle)]
+pub extern "C" fn cosmos_world_get_shared_arena_size(world: *const CosmosWorld) -> u64 {
+    ffi_guard(0, || {
+        unsafe { world.as_ref() }.map_or(0, |w| w.shared_arena_size())
     })
 }
 

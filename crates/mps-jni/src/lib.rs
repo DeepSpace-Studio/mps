@@ -1602,3 +1602,72 @@ jni!(int cosmosWorldDynamicBodySnapshot(
         u32_from_jint(capacity),
     ) as jint
 });
+
+// =========================================================================
+// Cosmos Shared Arena — zero-JNI physics state read/write
+//
+// 与 mps-core 的 `world*SharedArena` 平行：把 cosmos world 的共享内存 arena
+// 暴露给 Java，供其用 native-order `ByteBuffer` 做命令环写入 + body 槽零拷贝
+// 回读。底层调用 `mps_cosmos::ffi::cosmos_world_*`（与 `crates/mps-cosmos/
+// include/cosmos.h` 的 C ABI 一致）。布局契约见 `mps_cosmos::arena` 的常量
+// （HEADER_SIZE / BODY_SLOT_STRIDE / CMD_SLOT_STRIDE / OFF_*）。
+//
+// 句柄约定同 cosmos world：`long world` = `*mut CosmosWorld`（由
+// `cosmosWorldCreate` 返回）。`out_address` / `out_size` 是 Java 端用
+// `Unsafe.allocateMemory` 或 `ByteBuffer.allocateDirect` 分配的 8 字节 native
+// 指针，写入 arena 基地址 / 总字节大小。
+// =========================================================================
+
+// 创建共享 arena。`out_address` / `out_size` 传 0（null）可跳过对应输出。
+// 返回 1 = 成功；0 = 已存在 / 容量非法 / world 为 null（原因见
+// `abiLastErrorCode`）。
+jni!(boolean cosmosWorldCreateSharedArena(long world, int max_bodies, int max_commands, long out_address, long out_size) {
+    mps_cosmos::ffi::cosmos_world_create_shared_arena(
+        world as isize as *mut CosmosWorld,
+        u32_from_jint(max_bodies),
+        u32_from_jint(max_commands),
+        pm::<u64>(out_address),
+        pm::<u64>(out_size),
+    ) as jbyte
+});
+// 销毁共享 arena（若有的话）。world 为 null 是 no-op。销毁前 Java 必须已释放映射
+// 该 arena 的 `ByteBuffer`，否则 use-after-free。
+jni!(void cosmosWorldDestroySharedArena(long world) {
+    mps_cosmos::ffi::cosmos_world_destroy_shared_arena(world as isize as *mut CosmosWorld);
+});
+// 取 arena 基地址（无 arena 时返回 0）。供 Java 映射 `ByteBuffer` 的地址来源。
+jni!(long cosmosWorldGetSharedArenaAddress(long world) {
+    mps_cosmos::ffi::cosmos_world_get_shared_arena_address(world as isize as *const CosmosWorld) as jlong
+});
+// 取 arena 总字节大小（无 arena 时返回 0）。供 Java 映射 `ByteBuffer` 的容量来源。
+jni!(long cosmosWorldGetSharedArenaSize(long world) {
+    mps_cosmos::ffi::cosmos_world_get_shared_arena_size(world as isize as *const CosmosWorld) as jlong
+});
+
+/// Returns the cosmos arena wrapped as a Java DirectByteBuffer.
+///
+/// 与核心 `worldGetArenaDirectByteBuffer` 平行，仅指向 cosmos world 的 arena。
+/// 使用标准 JNI `NewDirectByteBuffer`：返回的 `ByteBuffer` 直接包裹 native arena
+/// 内存，Java 侧可用 `ByteBuffer` / `DoubleBuffer` 做零 JNI 读写。
+#[unsafe(export_name = "Java_org_polaris2023_mps_rapier_RapierNative_cosmosWorldGetArenaDirectByteBuffer")]
+#[allow(non_snake_case)]
+pub extern "system" fn cosmosWorldGetArenaDirectByteBuffer(
+    env: JNIEnv,
+    _class: jclass,
+    world: jlong,
+) -> ljni::sys::jobject {
+    catch_unwind(AssertUnwindSafe(|| {
+        let world = world as isize as *mut CosmosWorld;
+        let addr = mps_cosmos::ffi::cosmos_world_get_shared_arena_address(world);
+        let size = mps_cosmos::ffi::cosmos_world_get_shared_arena_size(world);
+        if addr == 0 || size == 0 {
+            return std::ptr::null_mut();
+        }
+        let env_raw: *mut JNIEnv = &raw const env as *mut _;
+        let env = unsafe { &mut *env_raw };
+        unsafe { env.new_direct_byte_buffer(addr as _, size as _) }
+            .map(|bb| bb.as_raw())
+            .unwrap_or(std::ptr::null_mut())
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}

@@ -18,6 +18,7 @@
 
 pub extern crate rapier3d;
 
+pub mod arena;
 pub mod bodies;
 pub mod ffi;
 pub mod gravity;

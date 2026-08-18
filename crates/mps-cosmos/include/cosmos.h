@@ -11,6 +11,56 @@
 #include <stdlib.h>
 
 /**
+ * Magic number identifying a valid cosmos arena: "COSMAREN".
+ */
+#define ARENA_MAGIC 4850186914974811470
+
+/**
+ * Current cosmos arena layout version — increment on any layout change.
+ */
+#define ARENA_VERSION 1
+
+/**
+ * Body slot stride (must match Java side exactly).
+ */
+#define BODY_SLOT_STRIDE 96
+
+/**
+ * Command slot stride — 5 × u64 (cmd_type, body_index, a0, a1, a2).
+ */
+#define CMD_SLOT_STRIDE 40
+
+/**
+ * Header size in bytes.
+ */
+#define HEADER_SIZE 128
+
+/**
+ * Upper bounds for arena capacities — defense against absurd FFI requests.
+ */
+#define MAX_ARENA_BODIES 1000000
+
+#define MAX_ARENA_COMMANDS 1000000
+
+/**
+ * Hard cap on the total arena allocation (256 MiB) — also the Java
+ * `ByteBuffer.capacity()` 2 GiB ceiling.  Keep ≤ `i32::MAX`.
+ */
+#define MAX_ARENA_TOTAL_BYTES ((256 * 1024) * 1024)
+
+#define OFF_BODY_COUNT 32
+
+#define OFF_CMD_WRITE 44
+
+#define OFF_BODY_SLOT_BASE HEADER_SIZE
+
+/**
+ * Header offset (u64) storing the command-ring base offset (dynamic: depends on
+ * max_bodies).  Read this at map time instead of recomputing the layout.
+ */
+#define OFF_CMD_RING 96
+
+/**
  * 默认近场阈值倍率：|d| ≤ 8·bounding_radius 时走质点求和。8 给到 r² 误差 ~1.5%
  * 的 monopole，足够典型的薄壳/扁平分布过渡到 monopole。
  */
@@ -170,6 +220,49 @@ int32_t cosmos_world_step(struct CosmosWorld *world, double dt);
  * 返回 0 = 成功；1 = NonFinite；2 = NonPositive；3 = TooLarge。
  */
 int32_t cosmos_world_step_n(struct CosmosWorld *world, double dt, uint32_t n);
+
+/**
+ * 创建共享内存 arena（Java 零拷贝命令通道 + 状态回读）。
+ *
+ * 写入 `out_address` / `out_size`（传 `null` 可跳过对应输出）；返回的 `*mut CosmosWorld`
+ * 不变。一个世界最多一个 arena，已存在则原样保留并返回 `false`。容量必须 >0 且
+ * 不超过上限，总分配 ≤ 256 MiB。Java 侧用 `out_address`/`out_size` 把这块内存
+ * 映射成 native-order 的 `ByteBuffer`，命令环写入 + body 槽零拷贝读取都走它。
+ *
+ * # Safety
+ * `world` 须为 `cosmos_world_create` 产出的有效指针或 null；`out_address` /
+ * `out_size` 若为非负则指向 8 字节可写内存。
+ */
+int32_t cosmos_world_create_shared_arena(struct CosmosWorld *world,
+                                         uint32_t max_bodies,
+                                         uint32_t max_commands,
+                                         uint64_t *out_address,
+                                         uint64_t *out_size);
+
+/**
+ * 销毁共享 arena（若有的话）。`null` world 是 no-op。销毁前 Java 必须已释放映射
+ * 该 arena 的 `ByteBuffer`，否则会 use-after-free。
+ *
+ * # Safety
+ * `world` 须为 `cosmos_world_create` 产出的有效指针或 null。
+ */
+void cosmos_world_destroy_shared_arena(struct CosmosWorld *world);
+
+/**
+ * 取 arena 基地址（无 arena 时返回 0）。供 Java 映射 `ByteBuffer` 的地址来源。
+ *
+ * # Safety
+ * `world` 须为 `cosmos_world_create` 产出的有效指针或 null。
+ */
+uint64_t cosmos_world_get_shared_arena_address(const struct CosmosWorld *world);
+
+/**
+ * 取 arena 总字节大小（无 arena 时返回 0）。供 Java 映射 `ByteBuffer` 的容量来源。
+ *
+ * # Safety
+ * `world` 须为 `cosmos_world_create` 产出的有效指针或 null。
+ */
+uint64_t cosmos_world_get_shared_arena_size(const struct CosmosWorld *world);
 
 /**
  * 取刚体当前位置（3×f64）。`out` 指向 24 字节 native 缓冲（`Vec3`）。

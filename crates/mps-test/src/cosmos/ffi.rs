@@ -235,3 +235,226 @@ fn snapshot_round_trip_against_per_body_translation_out() {
         [per_body_pos[1].x, per_body_pos[1].y, per_body_pos[1].z]
     );
 }
+
+// ===========================================================================
+// Shared arena zero-copy round-trip (Java 命令环 → Rust drain → 状态回读)
+// ===========================================================================
+//
+// 这些测试直接对 arena 共享内存做 native-order 读写（与 Java 侧 `ByteBuffer`
+// 映射等价），验证零拷贝路径：
+//   - Java 把命令写进命令环（命令类型 + body 索引 + 3 个 f64 参数）；
+//   - Rust 在 `step` 头部 `drain_commands` 应用命令、尾部 `flush_all_bodies`
+//     把刚体状态拍平进 body 槽；
+// - 全程无一次 per-body JNI 往返。
+//
+// 布局常量来自 `mps_cosmos::arena`，与 `docs/cosmos-arena.md` 一致。任一偏移
+// 被破坏即视为 ABI 回归。
+
+use mps_cosmos::arena::{
+    ARENA_MAGIC, ARENA_VERSION, BODY_SLOT_STRIDE, CMD_SLOT_STRIDE, HEADER_SIZE, OFF_BODY_COUNT,
+    OFF_CMD_RING, OFF_CMD_WRITE,
+};
+
+/// 把 arena 基地址映射成可写裸指针，便于测试侧模拟 Java 的命令写入。
+fn arena_mut(addr: u64) -> *mut u8 {
+    addr as *mut u8
+}
+
+/// 读 body 槽的线速度（零拷贝回读），索引 `i`。
+unsafe fn read_body_linvel(base: *mut u8, i: usize) -> [f64; 3] {
+    unsafe {
+        let slot = base.add(HEADER_SIZE + i * BODY_SLOT_STRIDE as usize);
+        [
+            (slot.add(32) as *const f64).read_unaligned(),
+            (slot.add(40) as *const f64).read_unaligned(),
+            (slot.add(48) as *const f64).read_unaligned(),
+        ]
+    }
+}
+
+/// 读 body 槽的位置（零拷贝回读）。
+unsafe fn read_body_pos(base: *mut u8, i: usize) -> [f64; 3] {
+    unsafe {
+        let slot = base.add(HEADER_SIZE + i * BODY_SLOT_STRIDE as usize);
+        [
+            (slot.add(8) as *const f64).read_unaligned(),
+            (slot.add(16) as *const f64).read_unaligned(),
+            (slot.add(24) as *const f64).read_unaligned(),
+        ]
+    }
+}
+
+/// 在命令环写入一条命令（Java 侧等价操作），并 bump `cmd_write`。
+unsafe fn write_command(
+    base: *mut u8,
+    cmd_ring_base: usize,
+    slot: usize,
+    cmd_type: u64,
+    body_index: u64,
+    a: [f64; 3],
+) {
+    unsafe {
+        let p = base.add(cmd_ring_base + slot * CMD_SLOT_STRIDE as usize);
+        (p as *mut u64).write_unaligned(cmd_type);
+        (p.add(8) as *mut u64).write_unaligned(body_index);
+        (p.add(16) as *mut u64).write_unaligned(a[0].to_bits());
+        (p.add(24) as *mut u64).write_unaligned(a[1].to_bits());
+        (p.add(32) as *mut u64).write_unaligned(a[2].to_bits());
+    }
+}
+
+#[test]
+fn arena_header_is_valid_after_create() {
+    let mut world = empty_world();
+    let _sat = world.insert_body(satellite_builder(1.0, Vector::ZERO, Vector::ZERO, 0.1));
+    assert!(world.create_shared_arena(64, 64), "arena create");
+
+    let addr = world.shared_arena_address();
+    let size = world.shared_arena_size();
+    assert_ne!(addr, 0);
+    assert!(size > HEADER_SIZE as u64);
+
+    // 零拷贝读 header：magic / version / body_count。
+    unsafe {
+        let base = arena_mut(addr);
+        let magic = (base as *const u64).read_unaligned();
+        assert_eq!(magic, ARENA_MAGIC, "arena magic");
+        let version = (base.add(8) as *const u32).read_unaligned();
+        assert_eq!(version, ARENA_VERSION, "arena version");
+        let body_count = (base.add(OFF_BODY_COUNT) as *const u32).read_unaligned();
+        // 还未 step，flush 未跑，body_count 仍为 0；但 layout 合法。
+        assert_eq!(body_count, 0);
+    }
+
+    world.destroy_shared_arena();
+    assert_eq!(world.shared_arena_address(), 0, "arena freed");
+}
+
+#[test]
+fn arena_set_velocity_command_roundtrip_zero_copy() {
+    let mut world = empty_world();
+    // 默认 orbit_integration = Yoshida4（显式积子路径）。
+    let _sat = world.insert_body(satellite_builder(
+        1.0,
+        Vector::new(0.0, 0.0, 0.0),
+        Vector::ZERO,
+        0.1,
+    ));
+    assert!(world.create_shared_arena(64, 64));
+
+    let addr = world.shared_arena_address();
+    let base = arena_mut(addr);
+    unsafe {
+        // 命令环基地址由 header 在 `new` 时写入（OFF_CMD_RING）。
+        let cmd_ring_base = (base.add(OFF_CMD_RING) as *const u64).read_unaligned() as usize;
+        // Java 写入 SetVelocity (type=2) 给 body 0 → (1, 2, 3)。
+        write_command(base, cmd_ring_base, 0, 2, 0, [1.0, 2.0, 3.0]);
+        // bump cmd_write = 1（Java 写满 1 条命令）。
+        (base.add(OFF_CMD_WRITE) as *mut u32).write_unaligned(1);
+    }
+
+    // Rust 侧 step：头部 drain 命令（SetVelocity）→ 尾部 flush body 槽。
+    world.step(0.5);
+
+    // 零拷贝回读：body 0 的 linvel 应等于命令值；位置被显式积子推进（引力为 0，
+    // 仅匀速直线运动 → 位移 = v·dt = (0.5, 1.0, 1.5)）。
+    unsafe {
+        let vel = read_body_linvel(base, 0);
+        assert!(
+            (vel[0] - 1.0).abs() < 1e-9
+                && (vel[1] - 2.0).abs() < 1e-9
+                && (vel[2] - 3.0).abs() < 1e-9,
+            "linvel after SetVelocity command: {vel:?}"
+        );
+        let pos = read_body_pos(base, 0);
+        assert!(
+            (pos[0] - 0.5).abs() < 1e-9
+                && (pos[1] - 1.0).abs() < 1e-9
+                && (pos[2] - 1.5).abs() < 1e-9,
+            "pos after SetVelocity command (v·dt): {pos:?}"
+        );
+        // body_count 回读应为 1（flush 已写 1 体）。
+        let body_count = (base.add(OFF_BODY_COUNT) as *const u32).read_unaligned();
+        assert_eq!(body_count, 1, "body_count after step");
+        // 命令环已被 drain 清空（cmd_write 复位）。
+        let cmd_write = (base.add(OFF_CMD_WRITE) as *const u32).read_unaligned();
+        assert_eq!(cmd_write, 0, "cmd ring drained");
+    }
+
+    world.destroy_shared_arena();
+}
+
+#[test]
+fn arena_add_force_command_roundtrip_explicit_path() {
+    let mut world = empty_world();
+    // 显式积子路径（Yoshida4）。命令力 F 应折成 a=F/m 注入半隐式欧拉修正。
+    let _sat = world.insert_body(satellite_builder(
+        2.0, // mass = 2 kg
+        Vector::new(0.0, 0.0, 0.0),
+        Vector::ZERO,
+        0.1,
+    ));
+    assert!(world.create_shared_arena(64, 64));
+
+    let addr = world.shared_arena_address();
+    let base = arena_mut(addr);
+    unsafe {
+        let cmd_ring_base = (base.add(OFF_CMD_RING) as *const u64).read_unaligned() as usize;
+        // AddForce (type=0) 给 body 0 → (4, 0, 0) N。a = F/m = (2, 0, 0)。
+        write_command(base, cmd_ring_base, 0, 0, 0, [4.0, 0.0, 0.0]);
+        (base.add(OFF_CMD_WRITE) as *mut u32).write_unaligned(1);
+    }
+
+    world.step(1.0); // dt = 1.0
+
+    // 零拷贝回读：Δv = a·dt = (2,0,0)；位移 ≈ ½·a·dt² = (1,0,0)（半隐式修正 + 积子）。
+    unsafe {
+        let vel = read_body_linvel(base, 0);
+        assert!(
+            (vel[0] - 2.0).abs() < 1e-6,
+            "linvel after AddForce (a·dt): {vel:?}"
+        );
+        let pos = read_body_pos(base, 0);
+        assert!(
+            pos[0] > 0.9 && pos[0] < 1.1,
+            "pos after AddForce (½·a·dt²): {pos:?}"
+        );
+    }
+
+    world.destroy_shared_arena();
+}
+
+#[test]
+fn arena_ffi_create_get_address_size_roundtrip() {
+    // 经 FFI 入口验证（与 JNI 路径等价）：create 返回地址/大小，get_* 读回一致。
+    use mps_cosmos::ffi::{
+        cosmos_world_create_shared_arena, cosmos_world_destroy_shared_arena,
+        cosmos_world_get_shared_arena_address, cosmos_world_get_shared_arena_size,
+    };
+
+    let mut world = empty_world();
+    let _sat = world.insert_body(satellite_builder(1.0, Vector::ZERO, Vector::ZERO, 0.1));
+
+    let mut out_addr: u64 = 0;
+    let mut out_size: u64 = 0;
+    let ok = cosmos_world_create_shared_arena(
+        &mut world as *mut _,
+        128,
+        128,
+        &mut out_addr as *mut u64,
+        &mut out_size as *mut u64,
+    );
+    assert_eq!(ok, 1, "ffi create ok");
+    assert_eq!(
+        out_addr,
+        cosmos_world_get_shared_arena_address(&world as *const _)
+    );
+    assert_eq!(
+        out_size,
+        cosmos_world_get_shared_arena_size(&world as *const _)
+    );
+    assert!(out_addr != 0 && out_size > HEADER_SIZE as u64);
+
+    cosmos_world_destroy_shared_arena(&mut world as *mut _);
+    assert_eq!(cosmos_world_get_shared_arena_address(&world as *const _), 0);
+}
