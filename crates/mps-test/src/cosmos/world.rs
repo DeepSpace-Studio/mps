@@ -466,10 +466,12 @@ fn default_softening_bounds_close_encounter() {
         n_body_sources: world.n_body_sources(),
         source_positions: &src_pos,
         source_rotations: &src_rot,
+        source_pos_gm: &[],
         softening_sq: world.n_body_softening_sq(),
         central_body: None,
         sun_position: Vector::ZERO,
         relativistic: mps_cosmos::world::RelativisticCorrection::None,
+        has_irregular_sources: true,
     };
     let acc = total_acceleration(
         Vector::new(1.0, 0.0, 0.0),
@@ -1032,10 +1034,12 @@ fn n_body_optimized_matches_serial_reference_bit_identical() {
         n_body_sources: world.n_body_sources(),
         source_positions: &src_pos,
         source_rotations: &src_rot,
+        source_pos_gm: &[],
         softening_sq: 0.0,
         central_body: None,
         sun_position: Vector::ZERO,
         relativistic: mps_cosmos::world::RelativisticCorrection::None,
+        has_irregular_sources: true,
     };
 
     // 独立串行 reference：每体 velocity-Verlet（与生产 `verlet_step` 同公式）。
@@ -1129,10 +1133,12 @@ fn highorder_bit_identical_helper(mode: OrbitIntegration) {
         n_body_sources: world.n_body_sources(),
         source_positions: &src_pos,
         source_rotations: &src_rot,
+        source_pos_gm: &[],
         softening_sq: 0.0,
         central_body: None,
         sun_position: Vector::ZERO,
         relativistic: mps_cosmos::world::RelativisticCorrection::None,
+        has_irregular_sources: true,
     };
 
     // 串行 reference：每个体用对应纯函数推进。
@@ -1206,4 +1212,234 @@ fn highorder_yoshida4_kahan_matches_serial_reference() {
 #[test]
 fn highorder_forest_ruth8_kahan_matches_serial_reference() {
     highorder_bit_identical_helper(OrbitIntegration::ForestRuth8Kahan);
+}
+
+/// `has_irregular_sources` 标志短路优化一致性回归：含一个「不规则质量分布」n-body
+/// 源的 3 体世界，跑 `world.step(dt)`（生产路径，标志由 `refresh_n_body_sources`
+/// 自动算出并喂进 `AccelContext`），再用独立串行 reference（`total_acceleration`
+/// 显式传 `has_irregular_sources: true`，走真实近场质点求和）重算终态，比对每个
+/// 体位置/速度须 < 1e-12。同时断言 `world.has_irregular_sources()` 在生产路径下
+/// 正确识别为 `true`。这把 A2 的「标志短路不影响数值」钉死：标志只改分支判据的
+/// 聚合方式，不改变任何浮点运算顺序。
+#[test]
+fn irregular_source_flag_shortcut_matches_full_near_field() {
+    use mps_cosmos::gravity::MassPoint;
+    use mps_formula::celestial_data::G;
+
+    let dt = 0.01;
+    let mut world = CosmosWorld::new(CosmosWorldConfig {
+        gravity: Vector::ZERO,
+        dt,
+        solver_iterations: 4,
+        ccd_substeps: 4,
+        orbit_integration: OrbitIntegration::Verlet,
+        n_body_softening_sq: 0.0,
+        central_body: None,
+        verlet_substeps: 1,
+        ..CosmosWorldConfig::default()
+    });
+
+    // 1 个不规则源（两团块非对称）+ 2 个动态探测体，全部注册为 n-body 互引力源
+    // 与受力体，确保近场分支在 1 个源上真被触发。
+    let a = 100.0_f64;
+    let m_src = 1.0e6_f64;
+    let pts = vec![
+        MassPoint {
+            local_offset: Vector::new(a, 0.0, 0.0),
+            gm: G * (0.75 * m_src),
+        },
+        MassPoint {
+            local_offset: Vector::new(-a, 0.0, 0.0),
+            gm: G * (0.25 * m_src),
+        },
+    ];
+    let bounding = a + 1.0;
+
+    let defs = [
+        // (mass, pos, vel)
+        (m_src, Vector::new(0.0, 0.0, 0.0), Vector::ZERO),
+        (
+            1.0e3,
+            Vector::new(3.0, 1.0, 0.0),
+            Vector::new(0.0, -0.2, 0.0),
+        ),
+        (
+            5.0e2,
+            Vector::new(-2.0, 4.0, 1.0),
+            Vector::new(0.0, 0.0, 0.3),
+        ),
+    ];
+    let mut handles = Vec::new();
+    let mut init = Vec::new();
+    for (i, (m, p, v)) in defs.iter().enumerate() {
+        let h = world.insert_body(
+            satellite_builder(*m, *p, *v, 0.1)
+                .lock_translations()
+                .linear_damping(0.0)
+                .angular_damping(0.0)
+                .gravity_scale(0.0),
+        );
+        if i == 0 {
+            // 源刚体锁平移，但仍作为 n-body 互引力源参与（被其它体吸引）。
+            world.add_n_body_irregular(h, *m, pts.clone(), bounding);
+        } else {
+            world.add_n_body(h, *m);
+        }
+        let b = world.bodies().get(h).unwrap();
+        init.push((h, b.translation(), b.linvel(), *m));
+        handles.push(h);
+    }
+
+    // 生产路径：step 内部 refresh 会算出 has_irregular_sources=true 并喂进 ctx。
+    world.step(dt);
+    assert!(
+        world.has_irregular_sources(),
+        "含不规则源的世界应识别出 has_irregular_sources=true"
+    );
+
+    // 独立串行 reference：冻结初始配置，用 total_acceleration（显式
+    // has_irregular_sources=true）做 velocity-Verlet，与生产 verlet_step 同公式。
+    let src_pos = snapshot_source_positions(world.bodies(), world.n_body_sources());
+    let n_bodies = world.bodies().len();
+    let src_rot: Vec<Rotation> = (0..n_bodies).map(|_| Rotation::IDENTITY).collect();
+    let ctx = AccelContext {
+        celestials: &[],
+        n_body_sources: world.n_body_sources(),
+        source_positions: &src_pos,
+        source_rotations: &src_rot,
+        source_pos_gm: &[],
+        softening_sq: 0.0,
+        central_body: None,
+        sun_position: Vector::ZERO,
+        relativistic: mps_cosmos::world::RelativisticCorrection::None,
+        has_irregular_sources: true,
+    };
+    let mut reference = Vec::new();
+    for &(h, r0, v0, mass) in &init {
+        let a0 = total_acceleration(r0, v0, mass, h, &ctx, None);
+        let v_half = v0 + a0 * (0.5 * dt);
+        let r1 = r0 + v_half * dt;
+        let a1 = total_acceleration(r1, v_half, mass, h, &ctx, None);
+        let v1 = v_half + a1 * (0.5 * dt);
+        reference.push((h, r1, v1));
+    }
+
+    for (h, r_ref, v_ref) in reference {
+        let b = world.bodies().get(h).unwrap();
+        let pos = b.translation();
+        let vel = b.linvel();
+        assert!(
+            (pos.x - r_ref.x).abs() < 1e-12
+                && (pos.y - r_ref.y).abs() < 1e-12
+                && (pos.z - r_ref.z).abs() < 1e-12,
+            "不规则源世界 body {h:?} 位置 {pos:?} 与串行 reference {r_ref:?} 不一致"
+        );
+        assert!(
+            (vel.x - v_ref.x).abs() < 1e-12
+                && (vel.y - v_ref.y).abs() < 1e-12
+                && (vel.z - v_ref.z).abs() < 1e-12,
+            "不规则源世界 body {h:?} 速度 {vel:?} 与串行 reference {v_ref:?} 不一致"
+        );
+    }
+}
+
+/// B2 并行写回 lock-down：N 体世界（N 较大以触发 rayon 多核分桶），跑
+/// `world.step(dt)`（生产路径：3.5 段并行预计算 + B2 并行写回 body / Kahan 态），
+/// 再用独立串行 reference（同 `total_acceleration` + velocity-Verlet）重算终态，
+/// 每体位置/速度须 < 1e-12。这一把 B2「并发写回各体独有槽、与串行逐位一致」钉死：
+/// 写回顺序在不同体间无依赖，故 bit-identical。N=64 足以在常见机器上跨多个 rayon
+/// 工作线程，真正 exercise 并行写回路径。
+#[test]
+fn parallel_writeback_matches_serial_reference_bit_identical() {
+    use rapier3d::prelude::RigidBodyHandle;
+
+    let dt = 0.01;
+    let n = 64u64;
+    let mut world = CosmosWorld::new(CosmosWorldConfig {
+        gravity: Vector::ZERO,
+        dt,
+        solver_iterations: 4,
+        ccd_substeps: 4,
+        orbit_integration: OrbitIntegration::Verlet,
+        n_body_softening_sq: 0.0,
+        central_body: None,
+        verlet_substeps: 1,
+        ..CosmosWorldConfig::default()
+    });
+
+    // 每个体既是 n-body 互引力源也是受力体，构成全互引力 N 体问题。
+    let mut init = Vec::new();
+    for i in 0..n {
+        // 在球壳上均匀散布，质量/初速各异，确保互引力非零且非对称。
+        let theta = (i as f64) * 2.39996323_f64; // 黄金角，近似均匀
+        let r = 100.0 + (i as f64) * 1.5;
+        let pos = Vector::new(
+            r * theta.cos(),
+            r * theta.sin(),
+            (i as f64) * 0.7 - (n as f64) * 0.35,
+        );
+        let vel = Vector::new(
+            (i as f64 * 0.013).sin() * 0.05,
+            (i as f64 * 0.017).cos() * 0.05,
+            (i as f64 * 0.011).sin() * 0.05,
+        );
+        let m = 1.0e3 + (i as f64) * 10.0;
+        let h = world.insert_body(
+            satellite_builder(m, pos, vel, 0.1)
+                .lock_translations()
+                .linear_damping(0.0)
+                .angular_damping(0.0)
+                .gravity_scale(0.0),
+        );
+        world.add_n_body(h, m);
+        let b = world.bodies().get(h).unwrap();
+        init.push((h, b.translation(), b.linvel(), m));
+    }
+
+    // 生产路径：step 内部 refresh → 3.5 并行预计算 → B2 并行写回。
+    world.step(dt);
+
+    // 独立串行 reference：冻结初始配置，velocity-Verlet 与生产 verlet_step 同公式。
+    let src_pos = snapshot_source_positions(world.bodies(), world.n_body_sources());
+    let n_bodies = world.bodies().len();
+    let src_rot: Vec<Rotation> = (0..n_bodies).map(|_| Rotation::IDENTITY).collect();
+    let ctx = AccelContext {
+        celestials: &[],
+        n_body_sources: world.n_body_sources(),
+        source_positions: &src_pos,
+        source_rotations: &src_rot,
+        source_pos_gm: &[],
+        softening_sq: 0.0,
+        central_body: None,
+        sun_position: Vector::ZERO,
+        relativistic: mps_cosmos::world::RelativisticCorrection::None,
+        has_irregular_sources: true,
+    };
+    let mut reference = Vec::new();
+    for &(h, r0, v0, mass) in &init {
+        let a0 = total_acceleration(r0, v0, mass, h, &ctx, None);
+        let v_half = v0 + a0 * (0.5 * dt);
+        let r1 = r0 + v_half * dt;
+        let a1 = total_acceleration(r1, v_half, mass, h, &ctx, None);
+        let v1 = v_half + a1 * (0.5 * dt);
+        reference.push((h, r1, v1));
+    }
+
+    for (h, r_ref, v_ref) in reference {
+        let b = world.bodies().get(h).unwrap();
+        let pos = b.translation();
+        let vel = b.linvel();
+        assert!(
+            (pos.x - r_ref.x).abs() < 1e-12
+                && (pos.y - r_ref.y).abs() < 1e-12
+                && (pos.z - r_ref.z).abs() < 1e-12,
+            "B2 并行写回 body {h:?} 位置 {pos:?} 与串行 reference {r_ref:?} 不一致"
+        );
+        assert!(
+            (vel.x - v_ref.x).abs() < 1e-12
+                && (vel.y - v_ref.y).abs() < 1e-12
+                && (vel.z - v_ref.z).abs() < 1e-12,
+            "B2 并行写回 body {h:?} 速度 {vel:?} 与串行 reference {v_ref:?} 不一致"
+        );
+    }
 }

@@ -56,10 +56,12 @@ fn verlet_circle_orbit_closes_tight() {
         n_body_sources: &n_body_sources,
         source_positions: &src_pos,
         source_rotations: &src_rot,
+        source_pos_gm: &[],
         softening_sq: 0.0,
         central_body: None,
         sun_position: Vector::ZERO,
         relativistic: mps_cosmos::world::RelativisticCorrection::None,
+        has_irregular_sources: true,
     };
 
     let mut a = total_acceleration(

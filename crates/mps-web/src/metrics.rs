@@ -9,26 +9,8 @@
 
 /// Total number of `#[test]` items in `mps-test`, as a `&'static str` so it
 /// can be inserted into `view!` literals directly (`{ (TEST_COUNT) }`).
-pub const TEST_COUNT: &str = "843";
+pub const TEST_COUNT: &str = "844";
 /// Total number of `jni!(`/`jni_e_c!(` method entries in `mps-jni`.
 pub const JNI_METHOD_COUNT: &str = "367";
 /// Total number of `pub extern "C" fn` declarations in `mps-core/rapier`.
 pub const CORE_FFI_COUNT: &str = "670";
-/// Hand-curated: count of FFI entries under `world_*` prefix.
-pub const FFI_WORLD: &str = "67";
-/// Hand-curated: count of FFI entries under `rigid_body_*` prefix.
-pub const FFI_RIGID_BODY: &str = "61";
-/// Hand-curated: count of FFI entries under `collider_*` prefix.
-pub const FFI_COLLIDER: &str = "73";
-/// Hand-curated: count of FFI entries under `query_*` prefix.
-pub const FFI_QUERY: &str = "39";
-/// Hand-curated: count of `pub mod` modules in `mps-formula`.
-pub const FORMULA_MODULE_COUNT: &str = "33";
-/// Hand-curated: count of `CelestialBody` records in `celestial_data`.
-pub const CELESTIAL_COUNT: &str = "10";
-/// Hand-curated: count of distinct gravity models in `gravitational_models`.
-pub const GRAVITY_MODEL_COUNT: &str = "5";
-/// Hand-curated: count of integrators in the `integrators` module.
-pub const INTEGRATOR_COUNT: &str = "6";
-/// Workspace version (kept in sync with root Cargo.toml `[workspace.package]`).
-pub const VERSION: &str = "0.1.4";

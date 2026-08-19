@@ -34,10 +34,20 @@ pub struct AccelContext<'a> {
     pub n_body_sources: &'a [NBodySource],
     pub source_positions: &'a [Vector],
     pub source_rotations: &'a [Rotation],
+    /// SOA 紧凑表（`n_body_sources` 同序的 `(源世界位姿, gm)`）。仅当
+    /// `!has_irregular_sources`（全 monopole）时热循环读它代替逐源查
+    /// `source_positions[src_idx]` + `src.gm`，提升缓存局部性。顺序与
+    /// `n_body_sources` 完全一致 → 累加顺序不变 → **数值惰性（bit-identical）**。
+    pub source_pos_gm: &'a [(Vector, f64)],
     pub softening_sq: f64,
     pub central_body: Option<&'a mps_formula::celestial_data::CelestialBody>,
     pub sun_position: Vector,
     pub relativistic: crate::world::RelativisticCorrection,
+    /// 是否存在「不规则质量分布」n-body 源（带 `points` 且
+    /// `near_field_threshold > 0`）。`false` 时热循环对每源跳过近场 O(P)
+    /// 分支的判定（全 monopole 的常见路径）；数值惰性——该分支在 `false`
+    /// 下本就不会触发。
+    pub has_irregular_sources: bool,
 }
 
 /// 不规则质量分布近场分支的姿态 fallback：源刚体被移除或快照表未覆盖某
@@ -63,10 +73,12 @@ pub fn total_acceleration(
         n_body_sources,
         source_positions,
         source_rotations,
+        source_pos_gm,
         softening_sq,
         central_body,
         sun_position,
         relativistic,
+        has_irregular_sources,
     } = *ctx;
     let mut acc = Vector::ZERO;
 
@@ -103,15 +115,35 @@ pub fn total_acceleration(
         // 构造 + `unwrap_or` 分支（热路径，O(N·M) 调用）。调试期用 debug_assert
         // 守住不变量；release 下零开销。
         debug_assert!(source_positions.len() >= n_body_sources.len());
+        debug_assert!(has_irregular_sources || source_pos_gm.len() >= n_body_sources.len());
+        // 远场 monopole 互引力：逐源标量累加。
+        //
+        // 注：曾评估 C1/C2（per-body 3D + 4 路 `f64x4` SIMD）以降本路径 `sqrt` 调用
+        // 次数。但 micro-benchmark 证明，在启用 AVX 的本机构建下 `wide::f64x4::sqrt`
+        // 走 `sqrt_m256d` 路径，与标量 `f64::sqrt`（`sqrtsd`）相差 1 ULP，违反
+        // 「原方法不变 / 逐位一致」硬约束。故 SIMD 远场不采纳，保留原始标量循环
+        // （与历史版本逐位一致）。详见 `.hermes/plans/cosmos-simd-threading.md` §C2。
+        let mut seq = 0usize;
         for src in n_body_sources {
-            let src_idx = src.handle.into_raw_parts().0 as usize;
-            if src_idx == exclude || src.gm <= 0.0 {
+            // A3: 全 monopole 时用 SOA 紧凑表 `(pos, gm)` 代替逐源查
+            // `source_positions[src_idx]` + `src.gm`，缓存局部性更好；二者值
+            // 完全相同、累加顺序不变 → 数值惰性（bit-identical）。
+            let (r_j, gm) = if !has_irregular_sources {
+                let (p, g) = unsafe { *source_pos_gm.get_unchecked(seq) };
+                (p, g)
+            } else {
+                let src_idx = src.handle.into_raw_parts().0 as usize;
+                let p = unsafe { *source_positions.get_unchecked(src_idx) };
+                (p, src.gm)
+            };
+            if src.handle.into_raw_parts().0 as usize == exclude || gm <= 0.0 {
+                seq += 1;
                 continue;
             }
-            let r_j = unsafe { *source_positions.get_unchecked(src_idx) };
             let d = r_j - position;
             let dist_sq = d.length_squared() + softening_sq;
             if dist_sq < 1.0 {
+                seq += 1;
                 continue;
             }
             let dist = dist_sq.sqrt();
@@ -119,9 +151,17 @@ pub fn total_acceleration(
             // 循环里摘出：主路径只算 monopole，避免每源每体一次
             // `!src.points.is_empty()` + `near_field_threshold()` 判据；带 points
             // 的源单独收尾做 O(P) 小循环。物理语义不变。
+            // 当 `has_irregular_sources == false`（全 monopole 的常见路径）时，
+            // 整条 near-field 判定无意义——等价短路，不影响数值。
             let near_threshold = src.near_field_threshold();
-            if !src.points.is_empty() && near_threshold > 0.0 && dist <= near_threshold {
-                let rot = unsafe { *source_rotations.get_unchecked(src_idx) };
+            if has_irregular_sources
+                && !src.points.is_empty()
+                && near_threshold > 0.0
+                && dist <= near_threshold
+            {
+                let rot = unsafe {
+                    *source_rotations.get_unchecked(src.handle.into_raw_parts().0 as usize)
+                };
                 for mp in &src.points {
                     if mp.gm <= 0.0 {
                         continue;
@@ -136,8 +176,9 @@ pub fn total_acceleration(
                     acc_nb += d_i * (mp.gm / (dist_sq_i * dist_i));
                 }
             } else {
-                acc_nb += d * (src.gm / (dist_sq * dist));
+                acc_nb += d * (gm / (dist_sq * dist));
             }
+            seq += 1;
         }
         acc += acc_nb;
     }

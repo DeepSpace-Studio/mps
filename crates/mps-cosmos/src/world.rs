@@ -253,6 +253,12 @@ pub struct CosmosWorld {
     )>,
     /// n-body 源位置快照复用缓冲：每子步 `clear()` + 按需写入，跨子步复用。
     scratch_source_positions: Vec<Vector>,
+    /// SOA 紧凑表（`n_body_sources` 同序）：`(源世界位姿, gm)`。仅当
+    /// `!has_irregular_sources`（全 monopole）时热循环读它代替逐源查
+    /// `source_positions[src_idx]` + `src.gm`，提升缓存局部性。顺序与
+    /// `n_body_sources` 完全一致 → 累加顺序不变 → **数值惰性（bit-identical）**。
+    /// 含不规则源时该表不被使用，热循环走 `n_body_sources` 原路径。
+    scratch_source_pos_gm: Vec<(Vector, f64)>,
     /// n-body 源姿态快照复用缓冲（与 `scratch_source_positions` 同步写）：每子步
     /// `clear()` + 按 arena index 写入 `body.rotation()`，供不规则质量分布近场
     /// 分支把质点 `local_offset` 变到世界坐标。
@@ -261,6 +267,30 @@ pub struct CosmosWorld {
     /// `collect()` 全部有 parent 的 collider 到 `Vec::new()` 抛弃——这里改为跨步
     /// 复用：`clear()` + push，消除每步堆分配。元素是 `(collider_handle, world_pose)`。
     scratch_collider_updates: Vec<(ColliderHandle, Pose)>,
+    /// 跨子步复用的 Kahan 累加态快照缓冲：存 `explicit_substep` 3.5 段从
+    /// `kahan_state` 拷出的 per-body `(kp, kv)`（Copy）。每子步 `clear()` +
+    /// 重写，消除每子步 `Vec::with_capacity` 的堆分配抖动（稳态零分配）。
+    kahan_src_buf: Vec<Option<(mps_formula::math::KahanVec3, mps_formula::math::KahanVec3)>>,
+    /// 跨子步复用的并行预计算缓冫：存每体 `(a0, 高阶推进, Kahan 推进)` 三元组。
+    /// 由 `scratch_tasks.par_iter()` 经 `Vec::par_extend` 原地复用同块内存，
+    /// 消除每子步的 `Vec::with_capacity` + `collect()` 分配。
+    advance_buf: Vec<(
+        Vector,
+        Option<(Vector, Vector)>,
+        Option<(
+            Vector,
+            Vector,
+            mps_formula::math::KahanVec3,
+            mps_formula::math::KahanVec3,
+        )>,
+    )>,
+    /// 本世界是否含有「不规则质量分布」n-body 源（带 `points` 且
+    /// `near_field_threshold > 0`）。仅当存在这类源时，热循环 n-body 互引力的
+    /// 近场 O(P) 分支才会被触发。由 `refresh_n_body_sources` 每次重算（纯只读
+    /// 聚合，无额外分配）。`false` 时 `total_acceleration` 会跳过每个源的
+    /// `!src.points.is_empty() && near_threshold > 0.0` 测试（全 monopole 的
+    /// 常见路径），等价短路——该分支在 `false` 下本就不会触发，故数值惰性。
+    has_irregular_sources: bool,
 
     /// 可选的共享内存 arena（Java→Rust 零拷贝命令通道 + Rust→Java 零拷贝
     /// 状态回读）。由 `create_shared_arena` 创建、随世界生命周期存在；`step`
@@ -341,8 +371,12 @@ impl CosmosWorld {
             kahan_state: Vec::new(),
             scratch_tasks: Vec::new(),
             scratch_source_positions: Vec::new(),
+            scratch_source_pos_gm: Vec::new(),
             scratch_source_rotations: Vec::new(),
             scratch_collider_updates: Vec::new(),
+            kahan_src_buf: Vec::new(),
+            advance_buf: Vec::new(),
+            has_irregular_sources: false,
             shared_arena: None,
             arena_idx_map: Vec::new(),
             arena_idx_map_body_count: 0,
@@ -404,8 +438,12 @@ impl CosmosWorld {
             // scratch buffers always begin empty on a fresh world (P0.2 / P1.7).
             scratch_tasks: Vec::new(),
             scratch_source_positions: Vec::new(),
+            scratch_source_pos_gm: Vec::new(),
             scratch_source_rotations: Vec::new(),
             scratch_collider_updates: Vec::new(),
+            kahan_src_buf: Vec::new(),
+            advance_buf: Vec::new(),
+            has_irregular_sources: false,
             shared_arena: None,
             arena_idx_map: Vec::new(),
             arena_idx_map_body_count: 0,
@@ -870,6 +908,13 @@ impl CosmosWorld {
         &self.n_body_sources
     }
 
+    /// 测试/诊断用：本世界是否含有「不规则质量分布」n-body 源。由
+    /// `refresh_n_body_sources` 每次重算，用于短路 `total_acceleration` 的近场
+    /// 分支整体判定。生产路径不依赖；仅供集成测试验证该标志的正确性。
+    pub fn has_irregular_sources(&self) -> bool {
+        self.has_irregular_sources
+    }
+
     /// 取所有天体引力源（只读）。
     pub fn celestials(&self) -> &[CelestialSource] {
         &self.celestials
@@ -1035,10 +1080,12 @@ impl CosmosWorld {
             n_body_sources: &self.n_body_sources,
             source_positions: &self.scratch_source_positions,
             source_rotations: &self.scratch_source_rotations,
+            source_pos_gm: &self.scratch_source_pos_gm,
             softening_sq: self.n_body_softening_sq,
             central_body: self.central_body,
             sun_position: self.sun_position,
             relativistic: self.relativistic_correction,
+            has_irregular_sources: self.has_irregular_sources,
         };
 
         // 3.5 并行预计算每体的初始加速度 `a0 = total_acceleration(pos, vel, ...)`。
@@ -1061,42 +1108,34 @@ impl CosmosWorld {
         // body / Kahan 态」。Kahan 模式的 per-body 累加态：首次出现按 body 当前
         // pos/vel 初始化，之后每步由并行 advance 产出新态写回（见 3.5 + 写回段）。
         // 先确保 `kahan_state` 足够长且本 task 槽已初始化，再把累加态拷出到
-        // `kahan_src`（纯 Copy），供并行 advance 使用。
-        let kahan_src: Vec<Option<(mps_formula::math::KahanVec3, mps_formula::math::KahanVec3)>> =
-            self.scratch_tasks
-                .iter()
-                .map(|&(h, p, v, _m, _pt)| {
-                    let idx = h.into_raw_parts().0 as usize;
-                    if idx >= self.kahan_state.len() {
-                        self.kahan_state.resize(idx + 1, None);
-                    }
-                    let need_kahan = matches!(
-                        mode,
-                        OrbitIntegration::Yoshida4Kahan | OrbitIntegration::ForestRuth8Kahan
-                    );
-                    if need_kahan && self.kahan_state[idx].is_none() {
-                        self.kahan_state[idx] = Some((
-                            mps_formula::math::KahanVec3::new(crate::integrator::ffi_vec3_pub(p)),
-                            mps_formula::math::KahanVec3::new(crate::integrator::ffi_vec3_pub(v)),
-                        ));
-                    }
-                    self.kahan_state.get(idx).and_then(|s| s.clone())
-                })
-                .collect();
-        // rayon 的 `unzip` 仅支持 2 元组，这里手动收成 3 元组 vec。
-        let mut advance_buf: Vec<(
-            Vector,
-            Option<(Vector, Vector)>,
-            Option<(
-                Vector,
-                Vector,
-                mps_formula::math::KahanVec3,
-                mps_formula::math::KahanVec3,
-            )>,
-        )> = Vec::with_capacity(n_tasks);
+        // `self.kahan_src_buf`（跨子步复用缓冲，纯 Copy），供并行 advance 使用。
+        // 复用而非每子步新建：稳态零堆分配。
+        self.kahan_src_buf.clear();
+        self.kahan_src_buf.reserve(n_tasks);
+        for &(h, p, v, _m, _pt) in &self.scratch_tasks {
+            let idx = h.into_raw_parts().0 as usize;
+            if idx >= self.kahan_state.len() {
+                self.kahan_state.resize(idx + 1, None);
+            }
+            let need_kahan = matches!(
+                mode,
+                OrbitIntegration::Yoshida4Kahan | OrbitIntegration::ForestRuth8Kahan
+            );
+            if need_kahan && self.kahan_state[idx].is_none() {
+                self.kahan_state[idx] = Some((
+                    mps_formula::math::KahanVec3::new(crate::integrator::ffi_vec3_pub(p)),
+                    mps_formula::math::KahanVec3::new(crate::integrator::ffi_vec3_pub(v)),
+                ));
+            }
+            self.kahan_src_buf
+                .push(self.kahan_state.get(idx).and_then(|s| s.clone()));
+        }
+        // 复用 `self.advance_buf`：先 `clear()`（保留容量），再用 `par_extend`
+        // 原地追加预计算结果，避免每子步 `Vec::with_capacity` + `collect()` 的
+        // 堆分配。rayon `unzip` 仅支持 2 元组，这里手动收成 3 元组 vec。
+        self.advance_buf.clear();
         if n_tasks > 0 {
-            advance_buf = self
-                .scratch_tasks
+            self.scratch_tasks
                 .par_iter()
                 .map(|&(h, pos, vel, mass, perturb)| {
                     let a0 = crate::integrator::total_acceleration(
@@ -1119,7 +1158,7 @@ impl CosmosWorld {
                         );
                         // Kahan 推进纯函数：用拷贝出来的累加态，跨步补偿不重置，
                         // 与串行 `explicit_highorder_kahan_step` 逐位一致。
-                        let kaho = match kahan_src[h.into_raw_parts().0 as usize] {
+                        let kaho = match self.kahan_src_buf[h.into_raw_parts().0 as usize] {
                             Some((kp, kv)) => Some(crate::integrator::advance_highorder_kahan(
                                 mode, pos, vel, kp, kv, mass, h, perturb, &ctx, dt,
                             )),
@@ -1129,66 +1168,107 @@ impl CosmosWorld {
                     };
                     (a0, ho, kaho)
                 })
-                .collect();
+                .collect_into_vec(&mut self.advance_buf);
         }
-        // `advance_buf[i]` 即每体预计算的 (a0, highorder_advance, kahan_advance)；
-        // 下面串行循环按下标取用并写回 body / Kahan 态。
+        // B2: 写回循环并行化。拆开 `self` 的多个可变字段，对 `scratch_tasks` 做
+        // `par_iter` 并发写回 body / Kahan 态。
+        //
+        // 安全性（why unsafe 是 sound 的）：每个 task 对应一个唯一动态刚体
+        // `handle`，`bodies.get_mut(handle)` 只写该体；`kahan_idx` 由 handle 派生，
+        // `kahan_state[kahan_idx]` 是该体独占的累加态槽。两个可变字段的写入槽在
+        // 不同 task 之间**完全不重叠**，故并发写回无数据竞争、无别名——与串行
+        // **逐位一致**（每体终态只取决于自身预计算结果，跨体写回顺序无关）。
+        // rayon 的 `for_each` 要求 `Fn`，无法在闭包内对捕获的 `&mut` 字段做每调用
+        // 重借用；这里用裸指针把「互不重叠的可变借用」显式化，等价于「每体一把锁」
+        // 但零开销。kahan_state 已在 3.5 段按最大 idx 预扩容，此处直接赋值（并发
+        // resize 才是数据竞争，已规避）。`&ctx` / `advance_buf` / `scratch_tasks` /
+        // `arena_cmd_forces` 皆为共享只读。
+        {
+            let CosmosWorld {
+                bodies,
+                kahan_state,
+                arena_cmd_forces,
+                scratch_tasks,
+                advance_buf,
+                ..
+            } = self;
+            // 把两个可变字段降级为裸指针地址（usize，可 `Send`/`Sync`），在闭包内
+            // 按需重借为 `&mut`。槽不重叠，故并发解引用写不同内存是安全的。
+            let bodies_addr = bodies as *mut rapier3d::dynamics::RigidBodySet as usize;
+            let kahan_addr = kahan_state
+                as *mut Vec<Option<(mps_formula::math::KahanVec3, mps_formula::math::KahanVec3)>>
+                as usize;
+            scratch_tasks.par_iter().enumerate().for_each(
+                |(i, &(handle, _pos, _vel, mass, perturbation))| {
+                    // SAFETY: 见上。`bodies_addr`/`kahan_addr` 是 `self` 字段的地址，
+                    // 本闭包运行期间 `self` 不被其它地方借用；每个 task 写唯一槽。
+                    let bodies =
+                        unsafe { &mut *(bodies_addr as *mut rapier3d::dynamics::RigidBodySet) };
+                    let kahan_state = unsafe {
+                        &mut *(kahan_addr
+                            as *mut Vec<
+                                Option<(
+                                    mps_formula::math::KahanVec3,
+                                    mps_formula::math::KahanVec3,
+                                )>,
+                            >)
+                    };
+                    let kahan_idx = handle.into_raw_parts().0 as usize;
+                    // 高阶/Kahan 推进已并行预计算（见 3.5），直接取用，避免串行
+                    // 重复求值。
+                    let (a0, ho, kahan) = &advance_buf[i];
 
-        // 4. 选定积子：每个分支取 body、按对应积子推进、写回（Kahan 分支另缓存态）。
-        // 用裸索引遍历 tasks 以避免在循环体内 `self.bodies.get_mut` 时的可变借用
-        // 与 `self.kahan_state` 的可变借用冲突——按索引访问把 `self` 的多个可变
-        // 字段拆开借用。tasks 内容在子步内冻结，无别名问题。
-        // 索引遍历不可避免（同时按下标取 `scratch_tasks[i]` 与派生 `kahan_idx`
-        // 写 `kahan_state`），故允许 `needless_range_loop`。
-        #[allow(clippy::needless_range_loop)]
-        for i in 0..n_tasks {
-            let (handle, _pos, _vel, mass, perturbation) = self.scratch_tasks[i];
-            let kahan_idx = handle.into_raw_parts().0 as usize;
-            // 高阶/Kahan 推进已并行预计算（见 3.5），直接取用，避免串行重复求值。
-            let (a0, ho, kahan) = &advance_buf[i];
+                    let body = match bodies.get_mut(handle) {
+                        Some(b) => b,
+                        None => return,
+                    };
 
-            let body = match self.bodies.get_mut(handle) {
-                Some(b) => b,
-                None => continue,
-            };
-
-            match mode {
-                OrbitIntegration::Verlet => {
-                    let a0 = *a0;
-                    crate::integrator::verlet_step(body, a0, &ctx, mass, handle, perturbation, dt);
-                }
-                OrbitIntegration::Yoshida4 | OrbitIntegration::ForestRuth8 => {
-                    let (r1, v1) = ho.expect("ho 预计算应已就绪").clone();
-                    body.set_translation(r1, false);
-                    body.set_linvel(v1, false);
-                }
-                OrbitIntegration::Yoshida4Kahan | OrbitIntegration::ForestRuth8Kahan => {
-                    let (r1, v1, kp, kv) = kahan.expect("kahan 预计算应已就绪").clone();
-                    // 把并行 advance 产出的新 Kahan 态写回 world 缓存。
-                    if self.kahan_state.len() <= kahan_idx {
-                        self.kahan_state.resize(kahan_idx + 1, None);
+                    match mode {
+                        OrbitIntegration::Verlet => {
+                            let a0 = *a0;
+                            crate::integrator::verlet_step(
+                                body,
+                                a0,
+                                &ctx,
+                                mass,
+                                handle,
+                                perturbation,
+                                dt,
+                            );
+                        }
+                        OrbitIntegration::Yoshida4 | OrbitIntegration::ForestRuth8 => {
+                            let (r1, v1) = ho.expect("ho 预计算应已就绪").clone();
+                            body.set_translation(r1, false);
+                            body.set_linvel(v1, false);
+                        }
+                        OrbitIntegration::Yoshida4Kahan | OrbitIntegration::ForestRuth8Kahan => {
+                            let (r1, v1, kp, kv) = kahan.expect("kahan 预计算应已就绪").clone();
+                            // 把并行 advance 产出的新 Kahan 态写回 world 缓存。
+                            kahan_state[kahan_idx] = Some((kp, kv));
+                            body.set_translation(r1, false);
+                            body.set_linvel(v1, false);
+                        }
+                        OrbitIntegration::RapierForce => {
+                            unreachable!("RapierForce 不走显式路径")
+                        }
                     }
-                    self.kahan_state[kahan_idx] = Some((kp, kv));
-                    body.set_translation(r1, false);
-                    body.set_linvel(v1, false);
-                }
-                OrbitIntegration::RapierForce => unreachable!("RapierForce 不走显式路径"),
-            }
 
-            // 命令环注入的合力（AddForce，显式路径）：在积子推进之上叠加一个
-            // 常加速度半隐式欧拉修正（F 在本子步视为常量，与积子同阶精度）。
-            // 不改动 `integrator` 签名即可让 arena 命令力在所有显式积子模式下生效。
-            if mass > 0.0 {
-                let f = self.arena_cmd_forces.get(kahan_idx).copied().flatten();
-                if let Some(f) = f {
-                    let a_cmd = f / mass;
-                    let dv = a_cmd * dt;
-                    let v_now = body.linvel();
-                    body.set_linvel(v_now + dv, false);
-                    let r_now = body.translation();
-                    body.set_translation(r_now + a_cmd * (0.5 * dt * dt), false);
-                }
-            }
+                    // 命令环注入的合力（AddForce，显式路径）：在积子推进之上叠加一个
+                    // 常加速度半隐式欧拉修正（F 在本子步视为常量，与积子同阶精度）。
+                    // 不改动 `integrator` 签名即可让 arena 命令力在所有显式积子模式下生效。
+                    if mass > 0.0 {
+                        let f = arena_cmd_forces.get(kahan_idx).copied().flatten();
+                        if let Some(f) = f {
+                            let a_cmd = f / mass;
+                            let dv = a_cmd * dt;
+                            let v_now = body.linvel();
+                            body.set_linvel(v_now + dv, false);
+                            let r_now = body.translation();
+                            body.set_translation(r_now + a_cmd * (0.5 * dt * dt), false);
+                        }
+                    }
+                },
+            );
         }
     }
 
@@ -1205,12 +1285,32 @@ impl CosmosWorld {
         // push 触发的 incremental grow。
         let n_dynamic_hint = self.bodies.len();
         self.scratch_tasks.reserve(n_dynamic_hint);
-        for (h, b) in self.bodies.iter() {
-            if b.is_dynamic() {
-                self.scratch_tasks
-                    .push((h, b.translation(), b.linvel(), b.mass(), None));
-            }
-        }
+        // B1: 每体只读快照写入各自槽。先串行收集动态体 handle（廉价，
+        // `RigidBodySet::iter` 可用），再 `par_iter` 过 handle 并行取 translation/
+        // linvel/mass 快照（读 `bodies.get` 为 `&self` 共享读，`RigidBodySet` 是
+        // `Sync`，跨线程安全）—— 真正耗时的快照并行化。顺序由 handle 收集保序，
+        // 每个体只写自己的槽、无别名，与串行逐位一致（内容完全相同，仅求值并发）。
+        type Task = (
+            RigidBodyHandle,
+            Vector,
+            Vector,
+            f64,
+            Option<PerturbationConfig>,
+        );
+        let handles: Vec<RigidBodyHandle> = self
+            .bodies
+            .iter()
+            .filter(|(_, b)| b.is_dynamic())
+            .map(|(h, _)| h)
+            .collect();
+        let collected: Vec<Task> = handles
+            .par_iter()
+            .map(|&h| {
+                let b = self.bodies.get(h).expect("handle 来自 bodies.iter，必存在");
+                (h, b.translation(), b.linvel(), b.mass(), None)
+            })
+            .collect();
+        self.scratch_tasks = collected;
         // 填充每体 perturbation（Copy）。先单独线性扫一遍 perturbations（与
         // scratch_tasks 按 arena index 对齐），再就地写回 task.4，规避
         // "在 iter_mut 借用内同时不可变借 self.perturbations" 的借用冲突。
@@ -1261,33 +1361,73 @@ impl CosmosWorld {
             self.scratch_source_rotations
                 .resize_with(bodies_len, || Rotation::IDENTITY);
         }
-        for s in &mut self.n_body_sources {
-            let idx = s.handle.into_raw_parts().0 as usize;
-            let Some(b) = self.bodies.get(s.handle) else {
-                // 源刚体已移除：清零引力参数（含质点 gm），位置/姿态保持占位
-                s.gm = 0.0;
-                for mp in &mut s.points {
-                    mp.gm = 0.0;
-                }
-                continue;
-            };
-            let new_gm = gm_from_mass(b.mass());
-            // 不规则源：按新质量/原 gm 比例缩放每个 MassPoint.gm（保持几何结构
-            // 不变、只是质量跟着刚体走）。
-            if !s.points.is_empty() && s.gm > 0.0 {
-                let scale = new_gm / s.gm;
-                if (scale - 1.0).abs() > 1e-12 {
+        // B1: 源之间完全独立（各写自己 idx 槽、只读 bodies）。拆成两段并行：
+        //   Pass 1 —— `par_iter_mut` 刷新每个源的 `gm` 与 `points` 缩放（拆开
+        //     `self` 可变借用：`bodies` 只读 + `n_body_sources` 可写，互不 alias）。
+        //   Pass 2 —— 并行读每个源刚体的 translation/rotation，收集 `(idx,pos,rot)`，
+        //     再串行写回 `scratch_source_*`（idx 唯一、写回廉价，与串行逐位一致）。
+        {
+            let CosmosWorld {
+                bodies,
+                n_body_sources,
+                ..
+            } = self;
+            n_body_sources.par_iter_mut().for_each(|s| {
+                let Some(b) = bodies.get(s.handle) else {
+                    // 源刚体已移除：清零引力参数（含质点 gm），位置/姿态保持占位
+                    s.gm = 0.0;
                     for mp in &mut s.points {
-                        mp.gm *= scale;
+                        mp.gm = 0.0;
+                    }
+                    return;
+                };
+                let new_gm = gm_from_mass(b.mass());
+                // 不规则源：按新质量/原 gm 比例缩放每个 MassPoint.gm（保持几何结构
+                // 不变、只是质量跟着刚体走）。
+                if !s.points.is_empty() && s.gm > 0.0 {
+                    let scale = new_gm / s.gm;
+                    if (scale - 1.0).abs() > 1e-12 {
+                        for mp in &mut s.points {
+                            mp.gm *= scale;
+                        }
                     }
                 }
-            }
-            s.gm = new_gm;
-            if idx < self.scratch_source_positions.len() {
-                self.scratch_source_positions[idx] = b.translation();
-                self.scratch_source_rotations[idx] = *b.rotation();
-            }
+                s.gm = new_gm;
+            });
         }
+        // Pass 2: 并行取每个源刚体的 world 位姿，串行写回各自 idx 槽；同时攒
+        // SOA 表 `scratch_source_pos_gm`（与 `n_body_sources` 同序），供全 monopole
+        // 热路径只读一张连续表（缓存局部性更好）。idx 唯一、写回廉价。
+        self.scratch_source_pos_gm.clear();
+        self.scratch_source_pos_gm
+            .reserve(self.n_body_sources.len());
+        let snaps: Vec<(usize, Vector, Rotation, f64)> = self
+            .n_body_sources
+            .par_iter()
+            .map(|s| {
+                let idx = s.handle.into_raw_parts().0 as usize;
+                match self.bodies.get(s.handle) {
+                    // 已移除源（gm 已置 0）：占位零位姿；下游乘 gm=0 不读，等价。
+                    None => (idx, Vector::ZERO, Rotation::IDENTITY, 0.0),
+                    Some(b) => (idx, b.translation(), *b.rotation(), s.gm),
+                }
+            })
+            .collect();
+        for (idx, p, r, gm) in snaps {
+            if idx < self.scratch_source_positions.len() {
+                self.scratch_source_positions[idx] = p;
+                self.scratch_source_rotations[idx] = r;
+            }
+            self.scratch_source_pos_gm.push((p, gm));
+        }
+        // 聚合「是否存在不规则质量分布源」：带 `points` 且 `near_field_threshold > 0`
+        // 的源才计入。用于 `total_acceleration` 短路近场 O(P) 分支的整体判定
+        // （数值惰性：false 时该分支本就不触发）。纯只读聚合，无额外分配。
+        let has_irregular = self
+            .n_body_sources
+            .iter()
+            .any(|s| !s.points.is_empty() && s.near_field_threshold() > 0.0 && s.gm > 0.0);
+        self.has_irregular_sources = has_irregular;
     }
 
     /// 基于 `scratch_tasks` 已构建好的动态体列表 + `scratch_source_positions` /
@@ -1470,8 +1610,12 @@ impl Clone for CosmosWorld {
             // scratch buffer 属于每帧工作内存，克隆副本从空开始（复用从首帧起复用）。
             scratch_tasks: Vec::new(),
             scratch_source_positions: Vec::new(),
+            scratch_source_pos_gm: Vec::new(),
             scratch_source_rotations: Vec::new(),
             scratch_collider_updates: Vec::new(),
+            kahan_src_buf: Vec::new(),
+            advance_buf: Vec::new(),
+            has_irregular_sources: false,
             shared_arena: None,
             arena_idx_map: Vec::new(),
             arena_idx_map_body_count: 0,
