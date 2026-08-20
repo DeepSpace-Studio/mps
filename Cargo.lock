@@ -3958,6 +3958,7 @@ dependencies = [
  "mps-formula",
  "rapier3d-f64",
  "rayon",
+ "wide 1.6.1",
 ]
 
 [[package]]

@@ -18,6 +18,61 @@
 
 pub extern crate rapier3d;
 
+/// H. `explicit_substep` 阶段耗时剖分（env-gated，默认零开销）。
+///
+/// 仅在环境变量 `COSMOS_PROFILE=1` 时由 `world::explicit_substep` 调用。
+/// 用 `thread_local` 累加器记录 4 段（collect / refresh / advance /
+/// writeback）累计耗时与调用次数，首次调用打印表头，之后每 1000 子步
+/// 打印一次占比快照（stdout，固定前缀 `[COSMOS-PROFILE]` 便于 grep）。
+///
+/// 不设 `COSMOS_PROFILE` 时 `world.rs` 的 `profile_phase!` 宏直接短路、
+/// 不进入本函数，故零开销、不污染任何数值/语义（守「原方法不变」）。
+#[doc(hidden)]
+pub fn __cosmos_profile_record(phase: &'static str, elapsed: std::time::Duration) {
+    use std::cell::RefCell;
+    thread_local! {
+        static ACC: RefCell<Option<ProfileAcc>> = const { RefCell::new(None) };
+    }
+    struct ProfileAcc {
+        collect_ns: u64,
+        refresh_ns: u64,
+        advance_ns: u64,
+        writeback_ns: u64,
+        steps: u64,
+    }
+    ACC.with(|acc| {
+        let mut g = acc.borrow_mut();
+        let a = g.get_or_insert_with(|| {
+            println!(
+                "[COSMOS-PROFILE] step  phase%  collect   refresh   advance  writeback  (all µs, cumulative)"
+            );
+            ProfileAcc { collect_ns: 0, refresh_ns: 0, advance_ns: 0, writeback_ns: 0, steps: 0 }
+        });
+        match phase {
+            "collect" => a.collect_ns += elapsed.as_nanos() as u64,
+            "refresh" => a.refresh_ns += elapsed.as_nanos() as u64,
+            "advance" => a.advance_ns += elapsed.as_nanos() as u64,
+            "writeback" => a.writeback_ns += elapsed.as_nanos() as u64,
+            _ => {}
+        }
+        a.steps += 1;
+        if a.steps % 1000 == 0 {
+            let total = a.collect_ns + a.refresh_ns + a.advance_ns + a.writeback_ns;
+            let total = total.max(1);
+            let pct = |ns: u64| format!("{:5.1}%", ns as f64 * 100.0 / total as f64);
+            println!(
+                "[COSMOS-PROFILE] {:>5}  {:>7}  {:>7}  {:>7}  {:>7}  (total {:.1} ms)",
+                a.steps,
+                pct(a.collect_ns),
+                pct(a.refresh_ns),
+                pct(a.advance_ns),
+                pct(a.writeback_ns),
+                total as f64 / 1e6,
+            );
+        }
+    });
+}
+
 pub mod arena;
 pub mod bodies;
 pub mod ffi;

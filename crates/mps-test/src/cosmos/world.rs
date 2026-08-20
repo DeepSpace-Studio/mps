@@ -22,7 +22,7 @@ use mps_formula::math::KahanVec3;
 #[cfg(test)]
 use mps_formula::spaceflight::kepler_period;
 #[cfg(test)]
-use rapier3d::prelude::{Rotation, Vector};
+use rapier3d::prelude::{RigidBodyHandle, Rotation, Vector};
 
 /// RapierForce 路径回归测试：semi-implicit Euler 在纯点质量中心引力下推一段
 /// 短弧（1/10 开普勒周期），位矢模长应保持在小幅能量漂移范围内。
@@ -595,7 +595,6 @@ fn n_body_source_gm_tracks_live_body_mass() {
 fn irregular_n_body_near_field_induces_non_radial_acceleration() {
     use mps_cosmos::gravity::MassPoint;
     use mps_formula::celestial_data::G;
-    use rapier3d::prelude::RigidBodyHandle;
 
     let m_total: f64 = 1.0e6; // 源总质量 kg
     let a: f64 = 100.0; // 两团块离质心 m
@@ -700,7 +699,6 @@ fn irregular_n_body_near_field_induces_non_radial_acceleration() {
 fn roche_limit_formula_and_cosmos_end_to_end() {
     use mps_formula::astrophysics::{roche_limit, roche_limit_report};
     use mps_formula::ffi::Bool;
-    use rapier3d::prelude::RigidBodyHandle;
 
     // 公式层：密度比 5.0（主星比卫星密 5 倍），主星半径 1.0
     // → ratio = 5^(1/3) ≈ 1.70998
@@ -835,7 +833,6 @@ fn roche_limit_formula_and_cosmos_end_to_end() {
 #[test]
 fn hill_sphere_formula_and_cosmos_world_consistent() {
     use mps_formula::astrophysics::hill_sphere_radius;
-    use rapier3d::prelude::RigidBodyHandle;
 
     // 公式层：典型月球-地球体系
     //  M_earth ≈ 5.972e24 kg；M_moon ≈ 7.342e22 kg
@@ -1351,8 +1348,6 @@ fn irregular_source_flag_shortcut_matches_full_near_field() {
 /// 工作线程，真正 exercise 并行写回路径。
 #[test]
 fn parallel_writeback_matches_serial_reference_bit_identical() {
-    use rapier3d::prelude::RigidBodyHandle;
-
     let dt = 0.01;
     let n = 64u64;
     let mut world = CosmosWorld::new(CosmosWorldConfig {
