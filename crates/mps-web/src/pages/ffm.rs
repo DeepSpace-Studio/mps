@@ -4,7 +4,10 @@ use dioxus_i18n::t;
 /// Java FFM Bindings — Foreign Function & Memory API (JEP 454) metadata
 /// surface for Java 25+ callers via the `mpd-ffm` crate.
 pub fn Ffm() -> Element {
+    
     rsx! {
+        section { id: "sec-ffm", class: "doc-section",
+
         div { class: "page-head",
             div {
                 div { class: "page-tag", { t!("ffm-tag") } }
@@ -110,6 +113,8 @@ pub extern "C" fn abi_supports_jni() -> Bool {{ Bool::TRUE }}"#
             div { class: "callout",
                 p { { t!("ffm-status-body") } }
             }
+        }
+    
         }
     }
 }

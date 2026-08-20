@@ -5,7 +5,10 @@ use crate::metrics::{FORMULA_MODULE_COUNT, JNI_METHOD_COUNT, TEST_COUNT};
 
 /// Architecture Overview — crate graph, layering, and the Java→Rust call path.
 pub fn Architecture() -> Element {
+    
     rsx! {
+        section { id: "sec-architecture", class: "doc-section",
+
         div { class: "page-head",
             div {
                 div { class: "page-tag", { t!("arch-tag") } }
@@ -88,6 +91,8 @@ pub fn Architecture() -> Element {
             h2 { class: "section-heading", { t!("arch-build-title") } }
             p { class: "p-muted", { t!("arch-build-cbindgen") } }
             p { class: "p-muted", { t!("arch-build-xtask") } }
+        }
+    
         }
     }
 }

@@ -13,7 +13,10 @@ pub fn Quickstart() -> Element {
         ("5", "quickstart-step5-title", "quickstart-step5-desc"),
     ];
 
+    
     rsx! {
+        section { id: "sec-quickstart", class: "doc-section",
+
         div { class: "page-head",
             div {
                 div { class: "page-tag", { t!("quickstart-tag") } }
@@ -35,6 +38,8 @@ pub fn Quickstart() -> Element {
                     p { class: "p-lead", { t!(desc_key, tests: TEST_COUNT) } }
                 }
             })}
+        }
+    
         }
     }
 }

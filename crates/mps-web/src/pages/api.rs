@@ -6,7 +6,10 @@ use crate::metrics::{CORE_FFI_COUNT, FFI_COLLIDER, FFI_QUERY, FFI_RIGID_BODY, FF
 /// API Reference — the C ABI surface of `mps-core` as exported in
 /// `crates/mps-core/include/rigid_body.h` by cbindgen.
 pub fn Api() -> Element {
+    
     rsx! {
+        section { id: "sec-api", class: "doc-section",
+
         div { class: "page-head",
             div {
                 div { class: "page-tag", { t!("api-tag") } }
@@ -133,6 +136,8 @@ world_destroy(w);"#
                 li { { t!("api-stability-version") } }
                 li { { t!("api-stability-redline") } }
             }
+        }
+    
         }
     }
 }

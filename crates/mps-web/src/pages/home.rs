@@ -1,183 +1,83 @@
 use dioxus::prelude::*;
-use dioxus_i18n::t;
+use dioxus_i18n::{prelude::*, t};
+use unic_langid::langid;
 
-use crate::metrics::{
-    CELESTIAL_COUNT, CORE_FFI_COUNT, FORMULA_MODULE_COUNT, GRAVITY_MODEL_COUNT, INTEGRATOR_COUNT,
-    JNI_METHOD_COUNT, TEST_COUNT,
-};
+use crate::layouts::{Footer, Toc};
+use crate::metrics::{CELESTIAL_COUNT, FORMULA_MODULE_COUNT, GRAVITY_MODEL_COUNT, INTEGRATOR_COUNT, JNI_METHOD_COUNT, CORE_FFI_COUNT, TEST_COUNT};
 
-/// Home page — MPS Physics System overview.
-///
-/// Layout: a galaxy (= the home page index = the "sun") + 13 orbiting planets
-/// representing every other page. Pure CSS orbital animation drives the rings;
-/// every planet is a `<Link>` rendering as `<a href>` so navigation works
-/// under pure SSR with no client hydration bundle. The original hero / metric
-/// / directory / features content is preserved below the starfield.
-///
-/// DOM structure for each planet (four nesting layers — each layer has a
-/// single transform-related job so CSS animations never fight static
-/// transforms; see site.css §Galaxy comments):
-///   `.orbit-spin`  → rotates the whole ring (CW/CCW)
-///   `.planet-wrap` → counter-rotates so the label stays upright
-///   `.planet-pos`  → holds the radial `translateX(R)` offset via
-///                    `:nth-of-type` static transform. MUST be a separate
-///                    element — `.planet-wrap`'s animation overrides any
-///                    static `transform` on that same element, which would
-///                    otherwise erase the radial offset and pile every
-///                    planet on the galaxy center.
-///   `.planet`      → the visible ball, centered on the `.planet-pos` anchor
+use crate::pages::api::Api;
+use crate::pages::architecture::Architecture;
+use crate::pages::arena::Arena;
+use crate::pages::batch::Batch;
+use crate::pages::cosmos::Cosmos;
+use crate::pages::events::Events;
+use crate::pages::ffm::Ffm;
+use crate::pages::formula::Formula;
+use crate::pages::gravity::Gravity;
+use crate::pages::integrators::Integrators;
+use crate::pages::jni::Jni;
+use crate::pages::quickstart::Quickstart;
+use crate::pages::voxel::Voxel;
+
+/// The whole documentation, rendered as one inline page. A sticky TOC provides
+/// in-page navigation via native `#sec-...` anchor scrolling — no router, no
+/// client-side click interception.
 pub fn Home() -> Element {
+    // Initialise i18n (Fluent) for SSR rendering.
+    use_init_i18n(|| {
+        I18nConfig::new(langid!("zh-CN"))
+            .with_fallback(langid!("zh-CN"))
+            .with_locale((langid!("zh-CN"), include_str!("../i18n/locales/zh-CN.ftl")))
+            .with_locale((langid!("en"), include_str!("../i18n/locales/en.ftl")))
+    });
+
     rsx! {
-        div { class: "hero",
-            div { class: "hero-tag", { t!("home-hero-tag") } }
-            h1 { class: "hero-title", { t!("home-hero-title") } }
-            p { class: "hero-desc",
-                { t!("home-hero-desc",
-                    rapier: "Rapier3D-f64",
-                    ffi: CORE_FFI_COUNT,
-                    jni: JNI_METHOD_COUNT,
-                    tests: TEST_COUNT,
-                    gravity: GRAVITY_MODEL_COUNT,
-                    integrators: INTEGRATOR_COUNT,
-                    modules: FORMULA_MODULE_COUNT,
-                    bodies: CELESTIAL_COUNT
-                )}
-            }
-            div { class: "hero-actions",
-                a { href: "/quickstart", class: "btn-primary",
-                    { t!("home-cta-quickstart") }
+        Toc {}
+        main { class: "page-wrap",
+            section { id: "sec-home", class: "doc-section doc-home",
+                div { class: "hero",
+                    div { class: "hero-tag", { t!("home-hero-tag") } }
+                    h1 { class: "hero-title", { t!("home-hero-title") } }
+                    p { class: "hero-desc",
+                        { t!("home-hero-desc", rapier: "Rapier3D-f64", ffi: CORE_FFI_COUNT, jni: JNI_METHOD_COUNT, tests: TEST_COUNT, gravity: GRAVITY_MODEL_COUNT, integrators: INTEGRATOR_COUNT, modules: FORMULA_MODULE_COUNT, bodies: CELESTIAL_COUNT) }
+                    }
+                    div { class: "hero-actions",
+                        a { href: "#sec-quickstart", class: "btn-primary", { t!("home-cta-quickstart") } }
+                        a { href: "#sec-api", class: "btn-outline", { t!("home-cta-api") } }
+                    }
                 }
-                a { href: "/api", class: "btn-outline",
-                    { t!("home-cta-api") }
-                }
-            }
-        }
 
-        div { class: "metric-grid",
-            div { class: "metric-card",
-                strong { class: "num", { TEST_COUNT } }
-                span { class: "label", { t!("home-stat-tests") } }
-            }
-            div { class: "metric-card",
-                strong { class: "num", "300+" }
-                span { class: "label", { t!("home-stat-formula-fns") } }
-            }
-            div { class: "metric-card",
-                strong { class: "num", { FORMULA_MODULE_COUNT } }
-                span { class: "label", { t!("home-stat-formula-modules") } }
-            }
-            div { class: "metric-card",
-                strong { class: "num", { CELESTIAL_COUNT } }
-                span { class: "label", { t!("home-stat-celestial") } }
-            }
-        }
+                div { class: "metric-grid",
+                    div { class: "metric-card", strong { class: "num", { TEST_COUNT } } span { class: "label", { t!("home-stat-tests") } } }
+                    div { class: "metric-card", strong { class: "num", "300+" } span { class: "label", { t!("home-stat-formula-fns") } } }
+                    div { class: "metric-card", strong { class: "num", { FORMULA_MODULE_COUNT } } span { class: "label", { t!("home-stat-formula-modules") } } }
+                    div { class: "metric-card", strong { class: "num", { CELESTIAL_COUNT } } span { class: "label", { t!("home-stat-celestial") } } }
+                }
 
-        div { class: "text-center section-divider",
-            div { class: "hero-tag", "/ MODULE DIRECTORY" }
-            h2 { class: "section-heading-lg", { t!("home-section-directory") } }
-
-            div { class: "module-grid",
-                a { href: "/architecture", class: "module-card",
-                    span { class: "idx", "01" }
-                    strong { class: "title", { t!("home-mod-core-title") } }
-                    small { class: "desc", { t!("home-mod-core-desc") } }
-                    em { class: "arrow", "↗" }
-                }
-                a { href: "/cosmos", class: "module-card",
-                    span { class: "idx", "06" }
-                    strong { class: "title", { t!("home-mod-cosmos-title") } }
-                    small { class: "desc", { t!("home-mod-cosmos-desc") } }
-                    em { class: "arrow", "↗" }
-                }
-                a { href: "/gravity", class: "module-card",
-                    span { class: "idx", "02" }
-                    strong { class: "title", { t!("home-mod-physics-title") } }
-                    small { class: "desc", { t!("home-mod-physics-desc") } }
-                    em { class: "arrow", "↗" }
-                }
-                a { href: "/formula", class: "module-card",
-                    span { class: "idx", "03" }
-                    strong { class: "title", { t!("home-mod-formula-title") } }
-                    small { class: "desc", { t!("home-mod-formula-desc") } }
-                    em { class: "arrow", "↗" }
-                }
-                a { href: "/arena", class: "module-card",
-                    span { class: "idx", "04" }
-                    strong { class: "title", { t!("home-mod-integration-title") } }
-                    small { class: "desc", { t!("home-mod-integration-desc") } }
-                    em { class: "arrow", "↗" }
-                }
-                a { href: "/api", class: "module-card",
-                    span { class: "idx", "05" }
-                    strong { class: "title", { t!("home-mod-reference-title") } }
-                    small { class: "desc", { t!("home-mod-reference-desc") } }
-                    em { class: "arrow", "↗" }
+                div { class: "module-grid",
+                    a { href: "#sec-architecture", class: "module-card", span { class: "idx", "01" } strong { class: "title", { t!("home-mod-core-title") } } small { class: "desc", { t!("home-mod-core-desc") } } em { class: "arrow", "↗" } }
+                    a { href: "#sec-cosmos", class: "module-card", span { class: "idx", "06" } strong { class: "title", { t!("home-mod-cosmos-title") } } small { class: "desc", { t!("home-mod-cosmos-desc") } } em { class: "arrow", "↗" } }
+                    a { href: "#sec-gravity", class: "module-card", span { class: "idx", "02" } strong { class: "title", { t!("home-mod-physics-title") } } small { class: "desc", { t!("home-mod-physics-desc") } } em { class: "arrow", "↗" } }
+                    a { href: "#sec-formula", class: "module-card", span { class: "idx", "03" } strong { class: "title", { t!("home-mod-formula-title") } } small { class: "desc", { t!("home-mod-formula-desc") } } em { class: "arrow", "↗" } }
+                    a { href: "#sec-arena", class: "module-card", span { class: "idx", "04" } strong { class: "title", { t!("home-mod-integration-title") } } small { class: "desc", { t!("home-mod-integration-desc") } } em { class: "arrow", "↗" } }
+                    a { href: "#sec-api", class: "module-card", span { class: "idx", "05" } strong { class: "title", { t!("home-mod-reference-title") } } small { class: "desc", { t!("home-mod-reference-desc") } } em { class: "arrow", "↗" } }
                 }
             }
-        }
 
-        div { class: "section-divider",
-            h2 { class: "section-heading",
-                { t!("home-section-formula-modules", count: FORMULA_MODULE_COUNT) }
-            }
-            div { class: "mini-stat-grid",
-                div { class: "stat-card", span { class: "num", "88" }, span { class: "label", { t!("formula-cat-spaceflight") } } }
-                div { class: "stat-card", span { class: "num", "23" }, span { class: "label", { t!("formula-cat-nuclear") } } }
-                div { class: "stat-card", span { class: "num", "26" }, span { class: "label", { t!("formula-cat-mechanics") } } }
-                div { class: "stat-card", span { class: "num", "19" }, span { class: "label", { t!("formula-cat-astrophysics") } } }
-                div { class: "stat-card", span { class: "num", "23" }, span { class: "label", { t!("formula-cat-relativity") } } }
-                div { class: "stat-card", span { class: "num", "20" }, span { class: "label", { t!("formula-cat-quantum") } } }
-                div { class: "stat-card", span { class: "num", "16" }, span { class: "label", { t!("formula-cat-electromagnetism") } } }
-                div { class: "stat-card", span { class: "num", "18" }, span { class: "label", { t!("formula-cat-fluid") } } }
-            }
+            Quickstart {}
+            Architecture {}
+            Gravity {}
+            Integrators {}
+            Formula {}
+            Voxel {}
+            Events {}
+            Arena {}
+            Batch {}
+            Cosmos {}
+            Jni {}
+            Ffm {}
+            Api {}
         }
-
-        div { class: "callout",
-            p { { t!("home-callout", crate: "mps-formula") } }
-        }
-
-        div { class: "section-divider",
-            h2 { class: "section-heading", { t!("home-section-key-features") } }
-            div { class: "feature-grid",
-                div { class: "feature-card",
-                    h3 { { t!("home-feat-gravity-title") } }
-                    p { { t!("home-feat-gravity-desc") } }
-                }
-                div { class: "feature-card",
-                    h3 { { t!("home-feat-integrators-title") } }
-                    p { { t!("home-feat-integrators-desc") } }
-                }
-                div { class: "feature-card",
-                    h3 { { t!("home-feat-celestial-title") } }
-                    p { { t!("home-feat-celestial-desc") } }
-                }
-                div { class: "feature-card",
-                    h3 { { t!("home-feat-terrain-title") } }
-                    p { { t!("home-feat-terrain-desc") } }
-                }
-                div { class: "feature-card",
-                    h3 { { t!("home-feat-registry-title") } }
-                    p { { t!("home-feat-registry-desc") } }
-                }
-                div { class: "feature-card",
-                    h3 { { t!("home-feat-jni-title", count: JNI_METHOD_COUNT) } }
-                    p { { t!("home-feat-jni-desc", count: JNI_METHOD_COUNT) } }
-                }
-            }
-        }
-
-        div { class: "section-divider",
-            h2 { class: "section-heading", { t!("home-section-architecture") } }
-            pre { code {
-"Java 21 JNI / Java 25 FFM
-  └─ Rust C ABI ({CORE_FFI_COUNT} functions)
-       ├─ mps-formula  — 33 pure formula modules (300+ functions)
-       ├─ mps-core     — physics engine + Rapier wrapper (World, bodies, colliders, queries, events)
-       ├─ mps-cosmos   — cosmos rigid body (separate world, Verlet orbit integration)
-       ├─ mps-jni      — JNI bindings ({JNI_METHOD_COUNT} methods, incl. cosmos batch)
-       ├─ mps-ffm      — FFM metadata
-       └─ mps-test     — integration tests (incl. cosmos 19)"
-            }}
-        }
+        Footer {}
     }
 }

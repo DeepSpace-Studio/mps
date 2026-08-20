@@ -5,7 +5,10 @@ use crate::metrics::CELESTIAL_COUNT;
 
 /// Cosmos Rigid Body — separate physics domain for orbital-scale simulation.
 pub fn Cosmos() -> Element {
+    
     rsx! {
+        section { id: "sec-cosmos", class: "doc-section",
+
         div { class: "page-head",
             div {
                 div { class: "page-tag", { t!("cosmos-tag") } }
@@ -80,6 +83,8 @@ pub fn Cosmos() -> Element {
         div { class: "section-divider",
             h2 { class: "section-heading", { t!("cosmos-jni-title") } }
             p { class: "p-muted", { t!("cosmos-jni-desc") } }
+        }
+    
         }
     }
 }

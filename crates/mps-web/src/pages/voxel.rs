@@ -3,7 +3,10 @@ use dioxus_i18n::t;
 
 /// Voxel System — dense voxel grid + collider build + terrain gravity bridge.
 pub fn Voxel() -> Element {
+    
     rsx! {
+        section { id: "sec-voxel", class: "doc-section",
+
         div { class: "page-head",
             div {
                 div { class: "page-tag", { t!("vox-tag") } }
@@ -71,6 +74,8 @@ pub fn Voxel() -> Element {
                     p { { t!("vox-case-proximity-desc") } }
                 }
             }
+        }
+    
         }
     }
 }

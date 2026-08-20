@@ -23,25 +23,46 @@
 修复（根因，非补丁）：扩展 `dump-metrics` 用真实 grep 算出这些常量并一并生成 `metrics.rs`
 （保持 "metrics.rs 由 xtask 生成、不手改" 的约定）。重新生成后全站编译通过。
 
-## 站点结构（真实）
+## 站点结构（当前：单页内嵌，无分页路由）
 
 ```
 crates/mps-web/
 ├── Cargo.toml
 ├── build.rs                 # 把 public/ 拷到二进制旁（SSR 资源定位）
 ├── src/
-│   ├── lib.rs               # 入口：Route 枚举 + app() + main()
+│   ├── lib.rs               # 入口：dioxus::launch(Home)，**无 Route 枚举 / 无 Router**
 │   ├── main.rs              # 转发 mps_web::main()
-│   ├── metrics.rs           # xtask 生成（TEST_COUNT/JNI/CORE_FFI + 扩展计数）
+│   ├── metrics.rs           # xtask 生成
 │   ├── i18n.rs              # i18n 初始化 + langs
 │   ├── layouts/
-│   │   ├── mod.rs           # 根布局：左侧星座导航 + 品牌 + 语言切换 + footer
-│   │   └── site.css         # 深空科幻主题（玻璃拟态 / 霓虹 / 动态星空背景）
-│   └── pages/               # 18 个页面（home/quickstart/architecture/gravity/
-│       │                     #   integrators/formula/voxel/events/arena/batch/
-│       │                     #   cosmos/jni/ffm/api/not_found）
+│   │   ├── mod.rs           # Toc（顶部锚点导航）+ Footer；**无 Layout/Outlet**
+│   │   └── site.css         # 深空科幻主题（克制版）
+│   └── pages/               # 14 个页面组件，全部内嵌进 Home
+│       ├── home.rs          # 聚合页：Toc + 14 个 <Section> + Footer，内联渲染
+│       ├── quickstart.rs … api.rs (13 个)  每个导出 `pub fn X() -> Element`
+│       │                    返回 `section { id:"sec-x", class:"doc-section", … }`
 └── public/index.html
 ```
+
+**无分页**：所有章节在一个 HTML 文档内（约 78KB）。导航是顶部 TOC 的
+`#sec-xxx` 原生锚点（浏览器原生滚动，**零 JS、无 hydration 拦截**），
+彻底消除之前 "菜单栏点击不跳转"（Dioxus `Link` 在前端拦截器因 SSR-only 无 wasm 客户端而死链）的问题。
+
+## 设计（2026-08-20 第三版：单页 + 克制科幻风）
+
+用户反馈前两版"样式太丑"且"分页经常出问题"。本次方向：
+1. **砍掉分页**：不要用 router / 多页。整站 = 一个内联页面，TOC 用 `#sec-`
+   锚点做页内跳转（原生滚动，绝不会因为 hydration 缺失而点不动）。
+2. **克制科幻风**：深空渐变背景 + 安静的星点层（慢漂移动画），顶部 sticky
+   TOC 药丸链接，宽松留白，玻璃拟态卡片，柔和的青/紫霓虹（不再刺眼 glow）。
+   所有正文类（`.page-head`/`.section-card`/`.module-card`/`.callout`/`.hero`/
+   表格/代码块）统一换肤，18 个章节即时获得新外观。
+3. **中文优先**：i18n 中文为默认回退；语言切换用 `?lang=` 查询参数。
+
+### 为什么这样稳
+- 纯 SSR（build.rs 只拷 `public/index.html`，无 wasm 客户端 bundle，本机无 `dx`）。
+- 导航 = 原生 `<a href="#sec-x">`，点击 = 浏览器整页锚点滚动，不依赖任何客户端 JS。
+- 无 Dioxus `Link` / `Router` / `Outlet`，因此不存在点击拦截器吞导航的问题。
 
 ## 设计（2026-08-20 重做：换格局 + 科幻宇宙风）
 

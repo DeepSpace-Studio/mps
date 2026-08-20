@@ -3,7 +3,9 @@ use dioxus_i18n::t;
 
 /// Box3D 批量碰撞体 — 批量插入 + 合并 + 物理感预设。
 pub fn Batch() -> Element {
+    
     rsx! {
+        section { id: "sec-batch", class: "doc-section",
         div { class: "page-head",
             div {
                 div { class: "page-tag", { t!("batch-tag") } }
@@ -237,6 +239,8 @@ pub fn Batch() -> Element {
                     "// Rust 端：构造 3 个球体请求\nlet requests = [\n    ColliderRequest {{\n        shape: ShapeDesc {{ shape_type: 0, a: 0.5, ..Default::default() }},\n        translation: Vec3 {{ x: 0.0, y: 0.0, z: 0.0 }},\n        ..Default::default()\n    }},\n    // ... 两个更多\n];\nlet preset = Box3DPreset::box3d_default();\nlet handles = world.inner.batch_add_colliders(&requests, &preset);\n// 同材质 → 合并为 1 个 compound（3 个球）"
                 } }
             }
+        }
+    
         }
     }
 }

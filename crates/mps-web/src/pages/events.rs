@@ -3,7 +3,10 @@ use dioxus_i18n::t;
 
 /// Event System — collision + contact-force events, three dispatch modes, C-callback hook.
 pub fn Events() -> Element {
+    
     rsx! {
+        section { id: "sec-events", class: "doc-section",
+
         div { class: "page-head",
             div {
                 div { class: "page-tag", { t!("evt-tag") } }
@@ -89,6 +92,8 @@ pub fn Events() -> Element {
                     "// 注册碰撞回调：safe 端 Rust 转 unsafe extern \"C\"\ntypedef void (*CollisionEventFn)\n    (const void* ctx,\n     const CollisionEventRecord* event,\n     void* user);\nworld_set_collision_callback(world, fn, user);"
                 } }
             }
+        }
+    
         }
     }
 }

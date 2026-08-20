@@ -3,7 +3,10 @@ use dioxus_i18n::t;
 
 /// Shared Memory Arena — DirectByteBuffer bridge between Java and Rust physics state.
 pub fn Arena() -> Element {
+    
     rsx! {
+        section { id: "sec-arena", class: "doc-section",
+
         div { class: "page-head",
             div {
                 div { class: "page-tag", { t!("arena-tag") } }
@@ -64,6 +67,8 @@ pub fn Arena() -> Element {
                     "// Java 21 — DirectByteBuffer + JNI\nByteBuffer arena = arena_alloc(N * SLOT_BYTES);\narena_write_positions(arena, positions);\nworld_step(world, dt);\narena_read_positions(arena, positions);"
                 } }
             }
+        }
+    
         }
     }
 }

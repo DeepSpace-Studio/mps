@@ -3,7 +3,10 @@ use dioxus_i18n::t;
 
 /// Formula Modules — 33 pure-Rust domain modules mapped to their category headings.
 pub fn Formula() -> Element {
+    
     rsx! {
+        section { id: "sec-formula", class: "doc-section",
+
         div { class: "page-head",
             div {
                 div { class: "page-tag", { t!("form-tag") } }
@@ -128,6 +131,8 @@ pub fn Formula() -> Element {
                     "// 全部公式函数经 C ABI 暴露，无 WorldHandle 依赖\n// 例：双椭球引力加速度\nVec3 a = mps_formula_ellipsoid_gravity(pos, body);\n// 例：Yoshida 4 阶辛积分器推进\nmps_formula_yoshida4_step(&mut pos, &mut vel, gm, dt);"
                 } }
             }
+        }
+    
         }
     }
 }
