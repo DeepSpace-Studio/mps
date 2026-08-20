@@ -36,20 +36,42 @@ body {
   min-height: 100vh;
 }
 
-/* Quiet starfield */
+/* Dynamic starry-sky background: parallax star layers + twinkle + breathing nebula */
 .starfield-bg {
-  position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: 0.45;
-  background-image:
-    radial-gradient(1px 1px at 25px 35px, rgba(255,255,255,.5), transparent),
-    radial-gradient(1px 1px at 130px 90px, rgba(255,255,255,.3), transparent),
-    radial-gradient(1px 1px at 240px 170px, rgba(255,255,255,.4), transparent),
-    radial-gradient(2px 2px at 360px 250px, rgba(108,196,255,.28), transparent),
-    radial-gradient(1px 1px at 480px 70px, rgba(255,255,255,.26), transparent),
-    radial-gradient(2px 2px at 600px 380px, rgba(179,155,255,.24), transparent);
+  position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden;
+  background:
+    radial-gradient(1.5px 1.5px at 20px 30px, #ffffff, transparent),
+    radial-gradient(1.5px 1.5px at 130px 90px, rgba(255,255,255,.85), transparent),
+    radial-gradient(1px 1px at 240px 170px, #cfe2ff, transparent),
+    radial-gradient(2px 2px at 360px 250px, rgba(108,196,255,.9), transparent),
+    radial-gradient(1px 1px at 480px 70px, #ffffff, transparent),
+    radial-gradient(2px 2px at 600px 380px, rgba(179,155,255,.85), transparent);
   background-size: 860px 520px;
-  animation: drift 200s linear infinite;
+  animation: drift 110s linear infinite;
+}
+.starfield-bg::before {
+  content: ""; position: absolute; inset: 0;
+  background:
+    radial-gradient(2.5px 2.5px at 60px 140px, #ffffff, transparent),
+    radial-gradient(2px 2px at 300px 60px, rgba(179,155,255,.9), transparent),
+    radial-gradient(3px 3px at 520px 300px, rgba(108,196,255,.8), transparent),
+    radial-gradient(2px 2px at 720px 420px, #ffffff, transparent);
+  background-size: 1000px 640px;
+  animation: drift2 190s linear infinite, twinkle 5.5s ease-in-out infinite;
+  opacity: .85;
+}
+.starfield-bg::after {
+  content: ""; position: absolute; inset: 0;
+  background:
+    radial-gradient(720px 520px at 82% -12%, rgba(108,196,255,.20), transparent 60%),
+    radial-gradient(620px 520px at -4% 112%, rgba(179,155,255,.18), transparent 60%),
+    radial-gradient(520px 420px at 50% 55%, rgba(95,255,200,.06), transparent 60%);
+  animation: nebula 26s ease-in-out infinite alternate;
 }
 @keyframes drift { from { background-position: 0 0; } to { background-position: 860px 520px; } }
+@keyframes drift2 { from { background-position: 0 0; } to { background-position: -1000px 640px; } }
+@keyframes twinkle { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
+@keyframes nebula { 0% { opacity: .65; transform: scale(1); } 100% { opacity: 1; transform: scale(1.1); } }
 
 /* ===================== Sidebar (GitBook) ===================== */
 .sidebar {
@@ -103,12 +125,15 @@ body {
 .hero-desc { font-size: 15.5px; color: var(--dim); max-width: 700px; margin: 0 auto 24px; }
 .hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  color: #06101e; padding: 11px 24px; border-radius: 9px; text-decoration: none;
-  font-weight: 600; transition: transform .15s, box-shadow .15s;
-  box-shadow: 0 6px 24px rgba(108,196,255,.3);
+  background:
+    linear-gradient(135deg, #6cc4ff, #b39bff),
+    radial-gradient(120px 60px at 20% 0%, rgba(255,255,255,.35), transparent 60%);
+  background-blend-mode: screen;
+  color: #000000; font-weight: 700; padding: 11px 24px; border-radius: 9px; text-decoration: none;
+  transition: transform .15s, box-shadow .15s, filter .15s;
+  box-shadow: 0 6px 24px rgba(108,196,255,.30);
 }
-.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(108,196,255,.42); }
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(108,196,255,.42); filter: brightness(1.06); }
 .btn-outline { border: 1px solid var(--border-strong); color: var(--accent); padding: 11px 24px; border-radius: 9px; text-decoration: none; transition: background .15s; }
 .btn-outline:hover { background: rgba(108,196,255,.10); }
 
