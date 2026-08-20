@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 use dioxus_i18n::{prelude::*, t};
 use unic_langid::langid;
 
-use crate::layouts::{Footer, Toc};
+use crate::layouts::{Footer, Sidebar};
 use crate::metrics::{CELESTIAL_COUNT, FORMULA_MODULE_COUNT, GRAVITY_MODEL_COUNT, INTEGRATOR_COUNT, JNI_METHOD_COUNT, CORE_FFI_COUNT, TEST_COUNT};
 
 use crate::pages::api::Api;
@@ -32,8 +32,9 @@ pub fn Home() -> Element {
     });
 
     rsx! {
-        Toc {}
-        main { class: "page-wrap",
+        Sidebar {}
+        div { class: "content-col",
+            main { class: "page-wrap",
             section { id: "sec-home", class: "doc-section doc-home",
                 div { class: "hero",
                     div { class: "hero-tag", { t!("home-hero-tag") } }
@@ -77,6 +78,7 @@ pub fn Home() -> Element {
             Jni {}
             Ffm {}
             Api {}
+            }
         }
         Footer {}
     }

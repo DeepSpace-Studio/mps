@@ -588,3 +588,9 @@ not-found-back = 返回首页
 
 # ---- Footer ----
 footer-text = MPS Motion Physics System v{ $version } — GitHub
+nav-group-foundations = 基础
+nav-group-physics = 物理引擎
+nav-group-formula = 公式与算法
+nav-group-arena = 共享内存
+nav-group-bindings = 语言绑定
+nav-group-reference = 参考

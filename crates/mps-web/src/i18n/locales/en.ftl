@@ -588,3 +588,9 @@ not-found-back = Back to Home
 
 # ---- Footer ----
 footer-text = MPS Motion Physics System v{ $version } — GitHub
+nav-group-foundations = Foundations
+nav-group-physics = Physics
+nav-group-formula = Formulas
+nav-group-arena = Shared Memory
+nav-group-bindings = Bindings
+nav-group-reference = Reference
