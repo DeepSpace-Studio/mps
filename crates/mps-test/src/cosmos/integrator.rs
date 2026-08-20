@@ -62,6 +62,8 @@ fn verlet_circle_orbit_closes_tight() {
         sun_position: Vector::ZERO,
         relativistic: mps_cosmos::world::RelativisticCorrection::None,
         has_irregular_sources: true,
+        nb_parallel: mps_cosmos::integrator::nb_parallel_enabled(),
+        ff_simd: mps_cosmos::integrator::ff_simd_enabled(),
     };
 
     let mut a = total_acceleration(
@@ -184,6 +186,8 @@ fn inner_m_loop_ordered_parallel_bit_identical() {
             sun_position: Vector::ZERO,
             relativistic: mps_cosmos::world::RelativisticCorrection::None,
             has_irregular_sources: false,
+            nb_parallel: mps_cosmos::integrator::nb_parallel_enabled(),
+            ff_simd: mps_cosmos::integrator::ff_simd_enabled(),
         };
         for &pos in &probe_positions {
             let serial = total_acceleration(pos, Vector::ZERO, 1000.0, sat_hdl, &ctx_mono, None);
@@ -230,6 +234,8 @@ fn inner_m_loop_ordered_parallel_bit_identical() {
                 sun_position: Vector::ZERO,
                 relativistic: mps_cosmos::world::RelativisticCorrection::None,
                 has_irregular_sources: true,
+                nb_parallel: mps_cosmos::integrator::nb_parallel_enabled(),
+                ff_simd: mps_cosmos::integrator::ff_simd_enabled(),
             };
             // 卫星放在 near_src 近场阈值内（dist < 8e4），触发 points 求和分支。
             let probe_irr = near_pos + Vector::new(1.0e3, 0.0, 0.0);
@@ -311,6 +317,8 @@ fn far_field_simd_bit_identical_with_serial_scalar_loop() {
             sun_position: Vector::ZERO,
             relativistic: mps_cosmos::world::RelativisticCorrection::None,
             has_irregular_sources: false,
+            nb_parallel: mps_cosmos::integrator::nb_parallel_enabled(),
+            ff_simd: mps_cosmos::integrator::ff_simd_enabled(),
         };
         for &pos in &probe_positions {
             let serial = total_acceleration(pos, Vector::ZERO, 1000.0, sat_hdl, &ctx_mono, None);
@@ -355,6 +363,8 @@ fn far_field_simd_bit_identical_with_serial_scalar_loop() {
                 sun_position: Vector::ZERO,
                 relativistic: mps_cosmos::world::RelativisticCorrection::None,
                 has_irregular_sources: true,
+                nb_parallel: mps_cosmos::integrator::nb_parallel_enabled(),
+                ff_simd: mps_cosmos::integrator::ff_simd_enabled(),
             };
             let probe_irr = near_pos + Vector::new(1.0e3, 0.0, 0.0);
             let serial =
@@ -368,8 +378,10 @@ fn far_field_simd_bit_identical_with_serial_scalar_loop() {
     }
 }
 
-/// F 路由 lock-down：通过真实 env 开关 `COSMOS_FARFIELD_SIMD` 切换 `total_acceleration`
-/// 的串行/SIMD 路径，二者输出必须逐位一致（进程内切换 env，覆盖真实路由分支）。
+/// F 路由 lock-down：构造两个「数据相同、仅 `ff_simd` 开关不同」的 `AccelContext`，
+/// 分别走 `total_acceleration` 的串行主路径与 4 路 SIMD 路径（`COSMOS_FARFIELD_SIMD=1`），
+/// 二者输出必须逐位一致。开关在 ctx 构造期求值（env 缓存到 ctx，见 §11 附带发现），
+/// 不再进程内 flip env——语义等价且更清晰。
 #[test]
 fn far_field_simd_env_gate_routes_bit_identical() {
     let sat_hdl = RigidBodyHandle::from_raw_parts(0, 0);
@@ -409,7 +421,10 @@ fn far_field_simd_env_gate_routes_bit_identical() {
         pos_gm_full[2 + i] = (p, gm);
     }
     let rots: Vec<Rotation> = (0..pos_cap).map(|_| Rotation::IDENTITY).collect();
-    let ctx = AccelContext {
+    // 构造两个「数据相同、仅 ff_simd 开关不同」的 ctx：原测试靠中途 flip env 切换
+    // 串行/SIMD 路径，现改在 ctx 构造期一次性求值（env 缓存到 ctx，见 §11 附带发现），
+    // 两个 ctx 分别对应串行主路径与 F 的 4 路 SIMD 路径，输出必须逐位一致。
+    let ctx_serial = AccelContext {
         celestials: &[],
         n_body_sources: &sources,
         source_positions: &positions,
@@ -420,16 +435,183 @@ fn far_field_simd_env_gate_routes_bit_identical() {
         sun_position: Vector::ZERO,
         relativistic: mps_cosmos::world::RelativisticCorrection::None,
         has_irregular_sources: false,
+        nb_parallel: false,
+        ff_simd: false,
+    };
+    let ctx_simd = AccelContext {
+        celestials: &[],
+        n_body_sources: &sources,
+        source_positions: &positions,
+        source_rotations: &rots,
+        source_pos_gm: &pos_gm_full,
+        softening_sq: 0.0,
+        central_body: None,
+        sun_position: Vector::ZERO,
+        relativistic: mps_cosmos::world::RelativisticCorrection::None,
+        has_irregular_sources: false,
+        nb_parallel: false,
+        ff_simd: true,
     };
     let probe = Vector::new(7.0e6, -2.0e6, 3.5e6);
 
-    unsafe { std::env::remove_var("COSMOS_FARFIELD_SIMD") };
-    let serial = total_acceleration(probe, Vector::ZERO, 1000.0, sat_hdl, &ctx, None);
-    unsafe { std::env::set_var("COSMOS_FARFIELD_SIMD", "1") };
-    let simd = total_acceleration(probe, Vector::ZERO, 1000.0, sat_hdl, &ctx, None);
-    unsafe { std::env::remove_var("COSMOS_FARFIELD_SIMD") };
+    let serial = total_acceleration(probe, Vector::ZERO, 1000.0, sat_hdl, &ctx_serial, None);
+    let simd = total_acceleration(probe, Vector::ZERO, 1000.0, sat_hdl, &ctx_simd, None);
     assert_eq!(
         serial, simd,
         "F 路由：COSMOS_FARFIELD_SIMD=1 与串行不逐位一致 serial={serial:?} simd={simd:?}"
     );
+}
+
+/// lock-down：SIMD 远场在 `dsq<1.0`（含 dsq==0 重合体）时必须与串行 `continue` 逐位
+/// 一致，不得产生 NaN/Inf。这是 2026-08-20 (P1) 修复的真实除零 bug 的回归 guard：
+/// 原 4-lane 块先算 `gm/(dist_sq*dist)` 再 mask，dsq==0 得 Inf*0=NaN；串行因提前
+/// `continue` 不除故安全。F lock-down 原用小尺度随机点（min 距离 ≫1）未触发，本测
+/// 故意放重合/近距体逼出该分支。
+#[test]
+fn far_field_simd_close_body_no_nan_bit_identical() {
+    use mps_cosmos::integrator::far_field_monopole_simd;
+    let sat_hdl = RigidBodyHandle::from_raw_parts(0, 0);
+    // 4 源：idx0=排除项(自身)；idx1 正常；idx2 与 idx1 重合(dsq==0)；idx3 与 idx1 近距(dsq<1)。
+    let sources: Vec<NBodySource> = vec![
+        NBodySource::monopole(sat_hdl, 5.972e24),
+        NBodySource::monopole(RigidBodyHandle::from_raw_parts(1, 0), 1.0e20),
+        NBodySource::monopole(RigidBodyHandle::from_raw_parts(2, 0), 1.0e20),
+        NBodySource::monopole(RigidBodyHandle::from_raw_parts(3, 0), 1.0e20),
+    ];
+    let positions: Vec<Vector> = vec![
+        Vector::new(0.0, 0.0, 0.0),
+        Vector::new(10.0, 0.0, 0.0),
+        Vector::new(10.0, 0.0, 0.0), // 重合 idx1
+        Vector::new(10.3, 0.0, 0.0), // 近距 idx1 (d=0.3, dsq=0.09<1)
+    ];
+    let gms = [5.972e24, 1.0e20, 1.0e20, 1.0e20];
+    let pos_gm: Vec<(Vector, f64)> = positions
+        .iter()
+        .zip(gms.iter())
+        .map(|(p, &g)| (*p, g))
+        .collect();
+    let rots: Vec<Rotation> = (0..4).map(|_| Rotation::IDENTITY).collect();
+    let ctx = AccelContext {
+        celestials: &[],
+        n_body_sources: &sources,
+        source_positions: &positions,
+        source_rotations: &rots,
+        source_pos_gm: &pos_gm,
+        softening_sq: 0.0,
+        central_body: None,
+        sun_position: Vector::ZERO,
+        relativistic: mps_cosmos::world::RelativisticCorrection::None,
+        has_irregular_sources: false,
+        nb_parallel: false,
+        ff_simd: true,
+    };
+    let probe = Vector::new(10.0, 0.0, 0.0); // 与 idx1/idx2 重合、距 idx3 0.3
+    let serial = total_acceleration(probe, Vector::ZERO, 5.972e24, sat_hdl, &ctx, None);
+    let simd = far_field_monopole_simd(probe, sat_hdl, &ctx);
+    assert!(
+        serial.x.is_finite() && serial.y.is_finite() && serial.z.is_finite(),
+        "串行近距体出现 NaN {serial:?}"
+    );
+    assert!(
+        simd.x.is_finite() && simd.y.is_finite() && simd.z.is_finite(),
+        "SIMD 近距体出现 NaN {simd:?}（除零 bug 回归）"
+    );
+    assert_eq!(
+        serial, simd,
+        "SIMD 近距体 dsq<1 与串行不逐位一致 serial={serial:?} simd={simd:?}"
+    );
+}
+
+/// ad-hoc 性能剖析（默认忽略，手动 `--ignored --nocapture` 跑）：量化 P1（SIMD 远场默认开启）
+/// 在大 M monopole 远场热路径上的实测提速。隔离 `total_acceleration` 远场路径本身，
+/// 对比 `ff_simd=true`(默认) vs `ff_simd=false`(串行) 的 ns/call。仅供 H 实测，不改任何行为。
+#[test]
+#[ignore]
+fn bench_far_field_simd_speedup_ignore() {
+    use std::hint::black_box;
+    use std::time::Instant;
+    let sat_hdl = RigidBodyHandle::from_raw_parts(0, 0);
+    for &m in &[256usize, 1024, 4096] {
+        let mut sources: Vec<NBodySource> = Vec::with_capacity(m + 1);
+        sources.push(NBodySource::monopole(sat_hdl, 5.972e24));
+        let cap = 1000 + m;
+        let mut positions: Vec<Vector> = vec![Vector::ZERO; cap];
+        let mut pos_gm: Vec<(Vector, f64)> = Vec::with_capacity(m + 1);
+        pos_gm.push((Vector::ZERO, 5.972e24));
+        let mut rng = 0x9e37_79b9_7f4a_7c15u64;
+        for i in 0..m {
+            rng = rng
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            let a = (rng & 0xffff) as f64 * 2.0 * std::f64::consts::PI / 65535.0;
+            rng = rng
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            let b = ((rng >> 16) & 0xffff) as f64 * std::f64::consts::PI / 65535.0;
+            let rad = 1.0e7 + ((rng >> 32) & 0xffff) as f64 * 1.0e6;
+            let p = Vector::new(
+                rad * b.sin() * a.cos(),
+                rad * b.cos(),
+                rad * b.sin() * a.sin(),
+            );
+            let h = RigidBodyHandle::from_raw_parts(1000 + i as u32, 0);
+            let gm = 1.0e20 + (i as f64) * 1.0e15;
+            sources.push(NBodySource::monopole(h, gm));
+            positions[1000 + i] = p;
+            pos_gm.push((p, gm));
+        }
+        let rots: Vec<Rotation> = (0..cap).map(|_| Rotation::IDENTITY).collect();
+        let mk = |ff: bool| AccelContext {
+            celestials: &[],
+            n_body_sources: &sources,
+            source_positions: &positions,
+            source_rotations: &rots,
+            source_pos_gm: &pos_gm,
+            softening_sq: 0.0,
+            central_body: None,
+            sun_position: Vector::ZERO,
+            relativistic: mps_cosmos::world::RelativisticCorrection::None,
+            has_irregular_sources: false,
+            nb_parallel: false,
+            ff_simd: ff,
+        };
+        let ctx_simd = mk(true);
+        let ctx_serial = mk(false);
+        let probe = Vector::new(7.0e6, 0.0, 0.0);
+        let iters = 3000;
+        let t_simd = {
+            let t0 = Instant::now();
+            for _ in 0..iters {
+                black_box(total_acceleration(
+                    probe,
+                    Vector::ZERO,
+                    5.972e24,
+                    sat_hdl,
+                    &ctx_simd,
+                    None,
+                ));
+            }
+            t0.elapsed()
+        };
+        let t_serial = {
+            let t0 = Instant::now();
+            for _ in 0..iters {
+                black_box(total_acceleration(
+                    probe,
+                    Vector::ZERO,
+                    5.972e24,
+                    sat_hdl,
+                    &ctx_serial,
+                    None,
+                ));
+            }
+            t0.elapsed()
+        };
+        let ns_s = t_simd.as_nanos() as f64 / iters as f64;
+        let ns_c = t_serial.as_nanos() as f64 / iters as f64;
+        println!(
+            "FARFIELD m={m} SIMD={ns_s:.1}ns/call serial={ns_c:.1}ns/call speedup={:.2}x",
+            ns_c / ns_s,
+        );
+    }
 }

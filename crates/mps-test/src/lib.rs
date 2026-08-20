@@ -8,6 +8,7 @@ pub mod cosmos {
     pub mod gravity;
     pub mod integrator;
     pub mod orbit;
+    pub mod orbit_diagnostics;
     pub mod perturbation;
     pub mod world;
 }

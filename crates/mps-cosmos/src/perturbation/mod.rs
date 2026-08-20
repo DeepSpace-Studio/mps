@@ -4,7 +4,7 @@
 //! 翻译为对应扰动力（加速度 × 质量）。所有函数返回的是**力**（N），
 //! 由 `CosmosWorld::step` 在推进前注入到刚体上。
 
-use mps_formula::celestial_data::{CelestialBody, SOLAR_PRESSURE_AT_1AU};
+use mps_formula::celestial_data::{CelestialBody, G, SOLAR_PRESSURE_AT_1AU};
 use mps_formula::ffi::Vec3;
 use mps_formula::galactic_dynamics as gd;
 use mps_formula::heliophysics as hph;
@@ -150,6 +150,123 @@ pub fn solar_wind_pressure_force(
     // nPa → Pa。
     let pressure_pa = hph::solar_wind_dynamic_pressure(proton_density, v_rel_kms)? * 1.0e-9;
     Some(dir * (pressure_pa * effective_area))
+}
+
+/// 日食（阴影锥）衰减因子，作用于光压 / 太阳风。纯几何，无状态、不依赖 `WorldHandle`。
+///
+/// 双锥模型（太阳与遮挡体均为有限半径圆盘）：
+/// - 本影（umbra）：遮挡体完全遮住太阳 → 因子 0（光压/太阳风为 0）。
+/// - 半影（penumbra）：部分遮挡 → 因子在 [0,1] 内按横向距离线性过渡。
+/// - 无遮挡 → 因子 1（等于原输出，满足「原方法不变」铁律）。
+///
+/// 几何：光源在 `sun_pos`，遮挡体圆心在原点、半径 `occ_radius`（=`central_body` 的
+/// `equatorial_radius`），被照体在 `pos`。沿「太阳 → 遮挡体」轴投影求被照体的轴向
+/// 距离 `x`（遮挡体之后为正）与横向距离 `d_perp`；用太阳半径 `sun_radius`
+/// （=`SUN_EQ_RADIUS`）做双锥：
+/// - `r_umbra(x) = occ_radius + (occ_radius - sun_radius) * x / D`（`D` = 日-遮距离）。
+/// - `r_pen(x)   = occ_radius + (occ_radius + sun_radius) * x / D`。
+/// `d_perp ≤ r_umbra` → 0；`d_perp ≤ r_pen` → `(d_perp - r_umbra) / (r_pen - r_umbra)`
+/// 夹 [0,1]；否则 1。任意阶退化（零半径 / 零距离 / NaN）返回 1。
+///
+/// 调用方应先用 `cfg.enable_eclipse` 门控，只在开启时调用（开启即默认路径行为改变，
+/// 故必须显式 opt-in，且需 lock-down 证明终态仅日食场景变化）。
+pub fn eclipse_attenuation(pos: Vector, sun_pos: Vector, occ_radius: f64, sun_radius: f64) -> f64 {
+    if occ_radius <= 0.0 || sun_radius <= 0.0 || !occ_radius.is_finite() || !sun_radius.is_finite()
+    {
+        return 1.0;
+    }
+    let d_sun = sun_pos.length();
+    if d_sun < 1e-9 {
+        return 1.0;
+    }
+    let d_body = pos.length();
+    if d_body < 1e-9 {
+        return 1.0;
+    }
+    // 轴方向：太阳 → 遮挡体（遮挡体在原点）→ a = -sun_pos / |sun_pos|。
+    let a = -sun_pos / d_sun;
+    // 被照体相对太阳的轴向投影 s（s=0 在太阳，s=D 在遮挡体）。
+    let s = (pos - sun_pos).dot(a);
+    let x = s - d_sun; // 遮挡体之后为正
+    if x <= 0.0 {
+        return 1.0; // 在太阳与遮挡体之间 / 之前 → 无阴影
+    }
+    // 横向距离：被照体到轴的距离。
+    let axis_point = sun_pos + a * s;
+    let d_perp = (pos - axis_point).length();
+    if !d_perp.is_finite() {
+        return 1.0;
+    }
+    let r_umbra = occ_radius + (occ_radius - sun_radius) * x / d_sun;
+    if d_perp <= r_umbra {
+        return 0.0; // 本影
+    }
+    let r_pen = occ_radius + (occ_radius + sun_radius) * x / d_sun;
+    if d_perp <= r_pen {
+        // 半影：0（内缘，恰全遮）→ 1（外缘，恰初遮）线性过渡。
+        let denom = r_pen - r_umbra;
+        if denom <= 0.0 {
+            return 1.0;
+        }
+        let f = (d_perp - r_umbra) / denom;
+        if f < 0.0 {
+            0.0
+        } else if f > 1.0 {
+            1.0
+        } else {
+            f
+        }
+    } else {
+        1.0
+    }
+}
+
+/// Hut (1981) 平衡潮自旋同步力矩（N·m），驱动卫星自转趋向轨道同步、并（在双体
+/// 均可动时）圆化轨道。
+///
+/// 采用 Murray & Dermott《Solar System Dynamics》式 (4.159) 的圆形轨道主导项：
+/// `Γ = (3/2) · G·M_p²·k2 / (Q·a⁶) · R⁵ · (n − ω_∥)`，
+/// 其中 `M_p` 为伴星（潮汐施主）GM、`k2` Love 数、`Q` 潮汐品质因子、`R` 卫星半径、
+/// `a` 轨道半径、`n = sqrt(G·M_p/a³)` 平均运动、`ω_∥ = ω·û` 为卫星自旋在轨道法向
+/// `û = (r×v)/|r×v|` 上的分量。力矩沿 `û`，符号 `(n − ω_∥)`：欠同步时加速、过同步时减速。
+///
+/// 物理范围与限制（诚实标注，不伪造）：本实现仅施加**卫星自旋**力矩这一自洽、物理
+/// 成立的主导项。`central_body` 在当前 `CosmosWorld` 中为静态 `CelestialBody`（无可变
+/// 态），故「轨道圆化」所需的角动量反向交换（对伴星施加等大反向力矩）未实现——那需要
+/// 伴星本身是动态 n-body 体。完整双体潮汐演化（含轨道半长轴/偏心率演化）留给后续把
+/// `central_body` 升级为动态源时再做。默认关闭 → 不影响现有输出（原方法不变）。
+///
+/// 输入非法（a≤0 / R≤0 / k2≤0 / Q≤0 / 退化轨道）返回零向量。
+pub fn tidal_torque(
+    position: Vector,
+    velocity: Vector,
+    body_spin: Vector,
+    primary_gm: f64,
+    primary_radius: f64,
+    body_radius: f64,
+    k2: f64,
+    q: f64,
+) -> Vector {
+    let a = position.length();
+    if a <= 1e-9 || body_radius <= 0.0 || k2 <= 0.0 || q <= 0.0 || !primary_gm.is_finite() {
+        return Vector::ZERO;
+    }
+    // 必须离开两体表面，避免表面内奇异。
+    if a <= primary_radius + body_radius {
+        return Vector::ZERO;
+    }
+    let h_vec = position.cross(velocity);
+    let h_mag = (h_vec.x * h_vec.x + h_vec.y * h_vec.y + h_vec.z * h_vec.z).sqrt();
+    if h_mag < 1e-20 {
+        return Vector::ZERO; // 退化轨道（径向），无定义法向
+    }
+    let u_hat = h_vec / h_mag; // 轨道法向
+    let n = (primary_gm / a.powi(3)).sqrt(); // 平均运动
+    let omega_par = body_spin.dot(u_hat); // 自旋沿法向分量
+    let a6 = a.powi(6);
+    let r5 = body_radius.powi(5);
+    let tau_mag = 1.5 * (G * primary_gm * primary_gm * k2 / (q * a6)) * r5 * (n - omega_par);
+    u_hat * tau_mag
 }
 
 /// Chandrasekhar 动力学摩擦产生的力（N）。当一颗卫星穿过背景弥散介质（如星

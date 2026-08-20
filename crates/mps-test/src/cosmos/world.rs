@@ -21,6 +21,26 @@ use mps_formula::celestial_data::{CelestialBodyId, get_celestial_body};
 use mps_formula::math::KahanVec3;
 #[cfg(test)]
 use mps_formula::spaceflight::kepler_period;
+
+/// 镜像生产 `refresh_n_body_sources` 的 SOA 表构建：对每个 n-body 源按 handle 取世界位姿 +
+/// 源的 gm，得到与 `n_body_sources` 同序、同长的 `source_pos_gm`。reference-ctx 测试需要它
+/// 喂给 SIMD 远场路径（P1 起默认开启）——空表 `&[]` 会在 SIMD 默认开启后越界（串行路径
+/// 不读此表，故此前被掩盖）。
+fn snapshot_source_pos_gm(world: &CosmosWorld) -> Vec<(Vector, f64)> {
+    world
+        .n_body_sources()
+        .iter()
+        .map(|s| {
+            let p = world
+                .bodies()
+                .get(s.handle)
+                .map(|b| b.translation())
+                .unwrap_or(Vector::ZERO);
+            (p, s.gm)
+        })
+        .collect()
+}
+
 #[cfg(test)]
 use rapier3d::prelude::{RigidBodyHandle, Rotation, Vector};
 
@@ -466,12 +486,14 @@ fn default_softening_bounds_close_encounter() {
         n_body_sources: world.n_body_sources(),
         source_positions: &src_pos,
         source_rotations: &src_rot,
-        source_pos_gm: &[],
+        source_pos_gm: &snapshot_source_pos_gm(&world),
         softening_sq: world.n_body_softening_sq(),
         central_body: None,
         sun_position: Vector::ZERO,
         relativistic: mps_cosmos::world::RelativisticCorrection::None,
         has_irregular_sources: true,
+        nb_parallel: mps_cosmos::integrator::nb_parallel_enabled(),
+        ff_simd: mps_cosmos::integrator::ff_simd_enabled(),
     };
     let acc = total_acceleration(
         Vector::new(1.0, 0.0, 0.0),
@@ -1031,12 +1053,14 @@ fn n_body_optimized_matches_serial_reference_bit_identical() {
         n_body_sources: world.n_body_sources(),
         source_positions: &src_pos,
         source_rotations: &src_rot,
-        source_pos_gm: &[],
+        source_pos_gm: &snapshot_source_pos_gm(&world),
         softening_sq: 0.0,
         central_body: None,
         sun_position: Vector::ZERO,
         relativistic: mps_cosmos::world::RelativisticCorrection::None,
         has_irregular_sources: true,
+        nb_parallel: mps_cosmos::integrator::nb_parallel_enabled(),
+        ff_simd: mps_cosmos::integrator::ff_simd_enabled(),
     };
 
     // 独立串行 reference：每体 velocity-Verlet（与生产 `verlet_step` 同公式）。
@@ -1130,12 +1154,14 @@ fn highorder_bit_identical_helper(mode: OrbitIntegration) {
         n_body_sources: world.n_body_sources(),
         source_positions: &src_pos,
         source_rotations: &src_rot,
-        source_pos_gm: &[],
+        source_pos_gm: &snapshot_source_pos_gm(&world),
         softening_sq: 0.0,
         central_body: None,
         sun_position: Vector::ZERO,
         relativistic: mps_cosmos::world::RelativisticCorrection::None,
         has_irregular_sources: true,
+        nb_parallel: mps_cosmos::integrator::nb_parallel_enabled(),
+        ff_simd: mps_cosmos::integrator::ff_simd_enabled(),
     };
 
     // 串行 reference：每个体用对应纯函数推进。
@@ -1304,12 +1330,14 @@ fn irregular_source_flag_shortcut_matches_full_near_field() {
         n_body_sources: world.n_body_sources(),
         source_positions: &src_pos,
         source_rotations: &src_rot,
-        source_pos_gm: &[],
+        source_pos_gm: &snapshot_source_pos_gm(&world),
         softening_sq: 0.0,
         central_body: None,
         sun_position: Vector::ZERO,
         relativistic: mps_cosmos::world::RelativisticCorrection::None,
         has_irregular_sources: true,
+        nb_parallel: mps_cosmos::integrator::nb_parallel_enabled(),
+        ff_simd: mps_cosmos::integrator::ff_simd_enabled(),
     };
     let mut reference = Vec::new();
     for &(h, r0, v0, mass) in &init {
@@ -1403,12 +1431,14 @@ fn parallel_writeback_matches_serial_reference_bit_identical() {
         n_body_sources: world.n_body_sources(),
         source_positions: &src_pos,
         source_rotations: &src_rot,
-        source_pos_gm: &[],
+        source_pos_gm: &snapshot_source_pos_gm(&world),
         softening_sq: 0.0,
         central_body: None,
         sun_position: Vector::ZERO,
         relativistic: mps_cosmos::world::RelativisticCorrection::None,
         has_irregular_sources: true,
+        nb_parallel: mps_cosmos::integrator::nb_parallel_enabled(),
+        ff_simd: mps_cosmos::integrator::ff_simd_enabled(),
     };
     let mut reference = Vec::new();
     for &(h, r0, v0, mass) in &init {
@@ -1437,4 +1467,171 @@ fn parallel_writeback_matches_serial_reference_bit_identical() {
             "B2 并行写回 body {h:?} 速度 {vel:?} 与串行 reference {v_ref:?} 不一致"
         );
     }
+}
+
+/// 端到端 bit-identical 确定性闸门（E1 精神，本地基线）。
+///
+/// 同一确定性初始条件推演两次，终态必须逐位相等（f64 `==`）。覆盖全链路含
+/// P1 默认开启的 SIMD 远场（多个 n-body 源会激活 `far_field_monopole_simd`）。
+/// 这是「原方法不变」铁律的顶层护栏：任何未来优化若破坏逐位一致性，此测试
+/// 必红。跨平台（Linux/Windows）一致性由同一二进制在 CI 上跑两份基线比对实现；
+/// 此处给出可本地复跑的 run-to-run 基线。
+#[test]
+fn scenario_bit_identical_determinism_gate() {
+    let sun_gm = 1.32712440018e20_f64; // 太阳 GM
+    // 多个行星作为 n-body 源（激活 SIMD 远场路径）。
+    let planets = [
+        (1.0e-6 * sun_gm, 5.79e10_f64, 0.0_f64),    // 类水星
+        (2.45e-6 * sun_gm, 1.082e11_f64, 0.05_f64), // 类金星
+        (3.0e-6 * sun_gm, 1.496e11_f64, 0.10_f64),  // 类地球
+        (3.2e-7 * sun_gm, 2.279e11_f64, 0.03_f64),  // 类火星
+    ];
+
+    let build = || {
+        let mut world = CosmosWorld::new(CosmosWorldConfig {
+            gravity: Vector::ZERO,
+            dt: 60.0,
+            solver_iterations: 8,
+            ccd_substeps: 0,
+            n_body_softening_sq: 0.0,
+            central_body: None,
+            orbit_integration: OrbitIntegration::Verlet,
+            verlet_substeps: 1,
+            adaptive_substeps: false,
+            adaptive_tolerance: 1e-9,
+            relativistic_correction: mps_cosmos::world::RelativisticCorrection::None,
+        });
+        // 中心恒星（静止原点，作为 n-body 源）。
+        let sun_h = world.insert_body(
+            satellite_builder(sun_gm, Vector::ZERO, Vector::ZERO, 1.0).lock_translations(),
+        );
+        world.add_n_body(sun_h, sun_gm);
+        let mut handles = Vec::new();
+        for (m, a, inc) in planets {
+            let r = Vector::new(a * inc.cos(), a * inc.sin(), a * 0.2_f64);
+            let v = (sun_gm / a).sqrt(); // 近似圆速度
+            let vel = Vector::new(-v * inc.sin(), v * inc.cos(), v * 0.1_f64);
+            let h = world.insert_body(
+                satellite_builder(m, r, vel, 1.0)
+                    .linear_damping(0.0)
+                    .angular_damping(0.0)
+                    .gravity_scale(0.0),
+            );
+            world.add_n_body(h, m);
+            handles.push(h);
+        }
+        (world, handles)
+    };
+
+    let (mut w1, h1) = build();
+    let (mut w2, h2) = build();
+    for _ in 0..200 {
+        w1.step(60.0);
+        w2.step(60.0);
+    }
+
+    for (a, b) in h1.iter().zip(h2.iter()) {
+        let pa = w1.body_translation(*a).expect("body");
+        let pb = w2.body_translation(*b).expect("body");
+        let va = w1.body_linvel(*a).expect("body");
+        let vb = w2.body_linvel(*b).expect("body");
+        assert_eq!(pa.x, pb.x, "pos.x bit-diff");
+        assert_eq!(pa.y, pb.y, "pos.y bit-diff");
+        assert_eq!(pa.z, pb.z, "pos.z bit-diff");
+        assert_eq!(va.x, vb.x, "vel.x bit-diff");
+        assert_eq!(va.y, vb.y, "vel.y bit-diff");
+        assert_eq!(va.z, vb.z, "vel.z bit-diff");
+    }
+}
+
+/// F2（2026-08-20）：Hut (1981) 平衡潮自旋同步力矩。
+///
+/// 注意：潮汐自旋演化经 Rapier 的 `apply_torque_impulse` 接入，仅 `RapierForce`
+/// 积分路径消费（显式高阶积子不积分角运动，见 world.rs 文档）。故测试用 RapierForce。
+///
+/// - 关闭（默认）→ 自旋不施加潮汐力矩，与历史行为逐位一致（bit-identical）。
+/// - 开启 + 设 central_body 作伴星 → 欠同步自旋被加速向同步，若干步后终态自旋
+///   与「关闭」世界发散（力矩确实接入并施加）。真实小卫星的潮汐同步时标为地质量级，
+///   500 s 内绝对增量极小（~1e-18 rad/s），故此处只验证「方向正确 + 非零 + 关闭时
+///   逐位不变」，不盲设夸大阈值。
+#[test]
+fn tidal_torque_synchronizes_spin_when_enabled() {
+    let earth = get_celestial_body(CelestialBodyId::Earth);
+    let gm = earth.gm;
+    let r = 2.0e7_f64;
+    let v = (gm / r).sqrt();
+
+    let build = |enable_tidal: bool| {
+        let mut world = CosmosWorld::new(CosmosWorldConfig {
+            gravity: Vector::ZERO,
+            dt: 10.0,
+            solver_iterations: 8,
+            ccd_substeps: 0,
+            n_body_softening_sq: 0.0,
+            central_body: None,
+            orbit_integration: OrbitIntegration::RapierForce,
+            verlet_substeps: 1,
+            adaptive_substeps: false,
+            adaptive_tolerance: 1e-9,
+            relativistic_correction: mps_cosmos::world::RelativisticCorrection::None,
+        });
+        // 中心恒星（静止原点，作为 n-body 源提供轨道引力 + tidal 伴星）。
+        let star_h = world.insert_body(
+            satellite_builder(gm, Vector::ZERO, Vector::ZERO, 1.0).lock_translations(),
+        );
+        world.add_n_body(star_h, gm);
+        world.set_central_body(Some(earth));
+        // 卫星：初始无自旋（远欠同步），tidal 必然加速其自旋向同步。
+        let h = world.insert_body(
+            satellite_builder(
+                1000.0,
+                Vector::new(r, 0.0, 0.0),
+                Vector::new(0.0, v, 0.0),
+                1.0,
+            )
+            .angvel(Vector::new(0.0, 0.0, 0.0_f64))
+            .linear_damping(0.0)
+            .angular_damping(0.0)
+            .gravity_scale(0.0),
+        );
+        let mut cfg = mps_cosmos::world::PerturbationConfig::default();
+        cfg.enable_tidal = enable_tidal;
+        cfg.tidal_radius = 1.0e3_f64; // 1 km 卫星
+        cfg.love_number_k2 = 0.299;
+        cfg.tidal_q = 12.0;
+        world.set_perturbation(h, cfg);
+        (world, h)
+    };
+
+    // 关闭：自旋应恒等于初值（无潮汐力矩，Rapier 不改自旋）→ 逐位一致。
+    let (mut w_off, h_off) = build(false);
+    let spin0 = w_off.bodies().get(h_off).unwrap().angvel().z;
+    for _ in 0..50 {
+        w_off.step(10.0);
+    }
+    let spin_off = w_off.bodies().get(h_off).unwrap().angvel().z;
+    assert_eq!(spin_off, spin0, "tidal OFF must leave spin bit-identical");
+
+    // 开启：欠同步（初值 0 < n）被加速 → 终态自旋与「关闭」世界发散且方向为正。
+    let (mut w_on, h_on) = build(true);
+    for _ in 0..50 {
+        w_on.step(10.0);
+    }
+    let spin_on = w_on.bodies().get(h_on).unwrap().angvel().z;
+    assert!(
+        spin_on.is_finite(),
+        "spin must stay finite, got {}",
+        spin_on
+    );
+    assert!(
+        spin_on != spin_off,
+        "tidal ON must diverge from OFF (torque applied); on={} off={}",
+        spin_on,
+        spin_off
+    );
+    assert!(
+        spin_on > 0.0,
+        "sub-synchronous spin must be accelerated positive, got {}",
+        spin_on
+    );
 }

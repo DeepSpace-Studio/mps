@@ -358,6 +358,11 @@ pub extern "C" fn cosmos_world_set_perturbation(
                 friction_background_density,
                 friction_coulomb_log,
                 enable_dynamical_friction: enable_dynamical_friction != 0,
+                enable_eclipse: false,
+                enable_tidal: false,
+                love_number_k2: 0.299,
+                tidal_q: 12.0,
+                tidal_radius: 0.0,
             },
         );
         1

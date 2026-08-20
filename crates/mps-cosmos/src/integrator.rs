@@ -69,10 +69,43 @@ pub struct AccelContext<'a> {
     /// 分支的判定（全 monopole 的常见路径）；数值惰性——该分支在 `false`
     /// 下本就不会触发。
     pub has_irregular_sources: bool,
+    /// 互引力内层 M 并行归约开关（COSMOS_NB_PARALLEL=1，D 路由）。在
+    /// `AccelContext` 构造期一次性求值（每子步/每次构造一次），而非
+    /// `total_acceleration` 每次调用都读 env——默认路径零行为变化，且省去
+    /// 每体每调用的 syscall 级 env::var 开销（见 plan §11 附带发现）。
+    pub nb_parallel: bool,
+    /// 4 路 bit-identical SIMD 远场开关（F 路由）。**P1（2026-08-20）起默认 true**：
+    /// 不设 `COSMOS_FARFIELD_SIMD` 即走 SIMD 远场（与串行主路径逐位一致，已 lock-down
+    /// 证明），对所有模式提速；设 `COSMOS_FARFIELD_SIMD=0` 回退串行主路径（调试）。
+    /// 在 `AccelContext` 构造期求值（见 `ff_simd_enabled`）。
+    pub ff_simd: bool,
+}
+
+/// 互引力内层 M 并行归约开关（COSMOS_NB_PARALLEL=1，D 路由）的一次性求值。
+/// 在 `AccelContext` 构造期调用（每子步一次），避免 `total_acceleration` 每次调用都
+/// 做 syscall 级 env::var。默认关闭（零行为变化）。
+#[inline]
+pub fn nb_parallel_enabled() -> bool {
+    std::env::var("COSMOS_NB_PARALLEL").as_deref() == Ok("1")
+}
+
+/// 4 路 bit-identical SIMD 远场开关（F 路由）的一次性求值。构造期求值；lock-down
+/// 测试直接构造两个独立 ctx（仅 `ff_simd` 字段不同）对比，不再中途 flip env。
+///
+/// **P1（2026-08-20）：SIMD 远场提为默认路径**——不设 `COSMOS_FARFIELD_SIMD` 即默认
+/// 开启（与串行主路径逐位一致，已 lock-down 证明），对所有模式（全 monopole 远场）
+/// 直接提速。仅当显式设 `COSMOS_FARFIELD_SIMD=0` 时回退串行主路径（调试用）。历史
+/// 上该开关是 env-gated 默认关，现翻转为默认开。
+#[inline]
+pub fn ff_simd_enabled() -> bool {
+    match std::env::var("COSMOS_FARFIELD_SIMD").as_deref() {
+        Ok("0") => false, // 显式回退串行主路径（调试）
+        _ => true,        // 默认开 SIMD（含不设 / 设 "1"）
+    }
 }
 
 /// 不规则质量分布近场分支的姿态 fallback：源刚体被移除或快照表未覆盖某
-/// arena index 时按这个 `IDENTITY` 算（在该分支的近场状态下等价于"源没转"）。
+/// arena index 时按这个 IDENTITY 算（在该分支的近场状态下等价于源没转）。
 pub const DEFAULT_ROT: Rotation = Rotation::IDENTITY;
 
 /// 对单体的总加速度评估（天体引力 + n-body + 环境扰动），返回加速度 (m/s²)。
@@ -100,6 +133,7 @@ pub fn total_acceleration(
         sun_position,
         relativistic,
         has_irregular_sources,
+        ..
     } = *ctx;
     let mut acc = Vector::ZERO;
 
@@ -126,17 +160,14 @@ pub fn total_acceleration(
     // 并行归约）逐位一致的关键：并行只用来「独立求每个源的贡献」，归约本身
     // 仍是单条严格按源序的左折叠 `((a+b)+c)+…`，故结果与 rayon 调度无关。
     if !n_body_sources.is_empty() {
-        // D（B3）内层 M 并行归约 / F（C2 复活，bit-identical 版 SIMD）均为 env-gated，
-        // 默认走串行主路径（与历史版本逐位一致，零行为变化）。
-        //   COSMOS_NB_PARALLEL=1   → D：并行独立求每源贡献 + 单线程按源序左折叠
-        //   COSMOS_FARFIELD_SIMD=1 → F：4 路 SIMD 打包每源项（标量 sqrt + lane-wise
-        //     mul/div，按源序提取逐 lane 左折叠），与串行主路径逐位一致。
+        // D（B3）内层 M 并行归约 / F（C2 复活，bit-identical 版 SIMD）：
+        //   - D：`COSMOS_NB_PARALLEL=1` → 并行独立求每源贡献 + 单线程按源序左折叠（env-gated）。
+        //   - F：4 路 SIMD 远场，**默认开启**（设 `COSMOS_FARFIELD_SIMD=0` 回退串行，
+        //     P1 2026-08-20），与串行主路径逐位一致（lock-down 已证）。
         // 二者独立可叠加（同时设则外层并行、内层 SIMD）；单设其一便于 A/B 对比。
-        let nb_parallel = std::env::var("COSMOS_NB_PARALLEL").as_deref() == Ok("1");
-        let ff_simd = std::env::var("COSMOS_FARFIELD_SIMD").as_deref() == Ok("1");
-        let acc_nb = if nb_parallel {
+        let acc_nb = if ctx.nb_parallel {
             n_body_acceleration_reduce(position, handle, ctx)
-        } else if ff_simd {
+        } else if ctx.ff_simd {
             // F（C2 复活，bit-identical 版 SIMD）：4 路打包每源项（标量 sqrt +
             // lane-wise mul/div，按源序提取逐 lane 左折叠），与下方逐源标量循环
             // 逐位一致。
@@ -472,9 +503,14 @@ pub fn far_field_monopole_simd(
                 e3 as i64 as f64,
             ]);
             // term = d * (gm / (dist_sq * dist))，逐 lane（packed mul/div bit-identical）。
-            // 注意：dx/dy/dz 各是「某分量在不同源上的 4 路」，故需 x/y/z 三个因子向量，
-            // 再按源序逐 lane 提取每源完整 (tx,ty,tz) 并严格左折叠（与串行主路径同序）。
-            let factor = gm / (dist_sq * dist);
+            // 与串行主路径对齐：被排除 / gm<=0 / dsq<1.0 的 lane 在串行里是 `continue`
+            // （加 0）。但 SIMD 先算 `gm/(dist_sq*dist)` 再 mask，若 dsq==0 会得
+            // Inf*0=NaN（串行因提前 `continue` 不除，故安全）。给被 mask 的 lane 分母
+            // +zero_mask（=1）：非 mask lane 的 `dist_sq*dist` 因 dsq>=1 必 >=1>0，denom
+            // 不变、逐位一致；mask lane 得有限值后再 *(1-zero_mask)=0，与串行 `continue`
+            // 加 0 逐位一致。此即 SIMD 路径的真实除零 bug（F lock-down 用小尺度随机点
+            // 未触发 dsq<1，B2 紧壳层相邻体间距 <1 暴露；P1 默认开启后必然命中）。
+            let factor = gm / (dist_sq * dist + zero_mask);
             let factor = factor * (f64x4::splat(1.0) - zero_mask); // mask 命中→0
             let tx = dx * factor;
             let ty = dy * factor;
@@ -599,7 +635,7 @@ pub(crate) fn accel_routable(
     ctx: &AccelContext,
     perturbation: Option<&crate::world::PerturbationConfig>,
 ) -> Vector {
-    if std::env::var("COSMOS_NB_PARALLEL").as_deref() == Ok("1") {
+    if ctx.nb_parallel {
         // n-body 段走并行归约；天体/扰动段仍由 `total_acceleration` 计算
         // （它们本就串行且占比低，无需并行，且保证与串行路径完全一致）。
         let mut acc = total_acceleration_no_nbody(position, velocity, mass, ctx, perturbation);

@@ -28,6 +28,102 @@ use rapier3d::prelude::{
 };
 use rayon::prelude::*;
 
+/// §6：64B cache-line 对齐的 `(Vector, f64)` SOA 表（`scratch_source_pos_gm`）。
+/// 热路径（全 monopole 远场）只读这张连续表，首元素 64B 对齐可减少大 M 场景的
+/// unaligned load 罚分。零 bit-identical 风险（只改分配对齐，不动数据）。
+///
+/// stable 下 `allocator_api`（自定义 `Allocator`）未稳定，故手写对齐分配：委托
+/// `std::alloc`，把任意请求的 align 抬到 64 的倍数；`reserve` 增长时同样走对齐分配。
+/// 所有元素都是 `Copy`（`Vector`=`DVec3`、`f64`），`Drop` 无需逐元素析构。
+pub(crate) struct AlignedPosGm {
+    ptr: std::ptr::NonNull<(Vector, f64)>,
+    len: usize,
+    cap: usize,
+}
+
+impl AlignedPosGm {
+    pub(crate) fn new() -> Self {
+        // 空缓冲：ptr 用 dangling 占位（len=cap=0，永不解引用），首次 `reserve` 才分配。
+        Self {
+            ptr: std::ptr::NonNull::dangling(),
+            len: 0,
+            cap: 0,
+        }
+    }
+
+    /// 保证容量 ≥ `len + additional`，不足时按 64B 对齐几何增长。
+    pub(crate) fn reserve(&mut self, additional: usize) {
+        let need = self.len + additional;
+        if need <= self.cap {
+            return;
+        }
+        let new_cap = (self.cap * 2).max(need).max(8);
+        let new_layout = Self::layout(new_cap);
+        let new_ptr = if self.cap == 0 {
+            unsafe { std::alloc::alloc(new_layout) }
+        } else {
+            let old_layout = Self::layout(self.cap);
+            unsafe {
+                std::alloc::realloc(self.ptr.as_ptr() as *mut u8, old_layout, new_layout.size())
+            }
+        };
+        if new_ptr.is_null() {
+            std::alloc::handle_alloc_error(new_layout);
+        }
+        self.ptr = std::ptr::NonNull::new(new_ptr as *mut (Vector, f64)).unwrap();
+        self.cap = new_layout.size() / std::mem::size_of::<(Vector, f64)>();
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.len = 0;
+    }
+
+    pub(crate) fn push(&mut self, v: (Vector, f64)) {
+        if self.len == self.cap {
+            self.reserve(1);
+        }
+        unsafe { self.ptr.as_ptr().add(self.len).write(v) };
+        self.len += 1;
+    }
+
+    pub(crate) fn as_slice(&self) -> &[(Vector, f64)] {
+        unsafe { std::slice::from_raw_parts(self.ptr.as_ptr(), self.len) }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn len(&self) -> usize {
+        self.len
+    }
+
+    /// 把 `len` 个元素的布局抬到 64B 对齐。
+    fn layout(cap: usize) -> std::alloc::Layout {
+        std::alloc::Layout::array::<(Vector, f64)>(cap)
+            .expect("AlignedPosGm capacity overflow")
+            .align_to(64)
+            .expect("align_to(64) must succeed")
+            .pad_to_align()
+    }
+}
+
+impl std::fmt::Debug for AlignedPosGm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AlignedPosGm")
+            .field("len", &self.len)
+            .field("cap", &self.cap)
+            .finish()
+    }
+}
+
+impl Drop for AlignedPosGm {
+    fn drop(&mut self) {
+        if self.cap == 0 {
+            return;
+        }
+        let layout = Self::layout(self.cap);
+        unsafe { std::alloc::dealloc(self.ptr.as_ptr() as *mut u8, layout) };
+    }
+}
+
 /// 单刚体的环境扰动配置。
 #[derive(Clone, Copy, Debug)]
 pub struct PerturbationConfig {
@@ -57,6 +153,20 @@ pub struct PerturbationConfig {
     pub friction_coulomb_log: f64,
     /// 是否施加动力学摩擦。
     pub enable_dynamical_friction: bool,
+    /// 是否对光压/太阳风施加日食（阴影锥）衰减。遮挡体 = `central_body`（位于世界
+    /// 原点，半径 `equatorial_radius`）；光源 = `sun_position`。默认关闭 → 现有光压/
+    /// 太阳风输出逐位不变（满足「原方法不变」铁律）。开启后航天器进入中心体本影时
+    /// 力衰减为 0、半影内按几何线性过渡。纯几何，不改非日食场景行为。
+    pub enable_eclipse: bool,
+    /// 是否施加 Hut (1981) 平衡潮自旋同步力矩（潮汐演化：自旋同步化）。默认关闭
+    /// → 现有输出逐位不变。开启需 `central_body` 作潮汐伴星（无伴星则静默跳过）。
+    pub enable_tidal: bool,
+    /// 潮汐 Love 数 k2（无量纲），典型地球 0.299、月球 0.024、木卫 0.5+。
+    pub love_number_k2: f64,
+    /// 潮汐品质因子 Q（耗散），典型地球海潮 12、固体地球 ~100+、月球 ~30。
+    pub tidal_q: f64,
+    /// 被潮体半径（m），用于力矩强度 `R⁵` 标度。
+    pub tidal_radius: f64,
 }
 
 impl Default for PerturbationConfig {
@@ -75,6 +185,11 @@ impl Default for PerturbationConfig {
             friction_background_density: 0.0,
             friction_coulomb_log: 0.0,
             enable_dynamical_friction: false,
+            enable_eclipse: false,
+            enable_tidal: false,
+            love_number_k2: 0.299,
+            tidal_q: 12.0,
+            tidal_radius: 0.0,
         }
     }
 }
@@ -251,6 +366,12 @@ pub struct CosmosWorld {
         f64,
         Option<PerturbationConfig>,
     )>,
+    /// `collect_dynamic_tasks` 的「动态体 handle 列表」复用缓冲。每子步 `clear()`
+    /// 后 `par_extend` 复用同块内存。原实现每子步 `self.scratch_tasks = collected`
+    /// 会重新赋值成全新 `Vec`，导致每帧每子步多次堆分配，破坏 A1/A2「稳态零堆分配」
+    /// 目标；现用本缓冲承接 handle 列表、再 `par_extend` 入 `scratch_tasks`，不再
+    /// 新建或重新赋值。与 `scratch_tasks` 同生命周期、容量随工作集收敛。
+    scratch_handles: Vec<RigidBodyHandle>,
     /// n-body 源位置快照复用缓冲：每子步 `clear()` + 按需写入，跨子步复用。
     scratch_source_positions: Vec<Vector>,
     /// SOA 紧凑表（`n_body_sources` 同序）：`(源世界位姿, gm)`。仅当
@@ -258,7 +379,7 @@ pub struct CosmosWorld {
     /// `source_positions[src_idx]` + `src.gm`，提升缓存局部性。顺序与
     /// `n_body_sources` 完全一致 → 累加顺序不变 → **数值惰性（bit-identical）**。
     /// 含不规则源时该表不被使用，热循环走 `n_body_sources` 原路径。
-    scratch_source_pos_gm: Vec<(Vector, f64)>,
+    scratch_source_pos_gm: AlignedPosGm,
     /// n-body 源姿态快照复用缓冲（与 `scratch_source_positions` 同步写）：每子步
     /// `clear()` + 按 arena index 写入 `body.rotation()`，供不规则质量分布近场
     /// 分支把质点 `local_offset` 变到世界坐标。
@@ -370,8 +491,9 @@ impl CosmosWorld {
             relativistic_correction: config.relativistic_correction,
             kahan_state: Vec::new(),
             scratch_tasks: Vec::new(),
+            scratch_handles: Vec::new(),
             scratch_source_positions: Vec::new(),
-            scratch_source_pos_gm: Vec::new(),
+            scratch_source_pos_gm: AlignedPosGm::new(),
             scratch_source_rotations: Vec::new(),
             scratch_collider_updates: Vec::new(),
             kahan_src_buf: Vec::new(),
@@ -437,8 +559,9 @@ impl CosmosWorld {
             kahan_state: Vec::new(),
             // scratch buffers always begin empty on a fresh world (P0.2 / P1.7).
             scratch_tasks: Vec::new(),
+            scratch_handles: Vec::new(),
             scratch_source_positions: Vec::new(),
-            scratch_source_pos_gm: Vec::new(),
+            scratch_source_pos_gm: AlignedPosGm::new(),
             scratch_source_rotations: Vec::new(),
             scratch_collider_updates: Vec::new(),
             kahan_src_buf: Vec::new(),
@@ -990,7 +1113,7 @@ impl CosmosWorld {
         //    collected 的 scratch_tasks，不再重调 collect/refresh（L3：子步切分
         //    下原 apply_forces 每 substep 跑两遍 collect，N=1000 卫星×4 substep ≈
         //    8000 重复浅扫/tick；现已减半）。
-        self.inject_forces_from_collected_tasks();
+        self.inject_forces_from_collected_tasks(dt);
 
         // 2. Rapier 推进
         self.pipeline.step(
@@ -1099,12 +1222,14 @@ impl CosmosWorld {
             n_body_sources: &self.n_body_sources,
             source_positions: &self.scratch_source_positions,
             source_rotations: &self.scratch_source_rotations,
-            source_pos_gm: &self.scratch_source_pos_gm,
+            source_pos_gm: self.scratch_source_pos_gm.as_slice(),
             softening_sq: self.n_body_softening_sq,
             central_body: self.central_body,
             sun_position: self.sun_position,
             relativistic: self.relativistic_correction,
             has_irregular_sources: self.has_irregular_sources,
+            nb_parallel: crate::integrator::nb_parallel_enabled(),
+            ff_simd: crate::integrator::ff_simd_enabled(),
         };
 
         // 3.5 并行预计算每体的初始加速度 `a0 = total_acceleration(pos, vel, ...)`。
@@ -1157,6 +1282,7 @@ impl CosmosWorld {
             if n_tasks > 0 {
                 self.scratch_tasks
                     .par_iter()
+                    .with_min_len(16)
                     .map(|&(h, pos, vel, mass, perturb)| {
                         let a0 = crate::integrator::total_acceleration(
                             pos,
@@ -1222,8 +1348,11 @@ impl CosmosWorld {
                     as *mut Vec<
                         Option<(mps_formula::math::KahanVec3, mps_formula::math::KahanVec3)>,
                     > as usize;
-                scratch_tasks.par_iter().enumerate().for_each(
-                    |(i, &(handle, _pos, _vel, mass, perturbation))| {
+                scratch_tasks
+                    .par_iter()
+                    .enumerate()
+                    .with_min_len(16)
+                    .for_each(|(i, &(handle, _pos, _vel, mass, perturbation))| {
                         // SAFETY: 见上。`bodies_addr`/`kahan_addr` 是 `self` 字段的地址，
                         // 本闭包运行期间 `self` 不被其它地方借用；每个 task 写唯一槽。
                         let bodies =
@@ -1294,8 +1423,7 @@ impl CosmosWorld {
                                 body.set_translation(r_now + a_cmd * (0.5 * dt * dt), false);
                             }
                         }
-                    },
-                );
+                    });
             }
         });
     }
@@ -1307,38 +1435,41 @@ impl CosmosWorld {
     ///
     /// 被 [`Self::explicit_substep`] (Verlet 积子) 和 [`Self::apply_forces`]
     /// (RapierForce 路径) 共用。
+    ///
+    /// **§1 优化（消除每子步 Vec 重新分配）**：原实现每子步 `self.scratch_tasks =
+    /// collected` 把复用缓冲重新赋值成一个全新 `Vec`，导致每帧每子步 2 次堆分配 +
+    /// 1 次 drop，直接破坏 A1/A2「稳态零堆分配」目标。现改为：
+    /// - `scratch_handles` 复用缓冲 `clear()` + `par_extend` 收集动态体 handle；
+    /// - `scratch_tasks` 复用缓冲 `clear()`（保留容量）+ `par_extend` 原地追加快照，
+    ///   不再新建临时 `Vec`、不再重新赋值。稳态下两缓冲容量随工作集收敛后零分配。
     fn collect_dynamic_tasks(&mut self) {
-        self.scratch_tasks.clear();
+        self.scratch_handles.clear();
         // 动态体数量在首帧工作集化时收敛，后续帧不再增长；先 reserve 避免零散
         // push 触发的 incremental grow。
         let n_dynamic_hint = self.bodies.len();
+        self.scratch_handles.reserve(n_dynamic_hint);
+        self.scratch_tasks.clear();
         self.scratch_tasks.reserve(n_dynamic_hint);
         // B1: 每体只读快照写入各自槽。先串行收集动态体 handle（廉价，
-        // `RigidBodySet::iter` 可用），再 `par_iter` 过 handle 并行取 translation/
+        // `RigidBodySet::iter` 可用），再 `par_extend` 过 handle 并行取 translation/
         // linvel/mass 快照（读 `bodies.get` 为 `&self` 共享读，`RigidBodySet` 是
         // `Sync`，跨线程安全）—— 真正耗时的快照并行化。顺序由 handle 收集保序，
         // 每个体只写自己的槽、无别名，与串行逐位一致（内容完全相同，仅求值并发）。
-        type Task = (
-            RigidBodyHandle,
-            Vector,
-            Vector,
-            f64,
-            Option<PerturbationConfig>,
+        // 复用 `scratch_handles`：每子步 `clear()` + `extend`（std 迭代器复用容量，
+        // 仅在容量不足时增长，不做每子步新建 Vec）。
+        self.scratch_handles.extend(
+            self.bodies
+                .iter()
+                .filter(|(_, b)| b.is_dynamic())
+                .map(|(h, _)| h),
         );
-        let handles: Vec<RigidBodyHandle> = self
-            .bodies
-            .iter()
-            .filter(|(_, b)| b.is_dynamic())
-            .map(|(h, _)| h)
-            .collect();
-        let collected: Vec<Task> = handles
-            .par_iter()
-            .map(|&h| {
+        // 复用 `scratch_tasks`：原地 `par_extend`（rayon 并行迭代器），不新建临时
+        // Vec、不重新赋值。
+        self.scratch_tasks
+            .par_extend(self.scratch_handles.par_iter().map(|&h| {
                 let b = self.bodies.get(h).expect("handle 来自 bodies.iter，必存在");
                 (h, b.translation(), b.linvel(), b.mass(), None)
-            })
-            .collect();
-        self.scratch_tasks = collected;
+            }));
         // 填充每体 perturbation（Copy）。先单独线性扫一遍 perturbations（与
         // scratch_tasks 按 arena index 对齐），再就地写回 task.4，规避
         // "在 iter_mut 借用内同时不可变借 self.perturbations" 的借用冲突。
@@ -1469,11 +1600,13 @@ impl CosmosWorld {
     /// P1.12 / L3：原 `apply_forces` 的 force 注入主体；保留为独立方法以让
     /// `step_via_rapier_force` 在 reset_forces 与力注入之间插入"按 scratch_tasks
     /// 精准 reset dynamic bodies"步骤而无需重复 collect_dynamic_tasks。
-    fn inject_forces_from_collected_tasks(&mut self) {
+    fn inject_forces_from_collected_tasks(&mut self, dt: f64) {
         let n_tasks = self.scratch_tasks.len();
         for i in 0..n_tasks {
             let (handle, pos, vel, mass, perturbation) = self.scratch_tasks[i];
             let mut total_force = Vector::ZERO;
+            // 潮汐自旋力矩累加（Hut 1981），在扰动块内计算、于下方与力一并施加。
+            let mut tidal_torque_vec = Vector::ZERO;
 
             // 天体引力：加速度 × 质量
             for src in &self.celestials {
@@ -1557,13 +1690,29 @@ impl CosmosWorld {
                     } else {
                         Vector::ZERO
                     };
-                    total_force += solar_pressure_force(
+                    let mut f = solar_pressure_force(
                         sun_to_body,
                         sun_dir,
                         cfg.optical_area,
                         cfg.reflectivity,
                         AU,
                     );
+                    // 日食（阴影锥）衰减：仅当显式开启且设有 center_body 时生效，
+                    // 默认关闭 → 不影响现有光压输出（原方法不变）。
+                    if cfg.enable_eclipse {
+                        if let Some(central) = self.central_body {
+                            if central.equatorial_radius > 0.0 {
+                                let att = crate::perturbation::eclipse_attenuation(
+                                    pos,
+                                    self.sun_position,
+                                    central.equatorial_radius,
+                                    mps_formula::celestial_data::SUN_EQ_RADIUS,
+                                );
+                                f *= att;
+                            }
+                        }
+                    }
+                    total_force += f;
                 }
                 // 太阳风动压：沿用与光压相同的「太阳→物体」几何方向。
                 if cfg.enable_solar_wind && cfg.solar_wind_area > 0.0 {
@@ -1575,6 +1724,22 @@ impl CosmosWorld {
                         cfg.solar_wind_speed,
                         cfg.solar_wind_area,
                     ) {
+                        let mut f = f;
+                        // 日食（阴影锥）衰减：与光压共用同一几何（中心体在原点、太阳
+                        // 在 `sun_position`）。默认关闭 → 不影响现有太阳风输出。
+                        if cfg.enable_eclipse {
+                            if let Some(central) = self.central_body {
+                                if central.equatorial_radius > 0.0 {
+                                    let att = crate::perturbation::eclipse_attenuation(
+                                        pos,
+                                        self.sun_position,
+                                        central.equatorial_radius,
+                                        mps_formula::celestial_data::SUN_EQ_RADIUS,
+                                    );
+                                    f *= att;
+                                }
+                            }
+                        }
                         total_force += f;
                     }
                 }
@@ -1590,12 +1755,41 @@ impl CosmosWorld {
                 {
                     total_force += f;
                 }
+                // Hut (1981) 平衡潮自旋同步力矩：默认关闭 → 现有输出逐位不变。
+                // 仅当开启且设有 central_body 作潮汐伴星时计算；力矩施加于下方与力一并注入。
+                if cfg.enable_tidal
+                    && cfg.tidal_radius > 0.0
+                    && let Some(central) = self.central_body
+                {
+                    let spin = self
+                        .bodies
+                        .get(handle)
+                        .map(|b| {
+                            let av = b.angvel();
+                            Vector::new(av.x, av.y, av.z)
+                        })
+                        .unwrap_or(Vector::ZERO);
+                    tidal_torque_vec = crate::perturbation::tidal_torque(
+                        pos,
+                        vel,
+                        spin,
+                        central.gm,
+                        central.equatorial_radius,
+                        cfg.tidal_radius,
+                        cfg.love_number_k2,
+                        cfg.tidal_q,
+                    );
+                }
             }
 
-            if let Some(body) = self.bodies.get_mut(handle)
-                && total_force != Vector::ZERO
-            {
-                body.add_force(total_force, true);
+            if let Some(body) = self.bodies.get_mut(handle) {
+                if total_force != Vector::ZERO {
+                    body.add_force(total_force, true);
+                }
+                // 潮汐力矩（Hut 1981）：apply_torque_impulse 直接施加角冲量 = 力矩 × dt。
+                if tidal_torque_vec != Vector::ZERO {
+                    body.apply_torque_impulse(tidal_torque_vec * dt, true);
+                }
             }
         }
     }
@@ -1637,8 +1831,9 @@ impl Clone for CosmosWorld {
             kahan_state: self.kahan_state.clone(),
             // scratch buffer 属于每帧工作内存，克隆副本从空开始（复用从首帧起复用）。
             scratch_tasks: Vec::new(),
+            scratch_handles: Vec::new(),
             scratch_source_positions: Vec::new(),
-            scratch_source_pos_gm: Vec::new(),
+            scratch_source_pos_gm: AlignedPosGm::new(),
             scratch_source_rotations: Vec::new(),
             scratch_collider_updates: Vec::new(),
             kahan_src_buf: Vec::new(),
