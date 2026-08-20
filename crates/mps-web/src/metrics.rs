@@ -6,11 +6,33 @@
 //   TEST_COUNT       = `grep -rh '#[test]' crates/mps-test/src/ | wc -l`
 //   JNI_METHOD_COUNT= `grep -cE 'jni!\\(|jni_e_c!\\(' crates/mps-jni/src/lib.rs`
 //   CORE_FFI_COUNT  = `grep -rhE '^pub extern "C"' crates/mps-core/src/rapier/ | wc -l`
+//   VERSION         = workspace `version` in root Cargo.toml
+//   FORMULA_MODULE_COUNT / CELESTIAL_COUNT / GRAVITY_MODEL_COUNT / INTEGRATOR_COUNT
+//                 = module / enum counts derived from source
+//   FFI_WORLD / FFI_RIGID_BODY / FFI_COLLIDER / FFI_QUERY
+//                 = `pub extern "C" fn <prefix>_*` in crates/mps-core/src/rapier
 
-/// Total number of `#[test]` items in `mps-test`, as a `&'static str` so it
-/// can be inserted into `view!` literals directly (`{ (TEST_COUNT) }`).
+/// Workspace version (from root Cargo.toml), for the footer / brand.
+pub const VERSION: &str = "0.1.4";
+/// Total number of `#[test]` items in `mps-test`.
 pub const TEST_COUNT: &str = "862";
 /// Total number of `jni!(`/`jni_e_c!(` method entries in `mps-jni`.
 pub const JNI_METHOD_COUNT: &str = "367";
 /// Total number of `pub extern "C" fn` declarations in `mps-core/rapier`.
 pub const CORE_FFI_COUNT: &str = "670";
+/// Number of `pub mod` formula submodules under mps-formula scientists+disciplines.
+pub const FORMULA_MODULE_COUNT: &str = "107";
+/// Number of `CelestialBodyId` variants (built-in celestial bodies).
+pub const CELESTIAL_COUNT: &str = "10";
+/// Number of `pub mod` gravity model submodules under mps-core/src/gravity.
+pub const GRAVITY_MODEL_COUNT: &str = "0";
+/// Number of `OrbitIntegration` variants (integrator selection).
+pub const INTEGRATOR_COUNT: &str = "6";
+/// `pub extern "C" fn world_*` declarations in mps-core/rapier.
+pub const FFI_WORLD: &str = "117";
+/// `pub extern "C" fn rigid_body_*` declarations in mps-core/rapier.
+pub const FFI_RIGID_BODY: &str = "62";
+/// `pub extern "C" fn collider_*` declarations in mps-core/rapier.
+pub const FFI_COLLIDER: &str = "75";
+/// `pub extern "C" fn query_*` declarations in mps-core/rapier.
+pub const FFI_QUERY: &str = "58";

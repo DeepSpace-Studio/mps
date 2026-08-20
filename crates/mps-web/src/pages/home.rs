@@ -1,7 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_i18n::t;
 
-use crate::Route;
 use crate::metrics::{
     CELESTIAL_COUNT, CORE_FFI_COUNT, FORMULA_MODULE_COUNT, GRAVITY_MODEL_COUNT, INTEGRATOR_COUNT,
     JNI_METHOD_COUNT, TEST_COUNT,
@@ -29,140 +28,6 @@ use crate::metrics::{
 ///   `.planet`      → the visible ball, centered on the `.planet-pos` anchor
 pub fn Home() -> Element {
     rsx! {
-        // ── Galaxy (embedded inside the home page) ───────────────────────
-        div { class: "starfield",
-            div { class: "galaxy",
-                // Inner ring: 7 primary planets.
-                div { class: "orbit ring-inner",
-                    div { class: "orbit-spin",
-                        div { class: "planet-wrap",
-                            div { class: "planet-pos",
-                                Link { to: Route::Home {},
-                                    class: "planet p-primary active",
-                                    { t!("nav-planet-home") }
-                                }
-                            }
-                        }
-                        div { class: "planet-wrap",
-                            div { class: "planet-pos",
-                                Link { to: Route::Quickstart {},
-                                    class: "planet p-primary",
-                                    { t!("nav-planet-quickstart") }
-                                }
-                            }
-                        }
-                        div { class: "planet-wrap",
-                            div { class: "planet-pos",
-                                Link { to: Route::Architecture {},
-                                    class: "planet p-primary",
-                                    { t!("nav-planet-architecture") }
-                                }
-                            }
-                        }
-                        div { class: "planet-wrap",
-                            div { class: "planet-pos",
-                                Link { to: Route::Gravity {},
-                                    class: "planet p-primary",
-                                    { t!("nav-planet-gravity") }
-                                }
-                            }
-                        }
-                        div { class: "planet-wrap",
-                            div { class: "planet-pos",
-                                Link { to: Route::Integrators {},
-                                    class: "planet p-primary",
-                                    { t!("nav-planet-integrators") }
-                                }
-                            }
-                        }
-                        div { class: "planet-wrap",
-                            div { class: "planet-pos",
-                                Link { to: Route::Formula {},
-                                    class: "planet p-primary",
-                                    { t!("nav-planet-formula") }
-                                }
-                            }
-                        }
-                        div { class: "planet-wrap",
-                            div { class: "planet-pos",
-                                Link { to: Route::Api {},
-                                    class: "planet p-primary",
-                                    { t!("nav-planet-api") }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Outer ring: 7 secondary planets, slower counter-spin.
-                div { class: "orbit ring-outer",
-                    div { class: "orbit-spin",
-                        div { class: "planet-wrap",
-                            div { class: "planet-pos",
-                                Link { to: Route::Voxel {},
-                                    class: "planet p-secondary",
-                                    { t!("nav-planet-voxel") }
-                                }
-                            }
-                        }
-                        div { class: "planet-wrap",
-                            div { class: "planet-pos",
-                                Link { to: Route::Events {},
-                                    class: "planet p-secondary",
-                                    { t!("nav-planet-events") }
-                                }
-                            }
-                        }
-                        div { class: "planet-wrap",
-                            div { class: "planet-pos",
-                                Link { to: Route::Arena {},
-                                    class: "planet p-secondary",
-                                    { t!("nav-planet-arena") }
-                                }
-                            }
-                        }
-                        div { class: "planet-wrap",
-                            div { class: "planet-pos",
-                                Link { to: Route::Batch {},
-                                    class: "planet p-secondary",
-                                    { t!("nav-planet-batch") }
-                                }
-                            }
-                        }
-                        div { class: "planet-wrap",
-                            div { class: "planet-pos",
-                                Link { to: Route::Cosmos {},
-                                    class: "planet p-secondary",
-                                    { t!("nav-planet-cosmos") }
-                                }
-                            }
-                        }
-                        div { class: "planet-wrap",
-                            div { class: "planet-pos",
-                                Link { to: Route::Jni {},
-                                    class: "planet p-secondary",
-                                    { t!("nav-planet-jni") }
-                                }
-                            }
-                        }
-                        div { class: "planet-wrap",
-                            div { class: "planet-pos",
-                                Link { to: Route::Ffm {},
-                                    class: "planet p-secondary",
-                                    { t!("nav-planet-ffm") }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // ── The Sun (Home index) — central, glows, click → home ──
-                Link { to: Route::Home {}, class: "star", "★",
-                    span { class: "star-label", "MPS" }
-                }
-            }
-        }
-
         div { class: "hero",
             div { class: "hero-tag", { t!("home-hero-tag") } }
             h1 { class: "hero-title", { t!("home-hero-title") } }
@@ -179,10 +44,10 @@ pub fn Home() -> Element {
                 )}
             }
             div { class: "hero-actions",
-                Link { to: Route::Quickstart {}, class: "btn-primary",
+                a { href: "/quickstart", class: "btn-primary",
                     { t!("home-cta-quickstart") }
                 }
-                Link { to: Route::Api {}, class: "btn-outline",
+                a { href: "/api", class: "btn-outline",
                     { t!("home-cta-api") }
                 }
             }
@@ -212,37 +77,37 @@ pub fn Home() -> Element {
             h2 { class: "section-heading-lg", { t!("home-section-directory") } }
 
             div { class: "module-grid",
-                Link { to: Route::Architecture {}, class: "module-card",
+                a { href: "/architecture", class: "module-card",
                     span { class: "idx", "01" }
                     strong { class: "title", { t!("home-mod-core-title") } }
                     small { class: "desc", { t!("home-mod-core-desc") } }
                     em { class: "arrow", "↗" }
                 }
-                Link { to: Route::Cosmos {}, class: "module-card",
+                a { href: "/cosmos", class: "module-card",
                     span { class: "idx", "06" }
                     strong { class: "title", { t!("home-mod-cosmos-title") } }
                     small { class: "desc", { t!("home-mod-cosmos-desc") } }
                     em { class: "arrow", "↗" }
                 }
-                Link { to: Route::Gravity {}, class: "module-card",
+                a { href: "/gravity", class: "module-card",
                     span { class: "idx", "02" }
                     strong { class: "title", { t!("home-mod-physics-title") } }
                     small { class: "desc", { t!("home-mod-physics-desc") } }
                     em { class: "arrow", "↗" }
                 }
-                Link { to: Route::Formula {}, class: "module-card",
+                a { href: "/formula", class: "module-card",
                     span { class: "idx", "03" }
                     strong { class: "title", { t!("home-mod-formula-title") } }
                     small { class: "desc", { t!("home-mod-formula-desc") } }
                     em { class: "arrow", "↗" }
                 }
-                Link { to: Route::Arena {}, class: "module-card",
+                a { href: "/arena", class: "module-card",
                     span { class: "idx", "04" }
                     strong { class: "title", { t!("home-mod-integration-title") } }
                     small { class: "desc", { t!("home-mod-integration-desc") } }
                     em { class: "arrow", "↗" }
                 }
-                Link { to: Route::Api {}, class: "module-card",
+                a { href: "/api", class: "module-card",
                     span { class: "idx", "05" }
                     strong { class: "title", { t!("home-mod-reference-title") } }
                     small { class: "desc", { t!("home-mod-reference-desc") } }

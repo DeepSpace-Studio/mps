@@ -1,88 +1,73 @@
-# MPS Web 文档站点 — 规划
+# MPS Web 文档站点 — 规划（当前真实状态）
 
-## 概述
+> 注意：本规划曾写 "Topcoat" —— 那已是过时信息。当前 `crates/mps-web` 是
+> **Dioxus 0.7 + dioxus-i18n 0.5 (Fluent)** 全栈文档站（fullstack + router + server），
+> 不是 Topcoat。下文为 2026-08-20 重做后的实际格局。
 
-使用 **Topcoat**（Rust 全栈 Web 框架）在 `crates/mps-web/` 下构建 MPS Motion Physics System 的文档站点。
-Topcoat 使用 Rust 的 `view!` 宏编写 HTML 模板，`#[page]` 定义路由，所有页面代码用 Rust 编写。
+## 技术栈（真实）
 
-## 技术栈
+- **Dioxus 0.7** fullstack：`dioxus = { features = ["fullstack", "router", "server"] }`
+- **dioxus-i18n 0.5** + **fluent 0.16**：中英双语，Fluent `.ftl` 资源（`src/i18n/locales/{zh-CN,en}.ftl`）
+- SSR（服务端渲染），导航全部用 `<a href>` / `Link`（纯 SSR、无需客户端 hydration JS）
+- 本站**不依赖 `dx` CLI** 即可运行：`build.rs` 把 `public/` 拷到二进制旁，`cargo run -p mps-web`
+  起 SSR 服务（默认 8080）。
 
-- **Topcoat** = Rust 全栈框架（server-rendered，支持 `view!` 模板宏、`#[component]` 组件、`#[layout]` 布局、`#[page]` 路由）
-- 纯 Rust 代码，无需手写 HTML/CSS/JS 文件
-- 通过 GitHub Actions 构建并部署到 GitHub Pages
+## 为什么之前"用不了"
 
-## 站点结构（Rust 模块）
+2026-08-20 排查发现根因：**`mps-web` 整个 crate 编译失败**（6 个 unresolved import）。
+`metrics.rs` 由 `xtask dump-metrics` 生成，但当时只导出 `TEST_COUNT/JNI_METHOD_COUNT/CORE_FFI_COUNT`
+三个常量，而各页面引用了 `VERSION`、`FFI_WORLD/RIGID_BODY/COLLIDER/QUERY`、
+`FORMULA_MODULE_COUNT/CELESTIAL_COUNT/GRAVITY_MODEL_COUNT/INTEGRATOR_COUNT` 等更多符号
+→ 编译挂掉 → 任何页面都跑不起来。
+
+修复（根因，非补丁）：扩展 `dump-metrics` 用真实 grep 算出这些常量并一并生成 `metrics.rs`
+（保持 "metrics.rs 由 xtask 生成、不手改" 的约定）。重新生成后全站编译通过。
+
+## 站点结构（真实）
 
 ```
-crates/mps-web/src/
-├── lib.rs              # 入口：创建 Router，启动服务
-├── pages/
-│   ├── mod.rs          # 模块路由导出
-│   ├── home.rs         # 首页 — 项目介绍、核心数据
-│   ├── quickstart.rs   # 快速入门教程
-│   ├── architecture.rs # 架构概述
-│   ├── gravity.rs      # 引力模型
-│   ├── integrators.rs  # 辛积分器
-│   ├── formula.rs      # 公式模块 (28 modules)
-│   ├── voxel.rs        # Voxel 碰撞体
-│   ├── events.rs       # 事件系统
-│   ├── arena.rs        # 共享内存 Arena
-│   ├── jni.rs          # Java JNI 绑定
-│   ├── ffm.rs          # Java FFM 绑定
-│   └── api.rs          # API 参考
-├── components/
-│   ├── mod.rs
-│   ├── header.rs       # 导航栏组件
-│   ├── footer.rs       # 页脚组件
-│   ├── metric_card.rs  # 指标卡片组件
-│   ├── stat_grid.rs    # 统计网格组件
-│   ├── module_card.rs  # 模块卡片组件
-│   ├── doc_module.rs   # 文档模块容器
-│   └── layout.rs       # 全局布局（含语言切换）
-└── layouts/
-    └── mod.rs          # 根布局（HTML 骨架、导航、页脚）
+crates/mps-web/
+├── Cargo.toml
+├── build.rs                 # 把 public/ 拷到二进制旁（SSR 资源定位）
+├── src/
+│   ├── lib.rs               # 入口：Route 枚举 + app() + main()
+│   ├── main.rs              # 转发 mps_web::main()
+│   ├── metrics.rs           # xtask 生成（TEST_COUNT/JNI/CORE_FFI + 扩展计数）
+│   ├── i18n.rs              # i18n 初始化 + langs
+│   ├── layouts/
+│   │   ├── mod.rs           # 根布局：左侧星座导航 + 品牌 + 语言切换 + footer
+│   │   └── site.css         # 深空科幻主题（玻璃拟态 / 霓虹 / 动态星空背景）
+│   └── pages/               # 18 个页面（home/quickstart/architecture/gravity/
+│       │                     #   integrators/formula/voxel/events/arena/batch/
+│       │                     #   cosmos/jni/ffm/api/not_found）
+└── public/index.html
 ```
 
-## 设计原则
+## 设计（2026-08-20 重做：换格局 + 科幻宇宙风）
 
-1. 使用 Topcoat 的 `view!` 宏和 `#[component]` 组件构建所有页面
-2. 深色主题，与物理引擎的 "太空/天文" 调性一致
-3. 中英双语内容，通过 JS 信号切换
-4. 组件化：导航栏、页脚、卡片等均封装为可复用组件
+旧设计是一套脆弱的 **CSS 轨道星系导航**（首页渲染太阳 + 14 颗环绕行星，纯 CSS 旋转；
+其余页面用底部 sheet 模态）。该导航有 z-index 点击穿透 bug，且整站因编译失败根本跑不起来。
 
-## 执行批次
+新设计（"一切按你的来"）：
 
-### Batch 1: 基础框架 + 首页
-- 配置 `Cargo.toml` 依赖（topcoat, tokio）
-- 创建 `lib.rs` 入口 + 路由
-- 创建 `layouts/` 根布局（HTML 骨架、导航、页脚）
-- 创建 `components/` 基础组件（header, footer, metric_card, module_card 等）
-- 创建 `pages/home.rs` 首页
+- **左侧固定 "星座" 导航栏**：玻璃拟态（backdrop-blur）、霓虹青/紫描边、激活项左侧辉光。
+  导航按 `导航 / 物理引擎 / 宇宙 / 绑定` 分组，全部 `<a href>`/`Link`（SSR 安全、无 JS）。
+- **深空动态星空背景**：`body` 渐变 + `starfield-bg` 固定层（CSS radial-gradient 星点 + 缓慢漂移动画）。
+- **玻璃拟态内容卡片**：`.section-card` / `.module-card` / `.metric-card` 半透明 + 模糊 + 辉光阴影。
+- **霓虹遥测风**：等宽字体指标数字带青色 glow；按钮渐变 + 外发光。
+- **响应式**：≤880px 时侧栏收起为顶部栏，纯 CSS checkbox 切换（无 JS）。
+- **所有 18 页正文零改动**：仅通过重定义 CSS 类（`.page-head`/`.section-card`/`.module-card`/`.callout`/`.hero`/表格/代码块等）整体换皮 —— 全站即时获得新科幻皮肤。
+- **首页**：移除原轨道星系块（导航职责移交给侧栏），保留 hero + 指标卡 + 模块目录 + 公式分类 + 特性 + 架构图。
 
-### Batch 2: 核心功能页面
-- 创建 `pages/architecture.rs`（架构概述）
-- 创建 `pages/quickstart.rs`（快速入门）
-- 创建 `pages/gravity.rs`（引力模型）
-- 创建 `pages/integrators.rs`（辛积分器）
+## 验证（2026-08-20）
 
-### Batch 3: 公式与高级功能页面
-- 创建 `pages/formula.rs`（28 公式模块）
-- 创建 `pages/voxel.rs`（Voxel 碰撞体）
-- 创建 `pages/events.rs`（事件系统）
+- `cargo build -p mps-web` 通过（dev + 强制重编）。
+- 起 SSR 服务后 `curl /` 与 `curl /api` 均 HTTP 200、返回非空 HTML；
+  `/` 含 `mps-sidebar`/`mps-nav-link`/`starfield-bg`/`RIGID BODY`；
+  `/api` 含 FFI 前缀真实计数（world 117 / rigid_body 62 / collider 75 / query 58）。
+- 运行日志无 error/panic。
 
-### Batch 4: 集成与 API 页面
-- 创建 `pages/jni.rs`（Java JNI）
-- 创建 `pages/ffm.rs`（Java FFM）
-- 创建 `pages/arena.rs`（共享内存 Arena）
-- 创建 `pages/api.rs`（API 参考）
+## 未做（范围外，按约定只动 Rust 侧）
 
-### Batch 5: 部署配置
-- 创建 `Cargo.toml` 完整配置
-- 创建 `index.html` 占位（用于 GitHub Pages 入口）
-- 创建 GitHub Actions 部署 workflow
-- 更新 workspace `Cargo.toml` 确认配置
-- `cargo check` 验证编译
-
-## 内容来源
-
-从 `README.md` 和现有 `docs/` 目录提取内容，转为 Topcoat `view!` 宏语法。
+- 未改 Java / test21 / test25（与 mps-web 无关）。
+- 未重写各页面正文文案（仅换皮）；如需逐页内容升级可另开任务。

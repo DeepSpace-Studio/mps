@@ -1,4 +1,3 @@
-use crate::Route;
 use dioxus::prelude::*;
 use dioxus_i18n::t;
 
@@ -10,7 +9,7 @@ pub fn NotFound() -> Element {
             p { class: "hero-desc",
                 { t!("not-found-desc") }
             }
-            Link { to: Route::Home {}, class: "btn-primary",
+            a { href: "/", class: "btn-primary",
                 { t!("not-found-back") }
             }
         }
