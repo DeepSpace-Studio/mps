@@ -5,7 +5,6 @@ use crate::metrics::CELESTIAL_COUNT;
 
 /// Cosmos Rigid Body — separate physics domain for orbital-scale simulation.
 pub fn Cosmos() -> Element {
-    
     rsx! {
         section { id: "sec-cosmos", class: "doc-section",
 
@@ -23,6 +22,38 @@ pub fn Cosmos() -> Element {
             h2 { { t!("cosmos-what-title") } }
             p { class: "p-lead", { t!("cosmos-what-lead") } }
             p { class: "p-muted", { t!("cosmos-what-body") } }
+        }
+
+        // ── Functionality by category ────────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("cosmos-class-title") } }
+            p { class: "p-lead", { t!("cosmos-class-lead") } }
+            div { class: "feature-grid",
+                div { class: "feature-card",
+                    h3 { { t!("cosmos-class-world-title") } }
+                    p { { t!("cosmos-class-world-desc") } }
+                }
+                div { class: "feature-card",
+                    h3 { { t!("cosmos-class-gravity-title") } }
+                    p { { t!("cosmos-class-gravity-desc") } }
+                }
+                div { class: "feature-card",
+                    h3 { { t!("cosmos-class-integrator-title") } }
+                    p { { t!("cosmos-class-integrator-desc") } }
+                }
+                div { class: "feature-card",
+                    h3 { { t!("cosmos-class-orbit-title") } }
+                    p { { t!("cosmos-class-orbit-desc") } }
+                }
+                div { class: "feature-card",
+                    h3 { { t!("cosmos-class-flight-title") } }
+                    p { { t!("cosmos-class-flight-desc") } }
+                }
+                div { class: "feature-card feature-card-accent",
+                    h3 { { t!("cosmos-class-arena-title") } }
+                    p { { t!("cosmos-class-arena-desc") } }
+                }
+            }
         }
 
         // ── Sub-modules ───────────────────────────────────────────────────
@@ -79,12 +110,18 @@ pub fn Cosmos() -> Element {
             p { class: "p-muted", { t!("cosmos-bodies-desc") } }
         }
 
+        // ── Shared-memory Arena (same as core) ────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("cosmos-arena-title") } }
+            p { class: "p-muted", { t!("cosmos-arena-desc") } }
+        }
+
         // ── JNI integration ───────────────────────────────────────────────
         div { class: "section-divider",
             h2 { class: "section-heading", { t!("cosmos-jni-title") } }
             p { class: "p-muted", { t!("cosmos-jni-desc") } }
         }
-    
+
         }
     }
 }

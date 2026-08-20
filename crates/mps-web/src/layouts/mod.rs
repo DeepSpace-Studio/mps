@@ -27,36 +27,36 @@ pub fn Sidebar() -> Element {
             }
             nav { class: "sidebar-nav",
                 div { class: "nav-group",
-                    span { class: "nav-group-title", { t!("nav-group-foundations") } }
+                    span { class: "nav-group-title", { t!("nav-group-overview") } }
                     a { class: "nav-link", href: "#sec-home", { t!("nav-home") } }
                     a { class: "nav-link", href: "#sec-quickstart", { t!("nav-quickstart") } }
                     a { class: "nav-link", href: "#sec-architecture", { t!("nav-architecture") } }
                 }
                 div { class: "nav-group",
-                    span { class: "nav-group-title", { t!("nav-group-physics") } }
+                    span { class: "nav-group-title", { t!("nav-group-core") } }
                     a { class: "nav-link", href: "#sec-gravity", { t!("nav-gravity") } }
                     a { class: "nav-link", href: "#sec-integrators", { t!("nav-integrators") } }
+                    a { class: "nav-link", href: "#sec-events", { t!("nav-events") } }
+                    a { class: "nav-link", href: "#sec-arena", { t!("nav-arena") } }
+                    a { class: "nav-link", href: "#sec-batch", { t!("nav-batch") } }
+                    a { class: "nav-link", href: "#sec-voxel", { t!("nav-voxel") } }
+                    a { class: "nav-link", href: "#sec-api", { t!("nav-api") } }
+                }
+                div { class: "nav-group",
+                    span { class: "nav-group-title", { t!("nav-group-cosmos") } }
                     a { class: "nav-link", href: "#sec-cosmos", { t!("nav-cosmos") } }
                 }
                 div { class: "nav-group",
                     span { class: "nav-group-title", { t!("nav-group-formula") } }
                     a { class: "nav-link", href: "#sec-formula", { t!("nav-formula") } }
-                    a { class: "nav-link", href: "#sec-voxel", { t!("nav-voxel") } }
-                    a { class: "nav-link", href: "#sec-events", { t!("nav-events") } }
                 }
                 div { class: "nav-group",
-                    span { class: "nav-group-title", { t!("nav-group-arena") } }
-                    a { class: "nav-link", href: "#sec-arena", { t!("nav-arena") } }
-                    a { class: "nav-link", href: "#sec-batch", { t!("nav-batch") } }
-                }
-                div { class: "nav-group",
-                    span { class: "nav-group-title", { t!("nav-group-bindings") } }
+                    span { class: "nav-group-title", { t!("nav-group-jni") } }
                     a { class: "nav-link", href: "#sec-jni", { t!("nav-jni") } }
-                    a { class: "nav-link", href: "#sec-ffm", { t!("nav-ffm") } }
                 }
                 div { class: "nav-group",
-                    span { class: "nav-group-title", { t!("nav-group-reference") } }
-                    a { class: "nav-link", href: "#sec-api", { t!("nav-api") } }
+                    span { class: "nav-group-title", { t!("nav-group-ffm") } }
+                    a { class: "nav-link", href: "#sec-ffm", { t!("nav-ffm") } }
                 }
             }
             div { class: "sidebar-foot",

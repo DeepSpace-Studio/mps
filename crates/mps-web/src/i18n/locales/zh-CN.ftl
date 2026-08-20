@@ -62,7 +62,7 @@ home-mod-cosmos-desc = CosmosWorld、Verlet 轨道积分、n-body 互引力、�
 home-mod-physics-title = 物理系统
 home-mod-physics-desc = 引力、地形、力注册表、事件系统、空气动力学、流体
 home-mod-formula-title = 领域公式
-home-mod-formula-desc = 33 模块 — 航天、天体物理、核物理、相对论、量子等
+home-mod-formula-desc = 107 个纯公式模块（390+ 函数）— 航天、天体物理、核物理、相对论、量子等。
 home-mod-integration-title = 集成方案
 home-mod-integration-desc = Arena 共享内存、JNI/FFM 绑定、Java 生态
 home-mod-reference-title = 参考资料
@@ -151,9 +151,9 @@ arch-build-cbindgen = mps-core 构建时通过 build.rs 触发 cbindgen，将 pu
 arch-build-xtask = xtask 自动统计 TEST_COUNT / JNI_METHOD_COUNT / CORE_FFI_COUNT，并刷新 mps-web/src/metrics.rs。
 
 # ---- Gravity page ----
-grav-tag = // MPS
+grav-tag = // mps-core
 grav-title = 引力模型
-grav-desc = 从点质量到月球 Mascon 的完整引力模型清单。
+grav-desc = mps-core 的引力栈是可插拔的 ForceLaw：每个模型通过 world_set_*_gravity 注册，支持从牛顿点质量、球谐（EGM2008）、椭球、带谐 J2–J6、四极张量，到多面体（Werner–Scheeres）与月球 Mascon（GRAIL）共 8 类。
 grav-models-title = 模型目录
 grav-models-lead = 共 5 类，按轨道高度和精度需求自动选择。
 grav-col-name = 名称
@@ -183,12 +183,12 @@ grav-api-desc = 引力相关函数均经 mps-core C-ABI 暴露：
 grav-bodies-grid-title = 天体清单
 
 # ---- Integrators page ----
-int-tag = // MPS
+int-tag = // mps-core
 int-title = 辛积分器
-int-desc = Leapfrog、Yoshida 4、Forest–Ruth 8 阶辛积分器。
+int-desc = Leapfrog、Yoshida-4 与 Forest–Ruth 8 阶辛步进器，外加 Kahan 补偿变体，以及后牛顿修正 — 全部位于 mps-formula::integrators。
 int-why-title = 为何用辛积分器
-int-why-lead = 经典 RK4 在长时间轨道演化中能量漂移。
-int-why-body = 辛积分器保留哈密顿量结构，能量误差有界且周期性振荡，适合万年级轨道仿真。
+int-why-lead = 经典 RK4 在长时间轨道弧段会缓慢流失能量，轨道逐渐内旋。
+int-why-body = 辛步进器保留哈密顿量结构：能量误差保持有界并振荡而非持续增长，因此万年级传播仍闭合。每个步进器都提供 _kahan 变体，将 f64 精度从约 15 位提升至约 30 位有效数字。
 int-catalog-title = 积分器目录
 int-col-name = 积分器
 int-col-order = 阶数
@@ -215,9 +215,9 @@ int-diag-am = 比角动量 h = r × v — 辛积分器严格保持。
 int-diag-kepler = keplerian_elements() 转六根数，监控半长轴漂移。
 
 # ---- Formula page ----
-form-tag = // MPS
+form-tag = // mps-formula
 form-title = 公式模块
-form-desc = 33 个纯 Rust 公式模块，覆盖航天到量子物理。
+form-desc = 独立纯 Rust crate：107 个公式模块、390+ 个公开函数，覆盖航天到量子物理，零 Rapier / WorldHandle 依赖。
 form-intro-pure = 全部公式位于独立 crate mps-formula — 纯 Rust 实现，不依赖 Rapier 或 WorldHandle。
 form-mod-kepler = kepler.rs — 开普勒方程迭代解 / 六根数转换
 form-mod-dynamics = dynamics.rs — 轨道动力学 / 双中心近似
@@ -265,9 +265,9 @@ form-call-title = 从 Java 调用
 form-call-desc = 所有公式函数都经 C ABI 暴露，无 WorldHandle 依赖：
 
 # ---- Voxel page ----
-vox-tag = // MPS
+vox-tag = // mps-core
 vox-title = 体素系统
-vox-desc = 稠密体素栅格 → 碰撞体构建 → 多面体引力桥接。
+vox-desc = 稠密体素栅格 → 碰撞体构建 → 多面体引力桥接，全部位于 mps-core。
 vox-overview-title = 概览
 vox-overview-lead = VoxelGrid + build_voxel_collider 提供从体素地图到仿真的端到端管线。
 vox-overview-body = 适用于月球着陆器表面表示、不规则地形高程图，以及需要快速近场碰撞的环绕飞行仿真。
@@ -293,11 +293,11 @@ vox-case-proximity-title = 近场碰撞表现
 vox-case-proximity-desc = 由于凸分解后碰撞体数量有限，n-body 结构体碰撞开销 O(N×log M)。
 
 # ---- Events page ----
-evt-tag = // MPS
+evt-tag = // mps-core
 evt-title = 事件系统
-evt-desc = 碰撞 + 接触力事件，三种派发模式，C 回调 ABI。
+evt-desc = 碰撞事件与接触力事件，三种派发模式，C 回调 ABI — 基于无锁 SPSC ring buffer。
 evt-types-title = 事件类型
-evt-types-lead = 内置两类物理事件，均记录于 mps-formula 的 ffi/types/core.rs。
+evt-types-lead = world_step 发出两类物理事件记录，经事件 ring 取出。
 evt-col-type = 类型
 evt-col-fields = 字段
 evt-row-collision = started, collider1, collider2, sensor, removed
@@ -326,12 +326,12 @@ evt-abi-title = C 回调 ABI
 evt-abi-desc = 碰撞 / 接触力回调签名均以 unsafe extern "C" 暴露：
 
 # ---- Arena page ----
-arena-tag = // MPS
+arena-tag = // mps-core
 arena-title = 共享内存 Arena
-arena-desc = DirectByteBuffer — Java 与 Rust 间刚体状态零拷贝桥。
+arena-desc = DirectByteBuffer — Java 与 Rust 间刚体状态零拷贝桥；每帧仅一次 world_step FFI，无逐体 JNI。
 arena-why-title = 为什么需要 Arena
 arena-why-lead = 经典 JNI 的每体 get/setField 在 1000 个体场景下吃掉每帧 10 ms+。
-arena-why-body = 共享内存 Arena 把刚体 SoA 数据放进一段直接字节缓冲区，Java 端读写不进 Rust 边界。每帧仅触发一次 world_step FFI 调用。
+arena-why-body = 共享 Arena 把刚体 SoA 数据排布进一段直接字节缓冲区，Java 端在读写时不穿越 Rust 边界。每帧只发生一次 world_step FFI 调用。
 arena-layout-title = 内存布局
 arena-layout-desc = rapier::shared_arena 头部 + SoA 槽位数组 + 复用环。
 arena-mods-title = 子模块
@@ -340,20 +340,20 @@ arena-mod-layout = layout.rs — BodySlot 字段偏移常量。
 arena-mod-ring = ring.rs — SPSC 事件环复用。
 arena-mod-holes = holes.rs — 已删除槽位的 O(1) 回收。
 arena-flow-title = 每帧协议
-arena-flow-step-1 = Java 端 arena_write_* 写入本帧的目标位置 / 力 / 力矩。
-arena-flow-step-2 = world_step(world, dt) 单次 FFI 触发仿真。
-arena-flow-step-3 = arena_read_* 读取更新后的位置 / 速度 — 直接从 DirectByteBuffer。
-arena-flow-note = 全程无 GetFieldID / CallObjectMethod；JNI 引用表为空，无 GC 触发风险。
+arena-flow-step-1 = Java 端：arena_write_* 写入本帧的目标位置 / 力 / 力矩。
+arena-flow-step-2 = 单次 world_step(world, dt) FFI 触发仿真。
+arena-flow-step-3 = arena_read_* 直接从 DirectByteBuffer 读取更新后的位置 / 速度。
+arena-flow-note = 全程无 GetFieldID / CallObjectMethod；JNI 引用表为空，因此无 GC 风险。
 arena-java-title = Java 侧示例
 arena-java-desc = DirectByteBuffer + JNI 是 Java 21 的常规组合：
 
 # ---- Cosmos page ----
-cosmos-tag = // MPS
+cosmos-tag = // mps-cosmos
 cosmos-title = 太空刚体演算
-cosmos-desc = CosmosWorld — 独立轨道尺度物理域。
+cosmos-desc = CosmosWorld — 独立的轨道尺度物理域，不与 mps-core 的 Rapier World 共享。
 cosmos-what-title = 什么是 Cosmos
 cosmos-what-lead = mps-cosmos 提供一个不共享 World 的轨道物理域。
-cosmos-what-body = 与 mps-core 的 Rapier 不同，CosmosWorld 使用 Verlet 辛积分器和 n-body 两两互引力，适合长期轨道演化而无需刚体接触解算。
+cosmos-what-body = 与 mps-core 的 Rapier 步进不同，CosmosWorld 使用 Verlet 积分（verlet_step）与两两 n-body 互引力（n_body_acceleration_reduce），并配有 SIMD 远场单极路径（far_field_monopole_simd）应对大数量级。它专为长期轨道演化而生，无需刚体接触解算。
 cosmos-mods-title = 子模块
 cosmos-mod-kepler-title = kepler.rs
 cosmos-mod-kepler-desc = 开普勒方程迭代 / 六根数 ↔ 笛卡尔转换。
@@ -378,6 +378,22 @@ cosmos-bodies-title = 天体目录 ({ $count })
 cosmos-bodies-desc = JPL DE441 提供 10 个主要天体的 GM、轨道根数、相位，初始化时灌入 CosmosWorld。
 cosmos-jni-title = JNI 集成
 cosmos-jni-desc = mps-jni 暴露 cosmos_batch_* 方法：一次性提交多个飞船状态而非逐体调用，对 tracking 队列友好。
+cosmos-arena-title = 共享内存 Arena（与 core 一致）
+cosmos-arena-desc = Cosmos 自带 SharedArena（magic COSMAREN）—— 即 mps-core shared_arena 的轨道尺度孪生版。Java 通过 DirectByteBuffer 读写刚体状态，无需逐体 JNI；cosmosWorldGetArenaDirectByteBuffer 与 core 的 worldGetArenaDirectByteBuffer 平行。
+cosmos-class-title = 功能分类
+cosmos-class-lead = Cosmos 在轨道尺度复用了多个 mps-core 能力。以下每个类目把一项能力映射到其源码模块。
+cosmos-class-world-title = World 与天体
+cosmos-class-world-desc = world.rs / bodies.rs — CosmosWorld、中心体 + 太阳、10 天体 DE441 目录，以及批量插入（cosmos_world_add_n_body）。
+cosmos-class-gravity-title = 引力
+cosmos-class-gravity-desc = gravity.rs — 牛顿点质量与两两 n-body 互引力（n_body_acceleration_reduce），并配 SIMD 远场单极路径（far_field_monopole_simd）。
+cosmos-class-integrator-title = 积分器
+cosmos-class-integrator-desc = integrator.rs — verlet_step、n-body 加速度归约，以及高阶 + Kahan 补偿步进（advance_highorder_kahan）用于长弧段。
+cosmos-class-orbit-title = 轨道与诊断
+cosmos-class-orbit-desc = orbit.rs / orbit_diagnostics.rs — 六根数转换、Hill 半径（cosmos_hill_radius_for），以及用于监控漂移的状态快照。
+cosmos-class-flight-title = 飞行与摄动
+cosmos-class-flight-desc = flight/*（动力学、配平、稳定性）与 perturbation/* — 双中心动力学、第三体 / 光压 / 大气摄动，以及姿态配平。
+cosmos-class-arena-title = 共享内存 Arena
+cosmos-class-arena-desc = arena.rs + ffi.rs — SharedArena（COSMAREN），带 seqlock 保护的体槽；经 cosmos_world_get_shared_arena_address / _size 作为 DirectByteBuffer 暴露给 Java，与 core 的 arena 桥接平行。
 
 # ---- Batch collider page ----
 batch-tag = // Box3D
@@ -445,7 +461,7 @@ batch-example-title = Rust 使用示例
 batch-example-lead = 构造 ColliderRequest 数组，传入 batch_add_colliders，同材质自动合并为 compound。
 
 # ---- JNI page ----
-jni-tag = // MPS
+jni-tag = // mps-jni
 jni-title = Java JNI 绑定
 jni-desc = mps-jni 经 jni!/jni_e_c! 宏导出 { $methods } 个方法到 org.polaris2023.mps.rapier.RapierNative。
 jni-codegen-title = 宏代码生成
@@ -464,11 +480,11 @@ jni-groups-title = API 分组（{ $ffi } 个 extern C 入口）
 jni-group-abi-title = ABI / 版本
 jni-group-abi-desc = abiVersion / abiSupportsFfm / abiSupportsJni / last_error_code / last_error_message / clear。
 jni-group-world-title = world_*
-jni-group-world-desc = 创建 / 步进 / 销毁 / 重力 / 力律安装 / 事件注册。108 个 FFI 入口。
+jni-group-world-desc = 创建 / 步进 / 销毁 / 重力 / 力律安装 / 事件注册。117 个 FFI 入口。
 jni-group-rb-title = rigid_body_*
 jni-group-rb-desc = builder 链 / 状态读写 / 锁定轴 / mass_properties。62 个 FFI 入口。
 jni-group-collider-title = collider_*
-jni-group-collider-desc = 形状构造 / 摩擦弹性 / 碰撞组 / 传感器。70 个 FFI 入口。
+jni-group-collider-desc = 形状构造 / 摩擦弹性 / 碰撞组 / 传感器。75 个 FFI 入口。
 jni-group-query-title = query_*
 jni-group-query-desc = ray_cast / shape_cast / point / intersection / R树剔除。58 个 FFI 入口。
 jni-group-events-title = events / ForceLaw
@@ -588,9 +604,9 @@ not-found-back = 返回首页
 
 # ---- Footer ----
 footer-text = MPS Motion Physics System v{ $version } — GitHub
-nav-group-foundations = 基础
-nav-group-physics = 物理引擎
-nav-group-formula = 公式与算法
-nav-group-arena = 共享内存
-nav-group-bindings = 语言绑定
-nav-group-reference = 参考
+nav-group-overview = 概览
+nav-group-core = mps-core
+nav-group-cosmos = mps-cosmos
+nav-group-formula = mps-formula
+nav-group-jni = mps-jni
+nav-group-ffm = mps-ffm
