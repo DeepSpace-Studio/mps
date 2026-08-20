@@ -26,14 +26,14 @@ pub fn Sidebar() -> Element {
                 span { class: "sb-ver", "v{VERSION}" }
             }
             nav { class: "sidebar-nav",
-                div { class: "nav-group",
-                    span { class: "nav-group-title", { t!("nav-group-overview") } }
+                details { class: "nav-group", open: true,
+                    summary { class: "nav-group-title", { t!("nav-group-overview") } }
                     a { class: "nav-link", href: "#sec-home", { t!("nav-home") } }
                     a { class: "nav-link", href: "#sec-quickstart", { t!("nav-quickstart") } }
                     a { class: "nav-link", href: "#sec-architecture", { t!("nav-architecture") } }
                 }
-                div { class: "nav-group",
-                    span { class: "nav-group-title", { t!("nav-group-core") } }
+                details { class: "nav-group", open: true,
+                    summary { class: "nav-group-title", { t!("nav-group-core") } }
                     a { class: "nav-link", href: "#sec-gravity", { t!("nav-gravity") } }
                     a { class: "nav-link", href: "#sec-integrators", { t!("nav-integrators") } }
                     a { class: "nav-link", href: "#sec-events", { t!("nav-events") } }
@@ -42,20 +42,21 @@ pub fn Sidebar() -> Element {
                     a { class: "nav-link", href: "#sec-voxel", { t!("nav-voxel") } }
                     a { class: "nav-link", href: "#sec-api", { t!("nav-api") } }
                 }
-                div { class: "nav-group",
-                    span { class: "nav-group-title", { t!("nav-group-cosmos") } }
+                details { class: "nav-group", open: true,
+                    summary { class: "nav-group-title", { t!("nav-group-cosmos") } }
                     a { class: "nav-link", href: "#sec-cosmos", { t!("nav-cosmos") } }
+                    a { class: "nav-link", href: "#sec-cosmos-class", { t!("nav-cosmos-class") } }
                 }
-                div { class: "nav-group",
-                    span { class: "nav-group-title", { t!("nav-group-formula") } }
+                details { class: "nav-group", open: true,
+                    summary { class: "nav-group-title", { t!("nav-group-formula") } }
                     a { class: "nav-link", href: "#sec-formula", { t!("nav-formula") } }
                 }
-                div { class: "nav-group",
-                    span { class: "nav-group-title", { t!("nav-group-jni") } }
+                details { class: "nav-group", open: true,
+                    summary { class: "nav-group-title", { t!("nav-group-jni") } }
                     a { class: "nav-link", href: "#sec-jni", { t!("nav-jni") } }
                 }
-                div { class: "nav-group",
-                    span { class: "nav-group-title", { t!("nav-group-ffm") } }
+                details { class: "nav-group", open: true,
+                    summary { class: "nav-group-title", { t!("nav-group-ffm") } }
                     a { class: "nav-link", href: "#sec-ffm", { t!("nav-ffm") } }
                 }
             }

@@ -13,6 +13,7 @@ nav-events = 事件
 nav-arena = Arena
 nav-batch = 批量碰撞体
 nav-cosmos = 太空
+nav-cosmos-class = 功能分类
 nav-jni = JNI
 nav-ffm = FFM
 nav-api = API

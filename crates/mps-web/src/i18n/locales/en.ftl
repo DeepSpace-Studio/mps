@@ -13,6 +13,7 @@ nav-events = Events
 nav-arena = Arena
 nav-batch = Batch Colliders
 nav-cosmos = Cosmos
+nav-cosmos-class = Functionality
 nav-jni = JNI
 nav-ffm = FFM
 nav-api = API

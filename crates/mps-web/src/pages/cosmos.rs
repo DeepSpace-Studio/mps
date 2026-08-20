@@ -25,7 +25,7 @@ pub fn Cosmos() -> Element {
         }
 
         // ── Functionality by category ────────────────────────────────────
-        div { class: "section-divider",
+        div { class: "section-divider", id: "sec-cosmos-class",
             h2 { class: "section-heading", { t!("cosmos-class-title") } }
             p { class: "p-lead", { t!("cosmos-class-lead") } }
             div { class: "feature-grid",
