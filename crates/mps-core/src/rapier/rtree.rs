@@ -2,270 +2,9 @@ use crate::rapier::error::{
     ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, clear_error, ffi_guard,
     set_error,
 };
-use crate::rapier::ffi::{
-    AabbDesc, Bool, MAX_OUTPUT_CAPACITY, MAX_TREE_ENTRIES, RTreeHandle, Vec3,
-};
-use smallvec::SmallVec;
-
-const MAX_CHILDREN: usize = 8;
-
-#[derive(Clone, Copy, Debug)]
-struct Aabb {
-    mins: Vec3,
-    maxs: Vec3,
-}
-
-impl Aabb {
-    fn from_desc(desc: AabbDesc) -> Option<Self> {
-        let mins = desc.mins;
-        let maxs = desc.maxs;
-        if !mins.x.is_finite()
-            || !mins.y.is_finite()
-            || !mins.z.is_finite()
-            || !maxs.x.is_finite()
-            || !maxs.y.is_finite()
-            || !maxs.z.is_finite()
-            || mins.x > maxs.x
-            || mins.y > maxs.y
-            || mins.z > maxs.z
-        {
-            return None;
-        }
-
-        Some(Self { mins, maxs })
-    }
-
-    fn union(self, other: Self) -> Self {
-        Self {
-            mins: Vec3 {
-                x: self.mins.x.min(other.mins.x),
-                y: self.mins.y.min(other.mins.y),
-                z: self.mins.z.min(other.mins.z),
-            },
-            maxs: Vec3 {
-                x: self.maxs.x.max(other.maxs.x),
-                y: self.maxs.y.max(other.maxs.y),
-                z: self.maxs.z.max(other.maxs.z),
-            },
-        }
-    }
-
-    fn intersects(self, other: Self) -> bool {
-        self.mins.x <= other.maxs.x
-            && self.maxs.x >= other.mins.x
-            && self.mins.y <= other.maxs.y
-            && self.maxs.y >= other.mins.y
-            && self.mins.z <= other.maxs.z
-            && self.maxs.z >= other.mins.z
-    }
-
-    fn center_axis(self, axis: usize) -> f64 {
-        match axis {
-            0 => (self.mins.x + self.maxs.x) * 0.5,
-            1 => (self.mins.y + self.maxs.y) * 0.5,
-            _ => (self.mins.z + self.maxs.z) * 0.5,
-        }
-    }
-
-    fn extent_axis(self, axis: usize) -> f64 {
-        match axis {
-            0 => self.maxs.x - self.mins.x,
-            1 => self.maxs.y - self.mins.y,
-            _ => self.maxs.z - self.mins.z,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-struct Entry {
-    id: u64,
-    bounds: Aabb,
-}
-
-#[derive(Clone, Debug)]
-enum NodeKind {
-    Leaf(Box<SmallVec<[Entry; MAX_CHILDREN]>>),
-    Branch(Vec<Node>),
-}
-
-#[derive(Clone, Debug)]
-struct Node {
-    bounds: Aabb,
-    kind: NodeKind,
-}
-
-pub(crate) struct RTreeIndex {
-    entries: Vec<Entry>,
-    root: Option<Node>,
-    dirty: bool,
-}
-
-impl RTreeIndex {
-    fn new() -> Self {
-        Self {
-            entries: Vec::new(),
-            root: None,
-            dirty: false,
-        }
-    }
-
-    fn clear(&mut self) {
-        self.entries.clear();
-        self.root = None;
-        self.dirty = false;
-    }
-
-    fn insert(&mut self, id: u64, bounds: Aabb) -> bool {
-        if id == 0 {
-            return false;
-        }
-
-        if let Some(entry) = self.entries.iter_mut().find(|entry| entry.id == id) {
-            entry.bounds = bounds;
-        } else {
-            if self.entries.len() >= MAX_TREE_ENTRIES {
-                return false;
-            }
-            self.entries.push(Entry { id, bounds });
-        }
-        self.dirty = true;
-        true
-    }
-
-    fn remove(&mut self, id: u64) -> bool {
-        let Some(index) = self.entries.iter().position(|entry| entry.id == id) else {
-            return false;
-        };
-        self.entries.swap_remove(index);
-        self.dirty = true;
-        true
-    }
-
-    fn rebuild_if_needed(&mut self) {
-        if !self.dirty {
-            return;
-        }
-        self.root = build_node(&mut self.entries);
-        self.dirty = false;
-    }
-
-    fn query_count(&mut self, bounds: Aabb) -> u32 {
-        self.rebuild_if_needed();
-        let Some(root) = &self.root else {
-            return 0;
-        };
-        count_node(root, bounds)
-    }
-
-    fn query(&mut self, bounds: Aabb, out_ids: &mut [u64]) -> u32 {
-        self.rebuild_if_needed();
-        let Some(root) = &self.root else {
-            return 0;
-        };
-        let mut written = 0usize;
-        query_node(root, bounds, out_ids, &mut written);
-        written as u32
-    }
-}
-
-fn entries_bounds(entries: &[Entry]) -> Option<Aabb> {
-    let mut iter = entries.iter();
-    let first = iter.next()?.bounds;
-    Some(iter.fold(first, |acc, entry| acc.union(entry.bounds)))
-}
-
-fn nodes_bounds(nodes: &[Node]) -> Option<Aabb> {
-    let mut iter = nodes.iter();
-    let first = iter.next()?.bounds;
-    Some(iter.fold(first, |acc, node| acc.union(node.bounds)))
-}
-
-fn longest_axis(bounds: Aabb) -> usize {
-    let x = bounds.extent_axis(0);
-    let y = bounds.extent_axis(1);
-    let z = bounds.extent_axis(2);
-    if x >= y && x >= z {
-        0
-    } else if y >= z {
-        1
-    } else {
-        2
-    }
-}
-
-fn build_node(entries: &mut [Entry]) -> Option<Node> {
-    let bounds = entries_bounds(entries)?;
-    if entries.len() <= MAX_CHILDREN {
-        return Some(Node {
-            bounds,
-            kind: NodeKind::Leaf(Box::new(entries.iter().copied().collect())),
-        });
-    }
-
-    let axis = longest_axis(bounds);
-    entries.sort_unstable_by(|a, b| {
-        a.bounds
-            .center_axis(axis)
-            .total_cmp(&b.bounds.center_axis(axis))
-            .then_with(|| a.id.cmp(&b.id))
-    });
-
-    let child_count = entries.len().div_ceil(MAX_CHILDREN);
-    let mut children = Vec::with_capacity(child_count);
-    for chunk in entries.chunks_mut(MAX_CHILDREN) {
-        if let Some(child) = build_node(chunk) {
-            children.push(child);
-        }
-    }
-
-    let bounds = nodes_bounds(&children)?;
-    Some(Node {
-        bounds,
-        kind: NodeKind::Branch(children),
-    })
-}
-
-fn count_node(node: &Node, bounds: Aabb) -> u32 {
-    if !node.bounds.intersects(bounds) {
-        return 0;
-    }
-
-    match &node.kind {
-        NodeKind::Leaf(entries) => entries
-            .iter()
-            .filter(|entry| entry.bounds.intersects(bounds))
-            .count() as u32,
-        NodeKind::Branch(children) => children
-            .iter()
-            .map(|child| count_node(child, bounds))
-            .sum::<u32>(),
-    }
-}
-
-fn query_node(node: &Node, bounds: Aabb, out_ids: &mut [u64], written: &mut usize) {
-    if *written >= out_ids.len() || !node.bounds.intersects(bounds) {
-        return;
-    }
-
-    match &node.kind {
-        NodeKind::Leaf(entries) => {
-            for entry in entries.iter() {
-                if *written >= out_ids.len() {
-                    return;
-                }
-                if entry.bounds.intersects(bounds) {
-                    out_ids[*written] = entry.id;
-                    *written += 1;
-                }
-            }
-        }
-        NodeKind::Branch(children) => {
-            for child in children {
-                query_node(child, bounds, out_ids, written);
-            }
-        }
-    }
-}
+use crate::rapier::ffi::{AabbDesc, Bool, MAX_OUTPUT_CAPACITY, MAX_TREE_ENTRIES, RTreeHandle};
+use rapier3d::geometry::user_index::GenericAabbIndex;
+use rapier3d::geometry::Aabb;
 
 /// Create an empty R-tree index.
 ///
@@ -277,7 +16,7 @@ fn query_node(node: &Node, bounds: Aabb, out_ids: &mut [u64], written: &mut usiz
 pub extern "C" fn rtree_create() -> *mut RTreeHandle {
     ffi_guard(std::ptr::null_mut(), || {
         Box::into_raw(Box::new(RTreeHandle {
-            inner: RTreeIndex::new(),
+            inner: GenericAabbIndex::new(),
         }))
     })
 }
@@ -330,7 +69,7 @@ pub extern "C" fn rtree_len(tree: *const RTreeHandle) -> u32 {
             set_error(ERR_NULL_POINTER, "tree is null");
             return 0;
         };
-        let len = tree.inner.entries.len().min(u32::MAX as usize) as u32;
+        let len = tree.inner.len().min(u32::MAX as usize) as u32;
         clear_error();
         len
     })
@@ -348,7 +87,7 @@ pub extern "C" fn rtree_insert(tree: *mut RTreeHandle, id: u64, aabb: AabbDesc) 
             set_error(ERR_NULL_POINTER, "tree is null");
             return Bool::FALSE;
         };
-        let Some(bounds) = Aabb::from_desc(aabb) else {
+        let Some(bounds) = aabb_from_desc(aabb) else {
             set_error(ERR_INVALID_ARGUMENT, "invalid AABB");
             return Bool::FALSE;
         };
@@ -356,12 +95,12 @@ pub extern "C" fn rtree_insert(tree: *mut RTreeHandle, id: u64, aabb: AabbDesc) 
             set_error(ERR_INVALID_ARGUMENT, "id must be non-zero");
             return Bool::FALSE;
         }
-        if !tree.inner.insert(id, bounds) {
+        if tree.inner.len() >= MAX_TREE_ENTRIES {
             set_error(ERR_CAPACITY, "tree entry capacity exceeded");
             return Bool::FALSE;
         }
         clear_error();
-        Bool::TRUE
+        Bool::from(tree.inner.insert(id, bounds))
     })
 }
 
@@ -377,16 +116,16 @@ pub extern "C" fn rtree_update(tree: *mut RTreeHandle, id: u64, aabb: AabbDesc) 
             set_error(ERR_NULL_POINTER, "tree is null");
             return Bool::FALSE;
         };
-        if !tree.inner.entries.iter().any(|entry| entry.id == id) {
+        if !tree.inner.contains(id) {
             set_error(ERR_NOT_FOUND, "entry not found");
             return Bool::FALSE;
         }
-        let Some(bounds) = Aabb::from_desc(aabb) else {
+        let Some(bounds) = aabb_from_desc(aabb) else {
             set_error(ERR_INVALID_ARGUMENT, "invalid AABB");
             return Bool::FALSE;
         };
         clear_error();
-        tree.inner.insert(id, bounds).into()
+        Bool::from(tree.inner.insert(id, bounds))
     })
 }
 
@@ -423,8 +162,7 @@ pub extern "C" fn rtree_rebuild(tree: *mut RTreeHandle) {
             set_error(ERR_NULL_POINTER, "tree is null");
             return;
         };
-        tree.inner.dirty = true;
-        tree.inner.rebuild_if_needed();
+        tree.inner.rebuild();
         clear_error();
     })
 }
@@ -441,7 +179,7 @@ pub extern "C" fn rtree_query_aabb_count(tree: *mut RTreeHandle, aabb: AabbDesc)
             set_error(ERR_NULL_POINTER, "tree is null");
             return 0;
         };
-        let Some(bounds) = Aabb::from_desc(aabb) else {
+        let Some(bounds) = aabb_from_desc(aabb) else {
             set_error(ERR_INVALID_ARGUMENT, "invalid AABB");
             return 0;
         };
@@ -477,7 +215,7 @@ pub extern "C" fn rtree_query_aabb(
             set_error(ERR_CAPACITY, "invalid output capacity");
             return 0;
         }
-        let Some(bounds) = Aabb::from_desc(aabb) else {
+        let Some(bounds) = aabb_from_desc(aabb) else {
             set_error(ERR_INVALID_ARGUMENT, "invalid AABB");
             return 0;
         };
@@ -487,4 +225,28 @@ pub extern "C" fn rtree_query_aabb(
         clear_error();
         written
     })
+}
+
+/// Convert an FFI `AabbDesc` into the fork-native `Aabb`, rejecting non-finite
+/// or inverted bounds.
+fn aabb_from_desc(desc: AabbDesc) -> Option<Aabb> {
+    let mins = desc.mins;
+    let maxs = desc.maxs;
+    if !mins.x.is_finite()
+        || !mins.y.is_finite()
+        || !mins.z.is_finite()
+        || !maxs.x.is_finite()
+        || !maxs.y.is_finite()
+        || !maxs.z.is_finite()
+        || mins.x > maxs.x
+        || mins.y > maxs.y
+        || mins.z > maxs.z
+    {
+        return None;
+    }
+
+    Some(Aabb::new(
+        rapier3d::math::Vector::new(mins.x, mins.y, mins.z),
+        rapier3d::math::Vector::new(maxs.x, maxs.y, maxs.z),
+    ))
 }

@@ -29,7 +29,7 @@ pub struct CharacterControllerHandle {
 }
 
 pub struct RTreeHandle {
-    pub(crate) inner: crate::rapier::rtree::RTreeIndex,
+    pub(crate) inner: rapier3d::geometry::user_index::GenericAabbIndex,
 }
 
 pub struct CRbTreeHandle {

@@ -9,7 +9,7 @@ use rapier3d::prelude::{
 
 use super::types::{
     BodyStatus, ColliderHandleRaw, ImpulseJointHandleRaw, InteractionGroupsDesc, JointAxisDesc,
-    JointTypeDesc, KdopPreset, NeuralActivation, Quat, QueryFilterDesc, RigidBodyHandleRaw,
+    JointTypeDesc, NeuralActivation, Quat, QueryFilterDesc, RigidBodyHandleRaw,
     ShapeCastOptionsDesc, ShapeDesc, ShapeType, Vec3, VoxelColliderMode,
 };
 use crate::rapier::forces::ForceLawType;
@@ -208,12 +208,13 @@ pub(crate) fn neural_activation_from_raw(value: u32) -> NeuralActivation {
     }
 }
 
-pub(crate) fn kdop_preset_from_raw(value: u32) -> KdopPreset {
+pub(crate) fn kdop_preset_from_raw(value: u32) -> rapier3d::geometry::KdopPreset {
+    use rapier3d::geometry::KdopPreset::*;
     match value {
-        14 => KdopPreset::K14,
-        18 => KdopPreset::K18,
-        26 => KdopPreset::K26,
-        _ => KdopPreset::K6,
+        14 => K14,
+        18 => K18,
+        26 => K26,
+        _ => K6,
     }
 }
 
