@@ -224,6 +224,7 @@ pub(crate) fn joint_type_from_raw(value: u32) -> JointTypeDesc {
         3 => JointTypeDesc::Rope,
         4 => JointTypeDesc::Spring,
         5 => JointTypeDesc::Spherical,
+        6 => JointTypeDesc::Wheel,
         _ => JointTypeDesc::Fixed,
     }
 }

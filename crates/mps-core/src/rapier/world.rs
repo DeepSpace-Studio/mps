@@ -1,6 +1,7 @@
 use rapier3d::prelude::{
-    ActiveHooks, BroadPhaseBvh, CCDSolver, ColliderSet, ImpulseJointSet, IntegrationParameters,
-    IslandManager, MultibodyJointSet, NarrowPhase, PhysicsPipeline, RigidBodySet, Vector,
+    ActiveHooks, BroadPhaseBvh, CCDSolver, ColliderHandle, ColliderSet, ImpulseJointSet,
+    IntegrationParameters, IslandManager, MultibodyJointSet, NarrowPhase, PhysicsPipeline,
+    RigidBodySet, Vector,
 };
 use std::sync::Arc;
 
@@ -143,6 +144,22 @@ impl PhysicsWorld {
             buffers: FrameWorkBuffers::default(),
             #[cfg(feature = "relative-force")]
             relative_force: DashMap::new(),
+        }
+    }
+
+    /// Enable or disable collision detection between two specific colliders,
+    /// regardless of their collision groups, solver hooks, or whether they are
+    /// connected by a joint.  Forwards to the narrow-phase's per-pair filter.
+    pub(crate) fn set_collision_enabled(
+        &mut self,
+        c1: ColliderHandle,
+        c2: ColliderHandle,
+        enabled: bool,
+    ) {
+        if enabled {
+            self.narrow_phase.enable_collision(c1, c2);
+        } else {
+            self.narrow_phase.disable_collision(c1, c2);
         }
     }
 }
@@ -1263,12 +1280,12 @@ pub extern "C" fn world_remove_relative_force(
 /// Enable or disable collision detection between two specific colliders, regardless
 /// of their collision groups, solver hooks, or whether they are connected by a joint.
 ///
-/// This surfaces the per-pair collision filtering added to Rapier's `NarrowPhase`
-/// (`disable_collision` / `enable_collision`). Unlike collision groups, the two
-/// colliders need not belong to the same body or be jointed; any pair can be
-/// disabled. Disabling a pair that was previously disabled (or enabling a pair that
-/// was never disabled) is a no-op. The setting persists across `world_step` calls:
-/// a disabled pair's existing contact manifolds are cleared on the next step.
+/// This surfaces the per-pair collision filtering exposed by Rapier's `World`
+/// (`set_collision_enabled`). Unlike collision groups, the two colliders need not
+/// belong to the same body or be jointed; any pair can be disabled. Disabling a
+/// pair that was previously disabled (or enabling a pair that was never disabled)
+/// is a no-op. The setting persists across `world_step` calls: a disabled pair's
+/// existing contact manifolds are cleared on the next step.
 ///
 /// # Safety
 ///
@@ -1288,10 +1305,6 @@ pub extern "C" fn world_set_collision_enabled(
         };
         let c1 = unpack_collider_handle(collider1);
         let c2 = unpack_collider_handle(collider2);
-        if enabled.0 != 0 {
-            world.inner.narrow_phase.enable_collision(c1, c2);
-        } else {
-            world.inner.narrow_phase.disable_collision(c1, c2);
-        }
+        world.inner.set_collision_enabled(c1, c2, enabled.0 != 0);
     })
 }

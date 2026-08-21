@@ -1394,4 +1394,5 @@ pub enum JointTypeDesc {
     Rope = 3,
     Spring = 4,
     Spherical = 5,
+    Wheel = 6,
 }

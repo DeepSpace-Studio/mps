@@ -1,6 +1,7 @@
 use rapier3d::prelude::{
     FixedJointBuilder, ImpulseJointHandle as RapierImpulseJointHandle, PrismaticJointBuilder,
     RevoluteJointBuilder, RopeJointBuilder, SphericalJointBuilder, SpringJointBuilder, Vector,
+    WheelJointBuilder,
 };
 
 use crate::rapier::error::{ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, ffi_guard, set_error};
@@ -24,6 +25,7 @@ pub(crate) enum JointBuilderKind {
     Rope(RopeJointBuilder),
     Spring(SpringJointBuilder),
     Spherical(SphericalJointBuilder),
+    Wheel(WheelJointBuilder),
 }
 
 impl JointBuilderKind {
@@ -46,6 +48,9 @@ impl JointBuilderKind {
             }
             JointBuilderKind::Spherical(builder) => {
                 JointBuilderKind::Spherical(builder.contacts_enabled(enabled))
+            }
+            JointBuilderKind::Wheel(builder) => {
+                JointBuilderKind::Wheel(builder.contacts_enabled(enabled))
             }
         };
     }
@@ -70,6 +75,9 @@ impl JointBuilderKind {
             JointBuilderKind::Spherical(builder) => {
                 JointBuilderKind::Spherical(builder.local_anchor1(anchor))
             }
+            JointBuilderKind::Wheel(builder) => {
+                JointBuilderKind::Wheel(builder.local_anchor1(anchor))
+            }
         };
     }
 
@@ -93,6 +101,9 @@ impl JointBuilderKind {
             JointBuilderKind::Spherical(builder) => {
                 JointBuilderKind::Spherical(builder.local_anchor2(anchor))
             }
+            JointBuilderKind::Wheel(builder) => {
+                JointBuilderKind::Wheel(builder.local_anchor2(anchor))
+            }
         };
     }
 
@@ -110,6 +121,7 @@ impl JointBuilderKind {
             JointBuilderKind::Spherical(builder) => {
                 JointBuilderKind::Spherical(builder.limits(joint_axis_to_rapier(axis), [min, max]))
             }
+            JointBuilderKind::Wheel(builder) => JointBuilderKind::Wheel(builder),
         };
     }
 
@@ -129,6 +141,7 @@ impl JointBuilderKind {
             JointBuilderKind::Spherical(builder) => JointBuilderKind::Spherical(
                 builder.motor_velocity(joint_axis_to_rapier(axis), target_vel, factor),
             ),
+            JointBuilderKind::Wheel(builder) => JointBuilderKind::Wheel(builder),
         };
     }
 
@@ -154,6 +167,7 @@ impl JointBuilderKind {
             JointBuilderKind::Spherical(builder) => JointBuilderKind::Spherical(
                 builder.motor_position(joint_axis_to_rapier(axis), target_pos, stiffness, damping),
             ),
+            JointBuilderKind::Wheel(builder) => JointBuilderKind::Wheel(builder),
         };
     }
 }
@@ -220,6 +234,16 @@ pub extern "C" fn joint_builder_create(
                 JointBuilderKind::Spring(SpringJointBuilder::new(axis_or_primary.x, b, c))
             }
             JointTypeDesc::Spherical => JointBuilderKind::Spherical(SphericalJointBuilder::new()),
+            JointTypeDesc::Wheel => {
+                if b < 0.0 || c < 0.0 {
+                    set_error(
+                        ERR_INVALID_ARGUMENT,
+                        "wheel suspension stiffness and damping must be non-negative",
+                    );
+                    return std::ptr::null_mut();
+                }
+                JointBuilderKind::Wheel(WheelJointBuilder::new(axis_or_primary.x, b, c))
+            }
         };
 
         Box::into_raw(Box::new(JointBuilderHandle { inner }))
@@ -434,6 +458,12 @@ fn build_and_insert(
                 .insert(body1, body2, builder.build(), wake_up)
         }
         JointBuilderKind::Spherical(builder) => {
+            world
+                .inner
+                .impulse_joints
+                .insert(body1, body2, builder.build(), wake_up)
+        }
+        JointBuilderKind::Wheel(builder) => {
             world
                 .inner
                 .impulse_joints

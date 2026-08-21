@@ -6398,12 +6398,12 @@ Bool world_remove_relative_force(struct WorldHandle *world, RigidBodyHandleRaw h
  * Enable or disable collision detection between two specific colliders, regardless
  * of their collision groups, solver hooks, or whether they are connected by a joint.
  *
- * This surfaces the per-pair collision filtering added to Rapier's `NarrowPhase`
- * (`disable_collision` / `enable_collision`). Unlike collision groups, the two
- * colliders need not belong to the same body or be jointed; any pair can be
- * disabled. Disabling a pair that was previously disabled (or enabling a pair that
- * was never disabled) is a no-op. The setting persists across `world_step` calls:
- * a disabled pair's existing contact manifolds are cleared on the next step.
+ * This surfaces the per-pair collision filtering exposed by Rapier's `World`
+ * (`set_collision_enabled`). Unlike collision groups, the two colliders need not
+ * belong to the same body or be jointed; any pair can be disabled. Disabling a
+ * pair that was previously disabled (or enabling a pair that was never disabled)
+ * is a no-op. The setting persists across `world_step` calls: a disabled pair's
+ * existing contact manifolds are cleared on the next step.
  *
  * # Safety
  *
