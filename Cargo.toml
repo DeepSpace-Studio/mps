@@ -11,6 +11,11 @@ members = [
     "crates/mps-bindgen-macro",
     "crates/xtask"
 ]
+# The vendored `rapier/` folder is its own Cargo workspace (the user's local
+# rapier3d-f64 checkout). Exclude it so it isn't absorbed into this workspace;
+# `rapier3d-f64` is pulled in via a path dependency in [workspace.dependencies]
+# and keeps resolving its own `[workspace.package]` / `[workspace.dependencies]`.
+exclude = ["rapier"]
 resolver = "2"
 
 [workspace.package]
@@ -18,7 +23,7 @@ version = "0.1.4"
 edition = "2024"
 
 [workspace.dependencies]
-rapier3d = { package = "rapier3d-f64", version = "0.35.1", features = ["parallel"] }
+rapier3d = { package = "rapier3d-f64", path = "rapier/crates/rapier3d-f64", features = ["parallel"] }
 ljni = { version = "0.21.0", package = "jni" }
 parking_lot = "0.12.5"
 hashbrown = "0.17.1"

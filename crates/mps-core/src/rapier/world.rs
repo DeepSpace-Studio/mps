@@ -12,9 +12,10 @@ use crate::rapier::error::{
     clear_error, ffi_guard, set_error,
 };
 use crate::rapier::ffi::{
-    Bool, MAX_OUTPUT_CAPACITY, Quat, RigidBodyHandleRaw, Vec3, WorldHandle,
+    Bool, ColliderHandleRaw, MAX_OUTPUT_CAPACITY, Quat, RigidBodyHandleRaw, Vec3, WorldHandle,
     force_law_type_from_u32, isometry_from_parts, pack_rigid_body_handle, quat_finite,
-    quat_from_rapier, unpack_rigid_body_handle, vec3_finite, vec3_from_rapier, vec3_to_rapier,
+    quat_from_rapier, unpack_collider_handle, unpack_rigid_body_handle, vec3_finite,
+    vec3_from_rapier, vec3_to_rapier,
 };
 use crate::rapier::forces::{BodyForceLog, ForceFacade, ForceRegistry};
 use crate::rapier::terrain_gravity::TerrainGravitySource;
@@ -1255,5 +1256,42 @@ pub extern "C" fn world_remove_relative_force(
         }
         clear_error();
         Bool::TRUE
+    })
+}
+
+
+/// Enable or disable collision detection between two specific colliders, regardless
+/// of their collision groups, solver hooks, or whether they are connected by a joint.
+///
+/// This surfaces the per-pair collision filtering added to Rapier's `NarrowPhase`
+/// (`disable_collision` / `enable_collision`). Unlike collision groups, the two
+/// colliders need not belong to the same body or be jointed; any pair can be
+/// disabled. Disabling a pair that was previously disabled (or enabling a pair that
+/// was never disabled) is a no-op. The setting persists across `world_step` calls:
+/// a disabled pair's existing contact manifolds are cleared on the next step.
+///
+/// # Safety
+///
+/// `world` must be a valid pointer returned by `world_create` (or null). `collider1`
+/// and `collider2` must be valid `ColliderHandleRaw` values returned at insert time.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_set_collision_enabled(
+    world: *mut WorldHandle,
+    collider1: ColliderHandleRaw,
+    collider2: ColliderHandleRaw,
+    enabled: Bool,
+) {
+    ffi_guard((), || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return;
+        };
+        let c1 = unpack_collider_handle(collider1);
+        let c2 = unpack_collider_handle(collider2);
+        if enabled.0 != 0 {
+            world.inner.narrow_phase.enable_collision(c1, c2);
+        } else {
+            world.inner.narrow_phase.disable_collision(c1, c2);
+        }
     })
 }
