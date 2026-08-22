@@ -303,4 +303,70 @@ mod tests {
         assert_eq!(legacy.total_drag_force.x, -10.0);
         assert!(legacy.total_external_force.x == -10.0);
     }
+
+    #[test]
+    fn facade_persistent_and_event_forces_route_to_containers() {
+        use rapier3d::dynamics::force_containers::{ForceContainer, ForceKind, Persistence};
+
+        let mut bodies = RigidBodySet::new();
+        let mut colliders = ColliderSet::new();
+        let narrow_phase = NarrowPhase::new();
+        let h = bodies.insert(RigidBodyBuilder::dynamic().build());
+
+        let mut log: Vec<Option<BodyForceLog>> = Vec::new();
+        let mut pending = SmallVec::new();
+        let mut friction = Vec::new();
+        let mut scratch_force_pairs = SmallVec::new();
+        let mut scratch_force_pairs_alt = SmallVec::new();
+        let mut scratch_body_data = SmallVec::new();
+        let mut facade = make_facade(
+            &mut bodies,
+            &mut colliders,
+            &narrow_phase,
+            &mut log,
+            &mut pending,
+            &mut friction,
+            &mut scratch_force_pairs,
+            &mut scratch_force_pairs_alt,
+            &mut scratch_body_data,
+        );
+
+        // Persistent thrust: set once via the kind-classified container model.
+        let id = facade.add_persistent_force(
+            h,
+            Vector::new(0.0, 5.0, 0.0),
+            Vector::new(0.0, 0.0, 0.0),
+            None,
+            ForceKind::Thrust,
+        );
+        assert!(id != 0, "persistent force should be assigned an id");
+
+        // Transient event force: current step only.
+        let eid = facade.emit_event_force(
+            h,
+            Vector::new(1.0, 0.0, 0.0),
+            Vector::new(0.0, 0.0, 0.0),
+            None,
+            ForceKind::Event,
+        );
+        assert!(eid != 0, "event force should be assigned an id");
+
+        // Drain the report (records both forces), then release the facade's borrow
+        // on `bodies` so we can inspect the live containers on the body.
+        let report = facade.drain_report();
+        drop(facade);
+        assert!(!report.contributions.is_empty());
+
+        let c = bodies[h]
+            .force_container(ForceKind::Thrust)
+            .expect("thrust container created");
+        assert_eq!(c.persistence(), Persistence::Persistent);
+        assert_eq!(c.len(), 1);
+
+        let ec = bodies[h]
+            .force_container(ForceKind::Event)
+            .expect("event container created");
+        assert_eq!(ec.persistence(), Persistence::Transient);
+        assert_eq!(ec.len(), 1);
+    }
 }

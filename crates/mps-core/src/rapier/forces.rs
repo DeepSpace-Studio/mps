@@ -39,7 +39,8 @@
 //!
 //! The report is collected automatically.
 
-use rapier3d::prelude::{ColliderSet, NarrowPhase, RigidBodyHandle, RigidBodySet, Vector};
+use rapier3d::dynamics::force_containers::{ForceKind, Persistence};
+use rapier3d::prelude::{AngVector, ColliderSet, NarrowPhase, RigidBodyHandle, RigidBodySet, Vector};
 use smallvec::SmallVec;
 
 use crate::rapier::ffi::CustomPhysicsReport;
@@ -124,6 +125,22 @@ pub enum ForceLawType {
     TerrainGravity,
     /// User-defined force registered via FFI (opaque type tag in upper 32 bits).
     Custom(u64),
+}
+
+/// Map a rapier [`ForceKind`] (engine-native force container) to the nearest
+/// mps-core [`ForceLawType`] for frame-report categorisation. The container model
+/// is finer-grained than the legacy law enum, so several kinds collapse onto the
+/// same report bucket.
+pub(crate) fn force_kind_to_law(kind: ForceKind) -> ForceLawType {
+    match kind {
+        ForceKind::Gravity => ForceLawType::WorldGravity,
+        ForceKind::Thrust => ForceLawType::ControlPID,
+        ForceKind::Magnetic => ForceLawType::Electromagnetic,
+        ForceKind::Wind => ForceLawType::AirDrag,
+        ForceKind::Friction | ForceKind::ContactReaction => ForceLawType::CoulombFriction,
+        ForceKind::Event | ForceKind::User | ForceKind::Custom(_) => ForceLawType::UserForce,
+        _ => ForceLawType::UserForce,
+    }
 }
 
 impl ForceLawType {
@@ -592,6 +609,59 @@ impl<'a> ForceFacade<'a> {
         body.add_force_at_point(force, point, true);
         self.log_entry(handle).forces.push((source, force));
         true
+    }
+
+    /// Apply a **persistent** force via the kind-classified force-container model.
+    ///
+    /// Routes to `RigidBody::add_thrust(..., Persistence::Persistent)`: the force
+    /// survives across steps and is *not* cleared by the per-frame `reset_forces`
+    /// ritual, so a constant law (steady thrust, magnetic anchor, …) only needs to
+    /// register it once. Returns the assigned entry id (or `0` if the body is
+    /// non-dynamic / the force is zero). The `source` selects which container kind
+    /// records the force (e.g. `ForceKind::Thrust`, `ForceKind::Magnetic`).
+    pub fn add_persistent_force(
+        &mut self,
+        handle: RigidBodyHandle,
+        force: Vector,
+        torque: AngVector,
+        point: Option<Vector>,
+        source: ForceKind,
+    ) -> u64 {
+        let Some(body) = self.bodies.get_mut(handle) else {
+            return 0;
+        };
+        if !body.is_dynamic() || force == Vector::ZERO {
+            return 0;
+        }
+        let id = body.add_thrust(0, force, torque, point, Persistence::Persistent, true);
+        self.log_entry(handle).forces.push((force_kind_to_law(source), force));
+        id
+    }
+
+    /// Emit a **transient** event/one-shot force via the kind-classified model.
+    ///
+    /// Routes to `RigidBody::emit_event_force`: the force acts for the current step
+    /// only and the container drains it at frame end automatically — no manual
+    /// `reset_forces` needed. Use for one-shot impulses, contact-triggered pushes,
+    /// or any force that must not persist. The `source` selects the container kind
+    /// (e.g. `ForceKind::Event`, `ForceKind::Friction`).
+    pub fn emit_event_force(
+        &mut self,
+        handle: RigidBodyHandle,
+        force: Vector,
+        torque: AngVector,
+        point: Option<Vector>,
+        source: ForceKind,
+    ) -> u64 {
+        let Some(body) = self.bodies.get_mut(handle) else {
+            return 0;
+        };
+        if !body.is_dynamic() || force == Vector::ZERO {
+            return 0;
+        }
+        let id = body.emit_event_force(force, torque, point, source, true);
+        self.log_entry(handle).forces.push((force_kind_to_law(source), force));
+        id
     }
 
     // ---- per-body typed force application (for iterators) ----
