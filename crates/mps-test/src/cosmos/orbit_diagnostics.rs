@@ -1,9 +1,12 @@
 //! `mps_cosmos::orbit_diagnostics` 测试 —— 只读轨道诊断量的公式校验。
 
+#[cfg(test)]
 use mps_cosmos::orbit_diagnostics::{
     eccentricity_vector, kozai_period, mean_motion, mean_motion_ratio,
 };
+#[cfg(test)]
 use mps_formula::celestial_data::{CelestialBodyId, G, SUN_GM, get_celestial_body};
+#[cfg(test)]
 use rapier3d::prelude::Vector;
 
 #[test]

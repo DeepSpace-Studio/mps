@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod tests {
     use mps_core::rapier::dop::*;
-    use mps_core::rapier::ffi::*;
     use rapier3d::prelude::Vector;
     use smallvec::SmallVec;
 

@@ -26,6 +26,7 @@ use mps_formula::spaceflight::kepler_period;
 /// 源的 gm，得到与 `n_body_sources` 同序、同长的 `source_pos_gm`。reference-ctx 测试需要它
 /// 喂给 SIMD 远场路径（P1 起默认开启）——空表 `&[]` 会在 SIMD 默认开启后越界（串行路径
 /// 不读此表，故此前被掩盖）。
+#[cfg(test)]
 fn snapshot_source_pos_gm(world: &CosmosWorld) -> Vec<(Vector, f64)> {
     world
         .n_body_sources()
