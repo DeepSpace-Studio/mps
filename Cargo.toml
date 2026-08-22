@@ -15,7 +15,7 @@ members = [
 # rapier3d-f64 checkout). Exclude it so it isn't absorbed into this workspace;
 # `rapier3d-f64` is pulled in via a path dependency in [workspace.dependencies]
 # and keeps resolving its own `[workspace.package]` / `[workspace.dependencies]`.
-exclude = ["rapier"]
+exclude = ["rapier", "test21", "test25", "docs"]
 resolver = "2"
 
 [workspace.package]
