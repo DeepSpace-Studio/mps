@@ -3,8 +3,8 @@ use crate::rapier::error::{
     set_error,
 };
 use crate::rapier::ffi::{AabbDesc, Bool, MAX_OUTPUT_CAPACITY, MAX_TREE_ENTRIES, RTreeHandle};
-use rapier3d::geometry::user_index::GenericAabbIndex;
 use rapier3d::geometry::Aabb;
+use rapier3d::geometry::user_index::GenericAabbIndex;
 
 /// Create an empty R-tree index.
 ///

@@ -13,7 +13,6 @@ pub fn Quickstart() -> Element {
         ("5", "quickstart-step5-title", "quickstart-step5-desc"),
     ];
 
-    
     rsx! {
         section { id: "sec-quickstart", class: "doc-section",
 
@@ -39,7 +38,7 @@ pub fn Quickstart() -> Element {
                 }
             })}
         }
-    
+
         }
     }
 }

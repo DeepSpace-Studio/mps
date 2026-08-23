@@ -5,24 +5,21 @@ use rapier3d::math::Vector;
 use crate::rapier::error::{
     ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, ffi_guard, set_error,
 };
-use crate::rapier::ffi::{ColliderBuilderHandle};
+use crate::rapier::ffi::ColliderBuilderHandle;
 use crate::rapier::ffi::convert::kdop_preset_from_raw;
 
 // Re-export the fork-native hull types so existing callers (including the
 // integration tests in `mps-test`) keep referencing `mps_core::rapier::dop::*`
 // unchanged. The actual implementation now lives in `rapier3d::geometry`.
-pub use rapier3d::geometry::direction_hull::{FdhHull, KdopHull, KdopPreset};
 #[doc(hidden)]
 pub use rapier3d::geometry::direction_hull::DirectionHull;
+pub use rapier3d::geometry::direction_hull::{FdhHull, KdopHull, KdopPreset};
 
 const MAX_RAW_POINTS: u32 = 1_000_000;
 const MAX_RAW_DIRECTIONS: u32 = 4_096;
 
 /// Read a point cloud from raw f64 triplets for the hull builders below.
-fn builder_from_raw_points(
-    points_xyz: *const f64,
-    point_count: u32,
-) -> Option<Vec<Vector>> {
+fn builder_from_raw_points(points_xyz: *const f64, point_count: u32) -> Option<Vec<Vector>> {
     if points_xyz.is_null() {
         set_error(ERR_NULL_POINTER, "point input is null");
         return None;

@@ -3,7 +3,6 @@ use dioxus_i18n::t;
 
 /// Event System — collision + contact-force events, three dispatch modes, C-callback hook.
 pub fn Events() -> Element {
-    
     rsx! {
         section { id: "sec-events", class: "doc-section",
 
@@ -93,7 +92,7 @@ pub fn Events() -> Element {
                 } }
             }
         }
-    
+
         }
     }
 }

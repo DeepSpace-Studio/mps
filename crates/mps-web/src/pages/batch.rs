@@ -3,7 +3,6 @@ use dioxus_i18n::t;
 
 /// Box3D 批量碰撞体 — 批量插入 + 合并 + 物理感预设。
 pub fn Batch() -> Element {
-    
     rsx! {
         section { id: "sec-batch", class: "doc-section",
         div { class: "page-head",
@@ -240,7 +239,7 @@ pub fn Batch() -> Element {
                 } }
             }
         }
-    
+
         }
     }
 }

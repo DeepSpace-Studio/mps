@@ -1276,7 +1276,6 @@ pub extern "C" fn world_remove_relative_force(
     })
 }
 
-
 /// Enable or disable collision detection between two specific colliders, regardless
 /// of their collision groups, solver hooks, or whether they are connected by a joint.
 ///

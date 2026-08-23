@@ -3,7 +3,6 @@ use dioxus_i18n::t;
 
 /// Gravity Models — Newton, spherical harmonics, ellipsoid, polyhedron, Lunar Mascon.
 pub fn Gravity() -> Element {
-    
     rsx! {
         section { id: "sec-gravity", class: "doc-section",
 
@@ -82,7 +81,7 @@ pub fn Gravity() -> Element {
                 } }
             }
         }
-    
+
         }
     }
 }

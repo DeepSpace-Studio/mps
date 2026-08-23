@@ -3,7 +3,6 @@ use dioxus_i18n::t;
 
 /// Formula Modules — 33 pure-Rust domain modules mapped to their category headings.
 pub fn Formula() -> Element {
-    
     rsx! {
         section { id: "sec-formula", class: "doc-section",
 
@@ -132,7 +131,7 @@ pub fn Formula() -> Element {
                 } }
             }
         }
-    
+
         }
     }
 }

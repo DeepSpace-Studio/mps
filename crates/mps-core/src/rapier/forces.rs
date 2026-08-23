@@ -40,7 +40,9 @@
 //! The report is collected automatically.
 
 use rapier3d::dynamics::force_containers::{ForceKind, Persistence};
-use rapier3d::prelude::{AngVector, ColliderSet, NarrowPhase, RigidBodyHandle, RigidBodySet, Vector};
+use rapier3d::prelude::{
+    AngVector, ColliderSet, NarrowPhase, RigidBodyHandle, RigidBodySet, Vector,
+};
 use smallvec::SmallVec;
 
 use crate::rapier::ffi::CustomPhysicsReport;
@@ -634,7 +636,9 @@ impl<'a> ForceFacade<'a> {
             return 0;
         }
         let id = body.add_thrust(0, force, torque, point, Persistence::Persistent, true);
-        self.log_entry(handle).forces.push((force_kind_to_law(source), force));
+        self.log_entry(handle)
+            .forces
+            .push((force_kind_to_law(source), force));
         id
     }
 
@@ -660,7 +664,9 @@ impl<'a> ForceFacade<'a> {
             return 0;
         }
         let id = body.emit_event_force(force, torque, point, source, true);
-        self.log_entry(handle).forces.push((force_kind_to_law(source), force));
+        self.log_entry(handle)
+            .forces
+            .push((force_kind_to_law(source), force));
         id
     }
 

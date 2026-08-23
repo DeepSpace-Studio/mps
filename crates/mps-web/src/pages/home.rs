@@ -3,7 +3,10 @@ use dioxus_i18n::{prelude::*, t};
 use unic_langid::langid;
 
 use crate::layouts::{Footer, Sidebar};
-use crate::metrics::{CELESTIAL_COUNT, FORMULA_MODULE_COUNT, GRAVITY_MODEL_COUNT, INTEGRATOR_COUNT, JNI_METHOD_COUNT, CORE_FFI_COUNT, TEST_COUNT};
+use crate::metrics::{
+    CELESTIAL_COUNT, CORE_FFI_COUNT, FORMULA_MODULE_COUNT, GRAVITY_MODEL_COUNT, INTEGRATOR_COUNT,
+    JNI_METHOD_COUNT, TEST_COUNT,
+};
 
 use crate::pages::api::Api;
 use crate::pages::architecture::Architecture;

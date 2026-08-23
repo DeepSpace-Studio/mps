@@ -6,7 +6,6 @@ use crate::metrics::{CORE_FFI_COUNT, JNI_METHOD_COUNT, VERSION};
 /// Java JNI Bindings — the 312-method `org.polaris2023.mps.rapier.RapierNative`
 /// surface exported by `mps-jni` via `jni!` / `jni_e_c!` macros.
 pub fn Jni() -> Element {
-    
     rsx! {
         section { id: "sec-jni", class: "doc-section",
 
@@ -163,7 +162,7 @@ db.put(linvelX); db.put(linvelY); db.put(linvelZ);"#
                 li { { t!("jni-deploy-version", version: VERSION) } }
             }
         }
-    
+
         }
     }
 }

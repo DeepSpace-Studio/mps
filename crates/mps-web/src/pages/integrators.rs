@@ -3,7 +3,6 @@ use dioxus_i18n::t;
 
 /// Symplectic Integrators — Leapfrog, Yoshida 4, Forest–Ruth 8, Kahan补偿, Post-Newtonian修正.
 pub fn Integrators() -> Element {
-    
     rsx! {
         section { id: "sec-integrators", class: "doc-section",
         div { class: "page-head",
@@ -85,7 +84,7 @@ pub fn Integrators() -> Element {
                 li { { t!("int-diag-kepler") } }
             }
         }
-    
+
         }
     }
 }
