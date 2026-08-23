@@ -27,7 +27,6 @@ pub mod formulas {
     }
 
     /// Plasma beta: β = 2μ₀·n·k·T / B²
-
     pub fn plasma_beta(density: f64, temperature: f64, magnetic_field: f64) -> Option<f64> {
         let mu0 = 1.25663706212e-6;
         let kb = 1.380649e-23;
@@ -44,7 +43,6 @@ pub mod formulas {
     }
 
     /// Cyclotron (gyro) frequency: ω_c = q·B / m
-
     pub fn gyrofrequency(charge: f64, magnetic_field: f64, mass: f64) -> Option<f64> {
         if !charge.is_finite()
             || !magnetic_field.is_finite()
@@ -58,7 +56,6 @@ pub mod formulas {
     }
 
     /// Larmor radius: r_L = m·v_⟂ / (|q|·B)
-
     pub fn larmor_radius(
         mass: f64,
         perpendicular_velocity: f64,
@@ -81,7 +78,6 @@ pub mod formulas {
 
     /// Ideal MHD wave speeds: slow, Alfven, fast
     /// Returns (v_slow, v_alfven, v_fast) in m/s.
-
     pub fn mhd_wave_speeds(
         sound_speed: f64,
         alfven_speed: f64,
@@ -107,7 +103,6 @@ pub mod formulas {
     }
 
     /// Tokamak safety factor (cylindrical approximation): q = (r·B_t) / (R·B_p)
-
     pub fn safety_factor(
         minor_radius: f64,
         toroidal_field: f64,
@@ -126,7 +121,6 @@ pub mod formulas {
     }
 
     /// Landau damping rate (simplified, Maxwellian plasma): γ_L/ω = -sqrt(π/8) · (ω/|k|v_th)³ · exp(-ω²/(2k²v_th²))
-
     pub fn landau_damping_rate(
         wave_frequency: f64,
         wavenumber: f64,
@@ -147,7 +141,6 @@ pub mod formulas {
     }
 
     /// Magnetic mirror ratio: R_m = B_max / B_min
-
     pub fn mirror_ratio(max_field: f64, min_field: f64) -> Option<f64> {
         if !max_field.is_finite() || max_field <= 0.0 || !min_field.is_finite() || min_field <= 0.0
         {
@@ -157,7 +150,6 @@ pub mod formulas {
     }
 
     /// Mirror loss cone angle: sin²(θ_lc) = B_min / B_max
-
     pub fn mirror_loss_cone_angle(max_field: f64, min_field: f64) -> Option<f64> {
         if !max_field.is_finite()
             || max_field <= 0.0

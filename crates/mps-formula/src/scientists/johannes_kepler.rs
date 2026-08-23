@@ -27,7 +27,6 @@ pub mod formulas {
     ///
     /// Returns (semi_major_axis, eccentricity, inclination, RAAN, arg_periapsis, true_anomaly)
     /// or zeros for invalid orbits.
-
     pub fn keplerian_elements(
         position: Vec3,
         velocity: Vec3,

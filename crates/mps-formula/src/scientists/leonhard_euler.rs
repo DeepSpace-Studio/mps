@@ -64,7 +64,6 @@ pub mod formulas {
     }
 
     /// Compute AABB-based fluid buoyancy and drag forces.
-
     pub fn compute_fluid_forces(
         fluid: FluidVolume,
         body_center: Vec3,
@@ -119,7 +118,6 @@ pub mod formulas {
     }
 
     /// Simplified Navier-Stokes step.
-
     pub fn navier_stokes_simplified_step(
         velocity: Vec3,
         advection: Vec3,
@@ -160,7 +158,6 @@ pub mod formulas {
     }
 
     /// SPH Poly6 kernel.
-
     pub fn sph_poly6_kernel(distance: f64, smoothing_radius: f64) -> f64 {
         if !finite_non_negative(distance) || !finite_positive(smoothing_radius) {
             return f64::NAN;
@@ -178,7 +175,6 @@ pub mod formulas {
     }
 
     /// SPH Spiky gradient.
-
     pub fn sph_spiky_gradient(offset: Vec3, smoothing_radius: f64) -> Option<Vec3> {
         if !vec3_finite(offset) || !finite_positive(smoothing_radius) {
             return None;
@@ -195,7 +191,6 @@ pub mod formulas {
     }
 
     /// SPH viscosity Laplacian.
-
     pub fn sph_viscosity_laplacian(distance: f64, smoothing_radius: f64) -> f64 {
         if !finite_non_negative(distance) || !finite_positive(smoothing_radius) {
             return f64::NAN;
@@ -207,7 +202,6 @@ pub mod formulas {
     }
 
     /// Estimate density at a position using SPH particles.
-
     pub fn sph_estimate_density(
         position: Vec3,
         particles: &[SphParticle],
@@ -235,7 +229,6 @@ pub mod formulas {
     }
 
     /// Estimate SPH forces on a particle from its neighbors.
-
     pub fn sph_estimate_forces(
         particle: SphParticle,
         particles: &[SphParticle],
@@ -342,7 +335,6 @@ pub mod formulas {
     }
 
     /// Blasius boundary layer thickness: δ ≈ 5.0 · x / Re_x^(1/2)
-
     pub fn blasius_thickness(x: f64, re_x: f64) -> Option<f64> {
         if !x.is_finite() || x <= 0.0 || !re_x.is_finite() || re_x <= 0.0 {
             return None;
@@ -351,7 +343,6 @@ pub mod formulas {
     }
 
     /// Blasius displacement thickness: δ* ≈ 1.7208 · x / Re_x^(1/2)
-
     pub fn blasius_displacement_thickness(x: f64, re_x: f64) -> Option<f64> {
         if !x.is_finite() || x <= 0.0 || !re_x.is_finite() || re_x <= 0.0 {
             return None;
@@ -360,7 +351,6 @@ pub mod formulas {
     }
 
     /// Blasius momentum thickness: θ ≈ 0.664 · x / Re_x^(1/2)
-
     pub fn blasius_momentum_thickness(x: f64, re_x: f64) -> Option<f64> {
         if !x.is_finite() || x <= 0.0 || !re_x.is_finite() || re_x <= 0.0 {
             return None;
@@ -369,7 +359,6 @@ pub mod formulas {
     }
 
     /// Flat plate skin friction coefficient (laminar): C_f = 0.664 / Re_x^(1/2)
-
     pub fn laminar_skin_friction(re_x: f64) -> Option<f64> {
         if !re_x.is_finite() || re_x <= 0.0 {
             return None;
@@ -378,7 +367,6 @@ pub mod formulas {
     }
 
     /// Flat plate skin friction coefficient (turbulent, 1/7th power law): C_f = 0.027 / Re_x^(1/7)
-
     pub fn turbulent_skin_friction(re_x: f64) -> Option<f64> {
         if !re_x.is_finite() || re_x <= 0.0 {
             return None;
@@ -387,7 +375,6 @@ pub mod formulas {
     }
 
     /// Euler critical buckling load: P_cr = π² · E · I / (K·L)²
-
     pub fn euler_buckling_load(
         youngs_modulus: f64,
         moment_of_inertia: f64,
@@ -412,7 +399,6 @@ pub mod formulas {
     }
 
     /// Slenderness ratio: λ = K·L / r (where r = sqrt(I/A) = radius of gyration)
-
     pub fn slenderness_ratio(
         effective_length_factor: f64,
         column_length: f64,

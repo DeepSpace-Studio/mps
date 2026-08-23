@@ -25,7 +25,6 @@ pub mod formulas {
     pub const REDUCED_PLANCK: f64 = 1.054_571_817e-34;
 
     /// Heisenberg uncertainty principle check: Delta_x * Delta_p >= hbar/2
-
     pub fn heisenberg_uncertainty_satisfied(delta_x: f64, delta_p: f64) -> Option<bool> {
         if !delta_x.is_finite() || delta_x < 0.0 || !delta_p.is_finite() || delta_p < 0.0 {
             return None;
@@ -34,7 +33,6 @@ pub mod formulas {
     }
 
     /// Minimum uncertainty product: hbar/2
-
     pub fn minimum_uncertainty_product() -> f64 {
         REDUCED_PLANCK / 2.0
     }

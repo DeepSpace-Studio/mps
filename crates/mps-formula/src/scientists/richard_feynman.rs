@@ -28,7 +28,6 @@ pub mod formulas {
     /// Given the perturbation matrix elements in the degenerate subspace:
     /// H'_11, H'_12, H'_21 (=H'_12 for Hermitian), H'_22
     /// Returns the two first-order energy corrections.
-
     pub fn degenerate_perturbation_2x2(h11: f64, h12: f64, h22: f64) -> Option<(f64, f64)> {
         if !h11.is_finite() || !h12.is_finite() || !h22.is_finite() {
             return None;
@@ -45,7 +44,6 @@ pub mod formulas {
 
     /// Born approximation — differential scattering cross-section for Yukawa potential.
     /// dσ/dΩ = (2m/ħ²)² · (A/(q²+μ²))²
-
     pub fn born_yukawa_cross_section(
         mass: f64,
         amplitude: f64,
@@ -74,7 +72,6 @@ pub mod formulas {
     /// Variational method — estimate ground state energy upper bound.
     /// E_var = ⟨ψ_α|H|ψ_α⟩ / ⟨ψ_α|ψ_α⟩
     /// For hydrogen with trial wavefunction exp(-αr): E(α) = ħ²α²/(2m) - ke²α
-
     pub fn variational_hydrogen_energy(alpha: f64) -> Option<f64> {
         let hbar = REDUCED_PLANCK;
         let mass_e = 9.109_383_701_5e-31;
@@ -89,7 +86,6 @@ pub mod formulas {
     }
 
     /// Optimal variational parameter for hydrogen: α_opt = m e² / (4π ε₀ ħ²) = 1/a₀
-
     pub fn variational_hydrogen_optimal_alpha() -> f64 {
         let hbar = REDUCED_PLANCK;
         let mass_e = 9.109_383_701_5e-31;
@@ -99,7 +95,6 @@ pub mod formulas {
     }
 
     /// Spin-orbit coupling energy for hydrogen-like atoms: E_SO = (Z·α)² · E_n / (2n) · [j(j+1)-l(l+1)-s(s+1)] / [l(l+1/2)(l+1)]
-
     pub fn spin_orbit_energy(n: f64, l: f64, j: f64, atomic_number: f64) -> Option<f64> {
         if !n.is_finite() || !l.is_finite() || !j.is_finite() || !atomic_number.is_finite() {
             return None;

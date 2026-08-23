@@ -23,13 +23,11 @@ pub const SCIENTIST: ScientistRecord = ScientistRecord {
 pub mod formulas {
 
     /// Bohr radius: a0 = 4*pi*eps0 * hbar^2 / (m_e * e^2)
-
     pub fn bohr_radius() -> f64 {
         5.29177210903e-11
     }
 
     /// Hydrogen energy levels (Bohr model): E_n = -13.6 eV / n^2
-
     pub fn hydrogen_energy_level(quantum_number: u32) -> Option<f64> {
         if quantum_number == 0 {
             return None;
@@ -38,7 +36,6 @@ pub mod formulas {
     }
 
     /// Hydrogen orbital radius (Bohr): r_n = n^2 * a0
-
     pub fn hydrogen_orbital_radius(quantum_number: u32) -> Option<f64> {
         if quantum_number == 0 {
             return None;
@@ -47,7 +44,6 @@ pub mod formulas {
     }
 
     /// Hydrogen transition wavelength: 1/lambda = R * (1/n1^2 - 1/n2^2) where R = 1.097e7
-
     pub fn hydrogen_transition_wavelength(n1: u32, n2: u32) -> Option<f64> {
         if n1 == 0 || n2 == 0 || n1 >= n2 {
             return None;

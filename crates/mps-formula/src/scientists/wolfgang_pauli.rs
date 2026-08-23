@@ -23,26 +23,22 @@ pub const SCIENTIST: ScientistRecord = ScientistRecord {
 pub mod formulas {
 
     /// Pauli sigma_x matrix-vector multiply.
-
     pub fn pauli_sigma_x(_spinor: (f64, f64)) -> ((f64, f64), (f64, f64)) {
         ((0.0, 1.0), (1.0, 0.0))
     }
 
     /// Pauli sigma_y matrix-vector multiply.
-
     pub fn pauli_sigma_y(spinor: (f64, f64)) -> ((f64, f64), (f64, f64)) {
         // ((0, -i), (i, 0))
         ((-spinor.1, spinor.0), (spinor.1, -spinor.0))
     }
 
     /// Pauli sigma_z matrix-vector multiply.
-
     pub fn pauli_sigma_z(spinor: (f64, f64)) -> (f64, f64) {
         (spinor.0, -spinor.1)
     }
 
     /// Spin expectation value in direction n from spinor.
-
     pub fn spin_expectation(spinor: (f64, f64)) -> (f64, f64, f64) {
         let (a, b) = spinor;
         let norm2 = a * a + b * b;

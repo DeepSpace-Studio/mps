@@ -35,7 +35,6 @@ pub mod formulas {
     }
 
     /// Bernoulli static pressure.
-
     pub fn bernoulli_pressure(
         total_pressure: f64,
         density: f64,
@@ -55,7 +54,6 @@ pub mod formulas {
     }
 
     /// Bernoulli report.
-
     pub fn bernoulli_report(
         pressure: f64,
         density: f64,
@@ -83,7 +81,6 @@ pub mod formulas {
     }
 
     /// Reynolds number: Re = rho * v * L / mu
-
     pub fn re_n(density: f64, velocity: f64, char_length: f64, viscosity: f64) -> Option<f64> {
         if !density.is_finite()
             || density < 0.0
@@ -100,7 +97,6 @@ pub mod formulas {
     }
 
     /// Flow regime based on Reynolds number: 0=laminar, 1=transition, 2=turbulent
-
     pub fn flow_regime(reynolds: f64) -> u8 {
         if reynolds < 2000.0 {
             0
@@ -113,7 +109,6 @@ pub mod formulas {
 
     /// Friction factor for pipe flow (Darcy-Weisbach).
     /// Laminar: f = 64/Re. Turbulent: Colebrook equation (iterative).
-
     pub fn darcy_friction_factor(reynolds: f64, relative_roughness: f64) -> Option<f64> {
         if !reynolds.is_finite()
             || reynolds <= 0.0
@@ -142,7 +137,6 @@ pub mod formulas {
     }
 
     /// Compute the force and torque produced by a single aerodynamic surface.
-
     pub fn compute_surface_force(
         surface: AeroSurface,
         body_linvel: Vec3,
@@ -195,7 +189,6 @@ pub mod formulas {
     }
 
     /// Estimate total surface force without modifying a body.
-
     pub fn estimate_surface_force(
         body_linvel: Vec3,
         body_angvel: Vec3,

@@ -33,7 +33,6 @@ pub mod formulas {
     /// where φ is the geocentric latitude (sin φ = z/r).
     ///
     /// Returns a vector `pnm` indexed as pnm[n*(n+1)/2 + m] for n=0..max_degree.
-
     pub fn normalized_legendre(sin_phi: f64, max_degree: u32) -> Vec<f64> {
         let n_max = max_degree as usize;
         let size = (n_max + 1) * (n_max + 2) / 2;

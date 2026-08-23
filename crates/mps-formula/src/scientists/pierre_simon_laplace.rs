@@ -31,7 +31,6 @@ pub mod formulas {
     pub const SPEED_OF_LIGHT: f64 = 299_792_458.0;
 
     /// Gravitational lensing Einstein radius for point mass.
-
     pub fn einstein_radius(
         mass_kg: f64,
         dist_lens: f64,
@@ -56,7 +55,6 @@ pub mod formulas {
 
     /// Hawking temperature of a Schwarzschild black hole:
     /// T = ħ·c³ / (8·π·G·M·k_B).
-
     pub fn hawking_temperature(mass: f64, g: f64) -> Option<f64> {
         if !mass.is_finite() || mass <= 0.0 || !g.is_finite() || g <= 0.0 {
             return None;
@@ -68,7 +66,6 @@ pub mod formulas {
     }
 
     /// Hubble-law recession velocity: v = H₀·d.
-
     pub fn hubble_recession_velocity(distance: f64, hubble_constant: f64) -> Option<f64> {
         if !distance.is_finite()
             || distance < 0.0
@@ -81,7 +78,6 @@ pub mod formulas {
     }
 
     /// Hubble-law luminosity distance from redshift (low-z): d = c·z / H₀.
-
     pub fn hubble_distance(redshift: f64, hubble_constant: f64) -> Option<f64> {
         if !redshift.is_finite()
             || redshift < 0.0
@@ -95,7 +91,6 @@ pub mod formulas {
 
     /// Flat matter-dominated universe lookback time:
     /// t_L = (2/3)·t_H·(1 − 1/√(1+z)), where t_H = 1/H₀ is the Hubble time.
-
     pub fn flat_universe_lookback_time(redshift: f64, hubble_time: f64) -> Option<f64> {
         if !redshift.is_finite() || redshift < 0.0 || !hubble_time.is_finite() || hubble_time <= 0.0
         {
@@ -115,7 +110,6 @@ pub mod formulas {
     /// Returns the comoving distance in Mpc.  Inputs are validated for
     /// finiteness and positivity; failures set `ERR_INVALID_ARGUMENT` and return
     /// `None`.
-
     pub fn friedmann_hubble_distance(hubble_constant: f64, redshift: f64) -> Option<f64> {
         if !finite_positive(hubble_constant) || !finite(redshift) || redshift < 0.0 {
             set_error(ERR_INVALID_ARGUMENT, "bad cosmology arguments");
@@ -133,7 +127,6 @@ pub mod formulas {
     /// approximation.  Useful for converting apparent magnitude to absolute
     /// magnitude at low redshift before the proper cosmological integral is
     /// needed.  Inputs in the same units as [`friedmann_hubble_distance`].
-
     pub fn luminosity_distance_hubble(hubble_constant: f64, redshift: f64) -> Option<f64> {
         let d_c = friedmann_hubble_distance(hubble_constant, redshift)?;
         Some((1.0 + redshift) * d_c)
@@ -142,7 +135,6 @@ pub mod formulas {
     /// Einstein-de Sitter (matter-only flat universe) cosmic age:
     /// `t0 = 2 / (3 · H0)`.
     /// `hubble_constant` in km/s/Mpc; returns age in gigayears (1 Gyr = 1e9 yr).
-
     pub fn einstein_de_sitter_age(hubble_constant: f64) -> Option<f64> {
         if !finite_positive(hubble_constant) {
             set_error(ERR_INVALID_ARGUMENT, "bad H0 for Einstein-de Sitter age");
@@ -156,7 +148,6 @@ pub mod formulas {
     /// Hubble flow recession velocity `v = H0 · D` for sub-luminal small-distance
     /// regime (`D < c / H0`).  Inputs: `hubble_constant` [km/s/Mpc],
     /// `distance_mpc` [Mpc]; returns `v` [km/s].
-
     pub fn hubble_flow_velocity(hubble_constant: f64, distance_mpc: f64) -> Option<f64> {
         if !finite_positive(hubble_constant) || !finite(distance_mpc) || distance_mpc < 0.0 {
             set_error(ERR_INVALID_ARGUMENT, "bad Hubble flow args");

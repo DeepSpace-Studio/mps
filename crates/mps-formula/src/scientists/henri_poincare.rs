@@ -24,7 +24,6 @@ pub mod formulas {
     pub const SPEED_OF_LIGHT: f64 = 299_792_458.0;
 
     /// Relativistic longitudinal Doppler shift.
-
     pub fn relativistic_doppler_longitudinal(
         source_frequency: f64,
         relative_velocity: f64,
@@ -49,7 +48,6 @@ pub mod formulas {
     }
 
     /// Relativistic transverse Doppler: f' = f/γ
-
     pub fn relativistic_doppler_transverse(
         source_frequency: f64,
         relative_velocity: f64,
@@ -68,7 +66,6 @@ pub mod formulas {
     }
 
     /// Relativistic total energy: E = γ·m·c².
-
     pub fn relativistic_total_energy(rest_mass: f64, lorentz_factor: f64) -> Option<f64> {
         if !rest_mass.is_finite()
             || rest_mass < 0.0
@@ -81,13 +78,11 @@ pub mod formulas {
     }
 
     /// Relativistic momentum magnitude: p = γ·m·v.
-
     pub fn relativistic_momentum(rest_mass: f64, speed: f64) -> Option<f64> {
         if !rest_mass.is_finite()
             || rest_mass < 0.0
             || !speed.is_finite()
-            || speed < 0.0
-            || speed >= SPEED_OF_LIGHT
+            || !(0.0..SPEED_OF_LIGHT).contains(&speed)
         {
             return None;
         }
@@ -97,7 +92,6 @@ pub mod formulas {
     }
 
     /// Energy–momentum relation (inverse of invariant mass): E = √(m²c⁴ + p²c²).
-
     pub fn relativistic_energy_from_momentum(rest_mass: f64, momentum: f64) -> Option<f64> {
         if !rest_mass.is_finite() || rest_mass < 0.0 || !momentum.is_finite() || momentum < 0.0 {
             return None;
@@ -107,7 +101,6 @@ pub mod formulas {
     }
 
     /// Relativistic aberration of light: cos θ' = (cos θ − β) / (1 − β·cos θ).
-
     pub fn relativistic_aberration(cos_theta: f64, beta: f64) -> Option<f64> {
         if !cos_theta.is_finite() || !beta.is_finite() || beta.abs() >= 1.0 {
             return None;
@@ -120,9 +113,8 @@ pub mod formulas {
     }
 
     /// Relativistic Doppler beaming (boost) factor: δ = 1 / [γ·(1 − β·cos θ)].
-
     pub fn relativistic_doppler_beaming_factor(beta: f64, cos_theta: f64) -> Option<f64> {
-        if !beta.is_finite() || beta < 0.0 || beta >= 1.0 || !cos_theta.is_finite() {
+        if !beta.is_finite() || !(0.0..1.0).contains(&beta) || !cos_theta.is_finite() {
             return None;
         }
         let gamma = 1.0 / (1.0 - beta * beta).sqrt();
@@ -134,7 +126,6 @@ pub mod formulas {
     }
 
     /// Gravitational redshift: z = 1 / sqrt(1 - R_s / r) - 1
-
     pub fn gravitational_redshift(mass: f64, radius: f64, g: f64) -> Option<f64> {
         let c = 299_792_458.0;
         if !mass.is_finite() || mass <= 0.0 || !radius.is_finite() || !g.is_finite() || g <= 0.0 {
@@ -148,7 +139,6 @@ pub mod formulas {
     }
 
     /// Cosmological redshift: z = 1/a - 1
-
     pub fn cosmological_redshift(scale_factor: f64) -> Option<f64> {
         if !scale_factor.is_finite() || scale_factor <= 0.0 {
             return None;
@@ -157,7 +147,6 @@ pub mod formulas {
     }
 
     /// Redshift from wavelengths: z = (λ_obs - λ_em) / λ_em
-
     pub fn redshift_from_wavelengths(observed: f64, emitted: f64) -> Option<f64> {
         if !observed.is_finite() || !emitted.is_finite() || emitted <= 0.0 {
             return None;

@@ -24,7 +24,6 @@ pub mod formulas {
 
     /// Specific activity: SA = λ · N_A / A  (Bq/g)
     /// where N_A is Avogadro's number and A is the atomic mass number
-
     pub fn specific_activity(decay_constant: f64, mass_number: f64) -> Option<f64> {
         if !decay_constant.is_finite()
             || decay_constant <= 0.0
@@ -38,7 +37,6 @@ pub mod formulas {
     }
 
     /// Gamma-ray attenuation (Beer–Lambert): I(x) = I₀ · exp(-μ · x)
-
     pub fn gamma_attenuation(
         initial_intensity: f64,
         linear_attenuation: f64,
@@ -57,7 +55,6 @@ pub mod formulas {
     }
 
     /// Half-value layer (HVL): thickness to reduce intensity by half: HVL = ln(2) / μ
-
     pub fn half_value_layer(linear_attenuation: f64) -> Option<f64> {
         if !linear_attenuation.is_finite() || linear_attenuation <= 0.0 {
             return None;

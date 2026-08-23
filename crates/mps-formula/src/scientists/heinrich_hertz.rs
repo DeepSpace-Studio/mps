@@ -41,7 +41,6 @@ pub mod formulas {
 
     /// Active sonar equation: SL - 2·TL + TS = NL - DI + DT
     /// Returns the received echo level (dB).
-
     pub fn active_sonar_echo_level(
         source_level: f64,
         transmission_loss: f64,
@@ -68,7 +67,6 @@ pub mod formulas {
 
     /// Passive sonar equation: SL - TL = NL - DI + DT
     /// Returns the signal excess (dB).
-
     pub fn passive_sonar_signal_excess(
         source_level: f64,
         transmission_loss: f64,
@@ -93,7 +91,6 @@ pub mod formulas {
     }
 
     /// Spherical spreading loss: TL = 20·log₁₀(r)
-
     pub fn spherical_spreading_loss(range: f64) -> Option<f64> {
         if !range.is_finite() || range <= 0.0 {
             return None;
@@ -102,7 +99,6 @@ pub mod formulas {
     }
 
     /// Cylindrical spreading loss: TL = 10·log₁₀(r)
-
     pub fn cylindrical_spreading_loss(range: f64) -> Option<f64> {
         if !range.is_finite() || range <= 0.0 {
             return None;
@@ -112,7 +108,6 @@ pub mod formulas {
 
     /// Thorp absorption coefficient (dB/km) for seawater.
     /// α = 0.11·f²/(1+f²) + 44·f²/(4100+f²) + 2.75e-4·f² + 0.003
-
     pub fn thorp_absorption(frequency_khz: f64) -> Option<f64> {
         if !frequency_khz.is_finite() || frequency_khz < 0.0 {
             return None;
@@ -127,7 +122,6 @@ pub mod formulas {
     }
 
     /// Sabine reverberation time: RT₆₀ = 0.161 · V / (S·ᾱ)
-
     pub fn sabine_rt60(volume: f64, surface_area: f64, mean_absorption: f64) -> Option<f64> {
         if !finite_3(volume, surface_area, mean_absorption)
             || volume <= 0.0
@@ -140,7 +134,6 @@ pub mod formulas {
     }
 
     /// Eyring reverberation time: RT₆₀ = 0.161 · V / (-S·ln(1-ᾱ))
-
     pub fn eyring_rt60(volume: f64, surface_area: f64, mean_absorption: f64) -> Option<f64> {
         if !finite_3(volume, surface_area, mean_absorption)
             || volume <= 0.0
@@ -154,7 +147,6 @@ pub mod formulas {
     }
 
     /// Characteristic impedance: Z = ρ·c
-
     pub fn acoustic_impedance(density: f64, sound_speed: f64) -> Option<f64> {
         if !density.is_finite() || density <= 0.0 || !sound_speed.is_finite() || sound_speed <= 0.0
         {
@@ -164,7 +156,6 @@ pub mod formulas {
     }
 
     /// Normal incidence transmission coefficient: τ = 4·Z₁·Z₂ / (Z₁+Z₂)²
-
     pub fn transmission_coefficient(z1: f64, z2: f64) -> Option<f64> {
         if !z1.is_finite() || z1 <= 0.0 || !z2.is_finite() || z2 <= 0.0 {
             return None;
@@ -173,7 +164,6 @@ pub mod formulas {
     }
 
     /// Mass law transmission loss: TL = 20·log₁₀(f·m) - 47 (dB)
-
     pub fn mass_law_tl(frequency: f64, surface_density: f64) -> Option<f64> {
         if !frequency.is_finite()
             || frequency <= 0.0
@@ -186,7 +176,6 @@ pub mod formulas {
     }
 
     /// Helmholtz resonator frequency: f = (c/(2π))·√(A/(V·L))
-
     pub fn helmholtz_resonance_frequency(
         sound_speed: f64,
         neck_area: f64,
@@ -208,7 +197,6 @@ pub mod formulas {
     }
 
     /// Doppler shift: f' = f · (c ± v_r) / (c ∓ v_s)
-
     pub fn doppler_shift(
         source_frequency: f64,
         sound_speed: f64,
@@ -245,7 +233,6 @@ pub mod formulas {
     }
 
     /// Barrier attenuation (Maekawa): ΔL = 5 + 20·log₁₀(√(2π·N)/tanh(√(2π·N)))
-
     pub fn maekawa_barrier_attenuation(fresnel_number: f64) -> Option<f64> {
         if !fresnel_number.is_finite() || fresnel_number < 0.0 {
             return None;

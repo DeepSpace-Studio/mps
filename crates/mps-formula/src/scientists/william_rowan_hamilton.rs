@@ -56,7 +56,6 @@ pub mod formulas {
     ///   2. r_{n+1}   = r_n + v_{n+1/2} · dt
     ///   3. a_{n+1}   = compute(r_{n+1})
     ///   4. v_{n+1}   = v_{n+1/2} + 0.5 · a_{n+1} · dt
-
     pub fn leapfrog_step(
         position: &mut Vec3,
         velocity: &mut Vec3,
@@ -89,7 +88,6 @@ pub mod formulas {
     ///   w₂ = 1 - 2w₁           ≈ -1.7024143839193153
     ///
     /// The negative w₂ step is a feature, not a bug — it cancels the 3rd-order error term.
-
     pub fn yoshida4_step(
         position: &mut Vec3,
         velocity: &mut Vec3,
@@ -118,7 +116,6 @@ pub mod formulas {
     /// - Yoshida, *Construction of higher order symplectic integrators*, PLA 150 (1990)
     /// - McLachlan, *On the numerical integration of ODEs by symmetric composition*,
     ///   Comp. Phys. Comm. 1995
-
     pub fn forest_ruth8_step(
         position: &mut Vec3,
         velocity: &mut Vec3,
@@ -137,7 +134,6 @@ pub mod formulas {
     /// Forest–Ruth 8 with Kahan compensation. 系数同 [`forest_ruth8_step`]
     /// （Yoshida 1990 Table I 8 阶对称组合，和 = 1），位置/速度累加改用 Kahan
     /// 补偿，进一步压低长弧舍入积累。
-
     pub fn forest_ruth8_step_kahan(
         position: &mut KahanVec3,
         velocity: &mut KahanVec3,

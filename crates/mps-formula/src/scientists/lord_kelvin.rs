@@ -26,7 +26,6 @@ pub mod formulas {
     }
 
     /// Prandtl number: Pr = cp * mu / k
-
     pub fn prandtl_number(cp: f64, viscosity: f64, conductivity: f64) -> Option<f64> {
         if !finite_4(cp, viscosity, conductivity, 0.0)
             || cp <= 0.0

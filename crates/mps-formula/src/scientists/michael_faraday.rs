@@ -24,7 +24,6 @@ pub mod formulas {
 
     /// Faraday rotation angle: θ = V · B · L
     /// V = Verdet constant (rad/(T·m)), B = magnetic field along path (T), L = path length (m)
-
     pub fn faraday_rotation(
         verdet_constant: f64,
         magnetic_field: f64,

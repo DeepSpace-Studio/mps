@@ -27,7 +27,6 @@ pub mod formulas {
     }
 
     /// KH instability growth rate for two inviscid fluids with velocity shear.
-
     pub fn kelvin_helmholtz_growth_rate(
         k: f64,
         rho1: f64,
@@ -43,7 +42,6 @@ pub mod formulas {
     }
 
     /// RT instability growth rate: ω = sqrt(At · g · k)
-
     pub fn rayleigh_taylor_growth_rate(atuood_number: f64, gravity: f64, k: f64) -> Option<f64> {
         if !atuood_number.is_finite()
             || atuood_number < 0.0
@@ -58,7 +56,6 @@ pub mod formulas {
     }
 
     /// Atwood number: At = (ρ₂ - ρ₁)/(ρ₂ + ρ₁)
-
     pub fn atwood_number(density_heavy: f64, density_light: f64) -> Option<f64> {
         if !density_heavy.is_finite()
             || density_heavy < 0.0
@@ -75,7 +72,6 @@ pub mod formulas {
     }
 
     /// Minor loss pressure drop: ΔP = K · ½ρV²
-
     pub fn minor_loss_pressure_drop(
         loss_coefficient: f64,
         density: f64,
@@ -94,7 +90,6 @@ pub mod formulas {
     }
 
     /// Joukowsky pressure surge: ΔP = ρ · c · ΔV
-
     pub fn water_hammer_pressure_surge(
         density: f64,
         wave_speed: f64,

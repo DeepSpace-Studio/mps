@@ -34,7 +34,6 @@ pub mod formulas {
 
     /// Kerr metric horizon radii.
     /// Returns (r_outer, r_inner) where r = GM/c^2 +- sqrt((GM/c^2)^2 - a^2)
-
     pub fn kerr_horizon_radii(mass: f64, spin_parameter: f64, g: f64) -> Option<(f64, f64)> {
         let c = 299_792_458.0;
         if !mass.is_finite()
@@ -55,7 +54,6 @@ pub mod formulas {
     }
 
     /// Kerr ergosphere radius (outer): r_E = m + sqrt(m^2 - a^2 * cos^2(theta))
-
     pub fn kerr_ergosphere_radius(
         mass: f64,
         spin_parameter: f64,
@@ -83,7 +81,6 @@ pub mod formulas {
 
     /// Frame-dragging angular velocity at radius r (the Lense-Thirring effect):
     /// omega = 2 * m * a * r / Sigma^2  where Sigma = r^2 + a^2 * cos^2(theta)
-
     pub fn kerr_frame_dragging_frequency(
         mass: f64,
         spin_parameter: f64,
@@ -111,7 +108,6 @@ pub mod formulas {
     }
 
     /// Innermost Stable Circular Orbit (ISCO) for Schwarzschild: 6 M (3 R_s)
-
     pub fn schwarzschild_isco(mass: f64, g: f64) -> Option<f64> {
         let c = 299_792_458.0;
         if !mass.is_finite() || mass <= 0.0 || !g.is_finite() || g <= 0.0 {
@@ -124,7 +120,6 @@ pub mod formulas {
     /// r_isco(prograde) = M * (3 + Z2 - sqrt((3 - Z1)(3 + Z1 + 2*Z2)))
     /// where Z1 = 1 + (1 - a^2)^(1/3) * ((1+a)^(1/3) + (1-a)^(1/3))
     /// Z2 = sqrt(3*a^2 + Z1^2)
-
     pub fn kerr_isco(mass: f64, spin_parameter: f64, g: f64, prograde: bool) -> Option<f64> {
         let c = 299_792_458.0;
         if !mass.is_finite()
@@ -156,7 +151,6 @@ pub mod formulas {
     }
 
     /// Gravitational redshift: z = 1 / sqrt(1 - R_s / r) - 1
-
     pub fn gravitational_redshift(mass: f64, radius: f64, g: f64) -> Option<f64> {
         let c = 299_792_458.0;
         if !mass.is_finite() || mass <= 0.0 || !radius.is_finite() || !g.is_finite() || g <= 0.0 {
@@ -170,7 +164,6 @@ pub mod formulas {
     }
 
     /// Reissner-Nordstrom horizon radii: r = m +- sqrt(m^2 - Q^2)
-
     pub fn reissner_nordstrom_horizons(mass: f64, charge: f64, g: f64) -> Option<(f64, f64)> {
         let c = 299_792_458.0;
         let k = 8.9875517923e9;
@@ -195,7 +188,6 @@ pub mod formulas {
 
     /// Characteristic GW strain amplitude from compact binary.
     /// h = (4/d) · (G M_c / c²)^(5/3) · (πf)^(2/3)
-
     pub fn gw_strain_amplitude(
         distance: f64,
         chirp_mass_kg: f64,
@@ -218,7 +210,6 @@ pub mod formulas {
     }
 
     /// Chirp mass: M_c = (m₁·m₂)^(3/5) / (m₁+m₂)^(1/5)
-
     pub fn chirp_mass(mass1: f64, mass2: f64) -> Option<f64> {
         if !mass1.is_finite() || mass1 <= 0.0 || !mass2.is_finite() || mass2 <= 0.0 {
             return None;
@@ -227,7 +218,6 @@ pub mod formulas {
     }
 
     /// GW frequency evolution: df/dt ∝ f^(11/3)
-
     pub fn gw_frequency_derivative(frequency: f64, chirp_mass_kg: f64) -> Option<f64> {
         let g = 6.67430e-11;
         let c = 299_792_458.0;
@@ -248,7 +238,6 @@ pub mod formulas {
     }
 
     /// Relativistic longitudinal Doppler shift.
-
     pub fn relativistic_doppler_longitudinal(
         source_frequency: f64,
         relative_velocity: f64,
@@ -273,7 +262,6 @@ pub mod formulas {
     }
 
     /// Relativistic transverse Doppler: f' = f/γ
-
     pub fn relativistic_doppler_transverse(
         source_frequency: f64,
         relative_velocity: f64,
@@ -292,7 +280,6 @@ pub mod formulas {
     }
 
     /// Gravitational lensing Einstein radius for point mass.
-
     pub fn einstein_radius(
         mass_kg: f64,
         dist_lens: f64,
@@ -316,7 +303,6 @@ pub mod formulas {
     }
 
     /// Cosmological redshift: z = 1/a - 1
-
     pub fn cosmological_redshift(scale_factor: f64) -> Option<f64> {
         if !scale_factor.is_finite() || scale_factor <= 0.0 {
             return None;
@@ -325,7 +311,6 @@ pub mod formulas {
     }
 
     /// Redshift from wavelengths: z = (λ_obs - λ_em) / λ_em
-
     pub fn redshift_from_wavelengths(observed: f64, emitted: f64) -> Option<f64> {
         if !observed.is_finite() || !emitted.is_finite() || emitted <= 0.0 {
             return None;
@@ -334,7 +319,6 @@ pub mod formulas {
     }
 
     /// Lense-Thirring frame dragging angular frequency at polar orbit.
-
     pub fn lense_thirring_angular_frequency(
         mass_kg: f64,
         spin_parameter: f64,
@@ -355,7 +339,6 @@ pub mod formulas {
     }
 
     /// Schwarzschild effective potential: V_eff = (1 - r_s/r)(1 + L²/r²)
-
     pub fn schwarzschild_effective_potential(
         r: f64,
         rs: f64,
@@ -393,7 +376,6 @@ pub mod formulas {
     /// shaped PSD curve, not a single number; this is a compact closed-form
     /// estimate that generalises naturally when integrated against an actual
     /// PSD curve later (see PHYSICS_EXPANSION_PLAN.md W6 follow-up).
-
     pub fn gw_inspiral_snr(strain_rss: f64, f_min: f64, f_max: f64, noise_psd: f64) -> Option<f64> {
         if !finite_positive(strain_rss)
             || !finite_positive(f_min)
@@ -427,7 +409,6 @@ pub mod formulas {
     ///
     /// Returns seconds until coalescence.  For reference, a 1.4 Msun + 1.4 Msun
     /// binary at f_gw = 100 Hz has t_c ≈ 2.2 s.
-
     pub fn gw_inspiral_time_to_coalescence(chirp_mass_kg: f64, f_gw_hz: f64) -> Option<f64> {
         const G: f64 = 6.67430e-11;
         if !finite_positive(chirp_mass_kg) || !finite_positive(f_gw_hz) {
@@ -444,7 +425,6 @@ pub mod formulas {
     }
 
     /// Relativistic total energy: E = γ·m·c².
-
     pub fn relativistic_total_energy(rest_mass: f64, lorentz_factor: f64) -> Option<f64> {
         if !rest_mass.is_finite()
             || rest_mass < 0.0
@@ -457,13 +437,11 @@ pub mod formulas {
     }
 
     /// Relativistic momentum magnitude: p = γ·m·v.
-
     pub fn relativistic_momentum(rest_mass: f64, speed: f64) -> Option<f64> {
         if !rest_mass.is_finite()
             || rest_mass < 0.0
             || !speed.is_finite()
-            || speed < 0.0
-            || speed >= SPEED_OF_LIGHT
+            || !(0.0..SPEED_OF_LIGHT).contains(&speed)
         {
             return None;
         }
@@ -473,7 +451,6 @@ pub mod formulas {
     }
 
     /// Energy–momentum relation (inverse of invariant mass): E = √(m²c⁴ + p²c²).
-
     pub fn relativistic_energy_from_momentum(rest_mass: f64, momentum: f64) -> Option<f64> {
         if !rest_mass.is_finite() || rest_mass < 0.0 || !momentum.is_finite() || momentum < 0.0 {
             return None;
@@ -483,7 +460,6 @@ pub mod formulas {
     }
 
     /// Relativistic aberration of light: cos θ' = (cos θ − β) / (1 − β·cos θ).
-
     pub fn relativistic_aberration(cos_theta: f64, beta: f64) -> Option<f64> {
         if !cos_theta.is_finite() || !beta.is_finite() || beta.abs() >= 1.0 {
             return None;
@@ -496,9 +472,8 @@ pub mod formulas {
     }
 
     /// Relativistic Doppler beaming (boost) factor: δ = 1 / [γ·(1 − β·cos θ)].
-
     pub fn relativistic_doppler_beaming_factor(beta: f64, cos_theta: f64) -> Option<f64> {
-        if !beta.is_finite() || beta < 0.0 || beta >= 1.0 || !cos_theta.is_finite() {
+        if !beta.is_finite() || !(0.0..1.0).contains(&beta) || !cos_theta.is_finite() {
             return None;
         }
         let gamma = 1.0 / (1.0 - beta * beta).sqrt();
@@ -510,7 +485,6 @@ pub mod formulas {
     }
 
     /// Photon-sphere radius (Schwarzschild): r_ph = 1.5·r_s = 3·G·M/c².
-
     pub fn photon_sphere_radius(mass: f64, g: f64) -> Option<f64> {
         if !mass.is_finite() || mass <= 0.0 || !g.is_finite() || g <= 0.0 {
             return None;
@@ -520,7 +494,6 @@ pub mod formulas {
 
     /// Hawking temperature of a Schwarzschild black hole:
     /// T = ħ·c³ / (8·π·G·M·k_B).
-
     pub fn hawking_temperature(mass: f64, g: f64) -> Option<f64> {
         if !mass.is_finite() || mass <= 0.0 || !g.is_finite() || g <= 0.0 {
             return None;
@@ -532,7 +505,6 @@ pub mod formulas {
     }
 
     /// Hubble-law recession velocity: v = H₀·d.
-
     pub fn hubble_recession_velocity(distance: f64, hubble_constant: f64) -> Option<f64> {
         if !distance.is_finite()
             || distance < 0.0
@@ -545,7 +517,6 @@ pub mod formulas {
     }
 
     /// Hubble-law luminosity distance from redshift (low-z): d = c·z / H₀.
-
     pub fn hubble_distance(redshift: f64, hubble_constant: f64) -> Option<f64> {
         if !redshift.is_finite()
             || redshift < 0.0
@@ -559,7 +530,6 @@ pub mod formulas {
 
     /// Flat matter-dominated universe lookback time:
     /// t_L = (2/3)·t_H·(1 − 1/√(1+z)), where t_H = 1/H₀ is the Hubble time.
-
     pub fn flat_universe_lookback_time(redshift: f64, hubble_time: f64) -> Option<f64> {
         if !redshift.is_finite() || redshift < 0.0 || !hubble_time.is_finite() || hubble_time <= 0.0
         {
@@ -579,7 +549,6 @@ pub mod formulas {
     /// Returns the comoving distance in Mpc.  Inputs are validated for
     /// finiteness and positivity; failures set `ERR_INVALID_ARGUMENT` and return
     /// `None`.
-
     pub fn friedmann_hubble_distance(hubble_constant: f64, redshift: f64) -> Option<f64> {
         if !finite_positive(hubble_constant) || !finite(redshift) || redshift < 0.0 {
             set_error(ERR_INVALID_ARGUMENT, "bad cosmology arguments");
@@ -597,7 +566,6 @@ pub mod formulas {
     /// approximation.  Useful for converting apparent magnitude to absolute
     /// magnitude at low redshift before the proper cosmological integral is
     /// needed.  Inputs in the same units as [`friedmann_hubble_distance`].
-
     pub fn luminosity_distance_hubble(hubble_constant: f64, redshift: f64) -> Option<f64> {
         let d_c = friedmann_hubble_distance(hubble_constant, redshift)?;
         Some((1.0 + redshift) * d_c)
@@ -606,7 +574,6 @@ pub mod formulas {
     /// Einstein-de Sitter (matter-only flat universe) cosmic age:
     /// `t0 = 2 / (3 · H0)`.
     /// `hubble_constant` in km/s/Mpc; returns age in gigayears (1 Gyr = 1e9 yr).
-
     pub fn einstein_de_sitter_age(hubble_constant: f64) -> Option<f64> {
         if !finite_positive(hubble_constant) {
             set_error(ERR_INVALID_ARGUMENT, "bad H0 for Einstein-de Sitter age");
@@ -620,7 +587,6 @@ pub mod formulas {
     /// Hubble flow recession velocity `v = H0 · D` for sub-luminal small-distance
     /// regime (`D < c / H0`).  Inputs: `hubble_constant` [km/s/Mpc],
     /// `distance_mpc` [Mpc]; returns `v` [km/s].
-
     pub fn hubble_flow_velocity(hubble_constant: f64, distance_mpc: f64) -> Option<f64> {
         if !finite_positive(hubble_constant) || !finite(distance_mpc) || distance_mpc < 0.0 {
             set_error(ERR_INVALID_ARGUMENT, "bad Hubble flow args");

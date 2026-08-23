@@ -31,7 +31,6 @@ pub mod formulas {
     pub use crate::scientists::other::formulas::de_broglie_wavelength;
 
     /// Compton wavelength shift: Δλ = (h / m_e c)·(1 − cos θ).
-
     pub fn compton_wavelength_shift(scattering_angle: f64) -> Option<f64> {
         if !scattering_angle.is_finite() {
             return None;
@@ -41,7 +40,6 @@ pub mod formulas {
     }
 
     /// Compton scattered wavelength: λ' = λ + Δλ.
-
     pub fn compton_scattered_wavelength(lambda: f64, scattering_angle: f64) -> Option<f64> {
         if !lambda.is_finite() || lambda < 0.0 || !scattering_angle.is_finite() {
             return None;
@@ -53,7 +51,6 @@ pub mod formulas {
     /// Two-level Rabi oscillation excitation probability:
     /// P = [Ω² / (Ω² + δ²)] · sin²(½·√(Ω² + δ²)·t)
     /// where Ω is the (generalized) Rabi frequency and δ the detuning.
-
     pub fn rabi_oscillation_probability(
         rabi_frequency: f64,
         detuning: f64,
@@ -80,7 +77,6 @@ pub mod formulas {
     /// Returns 1.0 when (j1, j2, j3, m1, m2, m3) satisfy both the triangle
     /// inequality |j1−j2| ≤ j3 ≤ j1+j2 and the projection sum m1+m2 = m3;
     /// otherwise 0.0. (This is the *selection rule*, not the full CG coefficient.)
-
     pub fn clebsch_gordan_allowed(
         j1: f64,
         j2: f64,

@@ -31,7 +31,6 @@ pub mod formulas {
     ///
     /// The PID gains `kI`, `kP`, `kD` are pre-tuned for orbital mechanics:
     ///   kI = 0.3/order, kP = 0.6/order, kD = 0.0/order
-
     pub fn adaptive_step_size(dt: f64, err: f64, tolerance: f64, order: u32) -> f64 {
         if err <= 0.0 || tolerance <= 0.0 {
             return dt;
@@ -54,13 +53,11 @@ pub mod formulas {
     /// Check if the current step size is adequate for the error tolerance.
     ///
     /// Returns `true` if the step should be accepted.
-
     pub fn step_accepted(err: f64, tolerance: f64) -> bool {
         err <= tolerance
     }
 
     /// Evaluate Carlson's symmetric elliptic integral R_F(x, y, z).
-
     pub fn carlson_rf(x: f64, y: f64, z: f64) -> f64 {
         let mut x = x;
         let mut y = y;
@@ -84,7 +81,6 @@ pub mod formulas {
     }
 
     /// Evaluate Carlson's symmetric elliptic integral R_D(x, y, z).
-
     pub fn carlson_rd(x: f64, y: f64, z: f64) -> f64 {
         let mut x = x;
         let mut y = y;

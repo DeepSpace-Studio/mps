@@ -27,7 +27,6 @@ pub mod formulas {
     pub const REDUCED_PLANCK: f64 = 1.054_571_817e-34;
 
     /// Landau energy level (non-relativistic, spinless): E_n = (n + ½)·(q·B/m)·ħ
-
     pub fn landau_level(
         quantum_number: i32,
         magnetic_field: f64,
@@ -48,7 +47,6 @@ pub mod formulas {
 
     /// Einstein A (spontaneous emission) coefficient for an electric-dipole
     /// transition: A = ω³·|d|² / (3·π·ε₀·ħ·c³), with ω = 2π·f.
-
     pub fn einstein_a_coefficient(transition_frequency: f64, dipole_moment: f64) -> Option<f64> {
         if !transition_frequency.is_finite()
             || transition_frequency < 0.0
@@ -65,7 +63,6 @@ pub mod formulas {
     }
 
     /// Fine structure constant: α ≈ 1/137.036
-
     pub fn fine_structure_constant() -> f64 {
         1.0 / 137.035_999_084
     }

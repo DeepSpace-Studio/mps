@@ -30,7 +30,6 @@ pub mod formulas {
     }
 
     /// Newton's law of cooling: Q = h * A * (T_surface - T_fluid)
-
     pub fn convective_heat_flux(h: f64, area: f64, t_surface: f64, t_fluid: f64) -> Option<f64> {
         if !finite_4(h, area, t_surface, t_fluid) || h < 0.0 || area < 0.0 {
             return None;
@@ -39,7 +38,6 @@ pub mod formulas {
     }
 
     /// Nusselt number (Dittus-Boelter): Nu = 0.023 * Re^0.8 * Pr^n
-
     pub fn dittus_boelter_nusselt(reynolds: f64, prandtl: f64, heating: bool) -> Option<f64> {
         if !reynolds.is_finite() || reynolds < 0.0 || !prandtl.is_finite() || prandtl < 0.0 {
             return None;
@@ -52,7 +50,6 @@ pub mod formulas {
     }
 
     /// Prandtl number: Pr = cp * mu / k
-
     pub fn prandtl_number(cp: f64, viscosity: f64, conductivity: f64) -> Option<f64> {
         if !finite_4(cp, viscosity, conductivity, 0.0)
             || cp <= 0.0
@@ -65,7 +62,6 @@ pub mod formulas {
     }
 
     /// Heat transfer coefficient from Nusselt: h = Nu * k / L
-
     pub fn htc_from_nusselt(nusselt: f64, conductivity: f64, char_length: f64) -> Option<f64> {
         if !finite_4(nusselt, conductivity, char_length, 0.0)
             || nusselt < 0.0
@@ -78,7 +74,6 @@ pub mod formulas {
     }
 
     /// Log-mean temperature difference for counter-flow heat exchanger.
-
     pub fn lmtd_counter_flow(
         t_hot_in: f64,
         t_hot_out: f64,
@@ -100,7 +95,6 @@ pub mod formulas {
     }
 
     /// Log-mean temperature difference for parallel-flow heat exchanger.
-
     pub fn lmtd_parallel_flow(
         t_hot_in: f64,
         t_hot_out: f64,
@@ -119,7 +113,6 @@ pub mod formulas {
     }
 
     /// NTU-epsilon effectiveness for counter-flow heat exchanger.
-
     pub fn ntu_epsilon_counter_flow(ntu: f64, c_r: f64) -> Option<f64> {
         if !finite_5(ntu, c_r, 0.0, 0.0, 0.0) || ntu < 0.0 || c_r < 0.0 {
             return None;
@@ -134,7 +127,6 @@ pub mod formulas {
     }
 
     /// Number of transfer units: NTU = UA / C_min
-
     pub fn ntu(overall_htc: f64, area: f64, c_min: f64) -> Option<f64> {
         if !finite_5(overall_htc, area, c_min, 0.0, 0.0)
             || overall_htc <= 0.0
@@ -147,7 +139,6 @@ pub mod formulas {
     }
 
     /// Heat capacity rate: C = m_dot * cp
-
     pub fn heat_capacity_rate(mass_flow: f64, specific_heat: f64) -> Option<f64> {
         if !finite_5(mass_flow, specific_heat, 0.0, 0.0, 0.0)
             || mass_flow <= 0.0
@@ -160,7 +151,6 @@ pub mod formulas {
 
     /// View factor for two parallel coaxial disks.
     /// R1 = r1/d, R2 = r2/d where d is the separation distance.
-
     pub fn view_factor_coaxial_disks(radius_ratio_1: f64, radius_ratio_2: f64) -> Option<f64> {
         if !finite_5(radius_ratio_1, radius_ratio_2, 0.0, 0.0, 0.0)
             || radius_ratio_1 < 0.0
@@ -174,7 +164,6 @@ pub mod formulas {
 
     /// View factor for two parallel, equal rectangles.
     /// X = a/d, Y = b/d where a, b are side lengths and d is the separation.
-
     pub fn view_factor_parallel_rectangles(x: f64, y: f64) -> Option<f64> {
         if !finite_5(x, y, 0.0, 0.0, 0.0) || x <= 0.0 || y <= 0.0 {
             return None;
@@ -191,7 +180,6 @@ pub mod formulas {
 
     /// Second virial coefficient for Lennard-Jones gas (simplified).
     /// B(T) = b₀ - a₀/RT, where b₀ = 2πN_A σ³/3, a₀ = 2πN_A² ε σ³
-
     pub fn virial_second_coefficient(temperature: f64, sigma: f64, epsilon: f64) -> Option<f64> {
         if !finite_5(temperature, sigma, epsilon, 0.0, 0.0)
             || temperature <= 0.0
@@ -208,7 +196,6 @@ pub mod formulas {
     }
 
     /// Quality (vapor mass fraction): x = m_vapor / (m_vapor + m_liquid)
-
     pub fn quality(vapor_mass: f64, liquid_mass: f64) -> Option<f64> {
         if !finite_5(vapor_mass, liquid_mass, 0.0, 0.0, 0.0)
             || vapor_mass < 0.0
@@ -224,7 +211,6 @@ pub mod formulas {
     }
 
     /// Homogeneous void fraction: α = 1 / (1 + (1-x)/x * ρ_v/ρ_l)
-
     pub fn homogeneous_void_fraction(quality: f64, rho_vapor: f64, rho_liquid: f64) -> Option<f64> {
         if !finite_5(quality, rho_vapor, rho_liquid, 0.0, 0.0)
             || !(0.0..=1.0).contains(&quality)

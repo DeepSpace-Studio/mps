@@ -26,7 +26,6 @@ pub mod formulas {
     }
 
     /// Clausius-Clapeyron: ln(P2/P1) = -(L/R) * (1/T2 - 1/T1)
-
     pub fn clausius_clapeyron_pressure(p1: f64, t1: f64, t2: f64, latent_heat: f64) -> Option<f64> {
         if !finite_4(p1, t1, t2, latent_heat)
             || p1 <= 0.0

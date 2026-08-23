@@ -26,7 +26,6 @@ pub mod formulas {
     pub const REDUCED_PLANCK: f64 = 1.054_571_817e-34;
 
     /// Fermi's golden rule — transition rate: Γ_fi = 2π/ħ · |⟨f|H'|i⟩|² · ρ(E_f)
-
     pub fn fermi_golden_rule_linear(matrix_element2: f64, density_of_states: f64) -> Option<f64> {
         let hbar = REDUCED_PLANCK;
         if !matrix_element2.is_finite()
@@ -40,7 +39,6 @@ pub mod formulas {
     }
 
     /// Fermi's golden rule — emission rate into continuum (single mode).
-
     pub fn fermi_golden_rule_cavity(
         coupling_strength: f64,
         cavity_linewidth: f64,
@@ -61,7 +59,6 @@ pub mod formulas {
     }
 
     /// Decay constant from half-life: λ = ln(2) / T½
-
     pub fn decay_constant(half_life: f64) -> Option<f64> {
         if !half_life.is_finite() || half_life <= 0.0 {
             return None;
@@ -70,7 +67,6 @@ pub mod formulas {
     }
 
     /// Remaining undecayed nuclei after time t: N(t) = N₀ · exp(-λt)
-
     pub fn remaining_nuclei(initial: f64, decay_constant: f64, time: f64) -> Option<f64> {
         if !initial.is_finite()
             || initial < 0.0
@@ -85,7 +81,6 @@ pub mod formulas {
     }
 
     /// Activity at time t: A(t) = λ · N(t)
-
     pub fn activity(decay_constant: f64, nuclei: f64) -> Option<f64> {
         if !decay_constant.is_finite()
             || decay_constant < 0.0
@@ -98,7 +93,6 @@ pub mod formulas {
     }
 
     /// Half-life from decay constant: T½ = ln(2) / λ
-
     pub fn half_life(decay_constant: f64) -> Option<f64> {
         if !decay_constant.is_finite() || decay_constant <= 0.0 {
             return None;
@@ -107,7 +101,6 @@ pub mod formulas {
     }
 
     /// Mean lifetime: τ = 1 / λ
-
     pub fn mean_lifetime(decay_constant: f64) -> Option<f64> {
         if !decay_constant.is_finite() || decay_constant <= 0.0 {
             return None;
@@ -119,7 +112,6 @@ pub mod formulas {
     ///
     /// B(A, Z) = a_v·A - a_s·A^(2/3) - a_c·Z²/A^(1/3) - a_a·(A-2Z)²/A + δ(A, Z)
     /// where δ = +a_p·A^(-1/2) for even-even, 0 for even-odd, -a_p·A^(-1/2) for odd-odd
-
     pub fn bethe_weizsaecker_binding_energy(mass_number: f64, atomic_number: f64) -> Option<f64> {
         if !mass_number.is_finite()
             || !atomic_number.is_finite()
@@ -154,7 +146,6 @@ pub mod formulas {
     }
 
     /// Binding energy per nucleon: B/A
-
     pub fn binding_energy_per_nucleon(mass_number: f64, atomic_number: f64) -> Option<f64> {
         let binding = bethe_weizsaecker_binding_energy(mass_number, atomic_number)?;
         Some(binding / mass_number)
@@ -165,7 +156,6 @@ pub mod formulas {
     /// N_n(t) = N₁(0) · Σ_{i=1}^{n} ( Π_{j=1}^{n-1} λ_j / Π_{j≠i, j=1}^{n} (λ_j - λ_i) ) · exp(-λ_i · t)
     ///
     /// Returns the abundance of the n-th nuclide at time t.
-
     pub fn bateman_abundance(
         parent_initial: f64,
         decay_constants: &[f64],
@@ -209,7 +199,6 @@ pub mod formulas {
 
     /// Neutron diffusion equation — simplified one-group flux in a sphere.
     /// φ(r) = S / (4π·D·R) · sin(B·r) / r  for critical reactor with buckling B²
-
     pub fn neutron_flux_sphere(
         radius: f64,
         diffusion_coefficient: f64,
@@ -238,7 +227,6 @@ pub mod formulas {
     /// Four-factor formula for thermal reactor criticality:
     /// k_eff = η · ε · p · f
     /// where η = neutrons per fission, ε = fast fission factor, p = resonance escape, f = thermal utilization
-
     pub fn four_factor_formula(eta: f64, epsilon: f64, p: f64, f: f64) -> Option<f64> {
         if !eta.is_finite()
             || eta <= 0.0
@@ -255,7 +243,6 @@ pub mod formulas {
     }
 
     /// Macroscopic cross-section: Σ = N · σ
-
     pub fn macroscopic_cross_section(
         number_density: f64,
         microscopic_cross_section: f64,
@@ -271,7 +258,6 @@ pub mod formulas {
     }
 
     /// Reaction rate: R = Σ · φ (reactions per unit volume per second)
-
     pub fn reaction_rate(macroscopic_cross_section: f64, neutron_flux: f64) -> Option<f64> {
         if !macroscopic_cross_section.is_finite()
             || macroscopic_cross_section < 0.0
@@ -285,7 +271,6 @@ pub mod formulas {
 
     /// Specific activity: SA = λ · N_A / A  (Bq/g)
     /// where N_A is Avogadro's number and A is the atomic mass number
-
     pub fn specific_activity(decay_constant: f64, mass_number: f64) -> Option<f64> {
         if !decay_constant.is_finite()
             || decay_constant <= 0.0
@@ -299,7 +284,6 @@ pub mod formulas {
     }
 
     /// Gamma-ray attenuation (Beer–Lambert): I(x) = I₀ · exp(-μ · x)
-
     pub fn gamma_attenuation(
         initial_intensity: f64,
         linear_attenuation: f64,
@@ -318,7 +302,6 @@ pub mod formulas {
     }
 
     /// Half-value layer (HVL): thickness to reduce intensity by half: HVL = ln(2) / μ
-
     pub fn half_value_layer(linear_attenuation: f64) -> Option<f64> {
         if !linear_attenuation.is_finite() || linear_attenuation <= 0.0 {
             return None;
@@ -327,7 +310,6 @@ pub mod formulas {
     }
 
     /// Q-value for D-T fusion from mass defect (exact)
-
     pub fn dt_fusion_q_value() -> f64 {
         // D (2.014102 u) + T (3.016049 u) → He-4 (4.002603 u) + n (1.008665 u)
         // Δm = 2.014102 + 3.016049 - 4.002603 - 1.008665 = 0.018883 u

@@ -1595,11 +1595,13 @@ fn tidal_torque_synchronizes_spin_when_enabled() {
             .angular_damping(0.0)
             .gravity_scale(0.0),
         );
-        let mut cfg = mps_cosmos::world::PerturbationConfig::default();
-        cfg.enable_tidal = enable_tidal;
-        cfg.tidal_radius = 1.0e3_f64; // 1 km 卫星
-        cfg.love_number_k2 = 0.299;
-        cfg.tidal_q = 12.0;
+        let cfg = mps_cosmos::world::PerturbationConfig {
+            enable_tidal,
+            tidal_radius: 1.0e3_f64, // 1 km M-主星半径
+            love_number_k2: 0.299,
+            tidal_q: 12.0,
+            ..Default::default()
+        };
         world.set_perturbation(h, cfg);
         (world, h)
     };

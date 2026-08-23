@@ -26,7 +26,6 @@ pub mod formulas {
     }
 
     /// 2D point source velocity potential: φ = Q/(2π) · ln(r)
-
     pub fn source_potential_2d(strength: f64, r: f64) -> Option<f64> {
         if !strength.is_finite() || !r.is_finite() || r <= 0.0 {
             return None;
@@ -35,7 +34,6 @@ pub mod formulas {
     }
 
     /// 2D doublet stream function: ψ = -κ · sin(θ) / (2π · r)
-
     pub fn doublet_stream_function_2d(strength: f64, r: f64, theta: f64) -> Option<f64> {
         if !strength.is_finite() || !r.is_finite() || r <= 0.0 || !theta.is_finite() {
             return None;
@@ -44,7 +42,6 @@ pub mod formulas {
     }
 
     /// Power-law viscosity: μ_eff = K · γ̇^(n-1)
-
     pub fn power_law_viscosity(consistency: f64, shear_rate: f64, flow_index: f64) -> Option<f64> {
         if !consistency.is_finite()
             || consistency <= 0.0
@@ -61,7 +58,6 @@ pub mod formulas {
     }
 
     /// Bingham plastic: τ = τ_y + μ_p · γ̇
-
     pub fn bingham_stress(
         yield_stress: f64,
         plastic_viscosity: f64,
@@ -81,7 +77,6 @@ pub mod formulas {
 
     /// Standard k-epsilon turbulence model: production of TKE.
     /// P_k = nut * S^2 where S = sqrt(2 * S_ij * S_ij)
-
     pub fn k_epsilon_production(eddy_viscosity: f64, strain_rate_magnitude: f64) -> Option<f64> {
         if !eddy_viscosity.is_finite()
             || eddy_viscosity < 0.0
@@ -94,7 +89,6 @@ pub mod formulas {
     }
 
     /// Eddy viscosity from k-epsilon: nut = C_mu * k^2 / epsilon
-
     pub fn k_epsilon_eddy_viscosity(tke: f64, dissipation: f64, c_mu: f64) -> Option<f64> {
         if !tke.is_finite()
             || tke < 0.0
@@ -110,7 +104,6 @@ pub mod formulas {
 
     /// k-epsilon: source term for k transport equation.
     /// dk/dt = P_k - epsilon + diffusion
-
     pub fn k_equation_source(production: f64, dissipation: f64) -> Option<f64> {
         if !production.is_finite() || !dissipation.is_finite() || dissipation < 0.0 {
             return None;
@@ -120,7 +113,6 @@ pub mod formulas {
 
     /// k-epsilon: source term for epsilon transport equation.
     /// depsilon/dt = C_eps1 * P_k * epsilon/k - C_eps2 * epsilon^2/k + diffusion
-
     pub fn epsilon_equation_source(
         production: f64,
         tke: f64,
@@ -140,13 +132,11 @@ pub mod formulas {
     }
 
     /// Standard k-epsilon model constants.
-
     pub fn k_epsilon_constants() -> (f64, f64, f64, f64, f64) {
         (0.09, 1.44, 1.92, 1.0, 1.3) // C_mu, C_eps1, C_eps2, sigma_k, sigma_eps
     }
 
     /// Characteristic turbulent length scale: L = C_mu^0.75 * k^1.5 / epsilon
-
     pub fn turbulent_length_scale(tke: f64, dissipation: f64) -> Option<f64> {
         if !tke.is_finite() || tke < 0.0 || !dissipation.is_finite() || dissipation <= 0.0 {
             return None;
@@ -156,7 +146,6 @@ pub mod formulas {
     }
 
     /// Turbulent Reynolds number: Re_t = k^2 / (nu * epsilon)
-
     pub fn turbulent_reynolds(tke: f64, dissipation: f64, kinematic_viscosity: f64) -> Option<f64> {
         if !tke.is_finite()
             || tke < 0.0
@@ -171,7 +160,6 @@ pub mod formulas {
     }
 
     /// Isentropic pressure ratio: P/P₀ = (1 + (γ-1)/2 · M²)^(-γ/(γ-1))
-
     pub fn isentropic_pressure_ratio(mach: f64, gamma: f64) -> Option<f64> {
         if !mach.is_finite() || mach < 0.0 || !gamma.is_finite() || gamma <= 0.0 {
             return None;
@@ -180,7 +168,6 @@ pub mod formulas {
     }
 
     /// Isentropic density ratio: ρ/ρ₀ = (1 + (γ-1)/2 · M²)^(-1/(γ-1))
-
     pub fn isentropic_density_ratio(mach: f64, gamma: f64) -> Option<f64> {
         if !mach.is_finite() || mach < 0.0 || !gamma.is_finite() || gamma <= 0.0 {
             return None;
@@ -189,7 +176,6 @@ pub mod formulas {
     }
 
     /// Isentropic temperature ratio: T/T₀ = 1/(1 + (γ-1)/2 · M²)
-
     pub fn isentropic_temperature_ratio(mach: f64, gamma: f64) -> Option<f64> {
         if !mach.is_finite() || mach < 0.0 || !gamma.is_finite() || gamma <= 0.0 {
             return None;
@@ -198,7 +184,6 @@ pub mod formulas {
     }
 
     /// Area-Mach relation for isentropic flow: A/A* = (1/M) · ((2/(γ+1))·(1+(γ-1)·M²/2))^((γ+1)/(2(γ-1)))
-
     pub fn area_mach_ratio(mach: f64, gamma: f64) -> Option<f64> {
         if !mach.is_finite() || mach < 0.0 || !gamma.is_finite() || gamma <= 0.0 {
             return None;
@@ -208,7 +193,6 @@ pub mod formulas {
     }
 
     /// Normal shock wave: downstream Mach number: M₂² = ((γ-1)M₁² + 2) / (2γ·M₁² - (γ-1))
-
     pub fn normal_shock_downstream_mach(upstream_mach: f64, gamma: f64) -> Option<f64> {
         if !upstream_mach.is_finite() || upstream_mach < 1.0 || !gamma.is_finite() || gamma <= 0.0 {
             return None;
@@ -220,7 +204,6 @@ pub mod formulas {
     }
 
     /// Normal shock pressure ratio: P₂/P₁ = 1 + 2γ/(γ+1) · (M₁² - 1)
-
     pub fn normal_shock_pressure_ratio(upstream_mach: f64, gamma: f64) -> Option<f64> {
         if !upstream_mach.is_finite() || upstream_mach < 1.0 || !gamma.is_finite() || gamma <= 0.0 {
             return None;
@@ -229,7 +212,6 @@ pub mod formulas {
     }
 
     /// Normal shock density ratio: ρ₂/ρ₁ = (γ+1)·M₁² / ((γ-1)·M₁² + 2)
-
     pub fn normal_shock_density_ratio(upstream_mach: f64, gamma: f64) -> Option<f64> {
         if !upstream_mach.is_finite() || upstream_mach < 1.0 || !gamma.is_finite() || gamma <= 0.0 {
             return None;
@@ -241,7 +223,6 @@ pub mod formulas {
     }
 
     /// Prandtl-Meyer expansion angle: ν(M) = ((γ+1)/(γ-1))^(1/2) · atan(((γ-1)/(γ+1)·(M²-1))^(1/2)) - atan((M²-1)^(1/2))
-
     pub fn prandtl_meyer_angle(mach: f64, gamma: f64) -> Option<f64> {
         if !mach.is_finite() || mach < 1.0 || !gamma.is_finite() || gamma <= 0.0 {
             return None;

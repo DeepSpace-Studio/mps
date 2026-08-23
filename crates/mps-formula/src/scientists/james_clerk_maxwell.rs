@@ -30,7 +30,6 @@ pub mod formulas {
 
     /// Biot-Savart law: dB = (mu0/4pi) * I * dl x r_hat / r^2
     /// Returns the magnetic field contribution at `point` from a current element.
-
     pub fn biot_savart_element(
         current: f64,
         dl: Vec3,
@@ -55,7 +54,6 @@ pub mod formulas {
 
     /// Biot-Savart law for a finite straight wire segment.
     /// Returns B at `point` from wire from `p1` to `p2` carrying current.
-
     pub fn biot_savart_wire_segment(current: f64, p1: Vec3, p2: Vec3, point: Vec3) -> Option<Vec3> {
         let mu0 = 1.25663706212e-6;
         if !finite_6(&[current, p1.x, p1.y, p1.z, p2.x, p2.y]) || !vec3_finite(point) {
@@ -86,7 +84,6 @@ pub mod formulas {
     }
 
     /// Poynting vector: S = E x H (W/m^2) where H = B / mu0
-
     pub fn poynting_vector(e: Vec3, b: Vec3) -> Option<Vec3> {
         let mu0 = 1.25663706212e-6;
         if !vec3_finite(e) || !vec3_finite(b) {
@@ -99,7 +96,6 @@ pub mod formulas {
     }
 
     /// Poynting vector magnitude for plane wave: |S| = |E|^2 / (mu0 * c)
-
     pub fn poynting_magnitude_plane_wave(e_field_magnitude: f64) -> Option<f64> {
         let c = 299_792_458.0;
         let mu0 = 1.25663706212e-6;
@@ -110,7 +106,6 @@ pub mod formulas {
     }
 
     /// Phase velocity in medium: v = c / n
-
     pub fn phase_velocity(refractive_index: f64) -> Option<f64> {
         let c = 299_792_458.0;
         if !refractive_index.is_finite() || refractive_index <= 0.0 {
@@ -120,7 +115,6 @@ pub mod formulas {
     }
 
     /// Wavelength: lambda = c / (n * f)
-
     pub fn wavelength_in_medium(frequency: f64, refractive_index: f64) -> Option<f64> {
         let c = 299_792_458.0;
         if !frequency.is_finite()
@@ -134,7 +128,6 @@ pub mod formulas {
     }
 
     /// Intrinsic impedance of medium: eta = sqrt(mu / epsilon)
-
     pub fn intrinsic_impedance(permeability: f64, permittivity: f64) -> Option<f64> {
         if !permeability.is_finite()
             || permeability <= 0.0
@@ -147,7 +140,6 @@ pub mod formulas {
     }
 
     /// Skin depth: delta = 1 / sqrt(pi * f * mu * sigma)
-
     pub fn skin_depth(frequency: f64, permeability: f64, conductivity: f64) -> Option<f64> {
         if !frequency.is_finite()
             || frequency <= 0.0
@@ -162,7 +154,6 @@ pub mod formulas {
     }
 
     /// EM wave vacuum wavelength: lambda = c / f
-
     pub fn vacuum_wavelength(frequency: f64) -> Option<f64> {
         let c = 299_792_458.0;
         if !frequency.is_finite() || frequency <= 0.0 {
@@ -172,7 +163,6 @@ pub mod formulas {
     }
 
     /// EM wave frequency: f = c / lambda
-
     pub fn wave_frequency(wavelength: f64) -> Option<f64> {
         let c = 299_792_458.0;
         if !wavelength.is_finite() || wavelength <= 0.0 {
@@ -182,7 +172,6 @@ pub mod formulas {
     }
 
     /// Radiation resistance of a short dipole: R_r = 80π² (L/λ)²
-
     pub fn dipole_radiation_resistance(dipole_length: f64, wavelength: f64) -> Option<f64> {
         if !dipole_length.is_finite()
             || !wavelength.is_finite()
@@ -199,13 +188,11 @@ pub mod formulas {
     }
 
     /// Half-wave dipole directivity: D = 1.64
-
     pub fn half_wave_dipole_directivity() -> f64 {
         1.64
     }
 
     /// Effective aperture from gain: A_e = G · λ² / (4π)
-
     pub fn effective_aperture(gain_linear: f64, wavelength: f64) -> Option<f64> {
         if !gain_linear.is_finite()
             || gain_linear <= 0.0
@@ -218,7 +205,6 @@ pub mod formulas {
     }
 
     /// Far-field distance (Fraunhofer): r = 2D²/λ where D is the largest antenna dimension.
-
     pub fn far_field_distance(antenna_size: f64, wavelength: f64) -> Option<f64> {
         if !antenna_size.is_finite()
             || antenna_size <= 0.0
@@ -231,7 +217,6 @@ pub mod formulas {
     }
 
     /// Friis transmission equation (power): P_r = P_t · G_t · G_r · (λ/(4πR))²
-
     pub fn friis_power_received(
         transmit_power: f64,
         tx_gain: f64,
@@ -264,7 +249,6 @@ pub mod formulas {
     }
 
     /// Reflection coefficient: Γ = (Z_L - Z_0) / (Z_L + Z_0)
-
     pub fn reflection_coefficient(
         load_impedance: f64,
         characteristic_impedance: f64,
@@ -281,7 +265,6 @@ pub mod formulas {
     }
 
     /// Voltage standing wave ratio: VSWR = (1+|Γ|)/(1-|Γ|)
-
     pub fn vswr(reflection_coeff: f64) -> Option<f64> {
         if !reflection_coeff.is_finite() || reflection_coeff.abs() >= 1.0 {
             return None;
@@ -290,7 +273,6 @@ pub mod formulas {
     }
 
     /// Return loss: RL = -20 log₁₀ |Γ| (dB)
-
     pub fn return_loss(reflection_coeff: f64) -> Option<f64> {
         if !reflection_coeff.is_finite()
             || reflection_coeff.abs() <= 0.0
@@ -302,7 +284,6 @@ pub mod formulas {
     }
 
     /// Quarter-wave transformer impedance: Z_q = sqrt(Z_0 · Z_L)
-
     pub fn quarter_wave_transformer(z0: f64, z_load: f64) -> Option<f64> {
         if !z0.is_finite() || z0 <= 0.0 || !z_load.is_finite() || z_load <= 0.0 {
             return None;
@@ -312,7 +293,6 @@ pub mod formulas {
 
     /// Transmission line input impedance: Z_in = Z_0 · (Z_L + j·Z_0·tan(βl)) / (Z_0 + j·Z_L·tan(βl))
     /// Returns (real, imag) for lossless case.
-
     pub fn transmission_line_input_impedance(
         z0: f64,
         z_load_real: f64,
@@ -344,7 +324,6 @@ pub mod formulas {
     }
 
     /// Coaxial cable characteristic impedance: Z_0 = (60/√ε_r) · ln(D/d)
-
     pub fn coaxial_impedance(
         inner_diameter: f64,
         outer_diameter: f64,
@@ -364,7 +343,6 @@ pub mod formulas {
     }
 
     /// Coaxial cable cutoff frequency (TE11 mode): f_c ≈ c/(π·(D+d)/2 · √ε_r)
-
     pub fn coaxial_cutoff_frequency(
         inner_diameter: f64,
         outer_diameter: f64,
@@ -387,7 +365,6 @@ pub mod formulas {
 
     /// Rayleigh scattering cross-section for a small dielectric sphere.
     /// σ_s = (8π³/3) · ((n²-1)/(n²+2))² · (d/2)⁶ / λ⁴
-
     pub fn rayleigh_scattering_cross_section(
         refractive_index: f64,
         diameter: f64,
@@ -410,7 +387,6 @@ pub mod formulas {
 
     /// Faraday rotation angle: θ = V · B · L
     /// V = Verdet constant (rad/(T·m)), B = magnetic field along path (T), L = path length (m)
-
     pub fn faraday_rotation(
         verdet_constant: f64,
         magnetic_field: f64,

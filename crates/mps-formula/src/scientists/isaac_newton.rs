@@ -41,7 +41,6 @@ pub mod formulas {
     ///   - Perihelion precession (Mercury: ~43"/century)
     ///   - Light bending near massive bodies
     ///   - Shapiro time delay
-
     pub fn post_newtonian_1pn(
         position: Vec3,
         velocity: Vec3,
@@ -79,7 +78,6 @@ pub mod formulas {
     ///
     /// Adds O(1/c⁴) terms.  Required for precision better than ~1m in
     /// Earth orbit over years.
-
     pub fn post_newtonian_2pn(position: Vec3, velocity: Vec3, gm: f64) -> Vec3 {
         let r_vec = vec3_to_rapier(position);
         let v_vec = vec3_to_rapier(velocity);
@@ -106,7 +104,6 @@ pub mod formulas {
     }
 
     /// Combined 1PN + 2PN correction (PN-only, without the Newtonian part).
-
     pub fn post_newtonian_full(position: Vec3, velocity: Vec3, gm: f64) -> Vec3 {
         let r_vec = vec3_to_rapier(position);
         let v_vec = vec3_to_rapier(velocity);
@@ -142,7 +139,6 @@ pub mod formulas {
     /// Compute specific mechanical energy E = ½v² - GM/r.
     ///
     /// For Keplerian orbits, E < 0 (bound), E = 0 (parabolic), E > 0 (hyperbolic).
-
     pub fn specific_energy(position: Vec3, velocity: Vec3, gm: f64) -> f64 {
         let r =
             (position.x * position.x + position.y * position.y + position.z * position.z).sqrt();
@@ -151,7 +147,6 @@ pub mod formulas {
     }
 
     /// Compute specific angular momentum h = r × v.
-
     pub fn specific_angular_momentum(position: Vec3, velocity: Vec3) -> Vec3 {
         let r = vec3_to_rapier(position);
         let v = vec3_to_rapier(velocity);
@@ -162,7 +157,6 @@ pub mod formulas {
     ///
     /// Returns (semi_major_axis, eccentricity, inclination, RAAN, arg_periapsis, true_anomaly)
     /// or zeros for invalid orbits.
-
     pub fn keplerian_elements(
         position: Vec3,
         velocity: Vec3,
@@ -254,7 +248,6 @@ pub mod formulas {
     /// where φ is the geocentric latitude (sin φ = z/r).
     ///
     /// Returns a vector `pnm` indexed as pnm[n*(n+1)/2 + m] for n=0..max_degree.
-
     pub fn normalized_legendre(sin_phi: f64, max_degree: u32) -> Vec<f64> {
         let n_max = max_degree as usize;
         let size = (n_max + 1) * (n_max + 2) / 2;
@@ -352,7 +345,6 @@ pub mod formulas {
     ///
     /// # Returns
     /// * `Vec3` — acceleration vector (m/s²) in body-fixed frame
-
     pub fn spherical_harmonics_acceleration(
         position: Vec3,
         body: &CelestialBody,
@@ -462,7 +454,6 @@ pub mod formulas {
     }
 
     /// Evaluate Carlson's symmetric elliptic integral R_F(x, y, z).
-
     pub fn carlson_rf(x: f64, y: f64, z: f64) -> f64 {
         let mut x = x;
         let mut y = y;
@@ -486,7 +477,6 @@ pub mod formulas {
     }
 
     /// Evaluate Carlson's symmetric elliptic integral R_D(x, y, z).
-
     pub fn carlson_rd(x: f64, y: f64, z: f64) -> f64 {
         let mut x = x;
         let mut y = y;
@@ -527,7 +517,6 @@ pub mod formulas {
     /// (a²+λ, a²+λ, c²+λ) where λ satisfies the ellipsoid equation.
     ///
     /// The acceleration is -∇U.
-
     pub fn ellipsoid_gravity(position: Vec3, body: &CelestialBody) -> Vec3 {
         let r_vec = vec3_to_rapier(position);
         let x = r_vec.x;
@@ -602,7 +591,6 @@ pub mod formulas {
     ///
     /// The tensor Q is stored as [q11, q12, q13, q21, q22, q23, q31, q32, q33]
     /// in row-major order.  Only q11..q33 matter (symmetric, traceless).
-
     pub fn quadrupole_tensor_acceleration(position: Vec3, gm: f64, quadrupole: &[f64; 9]) -> Vec3 {
         let r = vec3_to_rapier(position);
         let radius = r.length();
@@ -641,7 +629,6 @@ pub mod formulas {
     ///   Q₁₁ = Q₂₂ = -½ J₂ · M · R²
     ///   Q₃₃ = J₂ · M · R²
     ///   Q_{ij} = 0 for i≠j
-
     pub fn quadrupole_from_j2(gm: f64, equatorial_radius: f64, j2: f64) -> [f64; 9] {
         let g = crate::celestial_data::G;
         let mass = gm / g;
@@ -665,7 +652,6 @@ pub mod formulas {
     /// Uses only the zonal terms (m=0), which are rotationally symmetric
     /// about the z-axis.  3× faster than full spherical harmonics, suitable
     /// for real-time simulation when full EGM2008 is not needed.
-
     pub fn zonal_harmonics_acceleration(
         position: Vec3,
         gm: f64,

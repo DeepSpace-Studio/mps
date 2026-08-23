@@ -94,5 +94,5 @@ fn kozai_period_positive_and_scales_with_geometry() {
 #[test]
 fn g_constant_sanity() {
     // G 引用，确保导入可用且量级正确。
-    assert!(G > 6.0e-11 && G < 7.0e-11);
+    const { assert!(G > 6.0e-11 && G < 7.0e-11) };
 }

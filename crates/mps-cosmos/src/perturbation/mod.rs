@@ -163,9 +163,9 @@ pub fn solar_wind_pressure_force(
 /// `equatorial_radius`），被照体在 `pos`。沿「太阳 → 遮挡体」轴投影求被照体的轴向
 /// 距离 `x`（遮挡体之后为正）与横向距离 `d_perp`；用太阳半径 `sun_radius`
 /// （=`SUN_EQ_RADIUS`）做双锥：
-/// - `r_umbra(x) = occ_radius + (occ_radius - sun_radius) * x / D`（`D` = 日-遮距离）。
-/// - `r_pen(x)   = occ_radius + (occ_radius + sun_radius) * x / D`。
-/// `d_perp ≤ r_umbra` → 0；`d_perp ≤ r_pen` → `(d_perp - r_umbra) / (r_pen - r_umbra)`
+/// · `r_umbra(x) = occ_radius + (occ_radius - sun_radius) * x / D`（`D` = 日-遮距离）。
+/// · `r_pen(x)   = occ_radius + (occ_radius + sun_radius) * x / D`。
+/// 当 `d_perp ≤ r_umbra` → 0；`d_perp ≤ r_pen` → `(d_perp - r_umbra) / (r_pen - r_umbra)`
 /// 夹 [0,1]；否则 1。任意阶退化（零半径 / 零距离 / NaN）返回 1。
 ///
 /// 调用方应先用 `cfg.enable_eclipse` 门控，只在开启时调用（开启即默认路径行为改变，
@@ -209,13 +209,7 @@ pub fn eclipse_attenuation(pos: Vector, sun_pos: Vector, occ_radius: f64, sun_ra
             return 1.0;
         }
         let f = (d_perp - r_umbra) / denom;
-        if f < 0.0 {
-            0.0
-        } else if f > 1.0 {
-            1.0
-        } else {
-            f
-        }
+        f.clamp(0.0, 1.0)
     } else {
         1.0
     }

@@ -1154,8 +1154,7 @@ pub fn relativistic_momentum(rest_mass: f64, speed: f64) -> Option<f64> {
     if !rest_mass.is_finite()
         || rest_mass < 0.0
         || !speed.is_finite()
-        || speed < 0.0
-        || speed >= SPEED_OF_LIGHT
+        || !(0.0..SPEED_OF_LIGHT).contains(&speed)
     {
         return None;
     }
@@ -1187,7 +1186,7 @@ pub fn relativistic_aberration(cos_theta: f64, beta: f64) -> Option<f64> {
 
 /// Relativistic Doppler beaming (boost) factor: δ = 1 / [γ·(1 − β·cos θ)].
 pub fn relativistic_doppler_beaming_factor(beta: f64, cos_theta: f64) -> Option<f64> {
-    if !beta.is_finite() || beta < 0.0 || beta >= 1.0 || !cos_theta.is_finite() {
+    if !beta.is_finite() || !(0.0..1.0).contains(&beta) || !cos_theta.is_finite() {
         return None;
     }
     let gamma = 1.0 / (1.0 - beta * beta).sqrt();

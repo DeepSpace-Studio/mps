@@ -27,7 +27,6 @@ pub mod formulas {
 
     /// Free-particle plane wave: psi(x, t) = A * exp(i(kx - omega t))
     /// Returns (real, imag) components.
-
     pub fn free_particle_wave_function(
         amplitude: f64,
         wave_number: f64,
@@ -49,7 +48,6 @@ pub mod formulas {
     }
 
     /// Free particle energy: E = (hbar * k)^2 / (2m)
-
     pub fn free_particle_energy(wave_number: f64, mass: f64) -> Option<f64> {
         if !wave_number.is_finite() || !mass.is_finite() || mass <= 0.0 {
             return None;
@@ -63,7 +61,6 @@ pub mod formulas {
     pub use crate::scientists::other::formulas::de_broglie_wavelength;
 
     /// Infinite square well energy levels: E_n = n^2 * pi^2 * hbar^2 / (2 * m * L^2)
-
     pub fn infinite_well_energy(quantum_number: u32, mass: f64, well_width: f64) -> Option<f64> {
         if quantum_number == 0
             || !mass.is_finite()
@@ -81,7 +78,6 @@ pub mod formulas {
     }
 
     /// Infinite square well wave function at position x: psi_n(x) = sqrt(2/L) * sin(n*pi*x/L)
-
     pub fn infinite_well_wave_function(
         quantum_number: u32,
         well_width: f64,
@@ -101,7 +97,6 @@ pub mod formulas {
     }
 
     /// Probability density at position x in infinite well.
-
     pub fn infinite_well_probability_density(
         quantum_number: u32,
         well_width: f64,
@@ -113,7 +108,6 @@ pub mod formulas {
 
     /// Time evolution phase factor for an energy eigenstate: exp(-iEt/ħ)
     /// Returns (cos_term, sin_term) — real and imaginary parts.
-
     pub fn time_evolution_phase(energy: f64, time: f64) -> Option<(f64, f64)> {
         let hbar = REDUCED_PLANCK;
         if !energy.is_finite() || !time.is_finite() {
@@ -124,7 +118,6 @@ pub mod formulas {
     }
 
     /// Coherent state amplitude from position/momentum expectation.
-
     pub fn coherent_state_alpha(
         mean_position: f64,
         mean_momentum: f64,
@@ -148,7 +141,6 @@ pub mod formulas {
     }
 
     /// Poisson probability for measuring n photons in a coherent state: P(n) = |α|^(2n) exp(-|α|²) / n!
-
     pub fn coherent_state_photon_probability(alpha_squared: f64, n: u32) -> Option<f64> {
         if !alpha_squared.is_finite() || alpha_squared < 0.0 {
             return None;
@@ -168,7 +160,6 @@ pub mod formulas {
 
     /// Spherical harmonic Y_lm(θ, φ) — real-valued combinations (l ≤ 2).
     /// Returns Y_lm for the given angles.
-
     pub fn spherical_harmonic_real(l: i32, m: i32, theta: f64, phi: f64) -> Option<f64> {
         if !theta.is_finite() || !phi.is_finite() {
             return None;
@@ -193,7 +184,6 @@ pub mod formulas {
     }
 
     /// Angular momentum quantum numbers: J²|jm⟩ = ħ²·j(j+1)|jm⟩
-
     pub fn angular_momentum_squared(j: f64) -> Option<f64> {
         if !j.is_finite() || j < 0.0 {
             return None;

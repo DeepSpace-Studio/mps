@@ -29,7 +29,6 @@ pub mod formulas {
     }
 
     /// Carnot efficiency: eta = 1 - T_cold / T_hot
-
     pub fn carnot_efficiency(t_hot: f64, t_cold: f64) -> Option<f64> {
         if !finite_4(t_hot, t_cold, 0.0, 0.0) || t_hot <= 0.0 || t_cold < 0.0 || t_cold >= t_hot {
             return None;
@@ -38,7 +37,6 @@ pub mod formulas {
     }
 
     /// Otto cycle efficiency: eta = 1 - 1 / r^(gamma-1)
-
     pub fn otto_efficiency(compression_ratio: f64, gamma: f64) -> Option<f64> {
         if !compression_ratio.is_finite()
             || compression_ratio <= 1.0
@@ -51,7 +49,6 @@ pub mod formulas {
     }
 
     /// Diesel cycle efficiency
-
     pub fn diesel_efficiency(compression_ratio: f64, cutoff_ratio: f64, gamma: f64) -> Option<f64> {
         if !finite_4(compression_ratio, cutoff_ratio, gamma, 0.0)
             || compression_ratio <= 1.0
@@ -65,7 +62,6 @@ pub mod formulas {
     }
 
     /// Brayton cycle efficiency: eta = 1 - 1 / r_p^((gamma-1)/gamma)
-
     pub fn brayton_efficiency(pressure_ratio: f64, gamma: f64) -> Option<f64> {
         if !pressure_ratio.is_finite()
             || pressure_ratio <= 1.0
@@ -78,7 +74,6 @@ pub mod formulas {
     }
 
     /// Carnot refrigeration coefficient of performance: COP = Tc / (Th - Tc)
-
     pub fn carnot_refrigeration_cop(t_cold: f64, t_hot: f64) -> Option<f64> {
         if !finite_5(t_cold, t_hot, 0.0, 0.0, 0.0)
             || t_cold <= 0.0
@@ -91,7 +86,6 @@ pub mod formulas {
     }
 
     /// Heat pump COP: COP = Th / (Th - Tc)
-
     pub fn heat_pump_cop(t_cold: f64, t_hot: f64) -> Option<f64> {
         if !finite_5(t_cold, t_hot, 0.0, 0.0, 0.0)
             || t_cold <= 0.0

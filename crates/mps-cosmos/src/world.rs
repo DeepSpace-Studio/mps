@@ -1699,18 +1699,17 @@ impl CosmosWorld {
                     );
                     // 日食（阴影锥）衰减：仅当显式开启且设有 center_body 时生效，
                     // 默认关闭 → 不影响现有光压输出（原方法不变）。
-                    if cfg.enable_eclipse {
-                        if let Some(central) = self.central_body {
-                            if central.equatorial_radius > 0.0 {
-                                let att = crate::perturbation::eclipse_attenuation(
-                                    pos,
-                                    self.sun_position,
-                                    central.equatorial_radius,
-                                    mps_formula::celestial_data::SUN_EQ_RADIUS,
-                                );
-                                f *= att;
-                            }
-                        }
+                    if cfg.enable_eclipse
+                        && let Some(central) = self.central_body
+                        && central.equatorial_radius > 0.0
+                    {
+                        let att = crate::perturbation::eclipse_attenuation(
+                            pos,
+                            self.sun_position,
+                            central.equatorial_radius,
+                            mps_formula::celestial_data::SUN_EQ_RADIUS,
+                        );
+                        f *= att;
                     }
                     total_force += f;
                 }
@@ -1727,18 +1726,17 @@ impl CosmosWorld {
                         let mut f = f;
                         // 日食（阴影锥）衰减：与光压共用同一几何（中心体在原点、太阳
                         // 在 `sun_position`）。默认关闭 → 不影响现有太阳风输出。
-                        if cfg.enable_eclipse {
-                            if let Some(central) = self.central_body {
-                                if central.equatorial_radius > 0.0 {
-                                    let att = crate::perturbation::eclipse_attenuation(
-                                        pos,
-                                        self.sun_position,
-                                        central.equatorial_radius,
-                                        mps_formula::celestial_data::SUN_EQ_RADIUS,
-                                    );
-                                    f *= att;
-                                }
-                            }
+                        if cfg.enable_eclipse
+                            && let Some(central) = self.central_body
+                            && central.equatorial_radius > 0.0
+                        {
+                            let att = crate::perturbation::eclipse_attenuation(
+                                pos,
+                                self.sun_position,
+                                central.equatorial_radius,
+                                mps_formula::celestial_data::SUN_EQ_RADIUS,
+                            );
+                            f *= att;
                         }
                         total_force += f;
                     }

@@ -351,10 +351,9 @@ mod tests {
         );
         assert!(eid != 0, "event force should be assigned an id");
 
-        // Drain the report (records both forces), then release the facade's borrow
-        // on `bodies` so we can inspect the live containers on the body.
+        // Drain the report (records both forces); `facade`'s borrow of `bodies`
+        // ends here (NLL), so we can inspect the live containers on the body below.
         let report = facade.drain_report();
-        drop(facade);
         assert!(!report.contributions.is_empty());
 
         let c = bodies[h]
