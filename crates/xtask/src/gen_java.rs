@@ -3,7 +3,8 @@
 //!
 //! 包名写在注解里：`#[java_struct(package = "org.polaris2023.mps.ffi")]`。
 //! 缺省 `org.polaris2023.mps.ffi`。生成文件按包名落到
-//! `test21/src/main/java/<包名路径>/<Name>.java`，并带上对应的 `package` 行。
+//! `<包名路径>/<Name>.java`，并带上对应的 `package` 行。未指定输出目录时
+//! 默认写到 `<workspace>/target/javagen`（不存在则自动创建）。
 //!
 //! 每个生成的 Java 类：
 //! - 持有一个 `NativeMemory mem` + `long offset`；
@@ -134,8 +135,9 @@ pub fn run(workspace_root: &Path, output_dir: Option<&str>) -> Result<String, St
 
     let out_base = match output_dir {
         Some(d) => PathBuf::from(d),
-        // Java source root: each file is placed under <root>/<package-as-path>/
-        None => workspace_root.join("test21/src/main/java"),
+        // No explicit output dir: generate under <workspace>/target/javagen
+        // (created on demand by the create_dir_all call below).
+        None => workspace_root.join("target/javagen"),
     };
     std::fs::create_dir_all(&out_base).map_err(|e| format!("mkdir {}: {e}", out_base.display()))?;
 

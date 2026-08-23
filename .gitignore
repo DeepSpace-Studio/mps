@@ -21,14 +21,3 @@
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 .idea/
 
-/test21/.gradle/
-/test25/.gradle/
-/test21/build/
-/test25/build/
-
-/test21/run/
-/test21/runs/
-
-# Locally built native libraries copied into resources by Gradle — never commit
-/test21/src/main/resources/*.dll
-/test25/src/main/resources/*.dll

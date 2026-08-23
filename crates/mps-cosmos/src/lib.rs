@@ -9,7 +9,7 @@
 //! 计算函数，不介入 `mps-core` 的 C ABI / 共享 arena / 力律登记表。
 //!
 //! mps-cosmos 的 C ABI 由 `ffi` 模块导出（`cosmos_*` 符号），由 cbindgen
-//! 生成 `include/cosmos.h`，被 `mps-jni`（JNI）与 `test25/RigidBodyFfm`（FFM）
+//! 生成 `include/cosmos.h`，被 `mps-jni`（JNI）与 `mps-ffm`（FFM）
 //! 共同消费。
 
 // C ABI entry points validate raw pointers at the boundary (null checks plus

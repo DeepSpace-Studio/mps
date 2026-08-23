@@ -3,7 +3,7 @@
 //! Subcommands:
 //!   `dump-metrics`  →  regenerates `crates/mps-web/src/metrics.rs`
 //!   `gen-java`       →  scans `#[java_struct]`/`#[java_enum]` annotations and
-//!                        generates Java value classes under `test21/.../ffi/`
+//!                        generates Java value classes under the configured output dir.
 
 mod gen_java;
 

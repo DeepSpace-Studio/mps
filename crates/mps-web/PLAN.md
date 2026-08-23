@@ -90,5 +90,5 @@ crates/mps-web/
 
 ## 未做（范围外，按约定只动 Rust 侧）
 
-- 未改 Java / test21 / test25（与 mps-web 无关）。
+- 未改 Java / 绑定生成器（与 mps-web 无关）。
 - 未重写各页面正文文案（仅换皮）；如需逐页内容升级可另开任务。

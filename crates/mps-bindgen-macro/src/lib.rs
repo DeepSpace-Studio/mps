@@ -40,9 +40,8 @@
 //! pub struct Vec3 { pub x: f64, pub y: f64, pub z: f64 }
 //! ```
 //!
-//! 生成器会把它写到
-//! `test21/src/main/java/org/polaris2023/mps/ffi/Vec3.java`，
-//! 文件头带 `package org.polaris2023.mps.ffi;`。
+//! 生成器会把它写成一个 Java 源码文件（带 `package org.polaris2023.mps.ffi;`
+//! 文件头），由调用方决定输出目录。
 
 use proc_macro::TokenStream;
 use quote::ToTokens;

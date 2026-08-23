@@ -91,46 +91,11 @@ Each formula module follows a two-layer architecture:
 
 All existing C ABI function names, parameters, error codes, and `_flag` variants are preserved for backward compatibility.
 
-## Java Entry Points
-
-### Java 21 JNI
-
-`test21` uses `RigidBodyNative` JNI methods plus higher-level Java helpers in
-`org.polaris2023.msp_rigid_body.util`.
-
-Run:
-
-```powershell
-cd test21
-.\gradlew.bat check
-```
-
-### Java 25 FFM
-
-`test25` uses `RigidBodyFfm` with Java's Foreign Function & Memory API.
-It covers:
-
-- World, rigid body, collider, and CRbTree basics.
-- Voxel AABB/OBB build stats and collider creation.
-- Voxel AABB/OBB intersection queries.
-- Regular runtime queries: ray cast, point projection, AABB/OBB/sphere intersection, shape cast.
-- Rigid body runtime mutation: pose, velocity, force/torque, impulse, CCD, sleep/wakeup.
-- Air-drag and lift surface accumulation helpers for body motion.
-- Collider runtime mutation: pose, sensor, friction, restitution, groups, event bits, hooks, contact-force threshold.
-- Collision and contact-force event bulk reads plus event clearing.
-
-Run:
-
-```powershell
-cd test25
-.\gradlew.bat check
-```
-
 ## Voxel Colliders
 
 Voxel colliders can be created from:
 
-- Raw occupancy grids: native memory or Java `byte[]`.
+- Raw occupancy grids: native memory or a `byte[]` buffer.
 - Axis-aligned bounding boxes: `collider_builder_create_voxel_aabb`.
 - Oriented bounding boxes: `collider_builder_create_voxel_obb`.
 
@@ -144,13 +109,6 @@ Build modes are controlled by `VoxelColliderOptions`:
 `VoxelBuildStats` can be used before building to inspect cell count, solid count,
 selected mode, estimated parts, estimated vertices/triangles, and generated grid size.
 
-Java 21 includes a `VoxelGrid` helper with:
-
-```text
-get, set, clear, solidCount, fillBox, fillAabb, fillSphere,
-copyFrom, union, subtract, intersect, toByteArray, address
-```
-
 ## Verification
 
 Current verified commands:
@@ -158,20 +116,12 @@ Current verified commands:
 ```powershell
 cargo test -p mps-test              # 332 integration tests
 cargo check --workspace              # full workspace check
-
-cd test21
-.\gradlew.bat check
-
-cd ..\test25
-.\gradlew.bat check
 ```
 
 Expected result:
 
 ```text
 Rust tests: passed
-Java 21 JNI smoke test: passed
-Java 25 FFM smoke test: passed
 ```
 
 ## Documentation

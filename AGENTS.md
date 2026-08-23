@@ -1,6 +1,6 @@
 # AGENTS.md — mps_rigid_body
 
-`mps_rigid_body` 是一个 Rust workspace,把 `rapier3d-f64`(f64 精度)封装成单一原生 `cdylib`,供 Java 通过 JNI(JDK 21,`test21/`)和 Foreign Function & Memory API(JDK 25,`test25/`)调用。同时附带一个纯 Rust 物理/航天公式库(`mps-formula`,28 个模块)和一个 Dioxus 文档站(`mps-web`)。Workspace = 9 个 crate,edition 2024,版本 0.1.4。
+`mps_rigid_body` 是一个 Rust workspace,把 `rapier3d-f64`(f64 精度)封装成单一原生 `cdylib`,供外部项目通过 JNI(`mps-jni`)和 Foreign Function & Memory API(`mps-ffm`)调用。同时附带一个纯 Rust 物理/航天公式库(`mps-formula`,28 个模块)和一个 Dioxus 文档站(`mps-web`)。Workspace = 9 个 crate,edition 2024,版本 0.1.4。
 
 ## Crates
 
@@ -16,7 +16,7 @@
 
 ## 开发环境
 
-Rust stable,本机用 GNU 工具链。构建前先 `source ~/.hermes_session_env.sh`(把 `~/.cargo/bin` + mingw64/bin 加入 PATH)。MSVC 工具链在此机无 `link.exe`;MSYS 的 `/usr/bin/link` 会覆盖 MSVC link.exe。Java 测试需 PATH 上有 JDK 21(`test21`) / JDK 25(`test25`)。
+Rust stable,本机用 GNU 工具链。构建前先 `source ~/.hermes_session_env.sh`(把 `~/.cargo/bin` + mingw64/bin 加入 PATH)。MSVC 工具链在此机无 `link.exe`;MSYS 的 `/usr/bin/link` 会覆盖 MSVC link.exe。
 
 ## 构建与测试(从 CI `ci.yml` 核实)
 
@@ -28,9 +28,6 @@ cargo build --release                 # 整个 workspace
 cargo build --release -p mps-jni      # Java 加载的 .dll/.so
 cargo run -p xtask -- dump-metrics    # 新增 test/jni/ffi 后重新生成 metrics.rs
 ```
-
-Java 冒烟测试(从仓库根或各自目录):`cd test21 && ./gradlew check -no-daemon`
-和 `cd test25 && ./gradlew check -no-daemon`。运行前需先 `cargo build --release -p mps-jni`。
 
 Feature flags:`default = []`。`anvilkit-bridge`(依赖 `anvilkit`+`bevy_ecs`)和 `relative-force` 默认关闭。CI 只跑默认 features。`--all-features`(`anvilkit-bridge`)目前在 `crates/mps-test/src/rapier/anvilkit.rs` 有既存编译错误,与近期改动无关——除非专门修这个桥接,否则避开。
 

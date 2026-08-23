@@ -1,6 +1,6 @@
 //! mps-cosmos 的 C ABI 出口（FFI 层）。
 //!
-//! 由 `mps-jni`（JNI 路径）与 `test25/RigidBodyFfm`（FFM 路径）共同消费，
+//! 由 `mps-jni`（JNI 路径）与 `mps-ffm`（FFM 路径）共同消费，
 //! 作为 mps-cosmos 的唯一 C ABI 来源。本模块的符号由 cbindgen 生成
 //! `crates/mps-cosmos/include/cosmos.h` —— 与 `mps-core` 的 `rigid_body.h`
 //! 平行、互不耦合（[CLAUDE.md]：mps-cosmos 不介入 mps-core 的 C ABI）。
