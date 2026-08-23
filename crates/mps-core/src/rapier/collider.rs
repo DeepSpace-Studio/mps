@@ -85,7 +85,7 @@ fn points_from_xyz(points_xyz: *const f64, point_count: u32) -> Option<Vec<Vec3>
     let value_count = (point_count as usize).checked_mul(3)?;
     let values = unsafe { slice::from_raw_parts(points_xyz, value_count) };
     let mut points = Vec::with_capacity(point_count as usize);
-    for chunk in values.chunks_exact(3) {
+    for chunk in values.as_chunks::<3>().0 {
         let point = Vec3 {
             x: chunk[0],
             y: chunk[1],
@@ -568,7 +568,7 @@ pub extern "C" fn collider_builder_create_edge_bvh(
         };
         let indices = unsafe { slice::from_raw_parts(edges, index_count) };
         let mut parts = Vec::with_capacity(edge_count as usize);
-        for edge in indices.chunks_exact(2) {
+        for edge in indices.as_chunks::<2>().0 {
             let Some(a) = vertices.get(edge[0] as usize).copied() else {
                 set_error(ERR_INVALID_ARGUMENT, "edge vertex index out of range");
                 return std::ptr::null_mut();
@@ -616,7 +616,7 @@ pub extern "C" fn collider_builder_create_medial_spheres(
         };
         let values = unsafe { slice::from_raw_parts(spheres_xyzw, value_count) };
         let mut parts = Vec::with_capacity(sphere_count as usize);
-        for chunk in values.chunks_exact(4) {
+        for chunk in values.as_chunks::<4>().0 {
             let center = Vec3 {
                 x: chunk[0],
                 y: chunk[1],

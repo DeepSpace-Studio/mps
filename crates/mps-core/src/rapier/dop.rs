@@ -38,7 +38,7 @@ fn builder_from_raw_points(points_xyz: *const f64, point_count: u32) -> Option<V
     };
     let values = unsafe { slice::from_raw_parts(points_xyz, value_count) };
     let mut vectors = Vec::with_capacity(point_count as usize);
-    for chunk in values.chunks_exact(3) {
+    for chunk in values.as_chunks::<3>().0 {
         if !chunk[0].is_finite() || !chunk[1].is_finite() || !chunk[2].is_finite() {
             set_error(ERR_INVALID_ARGUMENT, "non-finite point coordinate");
             return None;
@@ -71,7 +71,7 @@ fn builder_from_raw_directions(
     };
     let values = unsafe { slice::from_raw_parts(directions_xyz, value_count) };
     let mut vectors = Vec::with_capacity(direction_count as usize);
-    for chunk in values.chunks_exact(3) {
+    for chunk in values.as_chunks::<3>().0 {
         if !chunk[0].is_finite() || !chunk[1].is_finite() || !chunk[2].is_finite() {
             set_error(ERR_INVALID_ARGUMENT, "non-finite direction component");
             return None;

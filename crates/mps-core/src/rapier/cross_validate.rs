@@ -825,10 +825,10 @@ mod tests {
     }
 
     #[test]
-    fn aggregation_default_is_mean() {
+    fn aggregation_default_is_newton_anchored() {
         assert_eq!(
             CrossValidateAggregation::default(),
-            CrossValidateAggregation::Mean
+            CrossValidateAggregation::NewtonAnchored
         );
     }
 }

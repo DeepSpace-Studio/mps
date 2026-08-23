@@ -44,31 +44,33 @@ pub fn compute_forces(
     let gravity_force = vec3_to_rapier(env.gravity) * env.mass;
     let relative_flow = vec3_to_rapier(env.flow_velocity) - vec3_to_rapier(state.velocity);
     let speed_squared = relative_flow.length_squared();
-    let drag_force;
-    let lift_force;
+    let (drag_force, lift_force) =
+        if speed_squared > 1.0e-18 && env.reference_area > 0.0 && env.density > 0.0 {
+            let speed = speed_squared.sqrt();
+            let flow_dir = relative_flow / speed;
+            let dynamic_pressure = 0.5 * env.density * speed_squared;
+            let drag_force =
+                flow_dir * (dynamic_pressure * env.reference_area * env.drag_coefficient);
 
-    if speed_squared > 1.0e-18 && env.reference_area > 0.0 && env.density > 0.0 {
-        let speed = speed_squared.sqrt();
-        let flow_dir = relative_flow / speed;
-        let dynamic_pressure = 0.5 * env.density * speed_squared;
-        drag_force = flow_dir * (dynamic_pressure * env.reference_area * env.drag_coefficient);
-
-        lift_force = if env.lift_coefficient > 0.0 {
-            let lift_dir = vec3_to_rapier(env.lift_direction)
-                .try_normalize()
-                .unwrap_or(rapier3d::prelude::Vector::ZERO);
-            if lift_dir.length_squared() > 0.0 {
-                lift_dir * (dynamic_pressure * env.reference_area * env.lift_coefficient)
+            let lift_force = if env.lift_coefficient > 0.0 {
+                let lift_dir = vec3_to_rapier(env.lift_direction)
+                    .try_normalize()
+                    .unwrap_or(rapier3d::prelude::Vector::ZERO);
+                if lift_dir.length_squared() > 0.0 {
+                    lift_dir * (dynamic_pressure * env.reference_area * env.lift_coefficient)
+                } else {
+                    rapier3d::prelude::Vector::ZERO
+                }
             } else {
                 rapier3d::prelude::Vector::ZERO
-            }
+            };
+            (drag_force, lift_force)
         } else {
-            rapier3d::prelude::Vector::ZERO
+            (
+                rapier3d::prelude::Vector::ZERO,
+                rapier3d::prelude::Vector::ZERO,
+            )
         };
-    } else {
-        drag_force = rapier3d::prelude::Vector::ZERO;
-        lift_force = rapier3d::prelude::Vector::ZERO;
-    }
 
     let total_force = gravity_force + drag_force + lift_force;
     let acceleration = total_force / env.mass;
