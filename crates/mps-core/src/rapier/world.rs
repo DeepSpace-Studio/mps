@@ -1,3 +1,4 @@
+use rapier3d::prelude::soft_body::SoftBodySet;
 use rapier3d::prelude::{
     ActiveHooks, BroadPhaseBvh, CCDSolver, ColliderHandle, ColliderSet, ImpulseJointSet,
     IntegrationParameters, IslandManager, MultibodyJointSet, NarrowPhase, PhysicsPipeline,
@@ -91,6 +92,12 @@ pub struct PhysicsWorld {
     pub(crate) impulse_joints: ImpulseJointSet,
     pub(crate) multibody_joints: MultibodyJointSet,
     pub(crate) ccd_solver: CCDSolver,
+    /// All soft bodies (deformable / point-mass + spring structures). Phase 0b
+    /// wiring: stepped independently after the rigid-body pipeline each frame,
+    /// mirroring the rapier `PhysicsWorld::soft_bodies` field. Particle gravity
+    /// is applied inside `SoftBody::step`; bound particles route their spring
+    /// forces into the rigid-body `force_containers` via `write_spring_forces`.
+    pub soft_bodies: SoftBodySet,
     pub(crate) hooks: crate::rapier::events::CallbackPhysicsHooks,
     pub(crate) events: Arc<crate::rapier::events::CollectingEventHandler>,
     pub(crate) force_registry: ForceRegistry,
@@ -135,6 +142,7 @@ impl PhysicsWorld {
             impulse_joints: ImpulseJointSet::new(),
             multibody_joints: MultibodyJointSet::new(),
             ccd_solver: CCDSolver::new(),
+            soft_bodies: SoftBodySet::new(),
             hooks: crate::rapier::events::CallbackPhysicsHooks::new(events.clone()),
             events,
             force_registry: ForceRegistry::new(),
@@ -423,6 +431,19 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
                 .events
                 .set_last_custom_physics_report(force_report.to_legacy_report());
         }
+
+        // Phase 0b/2 wiring: route bound-particle spring forces into the rigid-body
+        // `force_containers`, then advance the soft-body point masses (gravity +
+        // Hookean springs) independently. Mirrors rapier's own `PhysicsWorld` step
+        // order. Sleeping soft bodies are skipped inside `SoftBodySet::step`.
+        world
+            .inner
+            .soft_bodies
+            .write_spring_forces(&mut world.inner.bodies);
+        world
+            .inner
+            .soft_bodies
+            .step(world.inner.integration_parameters.dt);
 
         world.inner.pipeline.step(
             world.inner.gravity,

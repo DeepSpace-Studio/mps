@@ -4263,6 +4263,60 @@ uint32_t soft_chain_node_handles(const struct WorldHandle *world,
                                  uint32_t capacity);
 
 /**
+ * Build a mass-spring soft body from a `VoxelGrid` (Minecraft chunk).
+ *
+ * One point-mass particle is placed at the center of every *solid* voxel
+ * (`voxels[i] != 0`). Face-adjacent solid voxels are connected by a Hookean
+ * spring with the given `stiffness`/`damping` and rest length equal to the
+ * cell spacing along that axis. The resulting [`SoftBody`] is inserted into the
+ * world's `soft_bodies` set and advanced by `world_step`.
+ *
+ * # Parameters
+ * * `voxels` — flat `size_x * size_y * size_z` array, indexing `x + size_x*(z +
+ *   size_z*y)`; non-zero = solid.
+ * * `size_x/y/z` — grid dimensions (each > 0, product ≤ `voxels.len()`).
+ * * `voxel_size` — world-space size of one cell edge (uniform; > 0).
+ * * `origin` — world-space position of the (0,0,0) cell corner.
+ * * `particle_mass` — mass of each solid-cell particle (> 0).
+ * * `stiffness` / `damping` — spring coefficients (≥ 0).
+ * * `pin_boundary` — when non-zero, particles whose cell touches the grid edge
+ *   are created pinned (`inv_mass = 0`), so the soft body is anchored to the
+ *   chunk boundary (useful for hanging terrain/structures from the world).
+ *
+ * # Returns
+ * The `SoftBodyId` (as `u32`) on success, or `0` on error (`ERR_*`).
+ *
+ * # Safety
+ * `world` must be a valid world pointer; `voxels` must point to `voxels_len`
+ * readable bytes.
+ */
+uint32_t soft_body_voxel_build(struct WorldHandle *world,
+                               const uint8_t *voxels,
+                               uint32_t voxels_len,
+                               uint32_t size_x,
+                               uint32_t size_y,
+                               uint32_t size_z,
+                               double voxel_size,
+                               Vec3 origin,
+                               double particle_mass,
+                               double stiffness,
+                               double damping,
+                               Bool pin_boundary);
+
+/**
+ * Set the per-body constant acceleration (gravity) of a soft body.
+ *
+ * This is the terrain-gravity coupling hook: the caller samples
+ * `terrain_gravity_acceleration` per step and writes the resulting vector here,
+ * so a soft body falls under planetary/spherical gravity instead of the world's
+ * uniform `gravity`. Returns `Bool::TRUE` on success.
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+Bool soft_body_set_gravity(struct WorldHandle *world, uint32_t id, Vec3 gravity);
+
+/**
  * # Safety
  * `out_probability` must be null or point to a valid, writable `CollisionProbability`.
  */
