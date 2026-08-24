@@ -4210,6 +4210,59 @@ uint32_t rtree_query_aabb(struct RTreeHandle *tree,
                           uint32_t capacity);
 
 /**
+ * Create a skeletal soft body as a chain (line) of spring-linked rigid nodes.
+ *
+ * Nodes are placed `spacing` apart along `axis` starting at the world origin (or
+ * at `anchor` if `anchor != 0`). Adjacent nodes are joined by a spring joint with
+ * the given `stiffness`/`damping`; the spring's rest length is `spacing`, so the
+ * chain behaves like a soft rope / articulated strand.
+ *
+ * # Parameters
+ * * `node_count` — number of nodes (must be ≥ 1).
+ * * `spacing` — distance between adjacent nodes / spring rest length (> 0).
+ * * `node_mass` — mass of each node (> 0).
+ * * `node_radius` — collision sphere radius of each node (> 0).
+ * * `anchor` — `RigidBodyHandleRaw` to pin the first node to (0 = first node is a
+ *   free/fixed root at the origin; pass a valid handle to hang from it).
+ * * `axis` — unit direction of the chain (need not be normalized; it is normalized
+ *   internally; must be finite and non-zero).
+ * * `stiffness` / `damping` — spring coefficients (≥ 0).
+ *
+ * # Returns
+ * The number of nodes successfully created (0 on error). On partial failure the
+ * already-created nodes/joints remain in the world (caller may clear the world).
+ *
+ * # Safety
+ * `world` must be a valid world pointer returned by `world_create`.
+ */
+uint32_t soft_chain_create(struct WorldHandle *world,
+                           uint32_t node_count,
+                           double spacing,
+                           double node_mass,
+                           double node_radius,
+                           RigidBodyHandleRaw anchor,
+                           Vec3 axis,
+                           double stiffness,
+                           double damping);
+
+/**
+ * Read back the node handles of a soft chain that was just created.
+ *
+ * Call [`soft_chain_create`] first; the chain's node handles are the last
+ * `count` *dynamic* bodies, but to avoid ambiguity this helper snapshots the
+ * *currently dynamic* bodies whose colliders are spheres of `node_radius`. For
+ * simplicity it returns the handles of all dynamic bodies currently in the world
+ * (callers typically create a fresh world per chain).
+ *
+ * # Safety
+ * `world` must be a valid world pointer; `out_handles` must point to writable
+ * memory for `capacity` handles.
+ */
+uint32_t soft_chain_node_handles(const struct WorldHandle *world,
+                                 RigidBodyHandleRaw *out_handles,
+                                 uint32_t capacity);
+
+/**
  * # Safety
  * `out_probability` must be null or point to a valid, writable `CollisionProbability`.
  */

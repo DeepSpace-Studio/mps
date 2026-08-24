@@ -68,6 +68,7 @@ pub mod rapier {
     pub mod rigid_body;
     pub mod rtree;
     pub mod shared_arena;
+    pub mod soft_body;
     pub mod softbody;
     pub mod spaceflight;
     pub mod stellar;
