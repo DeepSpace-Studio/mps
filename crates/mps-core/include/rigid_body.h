@@ -595,6 +595,28 @@ ColliderHandleRaw anvilkit_app_entity_to_collider(const struct AnvilKitAppHandle
  * `app` and `world` must be null or valid handles returned by
  * `anvilkit_app_create` / the world-creation ABI.
  */
+uint32_t anvilkit_app_spawn_soft_body(struct AnvilKitAppHandle *app,
+                                      struct WorldHandle *world,
+                                      uint64_t entity_bits,
+                                      double particle_mass,
+                                      double stiffness,
+                                      double damping,
+                                      Bool pin);
+
+/**
+ * # Safety
+ *
+ * `app` must be null or a valid handle returned by `anvilkit_app_create`.
+ */
+uint32_t anvilkit_app_entity_to_soft_body(const struct AnvilKitAppHandle *app,
+                                          uint64_t entity_bits);
+
+/**
+ * # Safety
+ *
+ * `app` and `world` must be null or valid handles returned by
+ * `anvilkit_app_create` / the world-creation ABI.
+ */
 uint64_t anvilkit_app_create_constraint(struct AnvilKitAppHandle *app,
                                         struct WorldHandle *world,
                                         uint64_t entity1_bits,

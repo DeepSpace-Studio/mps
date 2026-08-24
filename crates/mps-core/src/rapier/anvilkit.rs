@@ -2,6 +2,7 @@ use anvilkit::core::math::Transform;
 use anvilkit::ecs::physics as ak_physics;
 use anvilkit::ecs::prelude::*;
 use dashmap::DashMap;
+use rapier3d::prelude::soft_body::{SoftBody, SoftBodyId};
 use rapier3d::prelude::{ColliderBuilder, RigidBodyBuilder, RigidBodyType};
 
 use crate::rapier::aerodynamics;
@@ -22,6 +23,7 @@ pub(crate) struct AnvilKitAppState {
     app: anvilkit::ecs::app::App,
     entity_to_body: DashMap<Entity, RigidBodyHandleRaw>,
     entity_to_collider: DashMap<Entity, ColliderHandleRaw>,
+    entity_to_soft_body: DashMap<Entity, SoftBodyId>,
     constraint_to_joint: DashMap<u64, ImpulseJointHandleRaw>,
     next_constraint_id: u64,
 }
@@ -138,6 +140,7 @@ impl AnvilKitAppState {
             app,
             entity_to_body: DashMap::new(),
             entity_to_collider: DashMap::new(),
+            entity_to_soft_body: DashMap::new(),
             constraint_to_joint: DashMap::new(),
             next_constraint_id: 1,
         }
@@ -147,6 +150,57 @@ impl AnvilKitAppState {
         Entity::try_from_bits(entity_bits)
             .ok()
             .filter(|entity| self.app.world.entities().contains(*entity))
+    }
+
+    /// Build a soft body bound to an anvilkit `Entity` and register the
+    /// `entity → SoftBodyId` link. The soft body starts as a single point-mass
+    /// particle placed at the entity's current world transform; the caller can
+    /// then grow it via the `soft_body_*` FFI (or voxel builder) and/or pin it.
+    /// Returns the `SoftBodyId` (as `u32`) on success, or `0` on error.
+    fn spawn_soft_body(
+        &mut self,
+        world: &mut WorldHandle,
+        entity_bits: u64,
+        particle_mass: f64,
+        stiffness: f64,
+        damping: f64,
+        pin: bool,
+    ) -> u32 {
+        let Some(entity) = self.entity_from_bits(entity_bits) else {
+            return 0;
+        };
+        let Some(transform) = self.app.world.get::<Transform>(entity) else {
+            return 0;
+        };
+        let pos = transform.translation;
+        let p = rapier3d::math::Vector::new(pos.x as f64, pos.y as f64, pos.z as f64);
+
+        let mut body = SoftBody::new(world.inner.gravity);
+        let idx = if pin {
+            body.add_pinned(p)
+        } else {
+            let i = body.add_particle(p);
+            if particle_mass.is_finite() && particle_mass > 0.0 {
+                body.particles[i].inv_mass = 1.0 / particle_mass;
+            }
+            i
+        };
+        // Silence unused-var warning when stiffness/damping are not yet used.
+        let _ = (stiffness, damping, idx);
+
+        let id = world.inner.soft_bodies.insert(body);
+        self.entity_to_soft_body.insert(entity, id);
+        id.0
+    }
+
+    fn entity_to_soft_body_id(&self, entity_bits: u64) -> u32 {
+        let Some(entity) = self.entity_from_bits(entity_bits) else {
+            return 0;
+        };
+        self.entity_to_soft_body
+            .get(&entity)
+            .map(|v| v.0)
+            .unwrap_or(0)
     }
 
     fn spawn_body(&mut self, translation: Vec3, rotation: Quat, status: u32) -> u64 {
@@ -490,6 +544,49 @@ pub extern "C" fn anvilkit_app_entity_to_collider(
             .get(&entity)
             .map(|v| *v)
             .unwrap_or(0)
+    })
+}
+
+/// # Safety
+///
+/// `app` and `world` must be null or valid handles returned by
+/// `anvilkit_app_create` / the world-creation ABI.
+#[unsafe(no_mangle)]
+pub extern "C" fn anvilkit_app_spawn_soft_body(
+    app: *mut crate::rapier::ffi::AnvilKitAppHandle,
+    world: *mut WorldHandle,
+    entity_bits: u64,
+    particle_mass: f64,
+    stiffness: f64,
+    damping: f64,
+    pin: Bool,
+) -> u32 {
+    ffi_guard(0, || {
+        let Some(app) = (unsafe { app.as_mut() }) else {
+            return 0;
+        };
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            return 0;
+        };
+        let pin = pin == Bool::TRUE;
+        app.inner
+            .spawn_soft_body(world, entity_bits, particle_mass, stiffness, damping, pin)
+    })
+}
+
+/// # Safety
+///
+/// `app` must be null or a valid handle returned by `anvilkit_app_create`.
+#[unsafe(no_mangle)]
+pub extern "C" fn anvilkit_app_entity_to_soft_body(
+    app: *const crate::rapier::ffi::AnvilKitAppHandle,
+    entity_bits: u64,
+) -> u32 {
+    ffi_guard(0, || {
+        let Some(app) = (unsafe { app.as_ref() }) else {
+            return 0;
+        };
+        app.inner.entity_to_soft_body_id(entity_bits)
     })
 }
 
