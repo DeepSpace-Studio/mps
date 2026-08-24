@@ -5033,6 +5033,7 @@ dependencies = [
  "bitflags 2.13.0",
  "glamx",
  "log",
+ "matrixmultiply",
  "nalgebra 0.35.0",
  "num-traits",
  "parry3d-f64",
