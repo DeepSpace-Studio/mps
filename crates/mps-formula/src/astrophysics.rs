@@ -124,10 +124,9 @@ fn insert_particle(
     insert_particle(nodes, child_node, particle_index, particles);
 }
 
-
 fn acceleration_from_mass(position: Vector, center: Vector, gm: f64, softening: f64) -> Vector {
     if gm <= 0.0 {
-      return Vector::ZERO;
+        return Vector::ZERO;
     }
     let offset = center - position;
     // Use mul_add for softened distance: r² + ε² with single rounding

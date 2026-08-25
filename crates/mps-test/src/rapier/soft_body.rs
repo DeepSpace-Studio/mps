@@ -64,8 +64,7 @@ mod tests {
         }
 
         // Verify every dynamic node is finite and within a sane bounding box.
-        for i in 0..n as usize {
-            let h = handles[i];
+        for &h in handles.iter().take(n as usize) {
             assert_ne!(h, 0, "node handle must be valid");
             let body = unsafe {
                 (*world)
@@ -506,7 +505,7 @@ mod tests {
         // Add 3 collinear particles.
         let p0 = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
         let p1 = soft_body_add_particle(world, id, 1.0, 0.0, 0.0, 1.0, Bool::FALSE);
-        let p2 = soft_body_add_particle(world, id, 2.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        let _p2 = soft_body_add_particle(world, id, 2.0, 0.0, 0.0, 1.0, Bool::FALSE);
         assert_eq!(soft_body_particle_count(world, id), 3);
 
         // Read back p1's position (should be (1,0,0)).
