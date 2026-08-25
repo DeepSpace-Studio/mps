@@ -1689,6 +1689,8 @@ jni!(long softBodyAddParticle(long world, int id, double x, double y, double z, 
 jni!(boolean softBodyAddSpring(long world, int id, int a, int b, double stiffness, double damping) { sb::soft_body_add_spring(m::<WH>(world), id as u32, a as u32, b as u32, stiffness, damping).0 as jbyte });
 jni!(boolean softBodyAddDistanceConstraint(long world, int id, int a, int b, double compliance) { sb::soft_body_add_distance_constraint(m::<WH>(world), id as u32, a as u32, b as u32, compliance).0 as jbyte });
 jni!(boolean softBodyAddTetrahedron(long world, int id, int a, int b, int c, int d) { sb::soft_body_add_tetrahedron(m::<WH>(world), id as u32, a as u32, b as u32, c as u32, d as u32).0 as jbyte });
+jni!(boolean softBodyAddTriangle(long world, int id, int a, int b, int c) { sb::soft_body_add_triangle(m::<WH>(world), id as u32, a as u32, b as u32, c as u32).0 as jbyte });
+jni!(boolean softBodyAddBending(long world, int id, int p, int q) { sb::soft_body_add_bending(m::<WH>(world), id as u32, p as u32, q as u32).0 as jbyte });
 jni!(boolean softBodyConfigureSolver(long world, int id, int solver_mode, int iterations, double compliance) { sb::soft_body_configure_solver(m::<WH>(world), id as u32, solver_mode as u32, iterations as u32, compliance).0 as jbyte });
 jni!(long softBodyBuildTetraMesh(long world, double gravity_x, double gravity_y, double gravity_z, long particles, int particles_len, long tets, int tets_len, double particle_mass, double compliance, int iterations) { sb::soft_body_build_tetra_mesh(m::<WH>(world), v3(gravity_x, gravity_y, gravity_z), p::<Vec3>(particles), particles_len as u32, p::<u32>(tets), tets_len as u32, particle_mass, compliance, iterations as u32) as jlong });
 
@@ -1708,6 +1710,7 @@ jni!(boolean softBodyDestroy(long world, int id) { sb::soft_body_destroy(m::<WH>
 jni!(int softBodyReadParticles(long world, int id, long out_pos, long out_inv_mass, int capacity) { sb::soft_body_read_particles(cp::<WH>(world), id as u32, pm::<Vec3>(out_pos), pm::<f64>(out_inv_mass), capacity as u32) as jint });
 jni!(int softBodyReadEdges(long world, int id, long out_edges, int capacity) { sb::soft_body_read_edges(cp::<WH>(world), id as u32, pm::<u32>(out_edges), capacity as u32) as jint });
 jni!(int softBodyReadTetrahedra(long world, int id, long out_tets, int capacity) { sb::soft_body_read_tetrahedra(cp::<WH>(world), id as u32, pm::<u32>(out_tets), capacity as u32) as jint });
+jni!(int softBodyReadTriangles(long world, int id, long out_tris, int capacity) { sb::soft_body_read_triangles(cp::<WH>(world), id as u32, pm::<u32>(out_tris), capacity as u32) as jint });
 
 // Phase 5f: 软体-刚体碰撞（proxy collider 桥接）
 jni!(boolean softBodyEnableCollision(long world, int id, double particle_radius, int enabled) { sb::soft_body_enable_collision(m::<WH>(world), id as u32, particle_radius, jb(enabled)).0 as jbyte });

@@ -9,11 +9,12 @@ mod tests {
         rigid_body_builder_build, rigid_body_builder_create, world_insert_rigid_body,
     };
     use mps_core::rapier::soft_body::{
-        soft_body_add_distance_constraint, soft_body_add_particle, soft_body_add_spring,
-        soft_body_add_tetrahedron, soft_body_build_tetra_mesh, soft_body_configure_solver,
-        soft_body_count, soft_body_create, soft_body_destroy, soft_body_enable_collision,
-        soft_body_get_particle, soft_body_particle_count, soft_body_read_edges,
-        soft_body_read_particles, soft_body_read_tetrahedra, soft_body_remove_particle,
+        soft_body_add_bending, soft_body_add_distance_constraint, soft_body_add_particle,
+        soft_body_add_spring, soft_body_add_tetrahedron, soft_body_add_triangle,
+        soft_body_build_tetra_mesh, soft_body_configure_solver, soft_body_count, soft_body_create,
+        soft_body_destroy, soft_body_enable_collision, soft_body_get_particle,
+        soft_body_particle_count, soft_body_read_edges, soft_body_read_particles,
+        soft_body_read_tetrahedra, soft_body_read_triangles, soft_body_remove_particle,
         soft_body_set_gravity, soft_body_voxel_build, soft_body_voxel_dig, soft_chain_create,
         soft_chain_node_handles,
     };
@@ -1163,6 +1164,152 @@ mod tests {
             soft_body_read_tetrahedra(world, u32::MAX, std::ptr::null_mut(), 0),
             0
         );
+
+        world_destroy(world);
+    }
+
+    // ── Phase 6: 布料拓扑（三角形面 + 结构边自动注册 + 弯曲约束）─────────────────
+    // 一个 2×1 的四边形布片 = (0,0)-(1,0)-(1,1)-(0,1)：两个三角形 + 四条边。
+    // 结构边由 add_triangle 自动去重注册；弯曲约束（对角线）由 add_bending 显式添加。
+    #[test]
+    fn soft_body_cloth_topology_and_bending() {
+        let world = make_world();
+        assert!(!world.is_null());
+
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+
+        // 4 个布料质点（pinned[0]=固定角，其余自由）。
+        assert_eq!(
+            soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::TRUE),
+            0
+        );
+        assert_eq!(
+            soft_body_add_particle(world, id, 1.0, 0.0, 0.0, 1.0, Bool::FALSE),
+            1
+        );
+        assert_eq!(
+            soft_body_add_particle(world, id, 1.0, 1.0, 0.0, 1.0, Bool::FALSE),
+            2
+        );
+        assert_eq!(
+            soft_body_add_particle(world, id, 0.0, 1.0, 0.0, 1.0, Bool::FALSE),
+            3
+        );
+
+        // 两个三角形组成四边形。shared edge (0,2) 由 add_triangle 去重，故
+        // 结构边 = 5（(0,1)(1,2)(2,0)(2,3)(3,0)），再加 1 条弯曲边 (1,3) = 6，
+        // 恰好是 4 顶点的全部 6 条边（K4）。
+        assert_eq!(soft_body_add_triangle(world, id, 0, 1, 2), Bool::TRUE);
+        assert_eq!(soft_body_add_triangle(world, id, 0, 2, 3), Bool::TRUE);
+
+        // 弯曲约束：四边形另一条对角线 (1,3)（(0,2) 已是结构共享边，无需重复）。
+        assert_eq!(soft_body_add_bending(world, id, 1, 3), Bool::TRUE);
+
+        let particle_count = soft_body_particle_count(world, id);
+        assert_eq!(particle_count, 4);
+
+        // ── 三角形读回：2 个面 = 6 个 u32 ──
+        let tri_count = soft_body_read_triangles(world, id, std::ptr::null_mut(), 0);
+        assert_eq!(tri_count, 2, "2 triangle faces expected");
+        let mut tris = vec![0u32; (tri_count as usize) * 3];
+        let read_tris = soft_body_read_triangles(world, id, tris.as_mut_ptr(), tris.len() as u32);
+        assert_eq!(read_tris, 2);
+
+        // ── 边读回：5 条结构边 + 1 条弯曲边 = 6 条边 ──
+        let edge_count = soft_body_read_edges(world, id, std::ptr::null_mut(), 0);
+        assert_eq!(edge_count, 6, "5 structural + 1 bending edge");
+        let mut edges = vec![0u32; (edge_count as usize) * 2];
+        let read_edges = soft_body_read_edges(world, id, edges.as_mut_ptr(), edges.len() as u32);
+        assert_eq!(read_edges, 6);
+        // 归一化为无序对，验证恰好是 K4 的全部 6 条边（去重生效，无重复）。
+        let mut pairs: std::collections::HashSet<(u32, u32)> = std::collections::HashSet::new();
+        for k in 0..6usize {
+            let a = edges[k * 2];
+            let b = edges[k * 2 + 1];
+            assert!(a != b, "degenerate edge");
+            pairs.insert(if a < b { (a, b) } else { (b, a) });
+        }
+        let expected: std::collections::HashSet<(u32, u32)> =
+            [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]
+                .into_iter()
+                .collect();
+        assert_eq!(pairs, expected, "edge set must equal all 6 edges of K4");
+
+        // 未知 id 返回 0，不 panic。
+        assert_eq!(
+            soft_body_read_triangles(world, u32::MAX, std::ptr::null_mut(), 0),
+            0
+        );
+
+        world_destroy(world);
+    }
+
+    // ── Phase 6: 布料在重力下的悬垂（XPBD 求解器跑通，不发散）──────────────────
+    #[test]
+    fn soft_body_cloth_sags_under_gravity() {
+        let world = make_world();
+        assert!(!world.is_null());
+
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: -9.81,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+
+        // 6 个质点排成 3×2 网格在 y=2 平面，pin 顶部两个角。
+        let _p0 = soft_body_add_particle(world, id, -1.0, 2.0, 0.0, 1.0, Bool::TRUE);
+        let _p1 = soft_body_add_particle(world, id, 1.0, 2.0, 0.0, 1.0, Bool::TRUE);
+        let _p2 = soft_body_add_particle(world, id, -1.0, 1.0, 0.0, 1.0, Bool::FALSE);
+        let _p3 = soft_body_add_particle(world, id, 1.0, 1.0, 0.0, 1.0, Bool::FALSE);
+        let _p4 = soft_body_add_particle(world, id, -1.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        let _p5 = soft_body_add_particle(world, id, 1.0, 0.0, 0.0, 1.0, Bool::FALSE);
+
+        // 4 个三角面覆盖网格。
+        assert_eq!(soft_body_add_triangle(world, id, 0, 1, 3), Bool::TRUE);
+        assert_eq!(soft_body_add_triangle(world, id, 0, 3, 2), Bool::TRUE);
+        assert_eq!(soft_body_add_triangle(world, id, 1, 5, 3), Bool::TRUE);
+        assert_eq!(soft_body_add_triangle(world, id, 3, 5, 4), Bool::TRUE);
+
+        // 启用 XPBD 求解器（布料用距离约束保形）。
+        assert_eq!(
+            soft_body_configure_solver(world, id, 1, 20, 0.0),
+            Bool::TRUE
+        );
+
+        for _ in 0..120 {
+            world_step(world, 1.0 / 60.0);
+        }
+
+        // 读回质点，确认：固定角不动、自由点有限且下垂、无 NaN/发散。
+        let count = soft_body_particle_count(world, id);
+        let mut pos = vec![Vec3::default(); count as usize];
+        let read =
+            soft_body_read_particles(world, id, pos.as_mut_ptr(), std::ptr::null_mut(), count);
+        assert_eq!(read, count);
+        for (i, p) in pos.iter().enumerate() {
+            assert!(
+                p.x.is_finite() && p.y.is_finite() && p.z.is_finite(),
+                "p{i} blew up"
+            );
+        }
+        // 固定角仍锚在 y≈2。
+        assert!((pos[0].y - 2.0).abs() < 1e-6, "pinned corner drifted");
+        assert!((pos[1].y - 2.0).abs() < 1e-6, "pinned corner drifted");
+        // 底部自由点应下垂（y 明显低于 2）。
+        assert!(pos[4].y < 1.5, "bottom row should sag below 1.5");
+        assert!(pos[5].y < 1.5, "bottom row should sag below 1.5");
 
         world_destroy(world);
     }

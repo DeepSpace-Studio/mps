@@ -305,4 +305,7 @@ include = [
   "soft_body_read_particles",
   "soft_body_read_edges",
   "soft_body_read_tetrahedra",
+  "soft_body_add_triangle",
+  "soft_body_add_bending",
+  "soft_body_read_triangles",
 ]

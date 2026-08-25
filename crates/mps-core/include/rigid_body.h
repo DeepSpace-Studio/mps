@@ -4421,6 +4421,43 @@ Bool soft_body_add_tetrahedron(struct WorldHandle *world,
                                uint32_t d);
 
 /**
+ * Phase 6 — cloth: add a triangular face `[a, b, c]` to a soft body's shell
+ * topology. The three structural edges are registered automatically as
+ * distance constraints (rest length from current spacing); duplicate edges
+ * shared with neighbouring triangles are de-duplicated inside rapier. Bending
+ * is composed separately by the caller via `soft_body_add_bending` (a single
+ * cross-diagonal distance constraint) — no new mechanics, fully reusing the
+ * existing XPBD distance solver.
+ *
+ * Returns `Bool::TRUE` on success. `Bool::FALSE` if the body/id is unknown, an
+ * index is out of bounds or duplicated, or the face is degenerate (a zero-length
+ * edge).
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+Bool soft_body_add_triangle(struct WorldHandle *world,
+                            uint32_t id,
+                            uint32_t a,
+                            uint32_t b,
+                            uint32_t c);
+
+/**
+ * Phase 6 — cloth: add a single bending edge between particles `p` and `q` as
+ * a distance constraint (rest length from current spacing). Compose bending
+ * across a quad by calling this for its two diagonals, or across a fold line by
+ * linking the un-shared vertices of two adjacent triangles. Reuses the existing
+ * XPBD distance solver (no new mechanics).
+ *
+ * Returns `Bool::TRUE` on success. `Bool::FALSE` if the body/id is unknown, an
+ * index is out of bounds, or the endpoints coincide.
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+Bool soft_body_add_bending(struct WorldHandle *world, uint32_t id, uint32_t p, uint32_t q);
+
+/**
  * Switch a soft body's solver.
  *
  * * `solver_mode` — `0` = `MassSpring` (Hookean springs, semi-implicit Euler);
@@ -4546,6 +4583,16 @@ uint32_t soft_body_read_tetrahedra(const struct WorldHandle *world,
                                    uint32_t id,
                                    uint32_t *out_tets,
                                    uint32_t capacity);
+
+/**
+ * Phase 6 — cloth: 批量读回三角形面（shell 拓扑）。每个三角形是 3 个 `u32`
+ * 粒子索引。 `out_tris` 容量需 ≥ `capacity` 个 `u32`（即 `capacity/3` 个三角形）。
+ * 与 `soft_body_read_edges` 配合可让渲染层区分结构边与弯曲边。
+ */
+uint32_t soft_body_read_triangles(const struct WorldHandle *world,
+                                  uint32_t id,
+                                  uint32_t *out_tris,
+                                  uint32_t capacity);
 
 /**
  * Dig out a single voxel cell of a soft body built via `soft_body_voxel_build`,

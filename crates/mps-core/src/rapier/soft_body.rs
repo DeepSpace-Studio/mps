@@ -777,6 +777,93 @@ pub extern "C" fn soft_body_add_tetrahedron(
     })
 }
 
+/// Phase 6 — cloth: add a triangular face `[a, b, c]` to a soft body's shell
+/// topology. The three structural edges are registered automatically as
+/// distance constraints (rest length from current spacing); duplicate edges
+/// shared with neighbouring triangles are de-duplicated inside rapier. Bending
+/// is composed separately by the caller via `soft_body_add_bending` (a single
+/// cross-diagonal distance constraint) — no new mechanics, fully reusing the
+/// existing XPBD distance solver.
+///
+/// Returns `Bool::TRUE` on success. `Bool::FALSE` if the body/id is unknown, an
+/// index is out of bounds or duplicated, or the face is degenerate (a zero-length
+/// edge).
+///
+/// # Safety
+/// `world` must be a valid world pointer.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_add_triangle(
+    world: *mut WorldHandle,
+    id: u32,
+    a: u32,
+    b: u32,
+    c: u32,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_add_triangle: world is null");
+            return Bool::FALSE;
+        };
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_add_triangle: unknown id");
+            return Bool::FALSE;
+        };
+        match body.add_triangle([a, b, c]) {
+            Some(_) => {
+                clear_error();
+                Bool::TRUE
+            }
+            None => {
+                set_error(
+                    ERR_INVALID_ARGUMENT,
+                    "soft_body_add_triangle: bad/degenerate indices",
+                );
+                Bool::FALSE
+            }
+        }
+    })
+}
+
+/// Phase 6 — cloth: add a single bending edge between particles `p` and `q` as
+/// a distance constraint (rest length from current spacing). Compose bending
+/// across a quad by calling this for its two diagonals, or across a fold line by
+/// linking the un-shared vertices of two adjacent triangles. Reuses the existing
+/// XPBD distance solver (no new mechanics).
+///
+/// Returns `Bool::TRUE` on success. `Bool::FALSE` if the body/id is unknown, an
+/// index is out of bounds, or the endpoints coincide.
+///
+/// # Safety
+/// `world` must be a valid world pointer.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_add_bending(world: *mut WorldHandle, id: u32, p: u32, q: u32) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_add_bending: world is null");
+            return Bool::FALSE;
+        };
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_add_bending: unknown id");
+            return Bool::FALSE;
+        };
+        match body.add_bending_constraint(p as usize, q as usize) {
+            Some(_) => {
+                clear_error();
+                Bool::TRUE
+            }
+            None => {
+                set_error(
+                    ERR_INVALID_ARGUMENT,
+                    "soft_body_add_bending: bad/coincident indices",
+                );
+                Bool::FALSE
+            }
+        }
+    })
+}
+
 /// Switch a soft body's solver.
 ///
 /// * `solver_mode` — `0` = `MassSpring` (Hookean springs, semi-implicit Euler);
@@ -1238,6 +1325,42 @@ pub extern "C" fn soft_body_read_tetrahedra(
                 slice[base + 1] = t[1];
                 slice[base + 2] = t[2];
                 slice[base + 3] = t[3];
+            }
+        }
+        clear_error();
+        n as u32
+    })
+}
+
+/// Phase 6 — cloth: 批量读回三角形面（shell 拓扑）。每个三角形是 3 个 `u32`
+/// 粒子索引。 `out_tris` 容量需 ≥ `capacity` 个 `u32`（即 `capacity/3` 个三角形）。
+/// 与 `soft_body_read_edges` 配合可让渲染层区分结构边与弯曲边。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_read_triangles(
+    world: *const WorldHandle,
+    id: u32,
+    out_tris: *mut u32,
+    capacity: u32,
+) -> u32 {
+    ffi_guard(0, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_read_triangles: world is null");
+            return 0;
+        };
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_read_triangles: unknown id");
+            return 0;
+        };
+        let n = body.triangles.len();
+        let cap = capacity as usize;
+        if !out_tris.is_null() && cap > 0 {
+            let slice = unsafe { std::slice::from_raw_parts_mut(out_tris, cap) };
+            for (i, t) in body.triangles.iter().enumerate().take(cap / 3) {
+                let base = i * 3;
+                slice[base] = t[0];
+                slice[base + 1] = t[1];
+                slice[base + 2] = t[2];
             }
         }
         clear_error();
