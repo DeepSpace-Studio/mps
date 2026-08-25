@@ -12,7 +12,8 @@ mod tests {
         soft_body_add_distance_constraint, soft_body_add_particle, soft_body_add_spring,
         soft_body_add_tetrahedron, soft_body_build_tetra_mesh, soft_body_configure_solver,
         soft_body_count, soft_body_create, soft_body_destroy, soft_body_enable_collision,
-        soft_body_get_particle, soft_body_particle_count, soft_body_remove_particle,
+        soft_body_get_particle, soft_body_particle_count, soft_body_read_edges,
+        soft_body_read_particles, soft_body_read_tetrahedra, soft_body_remove_particle,
         soft_body_set_gravity, soft_body_voxel_build, soft_body_voxel_dig, soft_chain_create,
         soft_chain_node_handles,
     };
@@ -1064,6 +1065,105 @@ mod tests {
         let dug_again = collider_voxel_edit(world, collider_handle, 0, 0, 0, 0);
         assert_eq!(dug_again, Bool::TRUE);
         assert_eq!(soft_body_particle_count(world, id), 7);
+
+        world_destroy(world);
+    }
+
+    /// Phase 5i: topology read-back for rendering. Build a tetra-mesh soft body
+    /// with a known spring + distance constraint + tetra, then pull the whole
+    /// state via the bulk `soft_body_read_*` FFI and check counts/consistency
+    /// against `soft_body_particle_count` + the topology we inserted.
+    #[test]
+    fn soft_body_read_back_topology_for_rendering() {
+        let world = make_world();
+        assert!(!world.is_null());
+
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+
+        // 4 particles forming a tetrahedron.
+        let p0 = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        let p1 = soft_body_add_particle(world, id, 1.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        let p2 = soft_body_add_particle(world, id, 0.0, 1.0, 0.0, 1.0, Bool::FALSE);
+        let p3 = soft_body_add_particle(world, id, 0.0, 0.0, 1.0, 1.0, Bool::FALSE);
+        assert_eq!((p0, p1, p2, p3), (0, 1, 2, 3));
+
+        // 1 spring edge (a-b) + 1 distance constraint edge (c-d).
+        assert_eq!(soft_body_add_spring(world, id, 0, 1, 50.0, 2.0), Bool::TRUE);
+        assert_eq!(
+            soft_body_add_distance_constraint(world, id, 2, 3, 10.0),
+            Bool::TRUE
+        );
+        // 1 tetra over all four particles.
+        assert_eq!(soft_body_add_tetrahedron(world, id, 0, 1, 2, 3), Bool::TRUE);
+
+        let count = soft_body_particle_count(world, id);
+        assert_eq!(count, 4);
+
+        // ── bulk particle read ──
+        let mut pos = vec![Vec3::default(); count as usize];
+        let mut inv_mass = vec![0.0f64; count as usize];
+        let read =
+            soft_body_read_particles(world, id, pos.as_mut_ptr(), inv_mass.as_mut_ptr(), count);
+        assert_eq!(read, count, "read_particles should return particle count");
+        // inv_mass of 1.0 mass → 1.0.
+        for im in &inv_mass {
+            assert_eq!(*im, 1.0, "unpinned particle inv_mass should be 1.0");
+        }
+        // Position 0 should match the particle we added.
+        assert!((pos[0].x).abs() < 1e-9 && (pos[0].y).abs() < 1e-9);
+
+        // ── edges read (spring + distance constraint = 2 edges = 4 u32) ──
+        let edge_count = soft_body_read_edges(world, id, std::ptr::null_mut(), 0);
+        assert_eq!(edge_count, 2, "2 edges (1 spring + 1 distance constraint)");
+        let mut edges = vec![0u32; (edge_count as usize) * 2];
+        let read_edges = soft_body_read_edges(world, id, edges.as_mut_ptr(), edges.len() as u32);
+        assert_eq!(read_edges, 2);
+        // spring edge (0,1) first, then distance edge (2,3).
+        assert_eq!((edges[0], edges[1]), (0, 1));
+        assert_eq!((edges[2], edges[3]), (2, 3));
+
+        // ── tetra read (1 tetra = 4 u32) ──
+        let tet_count = soft_body_read_tetrahedra(world, id, std::ptr::null_mut(), 0);
+        assert_eq!(tet_count, 1);
+        let mut tets = vec![0u32; (tet_count as usize) * 4];
+        let read_tets = soft_body_read_tetrahedra(world, id, tets.as_mut_ptr(), tets.len() as u32);
+        assert_eq!(read_tets, 1);
+        assert_eq!(tets, vec![0, 1, 2, 3]);
+
+        // ── capacity clamp: requesting fewer slots than needed must not panic ──
+        let tiny = soft_body_read_edges(world, id, edges.as_mut_ptr(), 2);
+        assert_eq!(
+            tiny, 2,
+            "real edge count returned even though buffer held only 1 edge"
+        );
+
+        // ── unknown id returns 0, no panic ──
+        assert_eq!(
+            soft_body_read_particles(
+                world,
+                u32::MAX,
+                pos.as_mut_ptr(),
+                std::ptr::null_mut(),
+                count
+            ),
+            0
+        );
+        assert_eq!(
+            soft_body_read_edges(world, u32::MAX, std::ptr::null_mut(), 0),
+            0
+        );
+        assert_eq!(
+            soft_body_read_tetrahedra(world, u32::MAX, std::ptr::null_mut(), 0),
+            0
+        );
 
         world_destroy(world);
     }

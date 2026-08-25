@@ -302,4 +302,7 @@ include = [
   "relativity_schwarzschild_effective_potential",
   "relativity_gw_inspiral_snr",
   "relativity_gw_inspiral_time_to_coalescence",
+  "soft_body_read_particles",
+  "soft_body_read_edges",
+  "soft_body_read_tetrahedra",
 ]

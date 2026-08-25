@@ -1113,6 +1113,138 @@ pub extern "C" fn soft_body_destroy(world: *mut WorldHandle, id: u32) -> Bool {
     })
 }
 
+// ── Phase 5i: 拓扑读回（渲染用）────────────────────────────────────────────
+//
+// 三个 FFI 把软体的「当前状态 + 拓扑」一次性拷给调用方提供的缓冲区，供渲染层
+// （Minecraft 端）每帧拉取重建网格，无需逐个粒子调用 `soft_body_get_particle`。
+// 语义对齐 `world_dynamic_body_snapshot`：调用方先给 capacity 申请足够大的缓冲，
+// FFI 写入前 `min(count, capacity)` 个元素并返回 *真实* 元素数（capacity 不足时
+// 调用方据此扩容重试）。所有函数对越界/空指针都 idempotent 返回 0，不 panic。
+
+/// 批量读回粒子：位置（world-space）+ 逆质量（0 = pinned）。
+/// `out_pos` 容量需 ≥ `capacity` 个 `Vec3`；`out_inv_mass` 容量需 ≥ `capacity` 个 `f64`。
+/// 任一出参为 null 即跳过该通道（只写非 null 的通道），但仍返回粒子总数。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_read_particles(
+    world: *const WorldHandle,
+    id: u32,
+    out_pos: *mut Vec3,
+    out_inv_mass: *mut f64,
+    capacity: u32,
+) -> u32 {
+    ffi_guard(0, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_read_particles: world is null");
+            return 0;
+        };
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_read_particles: unknown id");
+            return 0;
+        };
+        let n = body.particles.len();
+        let cap = capacity as usize;
+        if !out_pos.is_null() && cap > 0 {
+            let slice = unsafe { std::slice::from_raw_parts_mut(out_pos, cap) };
+            for (i, p) in body.particles.iter().enumerate().take(cap) {
+                slice[i] = vec3_from_rapier(p.pos);
+            }
+        }
+        if !out_inv_mass.is_null() && cap > 0 {
+            let slice = unsafe { std::slice::from_raw_parts_mut(out_inv_mass, cap) };
+            for (i, p) in body.particles.iter().enumerate().take(cap) {
+                slice[i] = p.inv_mass;
+            }
+        }
+        clear_error();
+        n as u32
+    })
+}
+
+/// 批量读回边（弹簧 + 距离约束合并）。每条边是 2 个 `u32` 粒子索引。
+/// `out_edges` 容量需 ≥ `capacity` 个 `u32`（即 `capacity/2` 条边）。
+/// 边顺序：先所有 springs，再所有 distance_constraints（与 `soft_body_read_tetrahedra`
+/// 配合可让渲染层区分软/硬边，若需要）。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_read_edges(
+    world: *const WorldHandle,
+    id: u32,
+    out_edges: *mut u32,
+    capacity: u32,
+) -> u32 {
+    ffi_guard(0, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_read_edges: world is null");
+            return 0;
+        };
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_read_edges: unknown id");
+            return 0;
+        };
+        let total_edges = body.springs.len() + body.distance_constraints.len();
+        let cap = capacity as usize;
+        if !out_edges.is_null() && cap > 0 {
+            let slice = unsafe { std::slice::from_raw_parts_mut(out_edges, cap) };
+            let mut w = 0usize;
+            for s in body.springs.iter() {
+                if w + 2 > cap {
+                    break;
+                }
+                slice[w] = s.a as u32;
+                slice[w + 1] = s.b as u32;
+                w += 2;
+            }
+            for d in body.distance_constraints.iter() {
+                if w + 2 > cap {
+                    break;
+                }
+                slice[w] = d.a as u32;
+                slice[w + 1] = d.b as u32;
+                w += 2;
+            }
+        }
+        clear_error();
+        total_edges as u32
+    })
+}
+
+/// 批量读回四面体（XPBD 体积约束单元）。每个四面体是 4 个 `u32` 粒子索引。
+/// `out_tets` 容量需 ≥ `capacity` 个 `u32`（即 `capacity/4` 个四面体）。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_read_tetrahedra(
+    world: *const WorldHandle,
+    id: u32,
+    out_tets: *mut u32,
+    capacity: u32,
+) -> u32 {
+    ffi_guard(0, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_read_tetrahedra: world is null");
+            return 0;
+        };
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_read_tetrahedra: unknown id");
+            return 0;
+        };
+        let n = body.tetrahedra.len();
+        let cap = capacity as usize;
+        if !out_tets.is_null() && cap > 0 {
+            let slice = unsafe { std::slice::from_raw_parts_mut(out_tets, cap) };
+            for (i, t) in body.tetrahedra.iter().enumerate().take(cap / 4) {
+                let base = i * 4;
+                slice[base] = t[0];
+                slice[base + 1] = t[1];
+                slice[base + 2] = t[2];
+                slice[base + 3] = t[3];
+            }
+        }
+        clear_error();
+        n as u32
+    })
+}
+
 // ── Phase 5d: 区块破坏 → 软体重建联动（Minecraft 闭环）──────────────────────
 //
 // 监听 voxel 地形 `set_cell` 破坏事件后，上层调用本 FFI：把被挖空的方块格

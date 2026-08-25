@@ -1704,5 +1704,10 @@ jni!(boolean softBodyGetParticle(long world, int id, int index, long out_pos, lo
 jni!(boolean softBodyRemoveParticle(long world, int id, int index) { sb::soft_body_remove_particle(m::<WH>(world), id as u32, index as u32).0 as jbyte });
 jni!(boolean softBodyDestroy(long world, int id) { sb::soft_body_destroy(m::<WH>(world), id as u32).0 as jbyte });
 
+// Phase 5i: 拓扑读回（渲染用）— 批量读回粒子位置/逆质量 + 边 + 四面体。
+jni!(int softBodyReadParticles(long world, int id, long out_pos, long out_inv_mass, int capacity) { sb::soft_body_read_particles(cp::<WH>(world), id as u32, pm::<Vec3>(out_pos), pm::<f64>(out_inv_mass), capacity as u32) as jint });
+jni!(int softBodyReadEdges(long world, int id, long out_edges, int capacity) { sb::soft_body_read_edges(cp::<WH>(world), id as u32, pm::<u32>(out_edges), capacity as u32) as jint });
+jni!(int softBodyReadTetrahedra(long world, int id, long out_tets, int capacity) { sb::soft_body_read_tetrahedra(cp::<WH>(world), id as u32, pm::<u32>(out_tets), capacity as u32) as jint });
+
 // Phase 5f: 软体-刚体碰撞（proxy collider 桥接）
 jni!(boolean softBodyEnableCollision(long world, int id, double particle_radius, int enabled) { sb::soft_body_enable_collision(m::<WH>(world), id as u32, particle_radius, jb(enabled)).0 as jbyte });

@@ -4517,6 +4517,37 @@ Bool soft_body_remove_particle(struct WorldHandle *world, uint32_t id, uint32_t 
 Bool soft_body_destroy(struct WorldHandle *world, uint32_t id);
 
 /**
+ * 批量读回粒子：位置（world-space）+ 逆质量（0 = pinned）。
+ * `out_pos` 容量需 ≥ `capacity` 个 `Vec3`；`out_inv_mass` 容量需 ≥ `capacity` 个 `f64`。
+ * 任一出参为 null 即跳过该通道（只写非 null 的通道），但仍返回粒子总数。
+ */
+uint32_t soft_body_read_particles(const struct WorldHandle *world,
+                                  uint32_t id,
+                                  Vec3 *out_pos,
+                                  double *out_inv_mass,
+                                  uint32_t capacity);
+
+/**
+ * 批量读回边（弹簧 + 距离约束合并）。每条边是 2 个 `u32` 粒子索引。
+ * `out_edges` 容量需 ≥ `capacity` 个 `u32`（即 `capacity/2` 条边）。
+ * 边顺序：先所有 springs，再所有 distance_constraints（与 `soft_body_read_tetrahedra`
+ * 配合可让渲染层区分软/硬边，若需要）。
+ */
+uint32_t soft_body_read_edges(const struct WorldHandle *world,
+                              uint32_t id,
+                              uint32_t *out_edges,
+                              uint32_t capacity);
+
+/**
+ * 批量读回四面体（XPBD 体积约束单元）。每个四面体是 4 个 `u32` 粒子索引。
+ * `out_tets` 容量需 ≥ `capacity` 个 `u32`（即 `capacity/4` 个四面体）。
+ */
+uint32_t soft_body_read_tetrahedra(const struct WorldHandle *world,
+                                   uint32_t id,
+                                   uint32_t *out_tets,
+                                   uint32_t capacity);
+
+/**
  * Dig out a single voxel cell of a soft body built via `soft_body_voxel_build`,
  * removing the particle that occupies it (plus its incident springs/constraints)
  * and rebuilding the voxel→particle map so further digs stay consistent.
