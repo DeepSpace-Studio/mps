@@ -4441,6 +4441,57 @@ Bool soft_body_configure_solver(struct WorldHandle *world,
                                 double compliance);
 
 /**
+ * Number of live soft bodies in the world.
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+uint32_t soft_body_count(const struct WorldHandle *world);
+
+/**
+ * Number of particles in a soft body. Returns `u32::MAX` for an unknown id.
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+uint32_t soft_body_particle_count(const struct WorldHandle *world, uint32_t id);
+
+/**
+ * Read back a particle's position and velocity.
+ *
+ * `out_pos` / `out_vel` must point to writable `Vec3`; either may be null to
+ * skip that output. Returns `Bool::TRUE` on success.
+ *
+ * # Safety
+ * `world` must be a valid world pointer; `out_pos`/`out_vel` (if non-null) must
+ * point to writable `Vec3`.
+ */
+Bool soft_body_get_particle(const struct WorldHandle *world,
+                            uint32_t id,
+                            uint32_t index,
+                            Vec3 *out_pos,
+                            Vec3 *out_vel);
+
+/**
+ * Remove a particle (and every spring / distance constraint / tetrahedron that
+ * references it) from a soft body, keeping the remaining topology valid.
+ * Returns `Bool::TRUE` on success.
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+Bool soft_body_remove_particle(struct WorldHandle *world, uint32_t id, uint32_t index);
+
+/**
+ * Destroy a soft body, freeing its storage. Other live `SoftBodyId`s remain
+ * valid (the id slot becomes a tombstone). Returns `Bool::TRUE` on success.
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+Bool soft_body_destroy(struct WorldHandle *world, uint32_t id);
+
+/**
  * # Safety
  * `out_probability` must be null or point to a valid, writable `CollisionProbability`.
  */

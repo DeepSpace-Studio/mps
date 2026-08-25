@@ -807,3 +807,150 @@ pub extern "C" fn soft_body_configure_solver(
         }
     })
 }
+
+// ── Phase 5b: query / readback / lifecycle FFI (close the loop) ──────────────
+//
+// Phase 5a 让外部能「搭」软体；本组让外部能「查 / 读 / 删 / 毁」——
+// 这是 Minecraft 联动（读回质点渲染、区块破坏删质点、实体消失毁软体）必需的闭环。
+// 返回 id 类沿用 `u32::MAX` 哨兵；布尔类沿用 `Bool::FALSE`；`SoftBodyId` 经 rapier
+// `SoftBodySet::remove` 走 tombstone，删除后其余 id 仍有效。
+
+/// Number of live soft bodies in the world.
+///
+/// # Safety
+/// `world` must be a valid world pointer.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_count(world: *const WorldHandle) -> u32 {
+    ffi_guard(0, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_count: world is null");
+            return 0;
+        };
+        clear_error();
+        world.inner.soft_bodies.count() as u32
+    })
+}
+
+/// Number of particles in a soft body. Returns `u32::MAX` for an unknown id.
+///
+/// # Safety
+/// `world` must be a valid world pointer.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_particle_count(world: *const WorldHandle, id: u32) -> u32 {
+    ffi_guard(u32::MAX, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_particle_count: world is null");
+            return u32::MAX;
+        };
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_particle_count: unknown id");
+            return u32::MAX;
+        };
+        clear_error();
+        body.particles.len() as u32
+    })
+}
+
+/// Read back a particle's position and velocity.
+///
+/// `out_pos` / `out_vel` must point to writable `Vec3`; either may be null to
+/// skip that output. Returns `Bool::TRUE` on success.
+///
+/// # Safety
+/// `world` must be a valid world pointer; `out_pos`/`out_vel` (if non-null) must
+/// point to writable `Vec3`.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_get_particle(
+    world: *const WorldHandle,
+    id: u32,
+    index: u32,
+    out_pos: *mut Vec3,
+    out_vel: *mut Vec3,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_get_particle: world is null");
+            return Bool::FALSE;
+        };
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_get_particle: unknown id");
+            return Bool::FALSE;
+        };
+        let i = index as usize;
+        let Some(p) = body.particles.get(i) else {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_get_particle: index out of bounds",
+            );
+            return Bool::FALSE;
+        };
+        if !out_pos.is_null() {
+            unsafe {
+                *out_pos = vec3_from_rapier(p.pos);
+            }
+        }
+        if !out_vel.is_null() {
+            unsafe {
+                *out_vel = vec3_from_rapier(p.vel);
+            }
+        }
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Remove a particle (and every spring / distance constraint / tetrahedron that
+/// references it) from a soft body, keeping the remaining topology valid.
+/// Returns `Bool::TRUE` on success.
+///
+/// # Safety
+/// `world` must be a valid world pointer.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_remove_particle(world: *mut WorldHandle, id: u32, index: u32) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_remove_particle: world is null");
+            return Bool::FALSE;
+        };
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_remove_particle: unknown id");
+            return Bool::FALSE;
+        };
+        if body.remove_particle(index as usize) {
+            clear_error();
+            Bool::TRUE
+        } else {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_remove_particle: index out of bounds",
+            );
+            Bool::FALSE
+        }
+    })
+}
+
+/// Destroy a soft body, freeing its storage. Other live `SoftBodyId`s remain
+/// valid (the id slot becomes a tombstone). Returns `Bool::TRUE` on success.
+///
+/// # Safety
+/// `world` must be a valid world pointer.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_destroy(world: *mut WorldHandle, id: u32) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_destroy: world is null");
+            return Bool::FALSE;
+        };
+        let sid = SoftBodyId(id);
+        if world.inner.soft_bodies.remove(sid) {
+            clear_error();
+            Bool::TRUE
+        } else {
+            set_error(ERR_NOT_FOUND, "soft_body_destroy: unknown id");
+            Bool::FALSE
+        }
+    })
+}

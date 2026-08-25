@@ -3,8 +3,10 @@ mod tests {
     use mps_core::rapier::ffi::{Bool, RigidBodyHandleRaw, Vec3, WorldHandle};
     use mps_core::rapier::soft_body::{
         soft_body_add_distance_constraint, soft_body_add_particle, soft_body_add_spring,
-        soft_body_add_tetrahedron, soft_body_configure_solver, soft_body_create,
-        soft_body_set_gravity, soft_body_voxel_build, soft_chain_create, soft_chain_node_handles,
+        soft_body_add_tetrahedron, soft_body_configure_solver, soft_body_count, soft_body_create,
+        soft_body_destroy, soft_body_get_particle, soft_body_particle_count,
+        soft_body_remove_particle, soft_body_set_gravity, soft_body_voxel_build, soft_chain_create,
+        soft_chain_node_handles,
     };
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
     use rapier3d::prelude::soft_body::SoftBodyId;
@@ -467,6 +469,128 @@ mod tests {
             soft_body_add_tetrahedron(world, id, a, a, a, a),
             Bool::FALSE
         );
+        world_destroy(world);
+    }
+
+    // ── Phase 5b: query / readback / lifecycle FFI ────────────────────────────
+
+    #[test]
+    fn soft_body_query_readback_and_lifecycle() {
+        let world = make_world();
+        assert!(!world.is_null());
+
+        // No soft bodies yet.
+        assert_eq!(soft_body_count(world), 0);
+
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: -9.81,
+                z: 0.0,
+            },
+        );
+        assert!(id != u32::MAX);
+        assert_eq!(soft_body_count(world), 1);
+
+        // Add 3 collinear particles.
+        let p0 = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        let p1 = soft_body_add_particle(world, id, 1.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        let p2 = soft_body_add_particle(world, id, 2.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        assert_eq!(soft_body_particle_count(world, id), 3);
+
+        // Read back p1's position (should be (1,0,0)).
+        let mut pos = Vec3::default();
+        let mut vel = Vec3::default();
+        assert_eq!(
+            soft_body_get_particle(world, id, p1, &mut pos, &mut vel),
+            Bool::TRUE
+        );
+        assert!((pos.x - 1.0).abs() < 1e-12 && pos.y.abs() < 1e-12 && pos.z.abs() < 1e-12);
+        // Out-of-bounds index → FALSE.
+        assert_eq!(
+            soft_body_get_particle(world, id, 99, &mut pos, &mut vel),
+            Bool::FALSE
+        );
+
+        // Remove p1; the other two stay, topology indices remain valid.
+        assert_eq!(soft_body_remove_particle(world, id, p1), Bool::TRUE);
+        assert_eq!(soft_body_particle_count(world, id), 2);
+        // Remaining particles kept their positions.
+        assert_eq!(
+            soft_body_get_particle(world, id, p0, &mut pos, std::ptr::null_mut()),
+            Bool::TRUE
+        );
+        assert!((pos.x - 0.0).abs() < 1e-12);
+        // p2 was index 2, after removal of index 1 it shifts to index 1.
+        assert_eq!(
+            soft_body_get_particle(world, id, 1, &mut pos, std::ptr::null_mut()),
+            Bool::TRUE
+        );
+        assert!((pos.x - 2.0).abs() < 1e-12, "p2 should now be at index 1");
+
+        // Destroy the body; count drops, other ids would stay valid (only one here).
+        assert_eq!(soft_body_destroy(world, id), Bool::TRUE);
+        assert_eq!(soft_body_count(world), 0);
+        // Re-querying the destroyed id → unknown.
+        assert_eq!(soft_body_particle_count(world, id), u32::MAX);
+        // Unknown id destroy → FALSE.
+        assert_eq!(soft_body_destroy(world, 999), Bool::FALSE);
+
+        world_destroy(world);
+    }
+
+    #[test]
+    fn soft_body_remove_particle_keeps_topology_valid_after_stepping() {
+        let world = make_world();
+        assert!(!world.is_null());
+
+        // 2x1x1 solid grid → 2 particles + 1 spring (mass-spring chain).
+        let sx = 2u32;
+        let sy = 1u32;
+        let sz = 1u32;
+        let voxels = vec![1u8; (sx * sy * sz) as usize];
+        let id = soft_body_voxel_build(
+            world,
+            voxels.as_ptr(),
+            voxels.len() as u32,
+            sx,
+            sy,
+            sz,
+            1.0,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            1.0,
+            50.0,
+            0.5,
+            Bool::FALSE,
+        );
+        assert!(id != u32::MAX);
+        assert_eq!(soft_body_particle_count(world, id), 2);
+
+        // Step a bit, then remove particle 0. The remaining particle must still be
+        // finite and the body still steppable (no dangling spring index).
+        for _ in 0..30 {
+            world_step(world, 1.0 / 60.0);
+        }
+        assert_eq!(soft_body_remove_particle(world, id, 0), Bool::TRUE);
+        assert_eq!(soft_body_particle_count(world, id), 1);
+        for _ in 0..30 {
+            world_step(world, 1.0 / 60.0);
+        }
+        let sb = unsafe {
+            (*world)
+                .inner
+                .soft_bodies
+                .get(SoftBodyId(id))
+                .expect("soft body present")
+        };
+        assert_eq!(sb.particles.len(), 1);
+        assert!(sb.particles[0].pos.x.is_finite());
+
         world_destroy(world);
     }
 }
