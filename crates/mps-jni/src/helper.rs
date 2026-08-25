@@ -14,13 +14,11 @@
 //! 使用 `MaybeUninit<u8>` 容器，避免 `vec![0i8; len]` 的 memset + clippy
 //! `uninit_vec` lint 兼容。`get_byte_array_region` 成功后 `assume_init`。
 
-use std::mem::MaybeUninit;
+use std::mem::{ManuallyDrop, MaybeUninit};
 
 use ljni::JNIEnv;
 use ljni::objects::JByteArray;
-use ljni::objects::JDoubleArray;
 use ljni::sys::jbyteArray;
-use ljni::sys::jdoubleArray;
 
 /// 把一个 Java `byte[]` 拷贝到 `Vec<u8>`，零填充 + 单次分配。
 ///
@@ -37,7 +35,7 @@ pub fn jbytearray_to_array(env: &JNIEnv, data: jbyteArray) -> Option<Vec<u8>> {
     let data = unsafe { JByteArray::from_raw(data) };
     // 用 ManuallyDrop 以免 from_raw 构造的 JByteArray 被 drop——JNI 局部 ref
     // 由上层 Java frame 管理，我们不应主动释放。
-    let data = std::mem::ManuallyDrop::new(data);
+    let data = ManuallyDrop::new(data);
 
     let len = env.get_array_length(&*data).ok()? as usize;
 
@@ -76,16 +74,4 @@ pub fn jbytearray_to_array(env: &JNIEnv, data: jbyteArray) -> Option<Vec<u8>> {
         }
         Err(_) => None,
     }
-}
-
-pub fn jdoublearray_to_array(env: &JNIEnv, data: jdoubleArray) -> Option<Vec<f64>> {
-    if data.is_null() {
-        return None;
-    }
-
-    let data = ManuallyDrop::new(unsafe { JDoubleArray::from_raw(data) });
-    let len = env.get_array_length(&*data).ok()? as usize;
-    let mut buf = vec![0.0f64; len];
-    env.get_double_array_region(&*data, 0, &mut buf).ok()?;
-    Some(buf)
 }

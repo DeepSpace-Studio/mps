@@ -781,11 +781,7 @@ pub extern "C" fn query_intersect_aabb_rigid_body_count_all(
     aabb: AabbDesc,
 ) -> u32 {
     ffi_guard(0, || {
-        let _query_lock = if let Some(world) = unsafe { world.as_ref() } {
-            Some(world.inner.query_lock.read())
-        } else {
-            None
-        };
+        let _query_lock = unsafe { world.as_ref() }.map(|world| world.inner.query_lock.read());
         crate::rapier::compat::query_intersect_aabb_rigid_body_count(
             world,
             aabb,
@@ -806,11 +802,7 @@ pub extern "C" fn query_intersect_aabb_rigid_bodies_all(
     capacity: u32,
 ) -> u32 {
     ffi_guard(0, || {
-        let _query_lock = if let Some(world) = unsafe { world.as_ref() } {
-            Some(world.inner.query_lock.read())
-        } else {
-            None
-        };
+        let _query_lock = unsafe { world.as_ref() }.map(|world| world.inner.query_lock.read());
         crate::rapier::compat::query_intersect_aabb_rigid_bodies(
             world,
             aabb,

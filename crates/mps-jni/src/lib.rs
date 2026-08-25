@@ -1,6 +1,6 @@
 mod helper;
 
-use crate::helper::{jbytearray_to_array, jdoublearray_to_array};
+use crate::helper::jbytearray_to_array;
 use ljni::JNIEnv;
 use ljni::sys::{jbyte, jbyteArray, jclass, jdouble, jdoubleArray, jint, jlong, jstring};
 #[cfg(feature = "anvilkit-bridge")]
@@ -27,8 +27,8 @@ use mps_core::rapier::ffi::{
 use mps_core::rapier::{
     bounds as bo, collider as col, compat as com, controller as cc, crbtree as crt, dop,
     error as er, events as ev, fracture as fr, joints as jo, matmech as mm, molecular as mol,
-    neural as neu, query as qu, rigid_body as rb, rtree as rt, spaceflight as sf, thermo as th,
-    voxel as vx, world as wo,
+    neural as neu, query as qu, rigid_body as rb, rtree as rt, soft_body as sb, spaceflight as sf,
+    thermo as th, voxel as vx, world as wo,
 };
 use mps_core::rapier3d::prelude::{Collider as CB, RigidBody as RB};
 use mps_ffm as abi;
@@ -346,13 +346,6 @@ jni_e_c!(long colliderBuilderCreateHeightmap(env _env, class _class, long data, 
 jni!(long colliderBuilderCreateEx(int shape_type, double a, double b, double c, double d) { to_jlong(col::collider_builder_create_ex(sd(shape_type, a, b, c, d))) });
 jni!(long colliderBuilderCreateSphere(double x, double y, double z, double radius) { to_jlong(col::collider_builder_create_sphere(Sphere { center: v3(x, y, z), radius })) });
 jni!(long colliderBuilderCreateObb(double cx, double cy, double cz, double hx, double hy, double hz, double qi, double qj, double qk, double qw) { to_jlong(col::collider_builder_create_obb(Obb {center: v3(cx, cy, cz),half_extents: v3(hx, hy, hz),rotation: qt(qi, qj, qk, qw),})) });
-jni!(long colliderBuilderCreateCompoundBoxes(long box_data, int box_count) { to_jlong(col::collider_builder_create_compound_boxes(p::<f64>(box_data), u32_from_jint(box_count))) });
-jni_e_c!(long colliderBuilderCreateCompoundBoxesArray(env _env, class _class, double_array box_data, int box_count) {
-    let Some(values) = jdoublearray_to_array(&_env, box_data) else {
-        return 0;
-    };
-    to_jlong(col::collider_builder_create_compound_boxes(values.as_ptr(), u32_from_jint(box_count)))
-});
 jni!(long colliderBuilderCreateConvexHull(long points_xyz, int point_count) { to_jlong(col::collider_builder_create_convex_hull(p::<f64>(points_xyz), u32_from_jint(point_count))) });
 jni!(long colliderBuilderCreatePointCloudBounds(long points_xyz, int point_count) { to_jlong(col::collider_builder_create_point_cloud_bounds(p::<f64>(points_xyz), u32_from_jint(point_count))) });
 jni!(long colliderBuilderCreateDoubleBv(double a_min_x, double a_min_y, double a_min_z, double a_max_x, double a_max_y, double a_max_z, double b_min_x, double b_min_y, double b_min_z, double b_max_x, double b_max_y, double b_max_z) { to_jlong(col::collider_builder_create_double_bv(aa(a_min_x,a_min_y,a_min_z,a_max_x,a_max_y,a_max_z), aa(b_min_x,b_min_y,b_min_z,b_max_x,b_max_y,b_max_z))) });
@@ -454,7 +447,6 @@ jni!(void colliderBuilderSetPose(long builder, double x, double y, double z, dou
 jni!(void colliderBuilderSetSensor(long builder, int sensor) { col::collider_builder_set_sensor(m::<CBH>(builder), jb(sensor)); });
 jni!(void colliderBuilderSetFriction(long builder, double friction) { col::collider_builder_set_friction(m::<CBH>(builder), friction); });
 jni!(void colliderBuilderSetRestitution(long builder, double restitution) { col::collider_builder_set_restitution(m::<CBH>(builder), restitution); });
-jni!(void colliderBuilderSetContactSkin(long builder, double skin) { col::collider_builder_set_contact_skin(m::<CBH>(builder), skin); });
 jni!(void colliderBuilderSetDensity(long builder, double density) { col::collider_builder_set_density(m::<CBH>(builder), density); });
 jni!(void colliderBuilderSetCollisionGroups(long builder, int memberships, int filter) { col::collider_builder_set_collision_groups(m::<CBH>(builder), grp(memberships, filter)); });
 jni!(void colliderBuilderSetSolverGroups(long builder, int memberships, int filter) { col::collider_builder_set_solver_groups(m::<CBH>(builder), grp(memberships, filter)); });
@@ -537,9 +529,7 @@ jni!(boolean colliderSetTranslation(long world, long handle, double x, double y,
 jni!(boolean colliderSetRotation(long world, long handle, double qi, double qj, double qk, double qw) { col::collider_set_rotation(m::<WH>(world), handle as CRaw, qt(qi, qj, qk, qw)).0 as jbyte });
 jni!(boolean colliderSetSensor(long world, long handle, int sensor) { col::collider_set_sensor(m::<WH>(world), handle as CRaw, jb(sensor)).0 as jbyte });
 jni!(boolean colliderSetFriction(long world, long handle, double friction) { col::collider_set_friction(m::<WH>(world), handle as CRaw, friction).0 as jbyte });
-jni!(boolean colliderSetFrictionCombineRule(long world, long handle, int rule) { col::collider_set_friction_combine_rule(m::<WH>(world), handle as CRaw, u32_from_jint(rule)).0 as jbyte });
 jni!(boolean colliderSetRestitution(long world, long handle, double restitution) { col::collider_set_restitution(m::<WH>(world), handle as CRaw, restitution).0 as jbyte });
-jni!(boolean colliderSetRestitutionCombineRule(long world, long handle, int rule) { col::collider_set_restitution_combine_rule(m::<WH>(world), handle as CRaw, u32_from_jint(rule)).0 as jbyte });
 jni!(boolean colliderSetCollisionGroups(long world, long handle, int memberships, int filter) { col::collider_set_collision_groups(m::<WH>(world), handle as CRaw, grp(memberships, filter)).0 as jbyte });
 jni!(boolean colliderSetSolverGroups(long world, long handle, int memberships, int filter) { col::collider_set_solver_groups(m::<WH>(world), handle as CRaw, grp(memberships, filter)).0 as jbyte });
 jni!(boolean colliderSetActiveEvents(long world, long handle, int bits) { col::collider_set_active_events(m::<WH>(world), handle as CRaw, bits as u32).0 as jbyte });
@@ -1686,3 +1676,33 @@ pub extern "system" fn cosmosWorldGetArenaDirectByteBuffer(
     }))
     .unwrap_or(std::ptr::null_mut())
 }
+
+// ── Phase 5e: 软体 JNI 网关（暴露 15 个 soft_body_* FFI 给 Java/FFM）──────────
+// 与 Phase 5a/5b/5d/5f 的 mps-core FFI 一一对应。FFM 侧直接在 Java 25 经
+// Linker 链接这些 `Java_org_polaris2023_mps_rapier_RapierNative_*` 符号，故本
+// 文件即 JNI + FFM 共享的网关。返回 id 类沿用 `u32::MAX` 哨兵（转 jlong 后 Java
+// 侧比较 == 0xFFFFFFFFL）；布尔类返回 `Bool` 经 `.0 as jbyte`（0/1）。
+
+// Phase 5a: 通用软体构造（任意拓扑：质点 / 弹簧 / XPBD 距离约束 / 四面体）
+jni!(long softBodyCreate(long world, double gravity_x, double gravity_y, double gravity_z) { sb::soft_body_create(m::<WH>(world), v3(gravity_x, gravity_y, gravity_z)) as jlong });
+jni!(long softBodyAddParticle(long world, int id, double x, double y, double z, double mass, int pinned) { sb::soft_body_add_particle(m::<WH>(world), id as u32, x, y, z, mass, jb(pinned)) as jlong });
+jni!(boolean softBodyAddSpring(long world, int id, int a, int b, double stiffness, double damping) { sb::soft_body_add_spring(m::<WH>(world), id as u32, a as u32, b as u32, stiffness, damping).0 as jbyte });
+jni!(boolean softBodyAddDistanceConstraint(long world, int id, int a, int b, double compliance) { sb::soft_body_add_distance_constraint(m::<WH>(world), id as u32, a as u32, b as u32, compliance).0 as jbyte });
+jni!(boolean softBodyAddTetrahedron(long world, int id, int a, int b, int c, int d) { sb::soft_body_add_tetrahedron(m::<WH>(world), id as u32, a as u32, b as u32, c as u32, d as u32).0 as jbyte });
+jni!(boolean softBodyConfigureSolver(long world, int id, int solver_mode, int iterations, double compliance) { sb::soft_body_configure_solver(m::<WH>(world), id as u32, solver_mode as u32, iterations as u32, compliance).0 as jbyte });
+jni!(long softBodyBuildTetraMesh(long world, double gravity_x, double gravity_y, double gravity_z, long particles, int particles_len, long tets, int tets_len, double particle_mass, double compliance, int iterations) { sb::soft_body_build_tetra_mesh(m::<WH>(world), v3(gravity_x, gravity_y, gravity_z), p::<Vec3>(particles), particles_len as u32, p::<u32>(tets), tets_len as u32, particle_mass, compliance, iterations as u32) as jlong });
+
+// Phase 4 + 5d: voxel 网格软体构造 + 破坏联动
+jni!(long softBodyVoxelBuild(long world, long voxels, int voxels_len, int size_x, int size_y, int size_z, double voxel_size, double origin_x, double origin_y, double origin_z, double particle_mass, double stiffness, double damping, int pin_boundary) { sb::soft_body_voxel_build(m::<WH>(world), p::<u8>(voxels), voxels_len as u32, size_x as u32, size_y as u32, size_z as u32, voxel_size, v3(origin_x, origin_y, origin_z), particle_mass, stiffness, damping, jb(pin_boundary)) as jlong });
+jni!(boolean softBodyVoxelDig(long world, int id, int cell_x, int cell_y, int cell_z) { sb::soft_body_voxel_dig(m::<WH>(world), id as u32, cell_x as u32, cell_y as u32, cell_z as u32).0 as jbyte });
+
+// Phase 5b: 查询 / 读回 / 生命周期
+jni!(boolean softBodySetGravity(long world, int id, double gravity_x, double gravity_y, double gravity_z) { sb::soft_body_set_gravity(m::<WH>(world), id as u32, v3(gravity_x, gravity_y, gravity_z)).0 as jbyte });
+jni!(long softBodyCount(long world) { sb::soft_body_count(cp::<WH>(world)) as jlong });
+jni!(long softBodyParticleCount(long world, int id) { sb::soft_body_particle_count(cp::<WH>(world), id as u32) as jlong });
+jni!(boolean softBodyGetParticle(long world, int id, int index, long out_pos, long out_vel) { sb::soft_body_get_particle(cp::<WH>(world), id as u32, index as u32, pm::<Vec3>(out_pos), pm::<Vec3>(out_vel)).0 as jbyte });
+jni!(boolean softBodyRemoveParticle(long world, int id, int index) { sb::soft_body_remove_particle(m::<WH>(world), id as u32, index as u32).0 as jbyte });
+jni!(boolean softBodyDestroy(long world, int id) { sb::soft_body_destroy(m::<WH>(world), id as u32).0 as jbyte });
+
+// Phase 5f: 软体-刚体碰撞（proxy collider 桥接）
+jni!(boolean softBodyEnableCollision(long world, int id, double particle_radius, int enabled) { sb::soft_body_enable_collision(m::<WH>(world), id as u32, particle_radius, jb(enabled)).0 as jbyte });

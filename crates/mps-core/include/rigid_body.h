@@ -1090,17 +1090,6 @@ uint32_t query_intersect_spherical_shell_all(const struct WorldHandle *world,
                                              uint32_t capacity);
 
 /**
- * Creates a compound collider builder from a packed array of axis-aligned boxes.
- *
- * # Safety
- *
- * `box_data` must point to at least `box_count * 6` readable `f64` values,
- * each box described as min_x, min_y, min_z, max_x, max_y, max_z.
- */
-struct ColliderBuilderHandle *collider_builder_create_compound_boxes(const double *box_data,
-                                                                     uint32_t box_count);
-
-/**
  * Creates a collider builder from a generic shape type and packed shape data.
  *
  * # Safety
@@ -1322,14 +1311,6 @@ void collider_builder_set_restitution(struct ColliderBuilderHandle *builder, dou
  * `builder` must be a valid pointer returned by a `collider_builder_create_*`
  * function and not yet consumed or destroyed.
  */
-void collider_builder_set_contact_skin(struct ColliderBuilderHandle *builder, double skin);
-
-/**
- * # Safety
- *
- * `builder` must be a valid pointer returned by a `collider_builder_create_*`
- * function and not yet consumed or destroyed.
- */
 void collider_builder_set_density(struct ColliderBuilderHandle *builder, double density);
 
 /**
@@ -1519,18 +1500,6 @@ uint8_t collider_set_sensor_flag(struct WorldHandle *world, ColliderHandleRaw ha
 Bool collider_set_friction(struct WorldHandle *world, ColliderHandleRaw handle, double friction);
 
 /**
- * Set the friction combine rule for a collider.
- *
- * Rules: 0=Average 1=Min 2=Multiply 3=Max 4=ClampedSum.
- *
- * # Safety
- * `world` must be a valid world pointer; `handle` must be a collider in `world`.
- */
-Bool collider_set_friction_combine_rule(struct WorldHandle *world,
-                                        ColliderHandleRaw handle,
-                                        uint32_t rule);
-
-/**
  * # Safety
  *
  * `world` must be a valid pointer returned by `world_create` and not yet destroyed.
@@ -1547,18 +1516,6 @@ uint8_t collider_set_friction_flag(struct WorldHandle *world,
 Bool collider_set_restitution(struct WorldHandle *world,
                               ColliderHandleRaw handle,
                               double restitution);
-
-/**
- * Set the restitution combine rule for a collider.
- *
- * Rules: 0=Average 1=Min 2=Multiply 3=Max 4=ClampedSum.
- *
- * # Safety
- * `world` must be a valid world pointer; `handle` must be a collider in `world`.
- */
-Bool collider_set_restitution_combine_rule(struct WorldHandle *world,
-                                           ColliderHandleRaw handle,
-                                           uint32_t rule);
 
 /**
  * # Safety
@@ -4575,6 +4532,24 @@ Bool soft_body_voxel_dig(struct WorldHandle *world,
                          uint32_t cell_x,
                          uint32_t cell_y,
                          uint32_t cell_z);
+
+/**
+ * Enable or disable rigid-body collision coupling for a soft body.
+ *
+ * When `enabled` is `Bool::TRUE`, one dynamic `Ball` collider (radius `particle_radius`)
+ * is created per free particle and registered in the world's collision-proxy table; the
+ * body's `collide` flag is set so the integration layer drives its particles from the
+ * proxies. When `Bool::FALSE`, any existing proxies are removed and `collide` is cleared.
+ *
+ * Returns `Bool::TRUE` on success.
+ *
+ * # Safety
+ * `world` must be a valid world pointer returned by `world_create`.
+ */
+Bool soft_body_enable_collision(struct WorldHandle *world,
+                                uint32_t id,
+                                double particle_radius,
+                                Bool enabled);
 
 /**
  * # Safety
