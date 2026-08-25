@@ -308,4 +308,11 @@ include = [
   "soft_body_add_triangle",
   "soft_body_add_bending",
   "soft_body_read_triangles",
+  "soft_body_apply_wind",
+  "soft_body_clear_wind",
+  "soft_body_sleep",
+  "soft_body_wake",
+  "soft_body_is_sleeping",
+  "soft_body_kinetic_energy",
+  "soft_body_total_volume",
 ]

@@ -541,6 +541,204 @@ pub extern "C" fn soft_body_set_gravity(world: *mut WorldHandle, id: u32, gravit
     })
 }
 
+// ── Phase 7: wind / air-resistance + sleeping + diagnostics ───────────────
+//
+// 复用 rapier 已有机制：
+//   * `SoftBody::apply_wind(accel, drag)` / `clear_wind()` — 纯外力（与重力同路）。
+//   * `SoftBodySet::sleep/wake/is_sleeping` — 粗粒度休眠标志（跳过 step）。
+//   * `SoftBody::kinetic_energy()` / `total_volume()` — 标量诊断（能量/体积守恒）。
+
+/// Phase 7: enable a uniform wind / air-resistance field on a soft body.
+///
+/// `accel` is a constant wind acceleration (`m/s²`) applied to every free
+/// particle (like a sideways gravity); `drag` is a linear air-resistance
+/// coefficient (`1/s`, `F_drag = -m·drag·v`). Both components must be finite.
+///
+/// # Returns
+/// `Bool::TRUE` on success, `Bool::FALSE` on `ERR_*` (null world, bad id,
+/// non-finite arguments).
+///
+/// # Safety
+/// `world` must be a valid world pointer.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_apply_wind(
+    world: *mut WorldHandle,
+    id: u32,
+    accel: Vec3,
+    drag: f64,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !vec3_finite(accel) || !drag.is_finite() {
+            set_error(ERR_INVALID_ARGUMENT, "soft_body_apply_wind: bad accel/drag");
+            return Bool::FALSE;
+        }
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_apply_wind: unknown id");
+            return Bool::FALSE;
+        };
+        body.apply_wind(vec3_to_rapier(accel), drag);
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Phase 7: disable the wind field on a soft body (`None`).
+///
+/// # Returns
+/// `Bool::TRUE` on success, `Bool::FALSE` on `ERR_*` (null world, bad id).
+///
+/// # Safety
+/// `world` must be a valid world pointer.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_clear_wind(world: *mut WorldHandle, id: u32) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_clear_wind: unknown id");
+            return Bool::FALSE;
+        };
+        body.clear_wind();
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Phase 7: mark a soft body as sleeping (no further integration until woken).
+///
+/// # Returns
+/// `Bool::TRUE` if the body existed and was put to sleep, `Bool::FALSE` on
+/// `ERR_*` (null world, bad id).
+///
+/// # Safety
+/// `world` must be a valid world pointer.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_sleep(world: *mut WorldHandle, id: u32) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        if !world.inner.soft_bodies.sleep(sid) {
+            set_error(ERR_NOT_FOUND, "soft_body_sleep: unknown id");
+            return Bool::FALSE;
+        }
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Phase 7: wake a sleeping soft body (resume integration).
+///
+/// # Returns
+/// `Bool::TRUE` if the body existed and was woken, `Bool::FALSE` on `ERR_*`
+/// (null world, bad id).
+///
+/// # Safety
+/// `world` must be a valid world pointer.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_wake(world: *mut WorldHandle, id: u32) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        if !world.inner.soft_bodies.wake(sid) {
+            set_error(ERR_NOT_FOUND, "soft_body_wake: unknown id");
+            return Bool::FALSE;
+        }
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Phase 7: whether a soft body is currently sleeping.
+///
+/// # Returns
+/// `Bool::TRUE` if sleeping, `Bool::FALSE` if awake or the id is unknown /
+/// world is null (and `ERR_*` is set).
+///
+/// # Safety
+/// `world` must be a valid world pointer.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_is_sleeping(world: *const WorldHandle, id: u32) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        if world.inner.soft_bodies.get(sid).is_none() {
+            set_error(ERR_NOT_FOUND, "soft_body_is_sleeping: unknown id");
+            return Bool::FALSE;
+        }
+        // `is_sleeping` returns false for unknown ids too; we already checked.
+        clear_error();
+        Bool::from(world.inner.soft_bodies.is_sleeping(sid))
+    })
+}
+
+/// Phase 7: total kinetic energy of a soft body's free particles (`½·m·|v|²`).
+///
+/// # Returns
+/// The kinetic energy (finite), or `0.0` with `ERR_*` set on null world / bad id.
+///
+/// # Safety
+/// `world` must be a valid world pointer.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_kinetic_energy(world: *const WorldHandle, id: u32) -> f64 {
+    ffi_guard(0.0, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return 0.0;
+        };
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_kinetic_energy: unknown id");
+            return 0.0;
+        };
+        clear_error();
+        body.kinetic_energy()
+    })
+}
+
+/// Phase 7: normalized total volume of a soft body's tetrahedra
+/// (sum of `|V|/|V_rest|`, so a unit-scaled, deformation-sensitive scalar).
+/// For bodies with no tetrahedra this is `0.0`.
+///
+/// # Returns
+/// The normalized volume (finite), or `0.0` with `ERR_*` set on null world /
+/// bad id.
+///
+/// # Safety
+/// `world` must be a valid world pointer.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_total_volume(world: *const WorldHandle, id: u32) -> f64 {
+    ffi_guard(0.0, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return 0.0;
+        };
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_total_volume: unknown id");
+            return 0.0;
+        };
+        clear_error();
+        body.total_volume()
+    })
+}
+
 // ── Phase 5a: general soft-body builder (unlock arbitrary topology) ──────────
 //
 // Phase 4 只暴露了「voxel 网格 → 软体」与「设置重力」两个高层入口，外部调用方

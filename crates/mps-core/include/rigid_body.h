@@ -4339,6 +4339,94 @@ uint32_t soft_body_voxel_build(struct WorldHandle *world,
 Bool soft_body_set_gravity(struct WorldHandle *world, uint32_t id, Vec3 gravity);
 
 /**
+ * Phase 7: enable a uniform wind / air-resistance field on a soft body.
+ *
+ * `accel` is a constant wind acceleration (`m/s²`) applied to every free
+ * particle (like a sideways gravity); `drag` is a linear air-resistance
+ * coefficient (`1/s`, `F_drag = -m·drag·v`). Both components must be finite.
+ *
+ * # Returns
+ * `Bool::TRUE` on success, `Bool::FALSE` on `ERR_*` (null world, bad id,
+ * non-finite arguments).
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+Bool soft_body_apply_wind(struct WorldHandle *world, uint32_t id, Vec3 accel, double drag);
+
+/**
+ * Phase 7: disable the wind field on a soft body (`None`).
+ *
+ * # Returns
+ * `Bool::TRUE` on success, `Bool::FALSE` on `ERR_*` (null world, bad id).
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+Bool soft_body_clear_wind(struct WorldHandle *world, uint32_t id);
+
+/**
+ * Phase 7: mark a soft body as sleeping (no further integration until woken).
+ *
+ * # Returns
+ * `Bool::TRUE` if the body existed and was put to sleep, `Bool::FALSE` on
+ * `ERR_*` (null world, bad id).
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+Bool soft_body_sleep(struct WorldHandle *world, uint32_t id);
+
+/**
+ * Phase 7: wake a sleeping soft body (resume integration).
+ *
+ * # Returns
+ * `Bool::TRUE` if the body existed and was woken, `Bool::FALSE` on `ERR_*`
+ * (null world, bad id).
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+Bool soft_body_wake(struct WorldHandle *world, uint32_t id);
+
+/**
+ * Phase 7: whether a soft body is currently sleeping.
+ *
+ * # Returns
+ * `Bool::TRUE` if sleeping, `Bool::FALSE` if awake or the id is unknown /
+ * world is null (and `ERR_*` is set).
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+Bool soft_body_is_sleeping(const struct WorldHandle *world, uint32_t id);
+
+/**
+ * Phase 7: total kinetic energy of a soft body's free particles (`½·m·|v|²`).
+ *
+ * # Returns
+ * The kinetic energy (finite), or `0.0` with `ERR_*` set on null world / bad id.
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+double soft_body_kinetic_energy(const struct WorldHandle *world, uint32_t id);
+
+/**
+ * Phase 7: normalized total volume of a soft body's tetrahedra
+ * (sum of `|V|/|V_rest|`, so a unit-scaled, deformation-sensitive scalar).
+ * For bodies with no tetrahedra this is `0.0`.
+ *
+ * # Returns
+ * The normalized volume (finite), or `0.0` with `ERR_*` set on null world /
+ * bad id.
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+double soft_body_total_volume(const struct WorldHandle *world, uint32_t id);
+
+/**
  * Create an empty soft body in the world and return its `SoftBodyId`.
  *
  * The body starts in the `MassSpring` solver; switch it to XPBD with

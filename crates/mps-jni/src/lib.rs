@@ -1712,5 +1712,13 @@ jni!(int softBodyReadEdges(long world, int id, long out_edges, int capacity) { s
 jni!(int softBodyReadTetrahedra(long world, int id, long out_tets, int capacity) { sb::soft_body_read_tetrahedra(cp::<WH>(world), id as u32, pm::<u32>(out_tets), capacity as u32) as jint });
 jni!(int softBodyReadTriangles(long world, int id, long out_tris, int capacity) { sb::soft_body_read_triangles(cp::<WH>(world), id as u32, pm::<u32>(out_tris), capacity as u32) as jint });
 
+// ── Phase 7: 风场/空气阻力 + 休眠 + 诊断 ──────────────────────────────────
+jni!(boolean softBodyApplyWind(long world, int id, double ax, double ay, double az, double drag) { sb::soft_body_apply_wind(m::<WH>(world), id as u32, Vec3 { x: ax, y: ay, z: az }, drag).0 as jbyte });
+jni!(boolean softBodyClearWind(long world, int id) { sb::soft_body_clear_wind(m::<WH>(world), id as u32).0 as jbyte });
+jni!(boolean softBodySleep(long world, int id) { sb::soft_body_sleep(m::<WH>(world), id as u32).0 as jbyte });
+jni!(boolean softBodyWake(long world, int id) { sb::soft_body_wake(m::<WH>(world), id as u32).0 as jbyte });
+jni!(boolean softBodyIsSleeping(long world, int id) { sb::soft_body_is_sleeping(cp::<WH>(world), id as u32).0 as jbyte });
+jni!(double softBodyKineticEnergy(long world, int id) { sb::soft_body_kinetic_energy(cp::<WH>(world), id as u32) });
+jni!(double softBodyTotalVolume(long world, int id) { sb::soft_body_total_volume(cp::<WH>(world), id as u32) });
 // Phase 5f: 软体-刚体碰撞（proxy collider 桥接）
 jni!(boolean softBodyEnableCollision(long world, int id, double particle_radius, int enabled) { sb::soft_body_enable_collision(m::<WH>(world), id as u32, particle_radius, jb(enabled)).0 as jbyte });

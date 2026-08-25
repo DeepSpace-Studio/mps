@@ -11,11 +11,13 @@ mod tests {
     use mps_core::rapier::soft_body::{
         soft_body_add_bending, soft_body_add_distance_constraint, soft_body_add_particle,
         soft_body_add_spring, soft_body_add_tetrahedron, soft_body_add_triangle,
-        soft_body_build_tetra_mesh, soft_body_configure_solver, soft_body_count, soft_body_create,
-        soft_body_destroy, soft_body_enable_collision, soft_body_get_particle,
-        soft_body_particle_count, soft_body_read_edges, soft_body_read_particles,
-        soft_body_read_tetrahedra, soft_body_read_triangles, soft_body_remove_particle,
-        soft_body_set_gravity, soft_body_voxel_build, soft_body_voxel_dig, soft_chain_create,
+        soft_body_apply_wind, soft_body_build_tetra_mesh, soft_body_clear_wind,
+        soft_body_configure_solver, soft_body_count, soft_body_create, soft_body_destroy,
+        soft_body_enable_collision, soft_body_get_particle, soft_body_is_sleeping,
+        soft_body_kinetic_energy, soft_body_particle_count, soft_body_read_edges,
+        soft_body_read_particles, soft_body_read_tetrahedra, soft_body_read_triangles,
+        soft_body_remove_particle, soft_body_set_gravity, soft_body_sleep, soft_body_total_volume,
+        soft_body_voxel_build, soft_body_voxel_dig, soft_body_wake, soft_chain_create,
         soft_chain_node_handles,
     };
     use mps_core::rapier::voxel::{collider_builder_create_voxels, collider_voxel_edit};
@@ -1310,6 +1312,191 @@ mod tests {
         // 底部自由点应下垂（y 明显低于 2）。
         assert!(pos[4].y < 1.5, "bottom row should sag below 1.5");
         assert!(pos[5].y < 1.5, "bottom row should sag below 1.5");
+
+        world_destroy(world);
+    }
+
+    // ── Phase 7: 风场把固定边的布料吹向侧向（纯外力，无新力学）─────────────────
+    #[test]
+    fn soft_body_wind_blows_cloth_sideways() {
+        let world = make_world();
+        assert!(!world.is_null());
+
+        // 无重力，纯风：布料应被恒定 wind accel 沿 +X 推出。
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+
+        // 5 个质点：仅 pin 左上角 p0，其余自由（软边以便迎风鼓起）。
+        // p0(-1,2) 固定；p1(1,2) p2(-1,0) p3(1,0) p4(0,1) 自由。
+        let _p0 = soft_body_add_particle(world, id, -1.0, 2.0, 0.0, 1.0, Bool::TRUE);
+        let _p1 = soft_body_add_particle(world, id, 1.0, 2.0, 0.0, 1.0, Bool::FALSE);
+        let _p2 = soft_body_add_particle(world, id, -1.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        let _p3 = soft_body_add_particle(world, id, 1.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        let _p4 = soft_body_add_particle(world, id, 0.0, 1.0, 0.0, 1.0, Bool::FALSE);
+
+        assert_eq!(soft_body_add_triangle(world, id, 0, 1, 4), Bool::TRUE);
+        assert_eq!(soft_body_add_triangle(world, id, 1, 3, 4), Bool::TRUE);
+        assert_eq!(soft_body_add_triangle(world, id, 3, 2, 4), Bool::TRUE);
+        assert_eq!(soft_body_add_triangle(world, id, 2, 0, 4), Bool::TRUE);
+
+        // 软边（compliance > 0）让布料可迎风鼓起；仅 pin 一个角 → 整片被风吹向 +X。
+        assert_eq!(
+            soft_body_configure_solver(world, id, 1, 20, 1e-2),
+            Bool::TRUE
+        );
+
+        // 启用 +X 风（10 m/s² 恒定加速度），无 drag 以便观察确定性位移。
+        assert_eq!(
+            soft_body_apply_wind(
+                world,
+                id,
+                Vec3 {
+                    x: 10.0,
+                    y: 0.0,
+                    z: 0.0
+                },
+                0.0,
+            ),
+            Bool::TRUE
+        );
+
+        for _ in 0..120 {
+            world_step(world, 1.0 / 60.0);
+        }
+
+        let count = soft_body_particle_count(world, id);
+        let mut pos = vec![Vec3::default(); count as usize];
+        let read =
+            soft_body_read_particles(world, id, pos.as_mut_ptr(), std::ptr::null_mut(), count);
+        assert_eq!(read, count);
+
+        // 固定角不动。
+        assert!(
+            (pos[0].x + 1.0).abs() < 1e-6,
+            "pinned corner must stay at x=-1"
+        );
+        assert!(
+            (pos[0].y - 2.0).abs() < 1e-6,
+            "pinned corner must stay at y=2"
+        );
+        // 无重力纯 +X 风下，整片布以单角铰接点像旗帜一样顺风扬起：
+        // 各自由质点有限、无发散，且整片质心明显顺风（x 正方向）漂移。
+        let mut finite = true;
+        let mut sum_x_end = 0.0;
+        for (i, p) in pos.iter().enumerate() {
+            if !(p.x.is_finite() && p.y.is_finite() && p.z.is_finite()) {
+                finite = false;
+            }
+            if i != 0 {
+                sum_x_end += p.x; // 跳过 pinned p0
+            }
+        }
+        assert!(finite, "some particle blew up");
+        // 自由质点初始 x 之和 = p1(1)+p2(-1)+p3(1)+p4(0) = 1.0；顺风后应 > 1.0。
+        assert!(
+            sum_x_end > 1.0 + 0.3,
+            "sheet should drift downwind (+X): sum_x={}",
+            sum_x_end
+        );
+        // 至少存在一个自由质点明显顺风超出初始最远 x=1.0。
+        let max_x = pos[1..]
+            .iter()
+            .map(|p| p.x)
+            .fold(f64::NEG_INFINITY, f64::max);
+        assert!(max_x > 1.2, "a free particle should be blown past x=1.2");
+        // 动能应为正且有限（风吹动）。
+        let ke = soft_body_kinetic_energy(world, id);
+        assert!(
+            ke.is_finite() && ke > 0.0,
+            "kinetic energy should be positive & finite"
+        );
+        // clear_wind 后动力学仍可继续（不报错）。
+        assert_eq!(soft_body_clear_wind(world, id), Bool::TRUE);
+
+        world_destroy(world);
+    }
+
+    // ── Phase 7: 休眠跳过积分 + 诊断读数（能量/体积）────────────────────────
+    #[test]
+    fn soft_body_sleep_skips_integration_and_diagnostics() {
+        let world = make_world();
+        assert!(!world.is_null());
+
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: -9.81,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+
+        // 单个自由质点，无约束。
+        let _p0 = soft_body_add_particle(world, id, 0.0, 10.0, 0.0, 1.0, Bool::FALSE);
+
+        // 初始：清醒、动能 0（静止）、体积 0（无四面体）。
+        assert_eq!(soft_body_is_sleeping(world, id), Bool::FALSE);
+        assert_eq!(soft_body_kinetic_energy(world, id), 0.0);
+        assert_eq!(soft_body_total_volume(world, id), 0.0);
+
+        // 让质点自由下落若干步。
+        for _ in 0..30 {
+            world_step(world, 1.0 / 60.0);
+        }
+        let ke_falling = soft_body_kinetic_energy(world, id);
+        assert!(
+            ke_falling > 0.0,
+            "falling particle should gain kinetic energy"
+        );
+
+        // 休眠：之后 step 不再改变位置。
+        assert_eq!(soft_body_sleep(world, id), Bool::TRUE);
+        assert_eq!(soft_body_is_sleeping(world, id), Bool::TRUE);
+        let before = {
+            let mut pos = vec![Vec3::default(); 1];
+            soft_body_read_particles(world, id, pos.as_mut_ptr(), std::ptr::null_mut(), 1);
+            pos[0]
+        };
+        for _ in 0..30 {
+            world_step(world, 1.0 / 60.0);
+        }
+        let after = {
+            let mut pos = vec![Vec3::default(); 1];
+            soft_body_read_particles(world, id, pos.as_mut_ptr(), std::ptr::null_mut(), 1);
+            pos[0]
+        };
+        assert!(
+            (before.x - after.x).abs() < 1e-12
+                && (before.y - after.y).abs() < 1e-12
+                && (before.z - after.z).abs() < 1e-12,
+            "sleeping body must not move under step"
+        );
+
+        // 唤醒后继续下落。
+        assert_eq!(soft_body_wake(world, id), Bool::TRUE);
+        assert_eq!(soft_body_is_sleeping(world, id), Bool::FALSE);
+        for _ in 0..10 {
+            world_step(world, 1.0 / 60.0);
+        }
+        let woken = {
+            let mut pos = vec![Vec3::default(); 1];
+            soft_body_read_particles(world, id, pos.as_mut_ptr(), std::ptr::null_mut(), 1);
+            pos[0]
+        };
+        assert!(woken.y < before.y, "woken particle should resume falling");
+
+        // 未知 id 的睡眠/诊断查询返回 False/0 而不 panic。
+        assert_eq!(soft_body_is_sleeping(world, u32::MAX), Bool::FALSE);
+        assert_eq!(soft_body_sleep(world, u32::MAX), Bool::FALSE);
+        assert_eq!(soft_body_kinetic_energy(world, u32::MAX), 0.0);
 
         world_destroy(world);
     }
