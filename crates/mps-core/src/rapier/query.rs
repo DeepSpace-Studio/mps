@@ -85,6 +85,7 @@ pub extern "C" fn query_cast_ray(
             set_error(ERR_NULL_POINTER, "world is null");
             return RayHit::default();
         };
+        let _query_lock = world.inner.query_lock.read();
         if !vec3_finite(origin) || !vec3_finite(direction) || !max_toi.is_finite() || max_toi < 0.0
         {
             set_error(ERR_INVALID_ARGUMENT, "invalid ray parameters");
@@ -215,6 +216,7 @@ pub extern "C" fn query_project_point(
             set_error(ERR_NULL_POINTER, "world is null");
             return PointProjection::default();
         };
+        let _query_lock = world.inner.query_lock.read();
         if !vec3_finite(point) || !max_dist.is_finite() || max_dist < 0.0 {
             set_error(ERR_INVALID_ARGUMENT, "invalid point projection parameters");
             return PointProjection::default();
@@ -288,6 +290,7 @@ pub extern "C" fn query_intersect_point_count(
             set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
+        let _query_lock = world.inner.query_lock.read();
         if !vec3_finite(point) {
             set_error(ERR_INVALID_ARGUMENT, "invalid query point");
             return 0;
@@ -319,6 +322,7 @@ pub extern "C" fn query_intersect_aabb_count(
             set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
+        let _query_lock = world.inner.query_lock.read();
         if !aabb_valid(aabb) {
             set_error(ERR_INVALID_ARGUMENT, "invalid AABB parameters");
             return 0;
@@ -355,6 +359,7 @@ pub extern "C" fn query_intersect_aabb(
             set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
+        let _query_lock = world.inner.query_lock.read();
         if out_handles.is_null() {
             set_error(ERR_NULL_POINTER, "output handle buffer is null");
             return 0;
@@ -452,6 +457,7 @@ pub extern "C" fn query_intersect_obb_count(
             set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
+        let _query_lock = world.inner.query_lock.read();
         let Some(shape) = obb_shape(obb) else {
             set_error(ERR_INVALID_ARGUMENT, "invalid OBB parameters");
             return 0;
@@ -539,6 +545,7 @@ pub extern "C" fn query_intersect_obb(
             set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
+        let _query_lock = world.inner.query_lock.read();
         if out_handles.is_null() {
             set_error(ERR_NULL_POINTER, "output handle buffer is null");
             return 0;
@@ -613,6 +620,7 @@ pub extern "C" fn query_intersect_sphere_count(
             set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
+        let _query_lock = world.inner.query_lock.read();
         let Some(shape) = sphere_shape(sphere) else {
             set_error(ERR_INVALID_ARGUMENT, "invalid sphere parameters");
             return 0;
@@ -703,6 +711,7 @@ pub extern "C" fn query_intersect_sphere(
             set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
+        let _query_lock = world.inner.query_lock.read();
         if out_handles.is_null() {
             set_error(ERR_NULL_POINTER, "output handle buffer is null");
             return 0;
@@ -772,6 +781,11 @@ pub extern "C" fn query_intersect_aabb_rigid_body_count_all(
     aabb: AabbDesc,
 ) -> u32 {
     ffi_guard(0, || {
+        let _query_lock = if let Some(world) = unsafe { world.as_ref() } {
+            Some(world.inner.query_lock.read())
+        } else {
+            None
+        };
         crate::rapier::compat::query_intersect_aabb_rigid_body_count(
             world,
             aabb,
@@ -792,6 +806,11 @@ pub extern "C" fn query_intersect_aabb_rigid_bodies_all(
     capacity: u32,
 ) -> u32 {
     ffi_guard(0, || {
+        let _query_lock = if let Some(world) = unsafe { world.as_ref() } {
+            Some(world.inner.query_lock.read())
+        } else {
+            None
+        };
         crate::rapier::compat::query_intersect_aabb_rigid_bodies(
             world,
             aabb,
@@ -820,6 +839,7 @@ pub extern "C" fn query_cast_shape(
             set_error(ERR_NULL_POINTER, "world is null");
             return ShapeCastHit::default();
         };
+        let _query_lock = world.inner.query_lock.read();
         if !shape_desc_valid(shape_desc)
             || !vec3_finite(translation)
             || !quat_finite(rotation)

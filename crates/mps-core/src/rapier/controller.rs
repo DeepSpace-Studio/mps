@@ -257,6 +257,8 @@ pub extern "C" fn character_controller_move_shape(
             set_error(ERR_NULL_POINTER, "world is null");
             return EffectiveCharacterMovement::default();
         };
+        // move_shape 会改世界内刚体状态，需要写锁与查询互斥
+        let _query_lock = world.inner.query_lock.write();
         let Some(controller) = (unsafe { controller.as_mut() }) else {
             set_error(ERR_NULL_POINTER, "character controller is null");
             return EffectiveCharacterMovement::default();
@@ -365,6 +367,7 @@ pub extern "C" fn character_controller_solve_impulses(
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
+        let _query_lock = world.inner.query_lock.write();
         let Some(controller) = (unsafe { controller.as_mut() }) else {
             set_error(ERR_NULL_POINTER, "character controller is null");
             return Bool::FALSE;
