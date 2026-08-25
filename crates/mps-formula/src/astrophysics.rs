@@ -124,24 +124,20 @@ fn insert_particle(
     insert_particle(nodes, child_node, particle_index, particles);
 }
 
-fn acceleration_from_mass(
-    position: Vector,
-    center: Vector,
-    mass: f64,
-    params: NBodySolverParams,
-) -> Vector {
-    if mass <= 0.0 {
-        return Vector::ZERO;
+
+fn acceleration_from_mass(position: Vector, center: Vector, gm: f64, softening: f64) -> Vector {
+    if gm <= 0.0 {
+      return Vector::ZERO;
     }
     let offset = center - position;
     // Use mul_add for softened distance: r² + ε² with single rounding
-    let r2 = mul_add(params.softening, params.softening, offset.length_squared());
+    let r2 = mul_add(softening, softening, offset.length_squared());
     if r2 <= EPSILON {
         return Vector::ZERO;
     }
     // r2 * sqrt(r2) = r³; compute as r2.sqrt() * r2 to avoid overflow
     let r3 = r2.sqrt() * r2;
-    offset * (params.gravitational_constant * mass / r3)
+    offset * (gm / r3)
 }
 
 fn bh_acceleration(
@@ -167,7 +163,12 @@ fn bh_acceleration(
         || width / distance.max(EPSILON) < params.opening_angle
     {
         *approximate_count += 1;
-        return acceleration_from_mass(position, node.center_of_mass, node.mass, params);
+        return acceleration_from_mass(
+            position,
+            node.center_of_mass,
+            params.gravitational_constant * node.mass,
+            params.softening,
+        );
     }
     let mut acceleration = Vector::ZERO;
     for child in node.children.into_iter().flatten() {
@@ -240,6 +241,11 @@ pub extern "C" fn astro_nbody_direct_accelerations(
         return Bool::FALSE;
     }
     let out = unsafe { slice::from_raw_parts_mut(out_accelerations, capacity as usize) };
+    // G×m 对每个天体是常量，预计算一次
+    let gm: Vec<f64> = particles
+        .iter()
+        .map(|particle| particle.mass * params.gravitational_constant)
+        .collect();
     let mut report = NBodyForceReport {
         body_count: particle_count,
         ..NBodyForceReport::default()
@@ -253,8 +259,8 @@ pub extern "C" fn astro_nbody_direct_accelerations(
             acceleration += acceleration_from_mass(
                 vec3_to_rapier(particles[i].position),
                 vec3_to_rapier(particles[j].position),
-                particles[j].mass,
-                params,
+                gm[j],
+                params.softening,
             );
             report.direct_pair_count += 1;
         }
@@ -276,6 +282,47 @@ pub extern "C" fn astro_nbody_direct_accelerations(
     }
     clear_error();
     Bool::TRUE
+}
+
+/// 裸牛顿引力快速路径：无软化、无参数校验、无逐对防护的 unsafe 版本。
+///
+/// 加速度 a = G·m_j / r³ · (p_j − p_i)，直接 O(n²)，G×m 每体预缓存。
+/// 调用方必须保证：无重叠粒子（否则除零产生 inf/NaN）、数据全为有限值。
+///
+/// # Safety
+/// `particles` 必须指向至少 `particle_count` 个可读 `NBodyParticle`；
+/// `out_accelerations` 必须指向至少 `capacity` 个可写 `Vec3`，且 `capacity >= particle_count`。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn astro_nbody_direct_accelerations_bare(
+    particles: *const NBodyParticle,
+    particle_count: u32,
+    gravitational_constant: f64,
+    out_accelerations: *mut Vec3,
+    capacity: u32,
+) {
+    let particles = unsafe { slice::from_raw_parts(particles, particle_count as usize) };
+    let out = unsafe { slice::from_raw_parts_mut(out_accelerations, capacity as usize) };
+
+    // G×m 对每个天体是常量，预缓存一次
+    let gm: Vec<f64> = particles
+        .iter()
+        .map(|particle| particle.mass * gravitational_constant)
+        .collect();
+
+    for i in 0..particles.len() {
+        let mut acceleration = Vector::ZERO;
+        let pi = vec3_to_rapier(particles[i].position);
+        for j in 0..particles.len() {
+            if i == j {
+                continue;
+            }
+            let offset = vec3_to_rapier(particles[j].position) - pi;
+            let r2 = offset.length_squared();
+            let r3 = r2.sqrt() * r2;
+            acceleration += offset * (gm[j] / r3);
+        }
+        out[i] = vec3_from_rapier(acceleration);
+    }
 }
 
 /// Computes Barnes-Hut tree-approximated gravitational accelerations for an N-body system.
@@ -382,8 +429,8 @@ pub extern "C" fn astro_fmm_monopole_acceleration(
     *out_acceleration = vec3_from_rapier(acceleration_from_mass(
         vec3_to_rapier(position),
         vec3_to_rapier(cluster_center),
-        cluster_mass,
-        params,
+        params.gravitational_constant * cluster_mass,
+        params.softening,
     ));
     clear_error();
     Bool::TRUE

@@ -12,7 +12,7 @@ use crate::rapier::ffi::{
 };
 use rapier3d::math::{Pose, Rotation, Vector};
 use rapier3d::na::Unit;
-use rapier3d::prelude::{Array2, Collider, ColliderBuilder, SharedShape, TypedShape};
+use rapier3d::prelude::{Array2, CoefficientCombineRule, Collider, ColliderBuilder, SharedShape, TypedShape};
 use smallvec::SmallVec;
 use std::slice;
 
@@ -21,6 +21,7 @@ const MAX_RAW_POINTS: u32 = 1_000_000;
 const MAX_HEIGHTMAP_CELLS: usize = 4_000_000;
 const MAX_EDGE_COUNT: u32 = 1_000_000;
 const MAX_SPHERE_COUNT: u32 = 1_000_000;
+const MAX_COMPOUND_PARTS: u32 = 100_000;
 
 fn default_builder(shape_desc: ShapeDesc) -> ColliderBuilder {
     ColliderBuilder::new(shape_from_desc(shape_desc))
@@ -127,6 +128,88 @@ fn builder_from_compound(parts: Vec<(Pose, SharedShape)>) -> *mut ColliderBuilde
     Box::into_raw(Box::new(ColliderBuilderHandle {
         inner: ColliderBuilder::compound(parts),
     }))
+}
+
+/// Parses a packed array of axis-aligned boxes into compound parts.
+///
+/// # Safety
+///
+/// `box_data` must point to at least `box_count * 6` readable `f64` values,
+/// each box described as min_x, min_y, min_z, max_x, max_y, max_z.
+fn boxes_from_minmax(box_data: *const f64, box_count: u32) -> Option<Vec<(Pose, SharedShape)>> {
+    if box_data.is_null() {
+        set_error(ERR_NULL_POINTER, "box data is null");
+        return None;
+    }
+    if box_count == 0 {
+        set_error(ERR_INVALID_ARGUMENT, "compound collider has no boxes");
+        return None;
+    }
+    let count = box_count as usize;
+    if count > MAX_COMPOUND_PARTS as usize {
+        set_error(ERR_INVALID_ARGUMENT, "too many compound boxes");
+        return None;
+    }
+    let total = count.checked_mul(6)?;
+    let data = unsafe { slice::from_raw_parts(box_data, total) };
+
+    let mut parts = Vec::with_capacity(count);
+    for chunk in data.chunks_exact(6) {
+        let min_x = chunk[0];
+        let min_y = chunk[1];
+        let min_z = chunk[2];
+        let max_x = chunk[3];
+        let max_y = chunk[4];
+        let max_z = chunk[5];
+        if !min_x.is_finite()
+            || !min_y.is_finite()
+            || !min_z.is_finite()
+            || !max_x.is_finite()
+            || !max_y.is_finite()
+            || !max_z.is_finite()
+            || min_x >= max_x
+            || min_y >= max_y
+            || min_z >= max_z
+        {
+            set_error(ERR_INVALID_ARGUMENT, "invalid box bounds");
+            return None;
+        }
+
+        let center = Vec3 {
+            x: (min_x + max_x) * 0.5,
+            y: (min_y + max_y) * 0.5,
+            z: (min_z + max_z) * 0.5,
+        };
+        let half = Vec3 {
+            x: ((max_x - min_x) * 0.5).max(MIN_HALF_EXTENT),
+            y: ((max_y - min_y) * 0.5).max(MIN_HALF_EXTENT),
+            z: ((max_z - min_z) * 0.5).max(MIN_HALF_EXTENT),
+        };
+        parts.push((
+            Pose::from_parts(vec3_to_rapier(center), Rotation::IDENTITY),
+            SharedShape::cuboid(half.x, half.y, half.z),
+        ));
+    }
+    Some(parts)
+}
+
+/// Creates a compound collider builder from a packed array of axis-aligned boxes.
+///
+/// # Safety
+///
+/// `box_data` must point to at least `box_count * 6` readable `f64` values,
+/// each box described as min_x, min_y, min_z, max_x, max_y, max_z.
+#[unsafe(no_mangle)]
+pub extern "C" fn collider_builder_create_compound_boxes(
+    box_data: *const f64,
+    box_count: u32,
+) -> *mut ColliderBuilderHandle {
+    ffi_guard(std::ptr::null_mut(), || {
+        let Some(parts) = boxes_from_minmax(box_data, box_count) else {
+            return std::ptr::null_mut();
+        };
+        builder_from_compound(parts)
+    })
 }
 
 /// Creates a collider builder from a generic shape type and packed shape data.
@@ -816,6 +899,33 @@ pub extern "C" fn collider_builder_set_restitution(
 /// `builder` must be a valid pointer returned by a `collider_builder_create_*`
 /// function and not yet consumed or destroyed.
 #[unsafe(no_mangle)]
+pub extern "C" fn collider_builder_set_contact_skin(
+    builder: *mut ColliderBuilderHandle,
+    skin: f64,
+) {
+    ffi_guard((), || {
+        let Some(builder) = (unsafe { builder.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "builder is null");
+            return;
+        };
+        if !skin.is_finite() || skin < 0.0 {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "contact skin must be finite and non-negative",
+            );
+            return;
+        }
+
+        let inner = std::mem::replace(&mut builder.inner, ColliderBuilder::ball(0.5));
+        builder.inner = inner.contact_skin(skin);
+    })
+}
+
+/// # Safety
+///
+/// `builder` must be a valid pointer returned by a `collider_builder_create_*`
+/// function and not yet consumed or destroyed.
+#[unsafe(no_mangle)]
 pub extern "C" fn collider_builder_set_density(builder: *mut ColliderBuilderHandle, density: f64) {
     ffi_guard((), || {
         let Some(builder) = (unsafe { builder.as_mut() }) else {
@@ -957,6 +1067,7 @@ pub extern "C" fn world_insert_collider(
             set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
+        let _query_lock = world.inner.query_lock.write();
         if memory_handle.is_null() {
             set_error(ERR_NULL_POINTER, "collider is null");
             return 0;
@@ -983,6 +1094,7 @@ pub extern "C" fn world_insert_collider_with_parent(
             set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
+        let _query_lock = world.inner.query_lock.write();
         if memory_handle.is_null() {
             set_error(ERR_NULL_POINTER, "collider is null");
             return 0;
@@ -1011,6 +1123,7 @@ pub extern "C" fn world_remove_collider(
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
+        let _query_lock = world.inner.query_lock.write();
 
         let removed = world
             .inner
@@ -1042,6 +1155,7 @@ pub extern "C" fn world_copy_collider(
             set_error(ERR_NULL_POINTER, "world is null");
             return std::ptr::null_mut();
         };
+        let _query_lock = world.inner.query_lock.write();
 
         let Some(collider) = world
             .inner
@@ -1366,6 +1480,44 @@ pub extern "C" fn collider_set_friction(
     })
 }
 
+/// Set the friction combine rule for a collider.
+///
+/// Rules: 0=Average 1=Min 2=Multiply 3=Max 4=ClampedSum.
+///
+/// # Safety
+/// `world` must be a valid world pointer; `handle` must be a collider in `world`.
+#[unsafe(no_mangle)]
+pub extern "C" fn collider_set_friction_combine_rule(
+    world: *mut WorldHandle,
+    handle: ColliderHandleRaw,
+    rule: u32,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let Some(collider) = world
+            .inner
+            .colliders
+            .get_mut(unpack_collider_handle(handle))
+        else {
+            set_error(ERR_NOT_FOUND, "collider not found");
+            return Bool::FALSE;
+        };
+
+        let rule = match rule {
+            1 => CoefficientCombineRule::Min,
+            2 => CoefficientCombineRule::Multiply,
+            3 => CoefficientCombineRule::Max,
+            4 => CoefficientCombineRule::ClampedSum,
+            _ => CoefficientCombineRule::Average,
+        };
+        collider.set_friction_combine_rule(rule);
+        Bool::TRUE
+    })
+}
+
 /// # Safety
 ///
 /// `world` must be a valid pointer returned by `world_create` and not yet destroyed.
@@ -1409,6 +1561,44 @@ pub extern "C" fn collider_set_restitution(
         }
 
         collider.set_restitution(restitution);
+        Bool::TRUE
+    })
+}
+
+/// Set the restitution combine rule for a collider.
+///
+/// Rules: 0=Average 1=Min 2=Multiply 3=Max 4=ClampedSum.
+///
+/// # Safety
+/// `world` must be a valid world pointer; `handle` must be a collider in `world`.
+#[unsafe(no_mangle)]
+pub extern "C" fn collider_set_restitution_combine_rule(
+    world: *mut WorldHandle,
+    handle: ColliderHandleRaw,
+    rule: u32,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let Some(collider) = world
+            .inner
+            .colliders
+            .get_mut(unpack_collider_handle(handle))
+        else {
+            set_error(ERR_NOT_FOUND, "collider not found");
+            return Bool::FALSE;
+        };
+
+        let rule = match rule {
+            1 => CoefficientCombineRule::Min,
+            2 => CoefficientCombineRule::Multiply,
+            3 => CoefficientCombineRule::Max,
+            4 => CoefficientCombineRule::ClampedSum,
+            _ => CoefficientCombineRule::Average,
+        };
+        collider.set_restitution_combine_rule(rule);
         Bool::TRUE
     })
 }

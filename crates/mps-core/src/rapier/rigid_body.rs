@@ -426,6 +426,7 @@ pub extern "C" fn world_insert_rigid_body(
             set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
+        let _query_lock = world.inner.query_lock.write();
         if memory_handle.is_null() {
             set_error(ERR_NULL_POINTER, "rigid body pointer is null");
             return 0;
@@ -451,6 +452,7 @@ pub extern "C" fn world_remove_rigid_body(
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
+        let _query_lock = world.inner.query_lock.write();
 
         let removed = world
             .inner
@@ -487,6 +489,7 @@ pub extern "C" fn world_copy_rigid_body(
             set_error(ERR_NULL_POINTER, "world is null");
             return std::ptr::null_mut();
         };
+        let _query_lock = world.inner.query_lock.write();
 
         let Some(rb) = world
             .inner

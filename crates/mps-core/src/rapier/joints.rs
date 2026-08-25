@@ -460,6 +460,9 @@ pub extern "C" fn world_insert_impulse_joint(
             set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
+        // 裸指针取锁：避免锁守卫的借用与下方 &mut WorldHandle 冲突
+        let lock_ptr = &world.inner.query_lock as *const parking_lot::RwLock<()>;
+        let _query_lock = unsafe { (*lock_ptr).write() };
         if builder.is_null() {
             set_error(ERR_NULL_POINTER, "joint builder is null");
             return 0;
@@ -486,6 +489,7 @@ pub extern "C" fn world_remove_impulse_joint(
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
+        let _query_lock = world.inner.query_lock.write();
 
         world
             .inner

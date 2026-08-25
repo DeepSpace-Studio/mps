@@ -64,6 +64,9 @@ pub struct PhysicsWorld {
     pub(crate) shared_arena: Option<Box<crate::rapier::shared_arena::SharedPhysicsArena>>,
     /// Persistent per-frame work buffers — cleared and reused each `world_step`.
     pub(crate) buffers: FrameWorkBuffers,
+    /// 查询/步进串行化：step 与所有世界结构变更拿写锁，射线/形状查询拿读锁。
+    /// 物理线程独占变更，渲染线程并发查询时会先拿读锁，避免撕裂 BroadPhaseBvh 节点索引。
+    pub(crate) query_lock: parking_lot::RwLock<()>,
 }
 
 impl PhysicsWorld {
@@ -93,6 +96,7 @@ impl PhysicsWorld {
             force_registry: ForceRegistry::new(),
             shared_arena: None,
             buffers: FrameWorkBuffers::default(),
+            query_lock: parking_lot::RwLock::new(()),
         }
     }
 }
@@ -147,6 +151,8 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
         let Some(world) = (unsafe { world.as_mut() }) else {
             return;
         };
+        // 写锁：整个步进期间禁止并发查询/结构变更，防止撕裂 BroadPhaseBvh
+        let _query_lock = world.inner.query_lock.write();
         if !delta_seconds.is_finite() || delta_seconds <= 0.0 || delta_seconds > MAX_STEP_SECONDS {
             return;
         }
@@ -446,6 +452,7 @@ pub extern "C" fn world_set_gravity(world: *mut WorldHandle, gravity: Vec3) {
         let Some(world) = (unsafe { world.as_mut() }) else {
             return;
         };
+        let _query_lock = world.inner.query_lock.write();
         if !vec3_finite(gravity) {
             return;
         }
@@ -525,6 +532,7 @@ pub extern "C" fn world_dynamic_body_snapshot_count(world: *const WorldHandle) -
         let Some(world) = (unsafe { world.as_ref() }) else {
             return 0;
         };
+        let _query_lock = world.inner.query_lock.read();
 
         world
             .inner
@@ -552,6 +560,7 @@ pub extern "C" fn world_dynamic_body_snapshot(
         let Some(world) = (unsafe { world.as_ref() }) else {
             return 0;
         };
+        let _query_lock = world.inner.query_lock.read();
         if out_handles.is_null()
             || out_values.is_null()
             || capacity == 0
@@ -604,6 +613,7 @@ pub extern "C" fn world_body_snapshot_count(world: *const WorldHandle) -> u32 {
         let Some(world) = (unsafe { world.as_ref() }) else {
             return 0;
         };
+        let _query_lock = world.inner.query_lock.read();
 
         world.inner.bodies.len().min(u32::MAX as usize) as u32
     })
@@ -628,6 +638,7 @@ pub extern "C" fn world_body_snapshot(
             set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
+        let _query_lock = world.inner.query_lock.read();
         if out_handles.is_null()
             || out_values.is_null()
             || capacity == 0
@@ -698,6 +709,7 @@ pub extern "C" fn world_update_body_poses(
             set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
+        let _query_lock = world.inner.query_lock.write();
         if handles.is_null() || values.is_null() || count == 0 || count > MAX_OUTPUT_CAPACITY {
             set_error(ERR_CAPACITY, "invalid body pose input");
             return 0;
@@ -767,6 +779,7 @@ pub extern "C" fn world_update_body_velocities(
             set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
+        let _query_lock = world.inner.query_lock.write();
         if handles.is_null() || values.is_null() || count == 0 || count > MAX_OUTPUT_CAPACITY {
             set_error(ERR_CAPACITY, "invalid body velocity input");
             return 0;
