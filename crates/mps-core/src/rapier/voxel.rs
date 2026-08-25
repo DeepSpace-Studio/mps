@@ -1583,6 +1583,28 @@ pub extern "C" fn collider_voxel_edit(
             return Bool::FALSE;
         };
 
+        // ── Phase 5g: terrain dig → soft-body collapse ──────────────────────
+        // When a cell is dug (solid set to 0), propagate the removal to every
+        // soft body whose voxel grid overlaps that world-space cell. We compute
+        // the dug cell's world-center from the collider grid (immutable borrow
+        // first), then release that borrow before mutating soft bodies (the
+        // two live in disjoint fields of `world.inner`).
+        if solid == 0 {
+            let world_center = if let Some(cache) = world.inner.voxel_grids.get(&handle) {
+                let g = &cache.grid;
+                Some(Vec3 {
+                    x: g.origin.x + (x as f64 + 0.5) * g.voxel_size_x,
+                    y: g.origin.y + (y as f64 + 0.5) * g.voxel_size_y,
+                    z: g.origin.z + (z as f64 + 0.5) * g.voxel_size_z,
+                })
+            } else {
+                None
+            };
+            if let Some(wc) = world_center {
+                crate::rapier::soft_body::propagate_dig_to_soft_bodies(world, wc);
+            }
+        }
+
         let Some(cache) = world.inner.voxel_grids.get_mut(&handle) else {
             set_error(
                 ERR_UNSUPPORTED,

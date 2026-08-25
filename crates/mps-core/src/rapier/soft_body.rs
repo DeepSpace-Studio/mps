@@ -49,6 +49,14 @@ pub(crate) struct VoxelSoftMeta {
     pub sx: usize,
     pub sy: usize,
     pub sz: usize,
+    /// World-space origin of the soft body's voxel grid (cell (0,0,0) center is
+    /// `origin + 0.5 * voxel_size`). Needed by Phase 5g to map a dug collider
+    /// cell (in a different grid's coordinate space) back to this soft body's
+    /// cell coordinates via world-space overlap.
+    pub origin: Vec3,
+    /// Uniform voxel edge length of the soft body's grid (matching the
+    /// `voxel_size` argument of `soft_body_voxel_build`).
+    pub voxel_size: f64,
     pub map: Vec<i64>,
 }
 
@@ -493,6 +501,8 @@ pub extern "C" fn soft_body_voxel_build(
                 sx,
                 sy: size_y as usize,
                 sz,
+                origin,
+                voxel_size,
                 map: index.clone(),
             },
         );
@@ -1132,56 +1142,111 @@ pub extern "C" fn soft_body_voxel_dig(
             set_error(ERR_NULL_POINTER, "soft_body_voxel_dig: world is null");
             return Bool::FALSE;
         };
-        let sid = SoftBodyId(id);
-        let Some(body) = world.inner.soft_bodies.get_mut(sid) else {
-            set_error(ERR_NOT_FOUND, "soft_body_voxel_dig: unknown id");
-            return Bool::FALSE;
-        };
-        let Some(meta) = world.inner.voxel_soft_meta.get_mut(&id) else {
-            set_error(
-                ERR_NOT_FOUND,
-                "soft_body_voxel_dig: body has no voxel mapping",
-            );
-            return Bool::FALSE;
-        };
-        // cell_linear uses the same layout as VoxelGrid::index / soft_body_voxel_build.
-        if cell_x as usize >= meta.sx || cell_y as usize >= meta.sy || cell_z as usize >= meta.sz {
-            set_error(
-                ERR_INVALID_ARGUMENT,
-                "soft_body_voxel_dig: cell out of bounds",
-            );
-            return Bool::FALSE;
-        }
-        let cell_linear = cell_x as usize + meta.sx * (cell_z as usize + meta.sz * cell_y as usize);
-        let p_idx = match meta.map.get(cell_linear).copied() {
-            Some(v) if v >= 0 => v as usize,
-            _ => {
-                set_error(
-                    ERR_INVALID_ARGUMENT,
-                    "soft_body_voxel_dig: cell is empty or already dug",
-                );
-                return Bool::FALSE;
-            }
-        };
-        if !body.remove_particle(p_idx) {
-            set_error(
-                ERR_INVALID_ARGUMENT,
-                "soft_body_voxel_dig: remove_particle failed",
-            );
-            return Bool::FALSE;
-        }
-        // Rebuild the map: the dug cell becomes -1; every surviving index that was
-        // > p_idx shifts down by one (mirrors SoftBody::remove_particle).
-        for m in meta.map.iter_mut() {
-            if *m == p_idx as i64 {
-                *m = -1;
-            } else if *m > p_idx as i64 {
-                *m -= 1;
-            }
-        }
-        clear_error();
-        Bool::TRUE
+        soft_body_voxel_dig_inner(world, id, cell_x, cell_y, cell_z)
     })
+}
+
+/// Core of [`soft_body_voxel_dig`] operating on an already-unwrapped world
+/// handle. Exposed as `pub(crate)` so `collider_voxel_edit` can propagate a
+/// terrain dig to overlapping soft bodies (Phase 5g) without re-wrapping the
+/// raw pointer.
+pub(crate) fn soft_body_voxel_dig_inner(
+    world: &mut WorldHandle,
+    id: u32,
+    cell_x: u32,
+    cell_y: u32,
+    cell_z: u32,
+) -> Bool {
+    let sid = SoftBodyId(id);
+    let Some(body) = world.inner.soft_bodies.get_mut(sid) else {
+        set_error(ERR_NOT_FOUND, "soft_body_voxel_dig: unknown id");
+        return Bool::FALSE;
+    };
+    let Some(meta) = world.inner.voxel_soft_meta.get_mut(&id) else {
+        set_error(
+            ERR_NOT_FOUND,
+            "soft_body_voxel_dig: body has no voxel mapping",
+        );
+        return Bool::FALSE;
+    };
+    // cell_linear uses the same layout as VoxelGrid::index / soft_body_voxel_build.
+    if cell_x as usize >= meta.sx || cell_y as usize >= meta.sy || cell_z as usize >= meta.sz {
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "soft_body_voxel_dig: cell out of bounds",
+        );
+        return Bool::FALSE;
+    }
+    let cell_linear = cell_x as usize + meta.sx * (cell_z as usize + meta.sz * cell_y as usize);
+    let p_idx = match meta.map.get(cell_linear).copied() {
+        Some(v) if v >= 0 => v as usize,
+        _ => {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_voxel_dig: cell is empty or already dug",
+            );
+            return Bool::FALSE;
+        }
+    };
+    if !body.remove_particle(p_idx) {
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "soft_body_voxel_dig: remove_particle failed",
+        );
+        return Bool::FALSE;
+    }
+    // Rebuild the map: the dug cell becomes -1; every surviving index that was
+    // > p_idx shifts down by one (mirrors SoftBody::remove_particle).
+    for m in meta.map.iter_mut() {
+        if *m == p_idx as i64 {
+            *m = -1;
+        } else if *m > p_idx as i64 {
+            *m -= 1;
+        }
+    }
+    clear_error();
+    Bool::TRUE
+}
+
+/// Phase 5g: when a voxel collider cell is dug (set to empty), propagate the
+/// dig to every soft body whose voxel grid overlaps that world-space cell. For
+/// each soft body we convert the dug cell's world-center into the soft body's
+/// own cell coordinates (stored in `VoxelSoftMeta.origin` / `voxel_size`) and
+/// call `soft_body_voxel_dig_inner`. Digs are best-effort and idempotent: a
+/// soft cell that is already empty/dug simply returns `Bool::FALSE` without
+/// disturbing the body.
+///
+/// Must be called when no other borrow of `world.inner` (e.g. a `VoxelCache`)
+/// is live, since it mutates `soft_bodies` + `voxel_soft_meta`.
+pub(crate) fn propagate_dig_to_soft_bodies(world: &mut WorldHandle, world_center: Vec3) {
+    // Snapshot the ids first to keep the borrow of `voxel_soft_meta` short.
+    let ids: Vec<u32> = world.inner.voxel_soft_meta.keys().copied().collect();
+    for id in ids {
+        let (sx, sy, sz, origin, voxel_size) = {
+            let meta = match world.inner.voxel_soft_meta.get(&id) {
+                Some(m) => m,
+                None => continue,
+            };
+            (meta.sx, meta.sy, meta.sz, meta.origin, meta.voxel_size)
+        };
+        if !voxel_size.is_finite() || voxel_size <= 0.0 {
+            continue;
+        }
+        // World-center → soft-body cell coordinate (uniform grid).
+        let scx = ((world_center.x - origin.x) / voxel_size - 0.5).round() as i64;
+        let scy = ((world_center.y - origin.y) / voxel_size - 0.5).round() as i64;
+        let scz = ((world_center.z - origin.z) / voxel_size - 0.5).round() as i64;
+        if scx < 0
+            || scy < 0
+            || scz < 0
+            || scx as usize >= sx
+            || scy as usize >= sy
+            || scz as usize >= sz
+        {
+            continue;
+        }
+        soft_body_voxel_dig_inner(world, id, scx as u32, scy as u32, scz as u32);
+    }
 }
 
 // ── Phase 5f: 软体-刚体碰撞（proxy collider 桥接）──────────────────────────

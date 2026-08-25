@@ -1,6 +1,13 @@
 #[cfg(test)]
 mod tests {
-    use mps_core::rapier::ffi::{BodyStatus, Bool, RigidBodyHandleRaw, Vec3, WorldHandle};
+    use mps_core::rapier::collider::{collider_builder_build, world_insert_collider_with_parent};
+    use mps_core::rapier::ffi::VoxelColliderOptions;
+    use mps_core::rapier::ffi::{
+        BodyStatus, Bool, ColliderHandleRaw, RigidBodyHandleRaw, Vec3, WorldHandle,
+    };
+    use mps_core::rapier::rigid_body::{
+        rigid_body_builder_build, rigid_body_builder_create, world_insert_rigid_body,
+    };
     use mps_core::rapier::soft_body::{
         soft_body_add_distance_constraint, soft_body_add_particle, soft_body_add_spring,
         soft_body_add_tetrahedron, soft_body_build_tetra_mesh, soft_body_configure_solver,
@@ -9,6 +16,7 @@ mod tests {
         soft_body_set_gravity, soft_body_voxel_build, soft_body_voxel_dig, soft_chain_create,
         soft_chain_node_handles,
     };
+    use mps_core::rapier::voxel::{collider_builder_create_voxels, collider_voxel_edit};
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
     use rapier3d::prelude::soft_body::SoftBodyId;
 
@@ -963,6 +971,99 @@ mod tests {
             "without collision coupling the particle should fall through the ground, got y={}",
             pos2.y
         );
+
+        world_destroy(world);
+    }
+
+    /// Phase 5g: digging a voxel collider cell auto-propagates to a soft body
+    /// that shares the same world-space voxelization. Build a 2×2×2 all-solid
+    /// grid as BOTH a voxel collider and a soft body (identical origin/size/
+    /// voxel_size). Dig cell (0,0,0) via `collider_voxel_edit`; the overlapping
+    /// soft-body particle must be removed automatically (count 8 → 7) without
+    /// an explicit `soft_body_voxel_dig` call.
+    #[test]
+    fn collider_voxel_edit_propagates_dig_to_soft_body() {
+        let world = make_world();
+        assert!(!world.is_null());
+
+        // 2×2×2 all-solid grid, origin (0,0,0), uniform voxel size 1.0.
+        let size: u32 = 2;
+        let voxels = vec![1u8; (size * size * size) as usize];
+
+        // Soft body built from the same grid.
+        let id = soft_body_voxel_build(
+            world,
+            voxels.as_ptr(),
+            voxels.len() as u32,
+            size,
+            size,
+            size,
+            1.0,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            1.0,         // particle_mass
+            100.0,       // stiffness
+            5.0,         // damping
+            Bool::FALSE, // pin_boundary
+        );
+        assert_ne!(id, u32::MAX, "soft body build failed");
+        assert_eq!(
+            soft_body_particle_count(world, id),
+            8,
+            "2x2x2 all-solid grid should yield 8 particles"
+        );
+
+        // Voxel collider sharing the identical world-space grid.
+        let options = VoxelColliderOptions {
+            mode: 0, // Auto
+            dynamic_body: Bool::FALSE,
+            small_voxel_limit: 0,
+            mesh_voxel_limit: 0,
+        };
+        let builder = collider_builder_create_voxels(
+            voxels.as_ptr(),
+            size,
+            size,
+            size,
+            1.0,
+            1.0,
+            1.0,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            options,
+        );
+        assert!(!builder.is_null(), "voxel collider builder failed");
+        let collider = collider_builder_build(builder);
+        assert!(!collider.is_null(), "voxel collider build failed");
+
+        // Parent body for the collider (a fixed anchor).
+        let parent = rigid_body_builder_create(BodyStatus::Fixed as u32);
+        let parent_handle = world_insert_rigid_body(world, rigid_body_builder_build(parent));
+        let collider_handle: ColliderHandleRaw =
+            world_insert_collider_with_parent(world, collider, parent_handle);
+        assert_ne!(collider_handle, 0, "voxel collider insert failed");
+
+        // Dig cell (0,0,0) in the collider grid.
+        let dug = collider_voxel_edit(world, collider_handle, 0, 0, 0, 0);
+        assert_eq!(dug, Bool::TRUE, "collider_voxel_edit dig should succeed");
+
+        // The overlapping soft-body particle at (0,0,0) must be auto-removed.
+        assert_eq!(
+            soft_body_particle_count(world, id),
+            7,
+            "digging collider cell (0,0,0) should auto-collapse the soft body by one particle"
+        );
+
+        // Re-dig the same cell: idempotent, count stays 7.
+        let dug_again = collider_voxel_edit(world, collider_handle, 0, 0, 0, 0);
+        assert_eq!(dug_again, Bool::TRUE);
+        assert_eq!(soft_body_particle_count(world, id), 7);
 
         world_destroy(world);
     }
