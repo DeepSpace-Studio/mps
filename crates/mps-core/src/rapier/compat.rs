@@ -93,7 +93,7 @@ pub extern "C" fn world_insert_dynamic_cuboids(
         let solver_groups = interaction_groups_to_rapier(solver_groups);
         let mut collider_count = 0usize;
 
-        for cuboid in cuboids.chunks_exact(6) {
+        for cuboid in cuboids.as_chunks::<6>().0 {
             let half_x = cuboid[3];
             let half_y = cuboid[4];
             let half_z = cuboid[5];
@@ -187,7 +187,7 @@ pub extern "C" fn world_insert_static_trimesh(
         let indices = unsafe { slice::from_raw_parts(indices, index_len as usize) };
 
         let mut vertices = Vec::with_capacity(vertex_count as usize);
-        for chunk in vertices_xyz.chunks_exact(3) {
+        for chunk in vertices_xyz.as_chunks::<3>().0 {
             if !chunk[0].is_finite() || !chunk[1].is_finite() || !chunk[2].is_finite() {
                 set_error(ERR_INVALID_ARGUMENT, "non-finite trimesh vertex");
                 return 0;
@@ -196,7 +196,7 @@ pub extern "C" fn world_insert_static_trimesh(
         }
 
         let mut triangles = Vec::with_capacity(index_len as usize / 3);
-        for chunk in indices.chunks_exact(3) {
+        for chunk in indices.as_chunks::<3>().0 {
             if chunk[0] >= vertex_count || chunk[1] >= vertex_count || chunk[2] >= vertex_count {
                 set_error(ERR_INVALID_ARGUMENT, "trimesh index out of range");
                 return 0;

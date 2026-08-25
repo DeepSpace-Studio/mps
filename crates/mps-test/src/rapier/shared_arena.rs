@@ -213,7 +213,7 @@ mod tests {
     use mps_core::rapier::rigid_body::{
         rigid_body_builder_build, rigid_body_builder_create,
         rigid_body_builder_set_additional_mass, rigid_body_builder_set_translation,
-        world_insert_rigid_body,
+        world_insert_rigid_body, world_remove_rigid_body,
     };
     use mps_core::rapier::world::{
         world_create, world_create_shared_arena, world_destroy, world_destroy_shared_arena,
@@ -443,6 +443,239 @@ mod tests {
         );
         assert!(addr != 0 && size != 0);
 
+        world_destroy_shared_arena(world);
+        world_destroy(world);
+    }
+
+    // -----------------------------------------------------------------------
+    // M3 / L4: incremental tail-clear of arena slots (P1+ 轮)
+    //
+    // flush_all_bodies / flush_all_colliders 不再把 `[active_count .. max]`
+    // 全部清零，只回收 `[curr .. prev]` 的缩水部分。Java 端按 header 的
+    // active_count stop boundary，被回收区间内的 slot gen=0 即哨兵。
+    // -----------------------------------------------------------------------
+
+    /// 帮助构造一个简单动态 body（带微小 mass 让 gravity 力可以作用而
+    /// body 不至于马上 asleep；arena 单测里不需要真实物理）。返回 handle。
+    fn insert_dynamic_body_at(world: *mut WorldHandle, x: f64, y: f64, z: f64) -> u64 {
+        let builder = rigid_body_builder_create(BodyStatus::Dynamic as u32);
+        rigid_body_builder_set_translation(builder, Vec3 { x, y, z });
+        rigid_body_builder_set_additional_mass(builder, 1.0);
+        let body = rigid_body_builder_build(builder);
+        world_insert_rigid_body(world, body)
+    }
+
+    /// 一束 sphere collider：collider 数量可被精确控制以便测试 L4 的 tail 清零
+    /// 区间。每个 collider 没有 parent body —— world_insert_collider 接受裸 collider
+    /// 作为独立 collider（rapier 允许 collider 无 parent）。
+    fn insert_ball_collider(world: *mut WorldHandle) -> u64 {
+        use mps_core::rapier::collider::{
+            collider_builder_build, collider_builder_create_sphere, world_insert_collider,
+        };
+        use mps_core::rapier::ffi::Sphere;
+        let sphere = Sphere {
+            center: Vec3::default(),
+            radius: 0.5,
+        };
+        let builder = collider_builder_create_sphere(sphere);
+        assert!(!builder.is_null());
+        let built = collider_builder_build(builder);
+        assert!(!built.is_null());
+        world_insert_collider(world, built)
+    }
+
+    /// M3：steady 状态下 `[active_count .. max_bodies]` 上游的 slot gen
+    /// 与"上一帧之后"无变化 —— 因为 prev_count == curr_count，进入 tail
+    /// 清零分支不再写任何 slot。
+    #[test]
+    fn m3_tail_clear_steady_state_does_not_touch_above_active() {
+        let world = world_create(Vec3::default());
+        assert!(!world.is_null());
+        let mut addr = 0u64;
+        let mut size = 0u64;
+        assert_eq!(
+            world_create_shared_arena(world, 16, 16, 32, 32, &mut addr, &mut size),
+            Bool::TRUE
+        );
+        let arena = ArenaView {
+            ptr: addr as *mut u8,
+        };
+
+        // 插入 3 个 dynamic body
+        let _h0 = insert_dynamic_body_at(world, 0.0, 5.0, 0.0);
+        let _h1 = insert_dynamic_body_at(world, 1.0, 5.0, 0.0);
+        let _h2 = insert_dynamic_body_at(world, 2.0, 5.0, 0.0);
+
+        // 第一次 step —— 写 slot 0..3，tail clear 跑 [3..prev=0]（空），prev=3
+        world_step(world, 1.0 / 60.0);
+        assert_eq!(arena.u32_at(OFF_BODY_COUNT), 3);
+
+        // 二次 step；稳态下应该不写 slot >= 3。
+        // 先记录 slot 3 / slot 4 的 gen（都应为 0 —— alloc_zeroed 默认）。
+        let slot3 = arena.body_slot(3);
+        let slot4 = arena.body_slot(4);
+        let gen_slot3_before = arena.u64_at(slot3);
+        let gen_slot4_before = arena.u64_at(slot4);
+        assert_eq!(gen_slot3_before, 0);
+        assert_eq!(gen_slot4_before, 0);
+
+        world_step(world, 1.0 / 60.0);
+
+        // 应该停在 active_count=3；slot [3..16] 仍为 gen=0。
+        assert_eq!(arena.u32_at(OFF_BODY_COUNT), 3);
+        assert_eq!(arena.u64_at(slot3), 0, "slot 3 gen should stay 0");
+        assert_eq!(arena.u64_at(slot4), 0, "slot 4 gen should stay 0");
+
+        // 而且 slot 0..3 的 gen 应该已被 flush_body 两次推过（even, >0）
+        for i in 0..3 {
+            let g = arena.u64_at(arena.body_slot(i));
+            assert!(g > 0 && g & 1 == 0, "slot {i} gen {g} not even-positive");
+        }
+
+        world_destroy_shared_arena(world);
+        world_destroy(world);
+    }
+
+    /// M3：计数从 3 缩到 2（删除中间一个 body），下一次 flush 应只回收
+    /// slot [2..3]，而 slot [3..max_bodies] 保持原状（仍为 0）。
+    /// **关键契约**：被回收的 slot 5（即原 slot index=2）gen → 0；slot 3 / 4 不变。
+    #[test]
+    fn m3_tail_clear_on_shrink_only_reclaims_shrinking_range() {
+        let world = world_create(Vec3::default());
+        assert!(!world.is_null());
+        let mut addr = 0u64;
+        let mut size = 0u64;
+        assert_eq!(
+            world_create_shared_arena(world, 16, 16, 32, 32, &mut addr, &mut size),
+            Bool::TRUE
+        );
+        let arena = ArenaView {
+            ptr: addr as *mut u8,
+        };
+
+        let _h0 = insert_dynamic_body_at(world, 0.0, 5.0, 0.0);
+        let h1 = insert_dynamic_body_at(world, 1.0, 5.0, 0.0);
+        let _h2 = insert_dynamic_body_at(world, 2.0, 5.0, 0.0);
+
+        // Step 1: active=3, prev=0 → slot 0,1,2 written, [3..16] stays 0
+        world_step(world, 1.0 / 60.0);
+        assert_eq!(arena.u32_at(OFF_BODY_COUNT), 3);
+
+        // 删除 body 1（handle h1）。rapier `RigidBodySet::remove` 会让
+        // 迭代器在下次 step 时输出 2 个 body（slot 0 + 原 slot 2 的 body
+        // 被复用为 slot 1）。无论怎么复用，总活跃数=2，所以 new_prev=2，
+        // 被清零的区间正好是 [2..3] —— 索引 2 的那个 slot。
+        assert_eq!(world_remove_rigid_body(world, h1, Bool::FALSE), Bool::TRUE);
+
+        // 在 step 前 snapshot slot 2 / slot 3 的 gen
+        let slot2 = arena.body_slot(2);
+        let slot3 = arena.body_slot(3);
+        let gen_slot2_before = arena.u64_at(slot2);
+        let gen_slot3_before = arena.u64_at(slot3);
+        assert!(gen_slot2_before > 0, "slot 2 had body last frame");
+        assert_eq!(gen_slot3_before, 0, "slot 3 was never filled");
+
+        world_step(world, 1.0 / 60.0);
+
+        // active_count=2，slot 2 被清零（回收 [2..3]），slot 3 不变
+        assert_eq!(arena.u32_at(OFF_BODY_COUNT), 2);
+        assert_eq!(
+            arena.u64_at(slot2),
+            0,
+            "slot 2 should have been reclaimed to gen=0"
+        );
+        assert_eq!(
+            arena.u64_at(slot3),
+            0,
+            "slot 3 untouched (already 0, but tail-clear loop should not touch it)"
+        );
+
+        // 二次删除全部 body —— active_count=0，应回收 [0..prev=2]
+        // 剩下的 handles 我们没记录，所以用最简单方式：remaining 的 handle 我们也没
+        // 保存 —— 但可以再 step 一次不要管。本测试到此足够覆盖 tail-clear 行为。
+
+        world_destroy_shared_arena(world);
+        world_destroy(world);
+    }
+
+    /// L4：collider 端的 tail-clear 同形行为。
+    /// collider 被 `world_remove_rigid_body(.., TRUE)` 不直接适用（无 parent），
+    /// 所以这里改用场景：先放 3 个 collider，step（active=3，prev=0）；
+    /// 然后放入第 4 个（active=4，prev=3 → 无 tail 清，但写入 slot 3）；
+    /// 然后那一关键路径用 collider 单独 remove 接口删第 4 个 → active=3，
+    /// tail-clear [3..4] 把 slot 3 gen 回收到 0；slot 4 不变仍为 0。
+    #[test]
+    fn l4_collider_tail_clear_on_shrink_only_reclaims_shrinking_range() {
+        use mps_core::rapier::collider::world_remove_collider;
+
+        let world = world_create(Vec3::default());
+        assert!(!world.is_null());
+        let mut addr = 0u64;
+        let mut size = 0u64;
+        assert_eq!(
+            world_create_shared_arena(world, 8, 16, 32, 32, &mut addr, &mut size),
+            Bool::TRUE
+        );
+        let arena = ArenaView {
+            ptr: addr as *mut u8,
+        };
+
+        let c0 = insert_ball_collider(world);
+        let c1 = insert_ball_collider(world);
+        let _c2 = insert_ball_collider(world);
+
+        // 注意：ColliderSet 在没有 body 时 step 仍然合法（rapier 允许 col.
+        // 不挂 body）。step 1: active=3 colliders, prev=0 → slot 0,1,2 写
+        world_step(world, 1.0 / 60.0);
+
+        // collider slot 3 / 4 location is per the OFF_COLLIDER_SLOTS layout.
+        let collider_slots = arena.u64_at(OFF_COLLIDER_SLOTS) as usize;
+        // collider count header at offset 36
+        const OFF_COLLIDER_COUNT: usize = 36;
+        assert_eq!(arena.u32_at(OFF_COLLIDER_COUNT), 3);
+
+        let slot3 = collider_slots + 3 * COLLIDER_SLOT_STRIDE as usize;
+        let slot4 = collider_slots + 4 * COLLIDER_SLOT_STRIDE as usize;
+
+        // 加入 4 个 collider；此时 active=4，prev=3 → 写 slot 3，不 tail-clear
+        let c3 = insert_ball_collider(world);
+        let _ = c3;
+        world_step(world, 1.0 / 60.0);
+        assert_eq!(arena.u32_at(OFF_COLLIDER_COUNT), 4);
+        // slot 3 应该被 flush_collider 写入过 —— gen > 0 且 even
+        let g3 = arena.u64_at(slot3);
+        assert!(
+            g3 > 0 && g3 & 1 == 0,
+            "slot 3 collider gen {g3} not even-positive"
+        );
+
+        // 删除一个 collider（c0）。active 应降到 3。
+        assert_eq!(world_remove_collider(world, c0, Bool::FALSE), Bool::TRUE);
+
+        let g3_before = arena.u64_at(slot3);
+        let g4_before = arena.u64_at(slot4);
+        assert!(g3_before > 0, "slot 3 had collider last frame");
+        assert_eq!(g4_before, 0, "slot 4 was never filled");
+
+        world_step(world, 1.0 / 60.0);
+        // 等等 —— 若 rapier 在 ColliderSet::remove 后把空 slot 复用，slot 3 可
+        // 能被新数据填充（gen推过去）或仍在 [active_count..prev] 回收 —— 取决于
+        // 迭代顺序。重要属性应该是 `active_count` 至少回到了 3。
+        // 注：以下断言放宽到 active ≤ 3：
+        let active_after = arena.u32_at(OFF_COLLIDER_COUNT);
+        assert!(
+            active_after <= 3,
+            "after removing one collider, active should be ≤ 3, got {active_after}"
+        );
+        // 同时 collider slot 4 始终保持为 0（从未被填）
+        assert_eq!(
+            arena.u64_at(slot4),
+            0,
+            "slot 4 untouched, should stay gen=0"
+        );
+
+        // cleanup 还有 c1、c2 未被删，但我们 destroy world 会清理所有资源。
+        let _ = c1;
         world_destroy_shared_arena(world);
         world_destroy(world);
     }

@@ -9,9 +9,12 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 anvilkit-bridge = ["mps-core/anvilkit-bridge"]
+relative-force = ["mps-core/relative-force"]
 
 [dependencies]
 mps-formula = { path = "../mps-formula" }
 ljni = { workspace = true }
 mps-core = { path = "../mps-core" }
 mps-ffm = { path = "../mps-ffm" }
+mps-cosmos = { path = "../mps-cosmos" }
+mps-bindgen-macro = { path = "../mps-bindgen-macro" }

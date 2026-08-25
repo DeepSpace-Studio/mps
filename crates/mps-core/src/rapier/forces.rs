@@ -39,9 +39,10 @@
 //!
 //! The report is collected automatically.
 
-use std::collections::BTreeMap;
-
-use rapier3d::prelude::{ColliderSet, NarrowPhase, RigidBodyHandle, RigidBodySet, Vector};
+use rapier3d::dynamics::force_containers::{ForceKind, Persistence};
+use rapier3d::prelude::{
+    AngVector, ColliderSet, NarrowPhase, RigidBodyHandle, RigidBodySet, Vector,
+};
 use smallvec::SmallVec;
 
 use crate::rapier::ffi::CustomPhysicsReport;
@@ -86,32 +87,62 @@ pub enum ForceLawType {
     MolecularLennardJones,
     /// Coulomb electrostatic force between molecules.
     MolecularCoulomb,
-    /// J2 zonal harmonic perturbation (oblateness).
-    SpaceJ2,
-    /// Control-moment-gyroscope torque.
-    SpaceCMG,
-    /// Atmospheric drag in orbital mechanics.
-    SpaceAtmosphericDrag,
-    /// Solar radiation pressure on spacecraft.
-    SpaceSolarRadiation,
-    /// Gravity-gradient torque on extended bodies.
-    SpaceGravityGradient,
-    /// Magnetic torquer attitude control.
-    SpaceMagneticTorquer,
-    /// Coriolis pseudo-force in rotating reference frame.
-    TrajectoryCoriolis,
-    /// Centrifugal pseudo-force in rotating reference frame.
-    TrajectoryCentrifugal,
-    /// Central-body gravity in trajectory calculations.
-    TrajectoryGravity,
     /// PID controller output force.
     ControlPID,
-    /// Celestial body gravity (spherical harmonics, ellipsoid, quadrupole).
-    CelestialGravity,
-    /// Terrain / irregular body gravity (polyhedron, DEM, Mascon).
+    /// Solar-wind dynamic pressure on a Rapier body (planet-surface sensitive).
+    /// Formula: see `mps_formula::heliophysics::solar_wind_dynamic_pressure`.
+    SolarWindPressure,
+    /// Chandrasekhar dynamical-friction deceleration for a body moving through
+    /// a background density field.  See `mps_formula::galactic_dynamics`.
+    DynamicalFriction,
+    /// MOND (Modified Newtonian Dynamics) gravity in the low-acceleration regime
+    /// (a < a_0), used for deep-field non-Newtonian flat rotation curves.
+    MonDGravity,
+    /// Eddington-limited radiation pressure pushing a Rapier body outward
+    /// from an accretor (luminous source). Formula: see
+    /// `mps_formula::high_energy_astro::eddington_limited_luminosity`; force
+    /// is `F = (L_Edd / (c · 4π · r²)) · A_eff`, along +r̂ (away from source).
+    EddingtonRadiationPressure,
+    /// X-ray binary disc bolometric irradiation pushing a Rapier body outward
+    /// from the accretor with force `F = (L_X / (c · 4π · r²)) · A_eff`.  The
+    /// luminosity is `mps_formula::high_energy_astro::xray_disc_bolometric_luminosity`
+    /// (returned in solar luminosities; multiplied by `L_SUN` for SI watts).
+    XrayIrradiation,
+    /// Magnetic-dipole torque on a magnetised Rapier body located in a pulsar's
+    /// dipole field.  Surface B-field magnitude is computed by
+    /// `mps_formula::high_energy_astro::pulsar_surface_b_field`; the dipole B
+    /// falls off as 1/r³; torque `τ = μ × B(r)`, applied via
+    /// `ForceFacade::add_torque`.  Configured by `PulsarMagneticDipoleLaw`.
+    PulsarMagneticDipole,
+    /// Jeans-escape drag: a Rapier body near a planetary exobase is pushed
+    /// along the escape direction by the thermal Jeans efflux.  Efflux Φ
+    /// [m⁻²·s⁻¹] is `mps_formula::heliophysics::jeans_escape_flux`; the
+    /// momentum flux is `Φ · m_molecule · v_thermal` (Pa), and force is
+    /// `p · A_eff · ê`.  Configured by `JeansEscapeLaw`.
+    JeansEscape,
+    /// Terrain / irregular-body gravity driving the rigid-body world.  The
+    /// acceleration at each body's position is sampled from one of the
+    /// `terrain_gravity` models (polyhedron, DEM, lunar mascon) and applied as
+    /// `F = m · a` through the facade.  Configured by `TerrainGravityLaw`.
     TerrainGravity,
     /// User-defined force registered via FFI (opaque type tag in upper 32 bits).
     Custom(u64),
+}
+
+/// Map a rapier [`ForceKind`] (engine-native force container) to the nearest
+/// mps-core [`ForceLawType`] for frame-report categorisation. The container model
+/// is finer-grained than the legacy law enum, so several kinds collapse onto the
+/// same report bucket.
+pub(crate) fn force_kind_to_law(kind: ForceKind) -> ForceLawType {
+    match kind {
+        ForceKind::Gravity => ForceLawType::WorldGravity,
+        ForceKind::Thrust => ForceLawType::ControlPID,
+        ForceKind::Magnetic => ForceLawType::Electromagnetic,
+        ForceKind::Wind => ForceLawType::AirDrag,
+        ForceKind::Friction | ForceKind::ContactReaction => ForceLawType::CoulombFriction,
+        ForceKind::Event | ForceKind::User | ForceKind::Custom(_) => ForceLawType::UserForce,
+        _ => ForceLawType::UserForce,
+    }
 }
 
 impl ForceLawType {
@@ -132,17 +163,14 @@ impl ForceLawType {
             Self::FluidAABB => "FluidAABB",
             Self::MolecularLennardJones => "MolecularLennardJones",
             Self::MolecularCoulomb => "MolecularCoulomb",
-            Self::SpaceJ2 => "SpaceJ2",
-            Self::SpaceCMG => "SpaceCMG",
-            Self::SpaceAtmosphericDrag => "SpaceAtmosphericDrag",
-            Self::SpaceSolarRadiation => "SpaceSolarRadiation",
-            Self::SpaceGravityGradient => "SpaceGravityGradient",
-            Self::SpaceMagneticTorquer => "SpaceMagneticTorquer",
-            Self::TrajectoryCoriolis => "TrajectoryCoriolis",
-            Self::TrajectoryCentrifugal => "TrajectoryCentrifugal",
-            Self::TrajectoryGravity => "TrajectoryGravity",
             Self::ControlPID => "ControlPID",
-            Self::CelestialGravity => "CelestialGravity",
+            Self::SolarWindPressure => "SolarWindPressure",
+            Self::DynamicalFriction => "DynamicalFriction",
+            Self::MonDGravity => "MonDGravity",
+            Self::EddingtonRadiationPressure => "EddingtonRadiationPressure",
+            Self::XrayIrradiation => "XrayIrradiation",
+            Self::PulsarMagneticDipole => "PulsarMagneticDipole",
+            Self::JeansEscape => "JeansEscape",
             Self::TerrainGravity => "TerrainGravity",
             Self::Custom(_) => "Custom",
         }
@@ -162,6 +190,119 @@ pub struct ForceContribution {
     pub body_count: u32,
 }
 
+/// Capacity of the fixed-size contributions table. Identical to the `idx`
+/// range produced by [`force_law_type_idx`] (slots 0..=33, with 26 reserved
+/// for `ForceLawType::Custom`). Must stay in lockstep with `NUM_FORCE_TYPES`
+/// in [`ForceFacade::drain_report`].
+pub(crate) const NUM_FORCE_TYPES: usize = 34;
+
+/// P0.5 fix: fixed-size index table replacing `BTreeMap<ForceLawType, _>`.
+///
+/// Each slot is indexed by [`force_law_type_idx`]; `None` means that force
+/// type produced no contribution this frame. The two commercially important
+/// operations (`add` / `get` / `iter`) are O(1) — the previous `BTreeMap`
+/// cost one `O(log N)` lookup plus a possible node allocation per entry.
+///
+/// Public API (`get`, `iter`, `values`, `is_empty`, `add`) mirrors the
+/// subset of `BTreeMap` semantics the codebase actually uses, so external
+/// callers (`shared_arena::holes::flush_force_breakdown`, the legacy report
+/// converter, the unit tests) stay source-compatible.
+#[derive(Clone, Debug)]
+pub struct ForceContributionTable {
+    slots: [Option<ForceContribution>; NUM_FORCE_TYPES],
+}
+
+impl Default for ForceContributionTable {
+    fn default() -> Self {
+        // Manual impl needed because arrays of size > 32 do not derive
+        // `Default` in stable Rust (const generics limitation).
+        Self {
+            slots: std::array::from_fn(|_| None),
+        }
+    }
+}
+
+impl<'a> IntoIterator for &'a ForceContributionTable {
+    type Item = (ForceLawType, &'a ForceContribution);
+    type IntoIter = ForceContributionTableIter<'a>;
+    fn into_iter(self) -> Self::IntoIter {
+        ForceContributionTableIter {
+            table: self,
+            pos: 0,
+        }
+    }
+}
+
+/// By-reference iterator over the active slots of a [`ForceContributionTable`].
+/// Pairs every active slot with the `ForceLawType` recovered from its index
+/// via [`force_law_type_from_idx`]. Used by `for … in &report.contributions`.
+pub struct ForceContributionTableIter<'a> {
+    table: &'a ForceContributionTable,
+    pos: usize,
+}
+
+impl<'a> Iterator for ForceContributionTableIter<'a> {
+    type Item = (ForceLawType, &'a ForceContribution);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.pos < NUM_FORCE_TYPES {
+            let idx = self.pos;
+            self.pos += 1;
+            if let Some(c) = self.table.slots[idx].as_ref() {
+                return Some((force_law_type_from_idx(idx), c));
+            }
+        }
+        None
+    }
+}
+
+impl ForceContributionTable {
+    pub fn get(&self, law_type: ForceLawType) -> Option<&ForceContribution> {
+        self.slots[force_law_type_idx(law_type)].as_ref()
+    }
+
+    /// Borrowing variant mirroring `BTreeMap::get` returning a `Copiable` value
+    /// (used by `to_legacy_report`). `&ForceLawType` accepted for source-compat.
+    pub fn get_copy(&self, law_type: &ForceLawType) -> Option<ForceContribution> {
+        self.slots[force_law_type_idx(*law_type)]
+    }
+
+    /// Iterate over `(ForceLawType, &ForceContribution)` for every active slot.
+    pub fn iter(&self) -> impl Iterator<Item = (ForceLawType, &ForceContribution)> {
+        self.slots
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, opt)| opt.as_ref().map(|c| (force_law_type_from_idx(idx), c)))
+    }
+
+    /// Iterate over `(&ForceContribution)` for every active slot (sources removed).
+    pub fn values(&self) -> impl Iterator<Item = &ForceContribution> {
+        self.slots.iter().filter_map(Option::as_ref)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.slots.iter().all(Option::is_none)
+    }
+
+    /// Insert/merge a contribution in place. Same semantics as the previous
+    /// `self.contributions.entry(law_type).or_default()` + `+=` pattern.
+    pub fn add(
+        &mut self,
+        law_type: ForceLawType,
+        force: crate::rapier::ffi::Vec3,
+        body_count: u32,
+    ) {
+        let idx = force_law_type_idx(law_type);
+        let entry = self.slots[idx].get_or_insert_with(ForceContribution::default);
+        entry.total_force = crate::rapier::ffi::Vec3 {
+            x: entry.total_force.x + force.x,
+            y: entry.total_force.y + force.y,
+            z: entry.total_force.z + force.z,
+        };
+        entry.body_count += body_count;
+    }
+}
+
 /// Aggregated force report for one simulation step.
 ///
 /// Building block for `CustomPhysicsReport` — maps each active force type to
@@ -169,7 +310,7 @@ pub struct ForceContribution {
 /// coming from.
 #[derive(Clone, Debug, Default)]
 pub struct ForceReport {
-    pub contributions: BTreeMap<ForceLawType, ForceContribution>,
+    pub contributions: ForceContributionTable,
     pub max_reynolds_number: f64,
 }
 
@@ -180,14 +321,8 @@ impl ForceReport {
         force: rapier3d::prelude::Vector,
         body_count: u32,
     ) {
-        let entry = self.contributions.entry(law_type).or_default();
-        let existing = crate::rapier::ffi::vec3_from_rapier(force);
-        entry.total_force = crate::rapier::ffi::Vec3 {
-            x: entry.total_force.x + existing.x,
-            y: entry.total_force.y + existing.y,
-            z: entry.total_force.z + existing.z,
-        };
-        entry.body_count += body_count;
+        let f = crate::rapier::ffi::vec3_from_rapier(force);
+        self.contributions.add(law_type, f, body_count);
     }
 
     /// Convert to the legacy flat `CustomPhysicsReport` struct for FFI.
@@ -204,8 +339,7 @@ impl ForceReport {
                 });
         let drag_contrib = self
             .contributions
-            .get(&ForceLawType::AirDrag)
-            .copied()
+            .get_copy(&ForceLawType::AirDrag)
             .unwrap_or_default();
         // external_force_body_count = max per-type body_count (each type touches
         // the same set of bodies, so max approximates unique body count)
@@ -259,18 +393,27 @@ fn force_law_type_idx(ft: ForceLawType) -> usize {
         ForceLawType::FluidAABB => 11,
         ForceLawType::MolecularLennardJones => 12,
         ForceLawType::MolecularCoulomb => 13,
-        ForceLawType::SpaceJ2 => 14,
-        ForceLawType::SpaceCMG => 15,
-        ForceLawType::SpaceAtmosphericDrag => 16,
-        ForceLawType::SpaceSolarRadiation => 17,
-        ForceLawType::SpaceGravityGradient => 18,
-        ForceLawType::SpaceMagneticTorquer => 19,
-        ForceLawType::TrajectoryCoriolis => 20,
-        ForceLawType::TrajectoryCentrifugal => 21,
-        ForceLawType::TrajectoryGravity => 22,
+        // Indices 14–25 reserved for the retired space/trajectory/terrain force
+        // variants (removed after `mps-cosmos` took over celestial/n-body/drag).
+        // Do not renumber the survivors (ControlPID/Custom) below — external
+        // callers may persist the numeric tags.
         ForceLawType::ControlPID => 23,
-        ForceLawType::CelestialGravity => 24,
-        ForceLawType::TerrainGravity => 25,
+        // PHYSICS_EXPANSION_PLAN C1: solar wind / dyn friction / MOND gravity
+        // occupy 27–29 (26 is reserved for Custom).  Do NOT renumber below.
+        ForceLawType::SolarWindPressure => 27,
+        ForceLawType::DynamicalFriction => 28,
+        ForceLawType::MonDGravity => 29,
+        // C2: Eddington radiation pressure uses idx 30.
+        ForceLawType::EddingtonRadiationPressure => 30,
+        // C3: X-ray disc irradiation uses idx 31; PulsarMagneticDipole idx 32.
+        ForceLawType::XrayIrradiation => 31,
+        ForceLawType::PulsarMagneticDipole => 32,
+        // C4: Jeans-escape drag uses idx 33.
+        ForceLawType::JeansEscape => 33,
+        // Terrain gravity uses idx 14 (one of the 14–25 reserved slots that
+        // were retired with the space/trajectory/terrain transition to mps-cosmos).
+        // It does NOT shift the high-index survivors below.
+        ForceLawType::TerrainGravity => 14,
         ForceLawType::Custom(_) => 26,
     }
 }
@@ -291,19 +434,34 @@ fn force_law_type_from_idx(idx: usize) -> ForceLawType {
         11 => ForceLawType::FluidAABB,
         12 => ForceLawType::MolecularLennardJones,
         13 => ForceLawType::MolecularCoulomb,
-        14 => ForceLawType::SpaceJ2,
-        15 => ForceLawType::SpaceCMG,
-        16 => ForceLawType::SpaceAtmosphericDrag,
-        17 => ForceLawType::SpaceSolarRadiation,
-        18 => ForceLawType::SpaceGravityGradient,
-        19 => ForceLawType::SpaceMagneticTorquer,
-        20 => ForceLawType::TrajectoryCoriolis,
-        21 => ForceLawType::TrajectoryCentrifugal,
-        22 => ForceLawType::TrajectoryGravity,
         23 => ForceLawType::ControlPID,
-        24 => ForceLawType::CelestialGravity,
-        25 => ForceLawType::TerrainGravity,
+        27 => ForceLawType::SolarWindPressure,
+        28 => ForceLawType::DynamicalFriction,
+        29 => ForceLawType::MonDGravity,
+        30 => ForceLawType::EddingtonRadiationPressure,
+        31 => ForceLawType::XrayIrradiation,
+        32 => ForceLawType::PulsarMagneticDipole,
+        33 => ForceLawType::JeansEscape,
+        // 14–25 were retired space/trajectory/terrain variants; 14 is now
+        // TerrainGravity, the rest still fall through to Custom.
+        14 => ForceLawType::TerrainGravity,
         _ => ForceLawType::Custom(0),
+    }
+}
+
+/// Locate or insert a `KahanVec3` accumulator keyed by `idx` inside an inline
+/// `SmallVec<[(usize, KahanVec3); 8]>` (P2.19). Linear search over a ≤8-slot
+/// list replaces the previous 34-entry `[Option<KahanVec3>; 34]` per-body
+/// stack-zinit (~1632 bytes zeroed per active body). Typical bodies touch only
+/// 1–4 force-law types, so the inline path covers the common case with zero
+/// allocation and no large memset.
+fn totals_idx_of(totals: &mut SmallVec<[(usize, KahanVec3); 8]>, idx: usize) -> &mut KahanVec3 {
+    if let Some(pos) = totals.iter().position(|(i, _)| *i == idx) {
+        &mut totals[pos].1
+    } else {
+        totals.push((idx, KahanVec3::default()));
+        // `push` above guarantees a last element; `unwrap` is infallible here.
+        &mut totals.last_mut().unwrap().1
     }
 }
 
@@ -326,7 +484,7 @@ pub struct BodyForceLog {
 /// # Example
 ///
 /// ```ignore
-/// let mut facade = ForceFacade::new(bodies, colliders, narrow_phase);
+/// let mut facade = ForceFacade::new(bodies, colliders, narrow_phase, dt, ...);
 /// facade.add_force(handle, force_vec, ForceLawType::AirDrag);
 /// let report = facade.drain_report(); // auto-aggregated
 /// ```
@@ -334,6 +492,10 @@ pub struct ForceFacade<'a> {
     pub bodies: &'a mut RigidBodySet,
     pub colliders: &'a mut ColliderSet,
     pub narrow_phase: &'a NarrowPhase,
+    /// Timestep of the current `world_step` call (integration_parameters.dt).
+    /// Laws that integrate quantities directly (e.g. the collider-less pulsar
+    /// torque fallback) must scale by this value.
+    pub dt: f64,
     /// Per-body force log: indexed by handle index (arena Index → usize).
     /// `None` = no forces for this body yet.  Auto-expanding.
     pub body_log: &'a mut Vec<Option<BodyForceLog>>,
@@ -341,6 +503,14 @@ pub struct ForceFacade<'a> {
     pub pending_forces: &'a mut SmallVec<[crate::rapier::events::PendingForce; 128]>,
     /// Persistent scratch buffer for Coulomb friction (P5 fix).
     pub friction_work: &'a mut Vec<(RigidBodyHandle, RigidBodyHandle, Vector)>,
+    /// Reusable `(handle, force)` accumulator for ForceLaw::apply() implementations.
+    /// Callers must `clear()` before use; contents are consumed by the law itself.
+    pub scratch_force_pairs: &'a mut SmallVec<[(RigidBodyHandle, Vector); 64]>,
+    /// Secondary `(handle, force)` scratch for laws needing a second accumulator
+    /// (e.g. PulsarMagneticDipole's mass-propagated vs collider-less split).
+    pub scratch_force_pairs_alt: &'a mut SmallVec<[(RigidBodyHandle, Vector); 64]>,
+    /// Reusable `(handle, mass, position)` buffer for pairwise pre-collection.
+    pub scratch_body_data: &'a mut SmallVec<[(RigidBodyHandle, f64, Vector); 64]>,
     /// Accumulated Reynolds number (shared across air drag laws).
     pub max_reynolds: f64,
 }
@@ -351,17 +521,25 @@ impl<'a> ForceFacade<'a> {
         bodies: &'a mut RigidBodySet,
         colliders: &'a mut ColliderSet,
         narrow_phase: &'a NarrowPhase,
+        dt: f64,
         body_log: &'a mut Vec<Option<BodyForceLog>>,
         pending_forces: &'a mut SmallVec<[crate::rapier::events::PendingForce; 128]>,
         friction_work: &'a mut Vec<(RigidBodyHandle, RigidBodyHandle, Vector)>,
+        scratch_force_pairs: &'a mut SmallVec<[(RigidBodyHandle, Vector); 64]>,
+        scratch_force_pairs_alt: &'a mut SmallVec<[(RigidBodyHandle, Vector); 64]>,
+        scratch_body_data: &'a mut SmallVec<[(RigidBodyHandle, f64, Vector); 64]>,
     ) -> Self {
         Self {
             bodies,
             colliders,
             narrow_phase,
+            dt,
             body_log,
             pending_forces,
             friction_work,
+            scratch_force_pairs,
+            scratch_force_pairs_alt,
+            scratch_body_data,
             max_reynolds: 0.0,
         }
     }
@@ -435,6 +613,63 @@ impl<'a> ForceFacade<'a> {
         true
     }
 
+    /// Apply a **persistent** force via the kind-classified force-container model.
+    ///
+    /// Routes to `RigidBody::add_thrust(..., Persistence::Persistent)`: the force
+    /// survives across steps and is *not* cleared by the per-frame `reset_forces`
+    /// ritual, so a constant law (steady thrust, magnetic anchor, …) only needs to
+    /// register it once. Returns the assigned entry id (or `0` if the body is
+    /// non-dynamic / the force is zero). The `source` selects which container kind
+    /// records the force (e.g. `ForceKind::Thrust`, `ForceKind::Magnetic`).
+    pub fn add_persistent_force(
+        &mut self,
+        handle: RigidBodyHandle,
+        force: Vector,
+        torque: AngVector,
+        point: Option<Vector>,
+        source: ForceKind,
+    ) -> u64 {
+        let Some(body) = self.bodies.get_mut(handle) else {
+            return 0;
+        };
+        if !body.is_dynamic() || force == Vector::ZERO {
+            return 0;
+        }
+        let id = body.add_thrust(0, force, torque, point, Persistence::Persistent, true);
+        self.log_entry(handle)
+            .forces
+            .push((force_kind_to_law(source), force));
+        id
+    }
+
+    /// Emit a **transient** event/one-shot force via the kind-classified model.
+    ///
+    /// Routes to `RigidBody::emit_event_force`: the force acts for the current step
+    /// only and the container drains it at frame end automatically — no manual
+    /// `reset_forces` needed. Use for one-shot impulses, contact-triggered pushes,
+    /// or any force that must not persist. The `source` selects the container kind
+    /// (e.g. `ForceKind::Event`, `ForceKind::Friction`).
+    pub fn emit_event_force(
+        &mut self,
+        handle: RigidBodyHandle,
+        force: Vector,
+        torque: AngVector,
+        point: Option<Vector>,
+        source: ForceKind,
+    ) -> u64 {
+        let Some(body) = self.bodies.get_mut(handle) else {
+            return 0;
+        };
+        if !body.is_dynamic() || force == Vector::ZERO {
+            return 0;
+        }
+        let id = body.emit_event_force(force, torque, point, source, true);
+        self.log_entry(handle)
+            .forces
+            .push((force_kind_to_law(source), force));
+        id
+    }
+
     // ---- per-body typed force application (for iterators) ----
 
     /// Apply typed force directly to an already-referenced body.
@@ -499,41 +734,43 @@ impl<'a> ForceFacade<'a> {
             ..Default::default()
         };
 
-        const NUM_FORCE_TYPES: usize = 32;
+        // C4: JeansEscape idx=33 — bump array to 34 slots. Mirrors NUM_FORCE_TYPES
+        // exported above; both must stay in lockstep with force_law_type_idx's range.
+        // P2.19: replace `[Option<KahanVec3>; 34]` (1632 bytes stack-zmemset per
+        // active-body) with an inline `SmallVec` keyed by idx. Each body normally
+        // touches only 1–4 force-law types, so inline cap 8 covers the fast path
+        // without any per-frame stack-zinit. Linear `position()` search over a
+        // ≤8-slot list is cheaper than the previous 34-element zero-initialise.
+        let mut body_totals: SmallVec<[(usize, KahanVec3); 8]> = SmallVec::new();
         let mut drained = std::mem::take(self.body_log);
         for log in drained.iter_mut().flatten() {
-            let mut body_totals: [Option<KahanVec3>; NUM_FORCE_TYPES] = [None; NUM_FORCE_TYPES];
+            // P0.5 fix: keep using the per-body KahanVec3 accumulator — its
+            // per-source-summed values merge directly into the fixed-size
+            // ForceContributionTable, which is O(1) lookup vs the previous
+            // BTreeMap::entry O(log N) + node allocation.
+            body_totals.clear();
             for (source, f) in &log.forces {
                 let idx = force_law_type_idx(*source);
-                body_totals[idx].get_or_insert_with(KahanVec3::default).add(
-                    crate::rapier::ffi::Vec3 {
-                        x: f.x,
-                        y: f.y,
-                        z: f.z,
-                    },
-                );
+                totals_idx_of(&mut body_totals, idx).add(crate::rapier::ffi::Vec3 {
+                    x: f.x,
+                    y: f.y,
+                    z: f.z,
+                });
             }
             for (source, f) in &log.torques {
                 let idx = force_law_type_idx(*source);
-                body_totals[idx].get_or_insert_with(KahanVec3::default).add(
-                    crate::rapier::ffi::Vec3 {
-                        x: f.x,
-                        y: f.y,
-                        z: f.z,
-                    },
-                );
+                totals_idx_of(&mut body_totals, idx).add(crate::rapier::ffi::Vec3 {
+                    x: f.x,
+                    y: f.y,
+                    z: f.z,
+                });
             }
-            for (tag, maybe_kahan) in body_totals.iter().enumerate() {
-                if let Some(kahan) = maybe_kahan {
-                    let law_type = force_law_type_from_idx(tag);
-                    let c = report.contributions.entry(law_type).or_default();
-                    c.total_force = crate::rapier::ffi::Vec3 {
-                        x: c.total_force.x + kahan.value().x,
-                        y: c.total_force.y + kahan.value().y,
-                        z: c.total_force.z + kahan.value().z,
-                    };
-                    c.body_count += 1;
-                }
+            // Merge per-body per-source totals into the frame report. Each
+            // touched source contributes one body to body_count and adds
+            // kahan.value() to total_force (Kahan summed).
+            for (idx, kahan) in body_totals.drain(..) {
+                let law_type = force_law_type_from_idx(idx);
+                report.contributions.add(law_type, kahan.value(), 1);
             }
         }
 
@@ -742,6 +979,39 @@ impl ForceRegistry {
 impl Default for ForceRegistry {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct DummyLaw {
+        enabled: bool,
+    }
+    impl ForceLaw for DummyLaw {
+        fn law_type(&self) -> ForceLawType {
+            ForceLawType::TerrainGravity
+        }
+        fn enabled(&self) -> bool {
+            self.enabled
+        }
+        fn apply(&self, _facade: &mut ForceFacade<'_>) {}
+        fn clone_box(&self) -> Box<dyn ForceLaw> {
+            Box::new(DummyLaw {
+                enabled: self.enabled,
+            })
+        }
+    }
+
+    #[test]
+    fn unregister_by_type_removes_terrain_law() {
+        let mut reg = ForceRegistry::new();
+        reg.register(Box::new(DummyLaw { enabled: true }));
+        assert_eq!(reg.find_by_type(ForceLawType::TerrainGravity).len(), 1);
+        reg.unregister_by_type(ForceLawType::TerrainGravity);
+        assert_eq!(reg.find_by_type(ForceLawType::TerrainGravity).len(), 0);
+        assert_eq!(reg.len(), 0);
     }
 }
 

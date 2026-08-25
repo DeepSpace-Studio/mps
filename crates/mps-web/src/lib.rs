@@ -1,42 +1,25 @@
-// Topcoat `#[component]` functions use PascalCase by framework convention, and
-// the macro's generated props struct trips dead-code lints on its fields.
-#![allow(non_snake_case, dead_code)]
+// MPS Web — single-page documentation (SSR-only, no router).
+//
+// The site is served fully server-side; there is no client WASM bundle
+// (no `dx` CLI in this environment). To avoid the Dioxus `Link` click
+// interceptor silently eating navigation under SSR-only, the whole doc is
+// ONE inline page: a sticky in-page table-of-contents with plain
+// `<a href="#sec-...">` anchors (native scroll, zero JS, no hydration trap).
 
-use topcoat::router::Router;
+#![allow(non_snake_case, unused)]
 
-mod components;
+mod i18n;
 mod layouts;
 mod pages;
 
-use layouts::root_layout;
-use pages::api::api;
-use pages::architecture::architecture;
-use pages::arena::arena;
-use pages::events::events;
-use pages::ffm::ffm;
-use pages::formula::formula;
-use pages::gravity::gravity;
-use pages::home::home;
-use pages::integrators::integrators;
-use pages::jni::jni;
-use pages::quickstart::quickstart;
-use pages::voxel::voxel;
+mod metrics;
 
-/// Build and return the application router.
-pub fn app() -> Router {
-    Router::builder()
-        .layout(root_layout)
-        .page(home)
-        .page(quickstart)
-        .page(architecture)
-        .page(gravity)
-        .page(integrators)
-        .page(formula)
-        .page(voxel)
-        .page(events)
-        .page(arena)
-        .page(jni)
-        .page(ffm)
-        .page(api)
-        .build()
+use dioxus::prelude::*;
+use dioxus_i18n::prelude::*;
+use unic_langid::langid;
+
+use pages::home::Home;
+
+pub fn main() {
+    dioxus::launch(Home);
 }

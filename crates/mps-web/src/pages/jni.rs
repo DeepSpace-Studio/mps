@@ -1,40 +1,168 @@
-use topcoat::router::page;
-use topcoat::view::view;
+use dioxus::prelude::*;
+use dioxus_i18n::t;
 
-/// JNI page
-#[page("/jni")]
-pub async fn jni() -> topcoat::Result {
-    view! {
-        <div>
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #333;">
-                <div>
-                    <div style="font-size:12px;color:#4a9eff;letter-spacing:3px;text-transform:uppercase;font-family:monospace;margin-bottom:8px;">"/ JNI"</div>
-                    <h1 style="font-size:28px;font-weight:300;color:#fff;margin:0 0 10px;">"Java JNI 绑定"</h1>
-                    <p style="font-size:14px;color:#999;line-height:1.7;margin:0;">"Java 21 JNI 全绑定，~280 个方法覆盖所有核心功能。"</p>
-                </div>
-                <div style="font-size:48px;font-weight:700;color:#333;font-family:monospace;line-height:1;">"01"</div>
-            </div>
-            <div style="background:#16213e;border:1px solid #333;border-radius:8px;padding:24px;margin-bottom:20px;">
-                <h2 style="color:#fff;font-size:20px;font-weight:400;margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid #333;">"Java 入口"</h2>
-                <p style="color:#aaa;line-height:1.7;">"Java 21 使用 RigidBodyNative JNI 方法，位于 org.polaris2023.mps_rigid_body.util 包。"</p>
-                <pre><code class="language-java">
-"// Java 示例
-World world = new World(new Vec3(0, -9.81, 0));
-RigidBody body = world.createRigidBody(RigidBodyType.DYNAMIC);
-body.setPosition(0, 10, 0);
-Collider collider = body.createCollider(ColliderShape.CUBOID, 0.5, 0.5, 0.5);
-world.step(1.0 / 60.0);
-Vec3 pos = body.getPosition();
-System.out.println(\"y = \" + pos.y);"
-                </code></pre>
-            </div>
-            <div style="background:#16213e;border:1px solid #333;border-radius:8px;padding:24px;margin-bottom:20px;">
-                <h2 style="color:#fff;font-size:20px;font-weight:400;margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid #333;">"运行测试"</h2>
-                <pre><code class="language-bash">
-"cd test21
-./gradlew.bat check"
-                </code></pre>
-            </div>
-        </div>
+use crate::metrics::{CORE_FFI_COUNT, JNI_METHOD_COUNT, VERSION};
+
+/// Java JNI Bindings — the 312-method `org.polaris2023.mps.rapier.RapierNative`
+/// surface exported by `mps-jni` via `jni!` / `jni_e_c!` macros.
+pub fn Jni() -> Element {
+    rsx! {
+        section { id: "sec-jni", class: "doc-section",
+
+        div { class: "page-head",
+            div {
+                div { class: "page-tag", { t!("jni-tag") } }
+                h1 { class: "page-title", { t!("jni-title") } }
+                p { class: "page-desc", { t!("jni-desc", methods: JNI_METHOD_COUNT) } }
+            }
+            div { class: "page-index", "11" }
+        }
+
+        // ── Macro codegen ────────────────────────────────────────────────────
+        div { class: "section-card",
+            h2 { { t!("jni-codegen-title") } }
+            p { class: "p-lead", { t!("jni-codegen-lead") } }
+            p { class: "p-muted", { t!("jni-codegen-body") } }
+            div { class: "code-block",
+                pre { code {
+                    r#"// mps-jni/src/lib.rs
+jni!(long worldCreate(double dt, int iters, int ccd) {{
+    to_jlong(wo::world_create(dt, iters as usize, ccd as usize))
+}});
+
+// jni_e_c! adds JNIEnv / jclass for callbacks needing VM access
+jni_e_c!(void collisionEventInstall(long world, long callbackPtr) {{
+    // ...
+}});"#
+                } }
+            }
+            p { class: "p-note", { t!("jni-codegen-note") } }
+        }
+
+        // ── Panic isolation ─────────────────────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("jni-panic-title") } }
+            p { class: "p-lead", { t!("jni-panic-lead") } }
+            div { class: "callout-note",
+                p { { t!("jni-panic-body") } }
+            }
+        }
+
+        // ── Symbol mangling ─────────────────────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("jni-mangle-title") } }
+            p { class: "p-muted", { t!("jni-mangle-desc") } }
+            div { class: "table-wrap",
+                table {
+                    thead { tr {
+                        th { { t!("jni-col-class") } }
+                        th { { t!("jni-col-symbol") } }
+                    } }
+                    tbody {
+                        tr {
+                            td { "org.polaris2023.mps.rapier.RapierNative" }
+                            td { "Java_org_polaris2023_mps_rapier_RapierNative_<m>" }
+                        }
+                        tr {
+                            td { "org.polaris2023.mps_rigid_body.RigidBodyNative" }
+                            td { "Java_org_polaris2023_mps_1rigid_1body_RigidBodyNative_<m>" }
+                        }
+                    }
+                }
+            }
+            p { class: "p-note", { t!("jni-mangle-note") } }
+        }
+
+        // ── API surface groups ─────────────────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("jni-groups-title", ffi: CORE_FFI_COUNT) } }
+            div { class: "feature-grid",
+                div { class: "feature-card",
+                    h3 { { t!("jni-group-abi-title") } }
+                    p { { t!("jni-group-abi-desc") } }
+                }
+                div { class: "feature-card",
+                    h3 { { t!("jni-group-world-title") } }
+                    p { { t!("jni-group-world-desc") } }
+                }
+                div { class: "feature-card",
+                    h3 { { t!("jni-group-rb-title") } }
+                    p { { t!("jni-group-rb-desc") } }
+                }
+                div { class: "feature-card",
+                    h3 { { t!("jni-group-collider-title") } }
+                    p { { t!("jni-group-collider-desc") } }
+                }
+                div { class: "feature-card",
+                    h3 { { t!("jni-group-query-title") } }
+                    p { { t!("jni-group-query-desc") } }
+                }
+                div { class: "feature-card",
+                    h3 { { t!("jni-group-events-title") } }
+                    p { { t!("jni-group-events-desc") } }
+                }
+                div { class: "feature-card",
+                    h3 { { t!("jni-group-forces-title") } }
+                    p { { t!("jni-group-forces-desc") } }
+                }
+                div { class: "feature-card",
+                    h3 { { t!("jni-group-aero-title") } }
+                    p { { t!("jni-group-aero-desc") } }
+                }
+                div { class: "feature-card",
+                    h3 { { t!("jni-group-arena-title") } }
+                    p { { t!("jni-group-arena-desc") } }
+                }
+                div { class: "feature-card",
+                    h3 { { t!("jni-group-cosmos-title") } }
+                    p { { t!("jni-group-cosmos-desc") } }
+                }
+                div { class: "feature-card",
+                    h3 { { t!("jni-group-spaceflight-title") } }
+                    p { { t!("jni-group-spaceflight-desc") } }
+                }
+            }
+        }
+
+        // ── Handle packing ──────────────────────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("jni-handle-title") } }
+            p { class: "p-lead", { t!("jni-handle-lead") } }
+            div { class: "code-block",
+                pre { code {
+                    "// RigidBodyHandle → jlong (high 32 = index, low 32 = generation)\n// 与 Rapier RigidBodyHandle::into_raw_parts() 顺序一致\nlong handle = worldCreate(...);\nlong ptr      = cosmosInsertBody(world, builder);"
+                } }
+            }
+            p { class: "p-note", { t!("jni-handle-note") } }
+        }
+
+        // ── Zero-copy Arena bridge ──────────────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("jni-arena-title") } }
+            p { class: "p-lead", { t!("jni-arena-lead") } }
+            div { class: "code-block",
+                pre { code {
+                    r#"// arenaAsDirectByteBuffer 通过 NewDirectByteBuffer 把原生 Arena
+// 包装成 java.nio.ByteBuffer，Java 端读写零 JNI 往返
+ByteBuffer buf = RapierNative.arenaAsDirectByteBuffer(world);
+DoubleBuffer db = buf.asDoubleBuffer();
+db.position(OFFSET_BODY_0_LINVEL);
+db.put(linvelX); db.put(linvelY); db.put(linvelZ);"#
+                } }
+            }
+            p { class: "p-muted", { t!("jni-arena-body") } }
+        }
+
+        // ── Deployment ──────────────────────────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("jni-deploy-title") } }
+            ul { class: "ul-plain",
+                li { { t!("jni-deploy-lib") } }
+                li { { t!("jni-deploy-load") } }
+                li { { t!("jni-deploy-version", version: VERSION) } }
+            }
+        }
+
+        }
     }
 }

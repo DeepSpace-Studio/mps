@@ -54,6 +54,8 @@ fn make_report(
     }
 }
 
+use mps_formula::disciplines::fluid::{compute_surface_force, estimate_surface_force};
+
 /// Apply aerodynamic forces from a set of surfaces to a rigid body.
 ///
 /// # Safety
@@ -108,7 +110,7 @@ pub extern "C" fn aero_apply_surfaces(
         let mut active_surface_count = 0u32;
 
         for surface in surfaces {
-            let Some((force, torque)) = mps_formula::aerodynamics::compute_surface_force(
+            let Some((force, torque)) = compute_surface_force(
                 *surface,
                 body_linvel,
                 body_angvel,
@@ -285,16 +287,14 @@ pub extern "C" fn aero_apply_voxel_grid(
                             drag_coefficient,
                             lift_coefficient,
                         };
-                        let Some((force, torque)) =
-                            mps_formula::aerodynamics::compute_surface_force(
-                                surface,
-                                body_linvel,
-                                body_angvel,
-                                body_center,
-                                vec3_from_rapier(wind_velocity),
-                                air_density,
-                            )
-                        else {
+                        let Some((force, torque)) = compute_surface_force(
+                            surface,
+                            body_linvel,
+                            body_angvel,
+                            body_center,
+                            vec3_from_rapier(wind_velocity),
+                            air_density,
+                        ) else {
                             continue;
                         };
 
@@ -425,7 +425,7 @@ pub extern "C" fn aero_estimate_surface_force(
             return Bool::FALSE;
         }
 
-        match mps_formula::aerodynamics::estimate_surface_force(
+        match estimate_surface_force(
             body_linvel,
             body_angvel,
             body_center,

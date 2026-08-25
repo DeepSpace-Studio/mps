@@ -8,6 +8,13 @@ use crate::rapier::ffi::{
     vec3_from_rapier, vec3_to_rapier,
 };
 
+use mps_formula::disciplines::mechanics::{
+    compute_fluid_forces, navier_stokes_simplified_step, sph_estimate_density, sph_estimate_forces,
+    sph_poly6_kernel, sph_spiky_gradient, sph_viscosity_laplacian,
+};
+
+use mps_formula::disciplines::fluid::{bernoulli_pressure, bernoulli_report};
+
 /// # Safety
 ///
 /// `out_report` may be null or must point to writable space for one
@@ -23,7 +30,7 @@ pub extern "C" fn fluid_estimate_aabb_forces(
     out_report: *mut FluidForceReport,
 ) -> Bool {
     ffi_guard(Bool::FALSE, || {
-        let Some(report) = mps_formula::fluid::compute_fluid_forces(
+        let Some(report) = compute_fluid_forces(
             fluid,
             body_center,
             body_half_extents,
@@ -74,7 +81,7 @@ pub extern "C" fn fluid_apply_aabb_forces(
         let body_center = vec3_from_rapier(body.center_of_mass());
         let body_linvel = vec3_from_rapier(body.linvel());
         let body_angvel = vec3_from_rapier(body.angvel());
-        let Some(report) = mps_formula::fluid::compute_fluid_forces(
+        let Some(report) = compute_fluid_forces(
             fluid,
             body_center,
             body_half_extents,
@@ -140,7 +147,7 @@ pub extern "C" fn fluid_navier_stokes_simplified_step(
     out_report: *mut NavierStokesReport,
 ) -> Bool {
     ffi_guard(Bool::FALSE, || {
-        let Some(report) = mps_formula::fluid::navier_stokes_simplified_step(
+        let Some(report) = navier_stokes_simplified_step(
             velocity,
             advection,
             pressure_gradient,
@@ -171,9 +178,7 @@ pub extern "C" fn fluid_navier_stokes_simplified_step(
 /// are no safety requirements on the caller.
 #[unsafe(no_mangle)]
 pub extern "C" fn fluid_sph_poly6_kernel(distance: f64, smoothing_radius: f64) -> f64 {
-    ffi_guard(0.0, || {
-        mps_formula::fluid::sph_poly6_kernel(distance, smoothing_radius)
-    })
+    ffi_guard(0.0, || sph_poly6_kernel(distance, smoothing_radius))
 }
 
 /// # Safety
@@ -193,8 +198,7 @@ pub extern "C" fn fluid_sph_spiky_gradient(
             );
             return Bool::FALSE;
         }
-        let Some(gradient) = mps_formula::fluid::sph_spiky_gradient(offset, smoothing_radius)
-        else {
+        let Some(gradient) = sph_spiky_gradient(offset, smoothing_radius) else {
             set_error(
                 ERR_INVALID_ARGUMENT,
                 "invalid SPH spiky gradient parameters",
@@ -220,9 +224,7 @@ pub extern "C" fn fluid_sph_spiky_gradient(
 /// are no safety requirements on the caller.
 #[unsafe(no_mangle)]
 pub extern "C" fn fluid_sph_viscosity_laplacian(distance: f64, smoothing_radius: f64) -> f64 {
-    ffi_guard(0.0, || {
-        mps_formula::fluid::sph_viscosity_laplacian(distance, smoothing_radius)
-    })
+    ffi_guard(0.0, || sph_viscosity_laplacian(distance, smoothing_radius))
 }
 
 /// # Safety
@@ -255,9 +257,7 @@ pub extern "C" fn fluid_sph_estimate_density(
         } else {
             unsafe { std::slice::from_raw_parts(particles, particle_count as usize) }
         };
-        let Some(density) =
-            mps_formula::fluid::sph_estimate_density(position, particles, smoothing_radius)
-        else {
+        let Some(density) = sph_estimate_density(position, particles, smoothing_radius) else {
             set_error(ERR_INVALID_ARGUMENT, "invalid SPH particle");
             return Bool::FALSE;
         };
@@ -300,7 +300,7 @@ pub extern "C" fn fluid_sph_estimate_forces(
         } else {
             unsafe { std::slice::from_raw_parts(particles, particle_count as usize) }
         };
-        let Some(report) = mps_formula::fluid::sph_estimate_forces(
+        let Some(report) = sph_estimate_forces(
             particle,
             particles,
             smoothing_radius,
@@ -337,13 +337,7 @@ pub extern "C" fn fluid_bernoulli_pressure(
     elevation: f64,
 ) -> f64 {
     ffi_guard(0.0, || {
-        mps_formula::fluid::bernoulli_pressure(
-            total_pressure,
-            density,
-            velocity,
-            gravity,
-            elevation,
-        )
+        bernoulli_pressure(total_pressure, density, velocity, gravity, elevation)
     })
 }
 
@@ -360,9 +354,7 @@ pub extern "C" fn fluid_bernoulli_report(
     out_report: *mut BernoulliReport,
 ) -> Bool {
     ffi_guard(Bool::FALSE, || {
-        let Some(report) =
-            mps_formula::fluid::bernoulli_report(pressure, density, velocity, gravity, elevation)
-        else {
+        let Some(report) = bernoulli_report(pressure, density, velocity, gravity, elevation) else {
             set_error(ERR_INVALID_ARGUMENT, "invalid Bernoulli parameters");
             return Bool::FALSE;
         };

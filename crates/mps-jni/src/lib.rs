@@ -5,26 +5,30 @@ use ljni::JNIEnv;
 use ljni::sys::{jbyte, jbyteArray, jclass, jdouble, jdoubleArray, jint, jlong, jstring};
 #[cfg(feature = "anvilkit-bridge")]
 use mps_core::rapier::anvilkit as ak;
+#[cfg(feature = "anvilkit-bridge")]
+use mps_core::rapier::ffi::AnvilKitAppHandle as AKH;
 use mps_core::rapier::ffi::{
-    AabbDesc, Bool, CRbTreeHandle as CRTH, Capsule, CharacterCollision,
-    CharacterControllerHandle as CCH, ColliderBuilderHandle as CBH, ColliderHandleRaw as CRaw,
-    CollisionEventRecord as CER, ContactForceEventRecord, Cylinder, EffectiveCharacterMovement,
-    Ellipsoid, HohmannTransfer, ImpulseJointHandleRaw as JRaw, InteractionGroupsDesc,
-    JointBuilderHandle as JBH, NeuralBoundsDesc, Obb, PointProjection, Prism, Quat,
+    AabbDesc, AeroForceReport, AeroSurface, AirDragLaw, Bool, CRbTreeHandle as CRTH, Capsule,
+    CharacterCollision, CharacterControllerHandle as CCH, ColliderBuilderHandle as CBH,
+    ColliderHandleRaw as CRaw, CollisionEventRecord as CER, ContactForceEventRecord,
+    CoulombFrictionLaw, Cylinder, DynamicalFrictionLaw, EddingtonRadiationPressureLaw,
+    EffectiveCharacterMovement, Ellipsoid, ExternalForceLaw, FluidForceReport, FluidVolume,
+    FractureEnergyReport, FractureFragmentDesc, FractureMaterial, FractureModeReport,
+    FractureReplaceReport, GriffithReport, HohmannTransfer, ImpulseJointHandleRaw as JRaw,
+    InteractionGroupsDesc, JeansEscapeLaw, JointBuilderHandle as JBH, MinerDamageReport,
+    MolecularForceLaw, MolecularPairReport, MolecularParticle, MonDGravityLaw, NeuralBoundsDesc,
+    NewtonGravityLaw, Obb, PointProjection, Prism, PulsarMagneticDipoleLaw, Quat,
     QuaternionDerivative, QueryFilterDesc, RTreeHandle as RTH, RayHit,
     RigidBodyBuilderHandle as RBH, RigidBodyHandleRaw as RRaw, ScalarKalman, ShapeCastHit,
-    ShapeCastOptionsDesc, ShapeDesc, Sphere, SphericalShell, Ssv, Vec3, VoxelColliderOptions,
-    WorldHandle as WH,
-};
-#[cfg(feature = "anvilkit-bridge")]
-use mps_core::rapier::ffi::{
-    AeroForceReport, AeroSurface, AnvilKitAppHandle as AKH, FluidForceReport, FluidVolume,
-    TrajectoryEnvironment, TrajectoryForceReport,
+    ShapeCastOptionsDesc, ShapeDesc, SnCurveReport, SolarWindPressureLaw, Sphere, SphericalShell,
+    Ssv, StressIntensityReport, TrajectoryEnvironment, TrajectoryForceReport, Vec3,
+    VoxelBuildStats, VoxelColliderOptions, WorldHandle as WH, XrayIrradiationLaw,
 };
 use mps_core::rapier::{
     bounds as bo, collider as col, compat as com, controller as cc, crbtree as crt, dop,
-    error as er, events as ev, joints as jo, neural as neu, query as qu, rigid_body as rb,
-    rtree as rt, spaceflight as sf, voxel as vx, world as wo,
+    error as er, events as ev, fracture as fr, joints as jo, matmech as mm, molecular as mol,
+    neural as neu, query as qu, rigid_body as rb, rtree as rt, spaceflight as sf, thermo as th,
+    voxel as vx, world as wo,
 };
 use mps_core::rapier3d::prelude::{Collider as CB, RigidBody as RB};
 use mps_ffm as abi;
@@ -177,6 +181,34 @@ fn sd(shape_type: jint, a: jdouble, b: jdouble, c: jdouble, d: jdouble) -> Shape
     }
 }
 
+/// Convert a (possibly non-unit) quaternion `q = (i, j, k, w)` into Rapier's
+/// builder-rotation convention: an axis-angle encoded as a `Vec3` whose
+/// direction is the rotation axis and whose magnitude is the rotation angle
+/// in radians. This mirrors `Rotation3::scaled_axis_angle()`.
+///
+/// Returns `(0, 0, 0)` for the identity / near-identity case so that bizzare
+/// callers passing `(0,0,0,1)` end up with no rotation rather than NaNs.
+fn quat_to_axis_angle(q: Quat) -> Vec3 {
+    // angle = 2 * acos(|w|); clamp w to [-1, 1] so acos never sees an OOB value.
+    let w = q.w.clamp(-1.0, 1.0);
+    let angle = 2.0 * w.acos();
+    let s = (1.0 - w * w).sqrt();
+    // s tiny ⇒ (near-)identity quaternion; pick zero rotation to stay finite.
+    if s < 1e-12 {
+        return Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+    }
+    let k = angle / s;
+    Vec3 {
+        x: q.i * k,
+        y: q.j * k,
+        z: q.k * k,
+    }
+}
+
 macro_rules! jni {
     (@ty long) => { jlong };
     (@ty boolean) => { jbyte };
@@ -187,6 +219,7 @@ macro_rules! jni {
     (@ty double_array) => { jdoubleArray };
     (@ty long_array) => { jlongArray };
     (@ty bool_array) => { jbooleanArray };
+    (@ty String) => { jstring };
     (@default long) => { 0 };
     (@default boolean) => { 0 };
     (@default byte_array) => { std::ptr::null_mut() };
@@ -215,26 +248,13 @@ macro_rules! jni {
 }
 
 macro_rules! jni_e_c {
-    (@ty long) => { jlong };
-    (@ty boolean) => { jbyte };
-    (@ty byte_array) => { jbyteArray };
-    (@ty double) => { jdouble };
-    (@ty int) => { jint };
-    (@ty void) => { () };
-    (@ty double_array) => { jdoubleArray };
-    (@ty long_array) => { jlongArray };
-    (@ty bool_array) => { jbooleanArray };
+    // Delegate the shared @ty / @default table to `jni!`, only adding the two
+    // extras (`env` / `class`) that `jni_e_c` needs but `jni!` does not provide.
+    // Keeps the two macros' type tables in lockstep — see OPTIMIZATION.md §5.A.
     (@ty env) => { JNIEnv };
     (@ty class) => { jclass };
-    (@default long) => { 0 };
-    (@default boolean) => { 0 };
-    (@default byte_array) => { std::ptr::null_mut() };
-    (@default double) => { 0.0 };
-    (@default int) => { 0 };
-    (@default void) => { () };
-    (@default double_array) => { std::ptr::null_mut() };
-    (@default long_array) => { std::ptr::null_mut() };
-    (@default bool_array) => { std::ptr::null_mut() };
+    (@ty $kind:ident) => { jni!(@ty $kind) };
+    (@default $kind:ident) => { jni!(@default $kind) };
     ($ret:ident $method:ident ( $($kind:ident $arg:ident),* ) $body:block) => {
         #[unsafe(export_name = concat!(
             "Java_org_polaris2023_mps_rapier_RapierNative_",
@@ -253,7 +273,7 @@ macro_rules! jni_e_c {
     };
 }
 
-jni!(int abiVersion() { abi::abi_version() as jint });
+jni!(int abiVersion(){ abi::abi_version() as jint });
 jni!(boolean abiSupportsFfm() { abi::abi_supports_ffm().0 as jbyte });
 jni!(boolean abiSupportsJni() { abi::abi_supports_jni().0 as jbyte });
 jni!(int abiLastErrorCode() { er::last_error_code() as jint });
@@ -297,6 +317,17 @@ jni!(int worldBodySnapshotCount(long world) { wo::world_body_snapshot_count(cp::
 jni!(int worldBodySnapshot(long world, long out_handles, long out_values, int capacity) { wo::world_body_snapshot(cp::<WH>(world), pm::<RRaw>(out_handles), pm::<f64>(out_values), u32_from_jint(capacity)) as jint });
 jni!(int worldUpdateBodyPoses(long world, long handles, long values, int count, int wake_up) { wo::world_update_body_poses(m::<WH>(world), p::<RRaw>(handles), p::<f64>(values), u32_from_jint(count), jb(wake_up)) as jint });
 jni!(int worldUpdateBodyVelocities(long world, long handles, long values, int count, int wake_up) { wo::world_update_body_velocities(m::<WH>(world), p::<RRaw>(handles), p::<f64>(values), u32_from_jint(count), jb(wake_up)) as jint });
+
+#[cfg(feature = "relative-force")]
+jni!(boolean worldSetRelativeForceEnabled(long world, long handle, int enabled, double lx, double ly, double lz) { wo::world_set_relative_force_enabled(m::<WH>(world), handle as RRaw, jb(enabled), v3(lx, ly, lz)).0 as jbyte });
+#[cfg(feature = "relative-force")]
+jni!(boolean worldGetRelativeForceEnabled(long world, long handle) { wo::world_get_relative_force_enabled(cp::<WH>(world), handle as RRaw).0 as jbyte });
+#[cfg(feature = "relative-force")]
+jni_e_c!(double_array worldGetRelativeForceLocalPoint(env _env, class _class, long world, long handle) { vec3_to_j_double_array(_env, wo::world_get_relative_force_local_point(cp::<WH>(world), handle as RRaw)) });
+#[cfg(feature = "relative-force")]
+jni!(boolean worldSetRelativeForceLocalPoint(long world, long handle, double lx, double ly, double lz) { wo::world_set_relative_force_local_point(m::<WH>(world), handle as RRaw, v3(lx, ly, lz)).0 as jbyte });
+#[cfg(feature = "relative-force")]
+jni!(boolean worldRemoveRelativeForce(long world, long handle) { wo::world_remove_relative_force(m::<WH>(world), handle as RRaw).0 as jbyte });
 
 //世界插入
 jni!(long worldInsertRigidBody(long world, long memory_handle) { rb::world_insert_rigid_body(m::<WH>(world), m::<RB>(memory_handle)) as jlong });
@@ -391,7 +422,7 @@ jni!(void voxelBuildStats(long voxels, int size_x, int size_y, int size_z, doubl
         v3(origin_x, origin_y, origin_z),
         VoxelColliderOptions { mode: voxel_mode(mode), dynamic_body: jb(dynamic_body), small_voxel_limit: u32_from_jint(small_voxel_limit), mesh_voxel_limit: u32_from_jint(mesh_voxel_limit) },
     );
-    if let Some(out) = unsafe { pm::<mps_core::rapier::ffi::VoxelBuildStats>(out_stats).as_mut() } { *out = stats; }
+    if let Some(out) = unsafe { pm::<VoxelBuildStats>(out_stats).as_mut() } { *out = stats; }
 });
 jni!(void voxelAabbBuildStats(double min_x, double min_y, double min_z, double max_x, double max_y, double max_z, double voxel_size_x, double voxel_size_y, double voxel_size_z, int mode, int dynamic_body, int small_voxel_limit, int mesh_voxel_limit, long out_stats) {
     let stats = vx::voxel_aabb_build_stats(
@@ -399,7 +430,7 @@ jni!(void voxelAabbBuildStats(double min_x, double min_y, double min_z, double m
         voxel_size_x, voxel_size_y, voxel_size_z,
         VoxelColliderOptions { mode: voxel_mode(mode), dynamic_body: jb(dynamic_body), small_voxel_limit: u32_from_jint(small_voxel_limit), mesh_voxel_limit: u32_from_jint(mesh_voxel_limit) },
     );
-    if let Some(out) = unsafe { pm::<mps_core::rapier::ffi::VoxelBuildStats>(out_stats).as_mut() } { *out = stats; }
+    if let Some(out) = unsafe { pm::<VoxelBuildStats>(out_stats).as_mut() } { *out = stats; }
 });
 jni!(void voxelObbBuildStats(double cx, double cy, double cz, double hx, double hy, double hz, double qi, double qj, double qk, double qw, double voxel_size_x, double voxel_size_y, double voxel_size_z, int mode, int dynamic_body, int small_voxel_limit, int mesh_voxel_limit, long out_stats) {
     let stats = vx::voxel_obb_build_stats(
@@ -407,11 +438,18 @@ jni!(void voxelObbBuildStats(double cx, double cy, double cz, double hx, double 
         voxel_size_x, voxel_size_y, voxel_size_z,
         VoxelColliderOptions { mode: voxel_mode(mode), dynamic_body: jb(dynamic_body), small_voxel_limit: u32_from_jint(small_voxel_limit), mesh_voxel_limit: u32_from_jint(mesh_voxel_limit) },
     );
-    if let Some(out) = unsafe { pm::<mps_core::rapier::ffi::VoxelBuildStats>(out_stats).as_mut() } { *out = stats; }
+    if let Some(out) = unsafe { pm::<VoxelBuildStats>(out_stats).as_mut() } { *out = stats; }
 });
 
 jni!(void colliderBuilderSetTranslation(long builder, double x, double y, double z) { col::collider_builder_set_translation(m::<CBH>(builder), v3(x, y, z)); });
-jni!(void colliderBuilderSetRotation(long builder, double x, double y, double z) { col::collider_builder_set_rotation(m::<CBH>(builder), v3(x, y, z)); });
+jni!(void colliderBuilderSetRotation(long builder, double qi, double qj, double qk, double qw) {
+    // Rapier's builder-level `set_rotation` consumes an axis-angle `Vec3`,
+    // but Java/ColliderBody callers pass a unit quaternion (i, j, k, w).
+    // Convert quaternion → axis-angle (axis * angle) here so the existing
+    // FFI `collider_builder_set_rotation(builder, Vec3)` can be reused and
+    // Java keeps its (x, y, z, w) quaternion signature — see SKILL §FFI.
+    col::collider_builder_set_rotation(m::<CBH>(builder), quat_to_axis_angle(qt(qi, qj, qk, qw)))
+});
 jni!(void colliderBuilderSetPose(long builder, double x, double y, double z, double qi, double qj, double qk, double qw) { col::collider_builder_set_pose(m::<CBH>(builder), v3(x, y, z), qt(qi, qj, qk, qw)); });
 jni!(void colliderBuilderSetSensor(long builder, int sensor) { col::collider_builder_set_sensor(m::<CBH>(builder), jb(sensor)); });
 jni!(void colliderBuilderSetFriction(long builder, double friction) { col::collider_builder_set_friction(m::<CBH>(builder), friction); });
@@ -425,6 +463,66 @@ jni!(void colliderBuilderSetActiveHooks(long builder, int bits) { col::collider_
 jni!(void colliderBuilderSetContactForceEventThreshold(long builder, double threshold) { col::collider_builder_set_contact_force_event_threshold(m::<CBH>(builder), threshold); });
 
 jni!(long colliderBuilderBuild(long builder) { to_jlong(col::collider_builder_build(m::<CBH>(builder))) });
+
+// 就地体素编辑：对已插入的 voxel collider 几何原地更新，handle 不变。
+// 单格翻转最贴 Minecraft 挖/放一格；批量覆盖用于 chunk 重载。
+// 这两个函数要求 collider 是由 collider_builder_create_voxel* 创建的（world
+// 内部保留了源网格），否则返回 false 并报 ERR_UNSUPPORTED。
+jni!(boolean colliderVoxelEdit(long world, long handle, int x, int y, int z, int solid) {
+    vx::collider_voxel_edit(m::<WH>(world), handle as CRaw, x as i64, y as i64, z as i64, solid).0 as jbyte
+});
+jni_e_c!(boolean colliderSetVoxels(env _env, class _class, long world, long handle, byte_array voxels, int size_x, int size_y, int size_z, double voxel_size_x, double voxel_size_y, double voxel_size_z, double origin_x, double origin_y, double origin_z, int mode, int dynamic_body, int small_voxel_limit, int mesh_voxel_limit) {
+    let Some(values) = jbytearray_to_array(&_env, voxels) else {
+        return 0;
+    };
+    vx::collider_set_voxels(
+        m::<WH>(world),
+        handle as CRaw,
+        values.as_ptr(),
+        u32_from_jint(size_x),
+        u32_from_jint(size_y),
+        u32_from_jint(size_z),
+        voxel_size_x, voxel_size_y, voxel_size_z,
+        v3(origin_x, origin_y, origin_z),
+        shape_type(mode),
+        dynamic_body,
+        u32_from_jint(small_voxel_limit),
+        u32_from_jint(mesh_voxel_limit),
+    ).0 as jbyte
+});
+
+// 射线拾取：对单个 voxel collider 投射射线，反查命中的体素 (ix,iy,iz)。
+// out_block 是调用方分配的 56 字节缓冲地址（VoxelCoord C 布局）。
+jni!(boolean colliderVoxelRayPick(long world, long collider, double ox, double oy, double oz, double dx, double dy, double dz, double max_toi, int solid, long out_block) {
+    vx::collider_voxel_ray_pick(
+        m::<WH>(world),
+        collider as CRaw,
+        v3(ox, oy, oz),
+        v3(dx, dy, dz),
+        max_toi,
+        jb(solid),
+        out_block as *mut vx::VoxelCoord,
+    ).0 as jbyte
+});
+jni!(boolean colliderVoxelCellAtPoint(long world, long collider, double px, double py, double pz, long out_block) {
+    vx::collider_voxel_cell_at_point(
+        m::<WH>(world),
+        collider as CRaw,
+        v3(px, py, pz),
+        out_block as *mut vx::VoxelCoord,
+    ).0 as jbyte
+});
+
+// 读取单个体素格子是否实心（collider_voxel_edit 的读对偶）。
+// out_solid 是调用方分配、能被 Java `boolean` 写入的 1 字节地址。
+jni!(boolean colliderVoxelGet(long world, long collider, int x, int y, int z, long out_solid) {
+    vx::collider_voxel_read_cell(
+        m::<WH>(world),
+        collider as CRaw,
+        x as i64, y as i64, z as i64,
+        out_solid as *mut u8,
+    ).0 as jbyte
+});
 
 jni!(void colliderBuilderDestroy(long builder) { col::collider_builder_destroy(m::<CBH>(builder)); });
 
@@ -489,6 +587,10 @@ jni!(void rigidBodyGetAngvelOut(long world, long body, long out_angvel) { rb::ri
 jni!(boolean rigidBodySetAngvel(long world, long body, double x, double y, double z, int wake_up) { rb::rigid_body_set_angvel(m::<WH>(world), body as RRaw, v3(x, y, z), jb(wake_up)).0 as jbyte });
 jni!(boolean rigidBodyAddForce(long world, long body, double x, double y, double z, int wake_up) { rb::rigid_body_add_force(m::<WH>(world), body as RRaw, v3(x, y, z), jb(wake_up)).0 as jbyte });
 jni!(boolean rigidBodyAddForceAtPoint(long world, long body, double x, double y, double z, double px, double py, double pz, int wake_up) { rb::rigid_body_add_force_at_point(m::<WH>(world), body as RRaw, v3(x, y, z), v3(px, py, pz), jb(wake_up)).0 as jbyte });
+#[cfg(feature = "relative-force")]
+jni!(boolean rigidBodyAddForceAtLocalPoint(long world, long body, double x, double y, double z, double lx, double ly, double lz, int wake_up) { rb::rigid_body_add_force_at_local_point(m::<WH>(world), body as RRaw, v3(x, y, z), v3(lx, ly, lz), jb(wake_up)).0 as jbyte });
+#[cfg(feature = "relative-force")]
+jni!(boolean rigidBodyAddTorqueAtLocalPoint(long world, long body, double x, double y, double z, double lx, double ly, double lz, int wake_up) { rb::rigid_body_add_torque_at_local_point(m::<WH>(world), body as RRaw, v3(x, y, z), v3(lx, ly, lz), jb(wake_up)).0 as jbyte });
 jni!(boolean rigidBodyResetForce(long world, long body, int wake_up) { rb::rigid_body_reset_force(m::<WH>(world), body as RRaw, jb(wake_up)).0 as jbyte });
 jni!(boolean rigidBodyAddTorque(long world, long body, double x, double y, double z, int wake_up) { rb::rigid_body_add_torque(m::<WH>(world), body as RRaw, v3(x, y, z), jb(wake_up)).0 as jbyte });
 jni!(boolean rigidBodyResetTorque(long world, long body, int wake_up) { rb::rigid_body_reset_torque(m::<WH>(world), body as RRaw, jb(wake_up)).0 as jbyte });
@@ -515,8 +617,17 @@ macro_rules! query_filter_args {
 }
 
 jni!(long queryCastRay(long world, double ox, double oy, double oz, double dx, double dy, double dz, double max_toi, int solid, int flags, int memberships, int filter, int use_groups, long exclude_collider, int use_exclude_collider, long exclude_rigid_body, int use_exclude_rigid_body, long out_hit) {
-    let hit = qu::query_cast_ray(cp::<WH>(world), v3(ox, oy, oz), v3(dx, dy, dz), max_toi, jb(solid), query_filter_args!(flags,memberships,filter,use_groups,exclude_collider,use_exclude_collider,exclude_rigid_body,use_exclude_rigid_body));
-    if let Some(out) = unsafe { pm::<RayHit>(out_hit).as_mut() } { *out = hit; }
+    let world_ptr = cp::<WH>(world);
+    if world_ptr.is_null() {
+        er::set_error(er::ERR_NULL_POINTER, "world is null");
+        return 0;
+    }
+    let filter_desc = query_filter_args!(flags, memberships, filter, use_groups, exclude_collider, use_exclude_collider, exclude_rigid_body, use_exclude_rigid_body);
+    let hit = qu::query_cast_ray(world_ptr, v3(ox, oy, oz), v3(dx, dy, dz), max_toi, jb(solid), filter_desc);
+    if out_hit != 0
+        && let Some(out) = unsafe { pm::<RayHit>(out_hit).as_mut() } {
+            *out = hit;
+        }
     hit.collider as jlong
 });
 
@@ -587,6 +698,18 @@ jni!(long worldInsertDynamicCuboids(long world, double x, double y, double z, do
 jni!(long worldInsertStaticTrimesh(long world, long vertices_xyz, int vertex_xyz_len, long indices, int index_len, double friction, double restitution) {
     com::world_insert_static_trimesh(m::<WH>(world), p::<f64>(vertices_xyz), u32_from_jint(vertex_xyz_len), p::<u32>(indices), u32_from_jint(index_len), friction, restitution) as jlong
 });
+jni!(boolean worldRegisterTerrainGravityPolyhedron(long world, long vertices_xyz, int n_vertices, long face_indices, int n_faces, double density) {
+    ev::world_register_terrain_gravity_polyhedron(m::<WH>(world), p::<f64>(vertices_xyz), u32_from_jint(n_vertices), p::<u32>(face_indices), u32_from_jint(n_faces), density).0 as jbyte
+});
+jni!(boolean worldRegisterTerrainGravityDem(long world, long dem, int nx, int ny, double resolution, double reference_radius, double surface_density) {
+    ev::world_register_terrain_gravity_dem(m::<WH>(world), p::<f64>(dem), u32_from_jint(nx), u32_from_jint(ny), resolution, reference_radius, surface_density).0 as jbyte
+});
+jni!(boolean worldRegisterTerrainGravityMascon(long world) {
+    ev::world_register_terrain_gravity_mascon(m::<WH>(world)).0 as jbyte
+});
+jni!(boolean worldUnregisterTerrainGravity(long world) {
+    ev::world_unregister_terrain_gravity(m::<WH>(world)).0 as jbyte
+});
 jni!(long worldInsertStaticVoxelAabb(long world, double min_x, double min_y, double min_z, double max_x, double max_y, double max_z, double voxel_size_x, double voxel_size_y, double voxel_size_z, int mode, int small_voxel_limit, int mesh_voxel_limit, double friction, double restitution) {
     vx::world_insert_static_voxel_aabb(m::<WH>(world), aa(min_x,min_y,min_z,max_x,max_y,max_z), voxel_size_x, voxel_size_y, voxel_size_z, VoxelColliderOptions { mode: voxel_mode(mode), dynamic_body: Bool::FALSE, small_voxel_limit: u32_from_jint(small_voxel_limit), mesh_voxel_limit: u32_from_jint(mesh_voxel_limit) }, friction, restitution) as jlong
 });
@@ -618,6 +741,11 @@ jni!(void characterControllerSetSnapToGround(long controller, int enabled, doubl
 jni!(void characterControllerSetSlopeAngles(long controller, double max_climb_angle, double min_slide_angle) { cc::character_controller_set_slope_angles(m::<CCH>(controller), max_climb_angle, min_slide_angle); });
 jni!(boolean characterControllerMoveShape(long world, long controller, double dt, int shape_type, double a, double b, double c, double d, double tx, double ty, double tz, double qi, double qj, double qk, double qw, double dx, double dy, double dz, long out_movement) {
     let movement = cc::character_controller_move_shape(cp::<WH>(world), m::<CCH>(controller), dt, sd(shape_type,a,b,c,d), v3(tx,ty,tz), qt(qi,qj,qk,qw), v3(dx,dy,dz));
+    if let Some(out) = unsafe { pm::<EffectiveCharacterMovement>(out_movement).as_mut() } { *out = movement; }
+    movement.grounded.0 as jbyte
+});
+jni!(boolean characterControllerMoveShapeWithTerrain(long world, long controller, double dt, int shape_type, double a, double b, double c, double d, double tx, double ty, double tz, double qi, double qj, double qk, double qw, double dx, double dy, double dz, long out_movement) {
+    let movement = cc::character_controller_move_shape_with_terrain(cp::<WH>(world), m::<CCH>(controller), dt, sd(shape_type,a,b,c,d), v3(tx,ty,tz), qt(qi,qj,qk,qw), v3(dx,dy,dz));
     if let Some(out) = unsafe { pm::<EffectiveCharacterMovement>(out_movement).as_mut() } { *out = movement; }
     movement.grounded.0 as jbyte
 });
@@ -657,13 +785,13 @@ jni!(void worldClearIntersectionPairFilterCallback(long world) { ev::world_clear
 // Force law API — Coulomb friction, air drag, external force, Newton gravity
 // =========================================================================
 jni!(boolean worldSetCoulombFrictionLaw(long world, double static_coefficient, double dynamic_coefficient, double velocity_threshold, int enabled) {
-    ev::world_set_coulomb_friction_law(m::<WH>(world), mps_core::rapier::ffi::CoulombFrictionLaw {
+    ev::world_set_coulomb_friction_law(m::<WH>(world), CoulombFrictionLaw {
         static_coefficient, dynamic_coefficient, velocity_threshold, enabled: jb(enabled),
     }).0 as jbyte
 });
 jni!(boolean worldClearCoulombFrictionLaw(long world) { ev::world_clear_coulomb_friction_law(m::<WH>(world)); Bool::TRUE.0 as jbyte });
 jni!(boolean worldSetAirDragLaw(long world, double fluid_vx, double fluid_vy, double fluid_vz, double density, double viscosity, double char_len, double ref_area, double cd, double re_limit, int enabled) {
-    ev::world_set_air_drag_law(m::<WH>(world), mps_core::rapier::ffi::AirDragLaw {
+    ev::world_set_air_drag_law(m::<WH>(world), AirDragLaw {
         fluid_velocity: v3(fluid_vx, fluid_vy, fluid_vz), density, dynamic_viscosity: viscosity,
         characteristic_length: char_len, reference_area: ref_area, drag_coefficient: cd,
         reynolds_stokes_limit: re_limit, enabled: jb(enabled),
@@ -671,7 +799,7 @@ jni!(boolean worldSetAirDragLaw(long world, double fluid_vx, double fluid_vy, do
 });
 jni!(boolean worldClearAirDragLaw(long world) { ev::world_clear_air_drag_law(m::<WH>(world)); Bool::TRUE.0 as jbyte });
 jni!(boolean worldSetExternalForceLaw(long world, double buoyancy_gravity_x, double buoyancy_gravity_y, double buoyancy_gravity_z, double fluid_density, double displaced_volume, int buoyancy_enabled, double charge, double electric_x, double electric_y, double electric_z, double magnetic_x, double magnetic_y, double magnetic_z, int em_enabled, double spring_x, double spring_y, double spring_z, double spring_stiffness, double spring_damping, int elastic_enabled, double gravity_source_x, double gravity_source_y, double gravity_source_z, double gravitational_parameter, int gravity_enabled, int enabled) {
-    ev::world_set_external_force_law(m::<WH>(world), mps_core::rapier::ffi::ExternalForceLaw {
+    ev::world_set_external_force_law(m::<WH>(world), ExternalForceLaw {
         buoyancy_gravity: v3(buoyancy_gravity_x, buoyancy_gravity_y, buoyancy_gravity_z),
         fluid_density, displaced_volume, buoyancy_enabled: jb(buoyancy_enabled),
         charge, electric_field: v3(electric_x, electric_y, electric_z),
@@ -685,11 +813,85 @@ jni!(boolean worldSetExternalForceLaw(long world, double buoyancy_gravity_x, dou
 });
 jni!(boolean worldClearExternalForceLaw(long world) { ev::world_clear_external_force_law(m::<WH>(world)); Bool::TRUE.0 as jbyte });
 jni!(boolean worldSetNewtonGravityLaw(long world, double gravitational_constant, double min_distance, double max_distance, int enabled) {
-    ev::world_set_newton_gravity_law(m::<WH>(world), mps_core::rapier::ffi::NewtonGravityLaw {
+    ev::world_set_newton_gravity_law(m::<WH>(world), NewtonGravityLaw {
         gravitational_constant, min_distance, max_distance, enabled: jb(enabled),
     }).0 as jbyte
 });
 jni!(boolean worldClearNewtonGravityLaw(long world) { ev::world_clear_newton_gravity_law(m::<WH>(world)); Bool::TRUE.0 as jbyte });
+
+// =========================================================================
+// Force law API — solar-wind pressure / dynamical friction / MOND gravity
+// (PHYSICS_EXPANSION_PLAN C1: mirrors world_set_solar_wind_pressure_law &
+// friends from mps-core events.rs.  See crates/mps-core/src/rapier/events.rs.)
+// =========================================================================
+jni!(boolean worldSetSolarWindPressureLaw(long world, double proton_density, double v_sw_mps, double wind_dir_x, double wind_dir_y, double wind_dir_z, double effective_area_m2, int enabled) {
+    ev::world_set_solar_wind_pressure_law(m::<WH>(world), SolarWindPressureLaw {
+        proton_density, v_sw_mps, wind_direction: v3(wind_dir_x, wind_dir_y, wind_dir_z),
+        effective_area_m2, enabled: jb(enabled),
+    }).0 as jbyte
+});
+jni!(boolean worldClearSolarWindPressureLaw(long world) { ev::world_clear_solar_wind_pressure_law(m::<WH>(world)); Bool::TRUE.0 as jbyte });
+jni!(boolean worldSetDynamicalFrictionLaw(long world, double background_density, double coulomb_log, int enabled) {
+    ev::world_set_dynamical_friction_law(m::<WH>(world), DynamicalFrictionLaw {
+        background_density_kg_m3: background_density, coulomb_log, enabled: jb(enabled),
+    }).0 as jbyte
+});
+jni!(boolean worldClearDynamicalFrictionLaw(long world) { ev::world_clear_dynamical_friction_law(m::<WH>(world)); Bool::TRUE.0 as jbyte });
+jni!(boolean worldSetMonDGravityLaw(long world, double newtonian_a, double mond_a_zero, double direction_x, double direction_y, double direction_z, int enabled) {
+    ev::world_set_mond_gravity_law(m::<WH>(world), MonDGravityLaw {
+        newtonian_a, mond_a_zero, direction: v3(direction_x, direction_y, direction_z),
+        enabled: jb(enabled),
+    }).0 as jbyte
+});
+jni!(boolean worldClearMonDGravityLaw(long world) { ev::world_clear_mond_gravity_law(m::<WH>(world)); Bool::TRUE.0 as jbyte });
+
+// =========================================================================
+// Force law API — Eddington-limited radiation pressure (PHYSICS_EXPANSION_PLAN C2)
+// =========================================================================
+jni!(boolean worldSetEddingtonRadiationPressureLaw(long world, double mass_kg, double opacity, double source_x, double source_y, double source_z, double effective_area_m2, int enabled) {
+    ev::world_set_eddington_radiation_pressure_law(m::<WH>(world), EddingtonRadiationPressureLaw {
+        mass_kg, opacity, source_position: v3(source_x, source_y, source_z),
+        effective_area_m2, enabled: jb(enabled),
+    }).0 as jbyte
+});
+jni!(boolean worldClearEddingtonRadiationPressureLaw(long world) { ev::world_clear_eddington_radiation_pressure_law(m::<WH>(world)); Bool::TRUE.0 as jbyte });
+
+// =========================================================================
+// Force law API — X-ray disc bolometric irradiation (PHYSICS_EXPANSION_PLAN C3)
+// =========================================================================
+jni!(boolean worldSetXrayIrradiationLaw(long world, double k_t_eff_kev, double r_in_km, double spectral_hardening, double source_x, double source_y, double source_z, double effective_area_m2, int enabled) {
+    ev::world_set_xray_irradiation_law(m::<WH>(world), XrayIrradiationLaw {
+        k_t_eff_kev, r_in_km, spectral_hardening, source_position: v3(source_x, source_y, source_z),
+        effective_area_m2, enabled: jb(enabled),
+    }).0 as jbyte
+});
+jni!(boolean worldClearXrayIrradiationLaw(long world) { ev::world_clear_xray_irradiation_law(m::<WH>(world)); Bool::TRUE.0 as jbyte });
+
+// =========================================================================
+// Force law API — Pulsar magnetic-dipole torque (PHYSICS_EXPANSION_PLAN C3)
+// =========================================================================
+jni!(boolean worldSetPulsarMagneticDipoleLaw(long world, double moment_of_inertia, double ns_radius_m, double period_ms, double period_derivative, double pulsar_x, double pulsar_y, double pulsar_z, double spin_x, double spin_y, double spin_z, double mu_x, double mu_y, double mu_z, int enabled) {
+    ev::world_set_pulsar_magnetic_dipole_law(m::<WH>(world), PulsarMagneticDipoleLaw {
+        moment_of_inertia, ns_radius_m, period_ms, period_derivative,
+        pulsar_position: v3(pulsar_x, pulsar_y, pulsar_z),
+        spin_axis: v3(spin_x, spin_y, spin_z),
+        body_dipole_moment: v3(mu_x, mu_y, mu_z),
+        enabled: jb(enabled),
+    }).0 as jbyte
+});
+jni!(boolean worldClearPulsarMagneticDipoleLaw(long world) { ev::world_clear_pulsar_magnetic_dipole_law(m::<WH>(world)); Bool::TRUE.0 as jbyte });
+
+// =========================================================================
+// Force law API — Jeans-escape drag (PHYSICS_EXPANSION_PLAN C4)
+// =========================================================================
+jni!(boolean worldSetJeansEscapeLaw(long world, double n_exo, double temperature, double escape_parameter, double mass_kg, double dir_x, double dir_y, double dir_z, double effective_area_m2, int enabled) {
+    ev::world_set_jeans_escape_law(m::<WH>(world), JeansEscapeLaw {
+        n_exo, temperature, escape_parameter, mass_kg,
+        escape_direction: v3(dir_x, dir_y, dir_z),
+        effective_area_m2, enabled: jb(enabled),
+    }).0 as jbyte
+});
+jni!(boolean worldClearJeansEscapeLaw(long world) { ev::world_clear_jeans_escape_law(m::<WH>(world)); Bool::TRUE.0 as jbyte });
 
 // =========================================================================
 // Event ring buffer — lock-free dispatch
@@ -708,8 +910,8 @@ jni!(boolean worldSetEventDispatchMode(long world, int mode) { ev::world_set_eve
 use mps_core::rapier::aerodynamics as aero_jni;
 jni!(boolean aeroApplySurfaces(long world, long body, double wind_x, double wind_y, double wind_z, double density, long surfaces, int surface_count, int wake_up, long out_report) {
     aero_jni::aero_apply_surfaces(m::<WH>(world), body as RRaw, v3(wind_x, wind_y, wind_z), density,
-        p::<mps_core::rapier::ffi::AeroSurface>(surfaces), u32_from_jint(surface_count), jb(wake_up),
-        pm::<mps_core::rapier::ffi::AeroForceReport>(out_report)).0 as jbyte
+        p::<AeroSurface>(surfaces), u32_from_jint(surface_count), jb(wake_up),
+        pm::<AeroForceReport>(out_report)).0 as jbyte
 });
 
 // =========================================================================
@@ -718,9 +920,9 @@ jni!(boolean aeroApplySurfaces(long world, long body, double wind_x, double wind
 use mps_core::rapier::fluid as fluid_jni;
 jni!(boolean fluidApplyAabbForces(long world, long body, double center_x, double center_y, double center_z, double half_x, double half_y, double half_z, double density, double linear_drag, double quadratic_drag, double angular_drag, double flow_x, double flow_y, double flow_z, double gravity_x, double gravity_y, double gravity_z, double body_half_x, double body_half_y, double body_half_z, double body_volume, int wake_up, long out_report) {
     fluid_jni::fluid_apply_aabb_forces(m::<WH>(world), body as RRaw,
-        mps_core::rapier::ffi::FluidVolume { center: v3(center_x, center_y, center_z), half_extents: v3(half_x, half_y, half_z), density, linear_drag, quadratic_drag, angular_drag, flow_velocity: v3(flow_x, flow_y, flow_z), gravity: v3(gravity_x, gravity_y, gravity_z) },
+        FluidVolume { center: v3(center_x, center_y, center_z), half_extents: v3(half_x, half_y, half_z), density, linear_drag, quadratic_drag, angular_drag, flow_velocity: v3(flow_x, flow_y, flow_z), gravity: v3(gravity_x, gravity_y, gravity_z) },
         v3(body_half_x, body_half_y, body_half_z), body_volume, jb(wake_up),
-        pm::<mps_core::rapier::ffi::FluidForceReport>(out_report)).0 as jbyte
+        pm::<FluidForceReport>(out_report)).0 as jbyte
 });
 
 // =========================================================================
@@ -729,16 +931,83 @@ jni!(boolean fluidApplyAabbForces(long world, long body, double center_x, double
 use mps_core::rapier::trajectory as traj_jni;
 jni!(boolean trajectoryApplyForcesToBody(long world, long body, double gravity_x, double gravity_y, double gravity_z, double flow_x, double flow_y, double flow_z, double mass, double ref_area, double density, double drag_coeff, double lift_coeff, double lift_x, double lift_y, double lift_z, int wake_up, long out_report) {
     traj_jni::trajectory_apply_forces_to_body(m::<WH>(world), body as RRaw,
-        mps_core::rapier::ffi::TrajectoryEnvironment { gravity: v3(gravity_x, gravity_y, gravity_z), flow_velocity: v3(flow_x, flow_y, flow_z), mass, reference_area: ref_area, density, drag_coefficient: drag_coeff, lift_coefficient: lift_coeff, lift_direction: v3(lift_x, lift_y, lift_z) },
-        jb(wake_up), pm::<mps_core::rapier::ffi::TrajectoryForceReport>(out_report)).0 as jbyte
+        TrajectoryEnvironment { gravity: v3(gravity_x, gravity_y, gravity_z), flow_velocity: v3(flow_x, flow_y, flow_z), mass, reference_area: ref_area, density, drag_coefficient: drag_coeff, lift_coefficient: lift_coeff, lift_direction: v3(lift_x, lift_y, lift_z) },
+        jb(wake_up), pm::<TrajectoryForceReport>(out_report)).0 as jbyte
 });
 
 // =========================================================================
-// Molecular dynamics — Lennard-Jones & Coulomb potential calculators
+// Molecular dynamics — Lennard-Jones & Coulomb potential calculators + forces
 // =========================================================================
-use mps_core::rapier::molecular as mol_jni;
-jni!(double molecularLennardJonesPotential(double r, double epsilon, double sigma) { mol_jni::molecular_lennard_jones_potential(r, epsilon, sigma) });
-jni!(double molecularCoulombPotential(double r, double q1, double q2, double k, double eps) { mol_jni::molecular_coulomb_potential(r, q1, q2, k, eps) });
+// `mol` alias is declared in the top-level `use mps_core::rapier::{...}` block.
+jni!(double molecularLennardJonesPotential(double r, double epsilon, double sigma) { mol::molecular_lennard_jones_potential(r, epsilon, sigma) });
+jni!(double molecularCoulombPotential(double r, double q1, double q2, double k, double eps) { mol::molecular_coulomb_potential(r, q1, q2, k, eps) });
+jni!(double molecularVacuumCoulombConstant() { mol::molecular_vacuum_coulomb_constant() });
+
+// Apply intermolecular forces between two rigid bodies in the world.
+// `particle_a` / `particle_b` are `long` pointers to a `MolecularParticle`
+// byte buffer (80 bytes, C layout: position@0, velocity@24, mass@48, charge@56,
+// epsilon@64, sigma@72 — each Vec3 is 24 bytes). `out_report` is a `long`
+// pointer to a 128-byte `MolecularPairReport` buffer (displacement@0, distance@24,
+// lennard_jones_potential@32, coulomb_potential@40, total_potential@48,
+// lennard_jones_force@56, coulomb_force@80, total_force@104). The caller fills
+// the two particle buffers with Unsafe; the report buffer is written back.
+jni!(boolean molecularApplyPairForces(long world, long body_a, long body_b, long particle_a, long particle_b, double coulomb_constant, double relative_permittivity, double cutoff_radius, double softening, int lennard_jones_enabled, int coulomb_enabled, int wake_up, long out_report) {
+    mol::molecular_apply_pair_forces(
+        m::<WH>(world), body_a as RRaw, body_b as RRaw,
+        unsafe { *p::<MolecularParticle>(particle_a) }, unsafe { *p::<MolecularParticle>(particle_b) },
+        MolecularForceLaw { coulomb_constant, relative_permittivity, cutoff_radius, softening, lennard_jones_enabled: jb(lennard_jones_enabled), coulomb_enabled: jb(coulomb_enabled) },
+        jb(wake_up), pm::<MolecularPairReport>(out_report)).0 as jbyte
+});
+jni!(boolean molecularApplyPairForcesFlag(long world, long body_a, long body_b, long particle_a, long particle_b, double coulomb_constant, double relative_permittivity, double cutoff_radius, double softening, int lennard_jones_enabled, int coulomb_enabled, int wake_up, long out_report) {
+mol::molecular_apply_pair_forces_flag(
+m::<WH>(world), body_a as RRaw, body_b as RRaw,
+unsafe { *p::<MolecularParticle>(particle_a) }, unsafe { *p::<MolecularParticle>(particle_b) },
+MolecularForceLaw { coulomb_constant, relative_permittivity, cutoff_radius, softening, lennard_jones_enabled: jb(lennard_jones_enabled), coulomb_enabled: jb(coulomb_enabled) },
+jb(wake_up), pm::<MolecularPairReport>(out_report)) as jbyte
+});
+
+// =========================================================================
+// Fracture mechanics — Griffith / S-N / Miner / stress intensity / fragments
+// =========================================================================
+// All `out_report` args are `long` pointers to C-layout report buffers written
+// back to the caller (read with Unsafe). Report sizes/offsets (bytes):
+//   StressIntensityReport 24: stress_intensity@0, critical@8(u8), safety_factor@16
+//   GriffithReport        32: critical_stress@0, energy_release_rate@8, critical_er_rate@16, will_fracture@24(u8)
+//   MinerDamageReport     24: damage@0, remaining_life_fraction@8, failed@16(u8)
+//   SnCurveReport        16: cycles_to_failure@0, infinite_life@8(u8)
+//   FractureEnergyReport 32: available_energy@0, surface_energy_required@8, fragment_kinetic_energy@16, will_fracture@24(u8)
+//   FractureModeReport   24: mode@0(u32), driving_stress@8, mixed_mode_ratio@16
+//   FractureReplaceReport 12: fragment_count@0(u32), joint_count@4(u32), removed_source@8(u8)
+// `material` (fractureGriffithCriterion) is a `long` to a 40-byte FractureMaterial
+//   buffer: youngs_modulus@0, poisson_ratio@8, fracture_toughness@16, surface_energy@24, density@32.
+// `fragments` (worldReplaceBodyWithFractureFragments) is a `long` to an array of
+//   96-byte FractureFragmentDesc buffers: local_center@0, half_extents@24, initial_velocity@48,
+//   density@72, friction@80, restitution@88.
+jni!(boolean fractureStressIntensityFactor(double stress, double crack_length, double geometry_factor, double fracture_toughness, long out_report) {
+    fr::fracture_stress_intensity_factor(stress, crack_length, geometry_factor, fracture_toughness, pm::<StressIntensityReport>(out_report)).0 as jbyte
+});
+jni!(boolean fractureGriffithCriterion(double stress, double crack_length, long material, long out_report) {
+    fr::fracture_griffith_criterion(stress, crack_length, unsafe { *p::<FractureMaterial>(material) }, pm::<GriffithReport>(out_report)).0 as jbyte
+});
+jni!(boolean fractureMinerDamage(long cycle_counts, int count, long cycles_to_failure, long out_report) {
+    fr::fracture_miner_damage(p::<f64>(cycle_counts), p::<f64>(cycles_to_failure), count as u32, pm::<MinerDamageReport>(out_report)).0 as jbyte
+});
+jni!(boolean fractureSnCurveLife(double stress_amplitude, double coefficient, double exponent, double endurance_limit, long out_report) {
+    fr::fracture_sn_curve_life(stress_amplitude, coefficient, exponent, endurance_limit, pm::<SnCurveReport>(out_report)).0 as jbyte
+});
+jni!(boolean fractureEnergyRelease(double strain_energy, double new_surface_area, double surface_energy, double kinetic_energy, long out_report) {
+    fr::fracture_energy_release(strain_energy, new_surface_area, surface_energy, kinetic_energy, pm::<FractureEnergyReport>(out_report)).0 as jbyte
+});
+jni!(boolean fractureModeFromStress(double tensile_stress, double shear_stress, double compressive_stress, long out_report) {
+    fr::fracture_mode_from_stress(tensile_stress, shear_stress, compressive_stress, pm::<FractureModeReport>(out_report)).0 as jbyte
+});
+jni!(boolean worldReplaceBodyWithFractureFragments(long world, long source_body, long fragments, int fragment_count, int connect_fragments, int remove_source, long out_body_handles, long out_joint_handles, int capacity, long out_report) {
+    fr::world_replace_body_with_fracture_fragments(
+        m::<WH>(world), source_body as RRaw, p::<FractureFragmentDesc>(fragments),
+        fragment_count as u32, jb(connect_fragments), jb(remove_source),
+        pm::<RRaw>(out_body_handles), pm::<JRaw>(out_joint_handles), capacity as u32,
+        pm::<FractureReplaceReport>(out_report)).0 as jbyte
+});
 
 #[cfg(feature = "anvilkit-bridge")]
 jni!(long anvilKitAppCreate() { to_jlong(ak::anvilkit_app_create()) });
@@ -758,6 +1027,46 @@ jni!(long anvilKitAppSpawnBodyWithCollider(long app, double tx, double ty, doubl
 jni!(boolean anvilKitAppSetTransform(long app, long entity_bits, double tx, double ty, double tz, double qi, double qj, double qk, double qw) {
     ak::anvilkit_app_set_transform(m::<AKH>(app), entity_bits as u64, v3(tx, ty, tz), qt(qi, qj, qk, qw)).0 as jbyte
 });
+// =========================================================================
+// Material mechanics — Hooke / elastic moduli / yield / fracture / fatigue / beam
+// =========================================================================
+// All functions take `f64` inputs and a `long out` pointer to a caller-allocated
+// `f64` slot; the computed value is written there and the result is `boolean`
+// (false on invalid input or null out). `principal_stresses` writes 3 `f64` into
+// a 24-byte buffer; `miners_damage` reads `count` `f64` from a `ratios` buffer.
+jni!(boolean materialMechanicsHookesLawUniaxial(double stress, double youngs_modulus, long out) { mm::material_mechanics_hookes_law_uniaxial(stress, youngs_modulus, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsStressFromStrain(double youngs_modulus, double strain, long out) { mm::material_mechanics_stress_from_strain(youngs_modulus, strain, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsShearModulus(double youngs_modulus, double poisson_ratio, long out) { mm::material_mechanics_shear_modulus(youngs_modulus, poisson_ratio, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsBulkModulus(double youngs_modulus, double poisson_ratio, long out) { mm::material_mechanics_bulk_modulus(youngs_modulus, poisson_ratio, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsLameLambda(double youngs_modulus, double poisson_ratio, long out) { mm::material_mechanics_lame_lambda(youngs_modulus, poisson_ratio, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsVonMisesStress(double sx, double sy, double sz, double txy, double tyz, double tzx, long out) { mm::material_mechanics_von_mises_stress(sx, sy, sz, txy, tyz, tzx, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsVonMisesYieldCheck(double von_mises_stress, double yield_stress, long out) { mm::material_mechanics_von_mises_yield_check(von_mises_stress, yield_stress, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsTrescaShearStress(double sigma_1, double sigma_3, long out) { mm::material_mechanics_tresca_shear_stress(sigma_1, sigma_3, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsTrescaYieldCheck(double sigma_1, double sigma_3, double yield_stress, long out) { mm::material_mechanics_tresca_yield_check(sigma_1, sigma_3, yield_stress, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsKiCenterCrack(double stress, double crack_half_length, long out) { mm::material_mechanics_ki_center_crack(stress, crack_half_length, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsKiEdgeCrack(double stress, double crack_length, long out) { mm::material_mechanics_ki_edge_crack(stress, crack_length, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsFractureCheck(double stress_intensity, double fracture_toughness, long out) { mm::material_mechanics_fracture_check(stress_intensity, fracture_toughness, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsCriticalCrackLength(double stress, double fracture_toughness, long out) { mm::material_mechanics_critical_crack_length(stress, fracture_toughness, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsBasquinStressAmplitude(double cycles_to_failure, double fatigue_strength_coefficient, double fatigue_exponent, long out) { mm::material_mechanics_basquin_stress_amplitude(cycles_to_failure, fatigue_strength_coefficient, fatigue_exponent, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsBasquinCyclesToFailure(double stress_amplitude, double fatigue_strength_coefficient, double fatigue_exponent, long out) { mm::material_mechanics_basquin_cycles_to_failure(stress_amplitude, fatigue_strength_coefficient, fatigue_exponent, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsCoffinMansonStrainAmplitude(double cycles_to_failure, double ductility_coefficient, double ductility_exponent, long out) { mm::material_mechanics_coffin_manson_strain_amplitude(cycles_to_failure, ductility_coefficient, ductility_exponent, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsGoodmanCorrection(double stress_amplitude, double mean_stress, double ultimate_tensile, long out) { mm::material_mechanics_goodman_correction(stress_amplitude, mean_stress, ultimate_tensile, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsNortonCreepRate(double stress, double temperature, double a, double n, double activation_energy, double gas_constant, long out) { mm::material_mechanics_norton_creep_rate(stress, temperature, a, n, activation_energy, gas_constant, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsBeamBendingStress(double bending_moment, double distance_from_neutral_axis, double area_moment_of_inertia, long out) { mm::material_mechanics_beam_bending_stress(bending_moment, distance_from_neutral_axis, area_moment_of_inertia, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsBeamDeflectionCenterPointLoad(double load, double span, double youngs_modulus, double moment_of_inertia, long out) { mm::material_mechanics_beam_deflection_center_point_load(load, span, youngs_modulus, moment_of_inertia, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsEulerBucklingLoad(double youngs_modulus, double moment_of_inertia, double effective_length_factor, double column_length, long out) { mm::material_mechanics_euler_buckling_load(youngs_modulus, moment_of_inertia, effective_length_factor, column_length, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsSlendernessRatio(double effective_length_factor, double column_length, double radius_of_gyration, long out) { mm::material_mechanics_slenderness_ratio(effective_length_factor, column_length, radius_of_gyration, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsPrincipalStresses(double sx, double sy, double sz, double txy, double tyz, double tzx, long out) { mm::material_mechanics_principal_stresses(sx, sy, sz, txy, tyz, tzx, pm::<f64>(out)).0 as jbyte });
+jni!(boolean materialMechanicsMinersDamage(long ratios, int count, long out) { mm::material_mechanics_miners_damage(p::<f64>(ratios), count as u32, pm::<f64>(out)).0 as jbyte });
+
+// =========================================================================
+// Thermodynamics — ideal gas law & polytropic processes
+// =========================================================================
+jni!(boolean thermodynamicsIdealGasPressure(double volume, double moles, double temperature, long out) { th::thermodynamics_ideal_gas_pressure(volume, moles, temperature, pm::<f64>(out)).0 as jbyte });
+jni!(boolean thermodynamicsIdealGasVolume(double pressure, double moles, double temperature, long out) { th::thermodynamics_ideal_gas_volume(pressure, moles, temperature, pm::<f64>(out)).0 as jbyte });
+jni!(boolean thermodynamicsIdealGasTemperature(double pressure, double volume, double moles, long out) { th::thermodynamics_ideal_gas_temperature(pressure, volume, moles, pm::<f64>(out)).0 as jbyte });
+jni!(boolean thermodynamicsPolytropicPressure(double p1, double v1, double v2, double gamma, long out) { th::thermodynamics_polytropic_pressure(p1, v1, v2, gamma, pm::<f64>(out)).0 as jbyte });
+jni!(boolean thermodynamicsPolytropicWork(double p1, double v1, double p2, double v2, double gamma, long out) { th::thermodynamics_polytropic_work(p1, v1, p2, v2, gamma, pm::<f64>(out)).0 as jbyte });
 #[cfg(feature = "anvilkit-bridge")]
 jni!(int anvilKitAppSyncToWorld(long app, long world) {
     ak::anvilkit_app_sync_to_world(m::<AKH>(app), m::<WH>(world)) as jint
@@ -775,8 +1084,8 @@ jni!(boolean anvilKitAppApplyAeroSurfaces(long app, long world, long entity_bits
     ak::anvilkit_app_apply_aero_surfaces(m::<AKH>(app), m::<WH>(world), entity_bits as u64, v3(wind_x, wind_y, wind_z), air_density, p::<AeroSurface>(surfaces), u32_from_jint(surface_count), jb(wake_up), pm::<AeroForceReport>(out_report)).0 as jbyte
 });
 #[cfg(feature = "anvilkit-bridge")]
-jni!(boolean anvilKitAppApplyAeroVoxelGrid(long app, long world, long entity_bits, double wind_x, double wind_y, double wind_z, double air_density, long voxels, int size_x, int size_y, int size_z, double voxel_size_x, double voxel_size_y, double voxel_size_z, double origin_x, double origin_y, double origin_z, double drag_coefficient, double lift_coefficient, int wake_up, long out_report) {
-    ak::anvilkit_app_apply_aero_voxel_grid(m::<AKH>(app), m::<WH>(world), entity_bits as u64, v3(wind_x, wind_y, wind_z), air_density, p::<u8>(voxels), u32_from_jint(size_x), u32_from_jint(size_y), u32_from_jint(size_z), voxel_size_x, voxel_size_y, voxel_size_z, v3(origin_x, origin_y, origin_z), drag_coefficient, lift_coefficient, jb(wake_up), pm::<AeroForceReport>(out_report)).0 as jbyte
+jni!(boolean anvilKitAppApplyAeroVoxelGrid(long app, long world, long entity_bits, double wind_x, double wind_y, double wind_z, double air_density, long voxels, int size_x, int size_y, int size_z, double voxel_size, double origin_x, double origin_y, double origin_z, double drag_coefficient, double lift_coefficient, int wake_up, long out_report) {
+    ak::anvilkit_app_apply_aero_voxel_grid(m::<AKH>(app), m::<WH>(world), entity_bits as u64, v3(wind_x, wind_y, wind_z), air_density, p::<u8>(voxels), u32_from_jint(size_x), u32_from_jint(size_y), u32_from_jint(size_z), voxel_size, v3(origin_x, origin_y, origin_z), drag_coefficient, lift_coefficient, jb(wake_up), pm::<AeroForceReport>(out_report)).0 as jbyte
 });
 #[cfg(feature = "anvilkit-bridge")]
 jni!(boolean anvilKitAppApplyFluidAabbForces(long app, long world, long entity_bits, double center_x, double center_y, double center_z, double half_x, double half_y, double half_z, double density, double linear_drag, double quadratic_drag, double angular_drag, double flow_x, double flow_y, double flow_z, double gravity_x, double gravity_y, double gravity_z, double body_half_x, double body_half_y, double body_half_z, double body_volume, int wake_up, long out_report) {
@@ -955,3 +1264,425 @@ jni!(boolean spaceApplySolarRadiationPressureToBody(long world, long body, doubl
 jni!(boolean spaceApplyGravityGradientTorqueToBody(long world, long body, double ix, double iy, double iz, double mu, int wake_up, long out_torque) {
     sf::space_apply_gravity_gradient_torque_to_body(m::<WH>(world), body as RRaw, v3(ix, iy, iz), mu, jb(wake_up), pm::<Vec3>(out_torque)).0 as jbyte
 });
+
+// =========================================================================
+// Cosmos — 太空刚体演算 (mps-cosmos)
+//
+// 与 `mps-core` 的 world 不同，`CosmosWorld` 是一个面向轨道演算的独立
+// 物理 world：自行持有 `RigidBodySet`/`PhysicsPipeline`，仅复用
+// `mps-formula` 的纯计算。这里把它的一组核心 `pub` API 包成 JNI export，
+// 供 Java 端做太空场景演练。
+//
+// 句柄约定：
+//   `long world`   —— `*mut CosmosWorld`
+//   `long builder` —— `*mut RigidBodyBuilder`（由 `cosmosSatelliteBuilder` /
+//                     `cosmosFixedBodyBuilder` 返回，**插入后所有权转移**
+//                     给 `CosmosWorld`；不插入则调用方用
+//                     `cosmosBuilderDestroy` 释放）
+//   `long body`    —— `RigidBodyHandle` 的 `into_raw_parts()` 打包成的单个
+//                     64 位（高 32 = index，低 32 = generation）。之所以不
+//                     拆成两个 jint，是为了和 rapier 的 `RigidBodyHandleRaw`
+//                     在 ABI 上对齐（后者也是单 u64）。
+// =========================================================================
+use mps_cosmos::gravity::CelestialSource;
+use mps_cosmos::rapier3d::prelude::{RigidBodyBuilder, RigidBodyHandle, Vector};
+use mps_cosmos::world::{
+    CosmosWorld, CosmosWorldConfig, OrbitIntegration, StepResult, StepSkipReason,
+};
+
+/// `RigidBodyHandle` ↔ `jlong` 打包。高 32 位存 index，低 32 位存
+/// generation —— 与 `RigidBodyHandle::into_raw_parts()` 顺序一致。
+fn pack_handle(h: RigidBodyHandle) -> jlong {
+    let (idx, generation) = h.into_raw_parts();
+    (((idx as u64) << 32) | (generation as u64)) as i64
+}
+
+fn unpack_handle(packed: jlong) -> RigidBodyHandle {
+    let packed = packed as u64;
+    let idx = ((packed >> 32) & 0xFFFF_FFFF) as u32;
+    let generation = (packed & 0xFFFF_FFFF) as u32;
+    RigidBodyHandle::from_raw_parts(idx, generation)
+}
+
+/// 由 `CelestialBodyId`（整数 0..=9）拿 `&'static CelestialBody`；非法则
+/// `None`。对应 `mps_formula::celestial_data::celestial_body_id_from_u32`。
+fn celestial_by_id(id: jint) -> Option<&'static mps_formula::celestial_data::CelestialBody> {
+    let id = u32::try_from(id).ok()?;
+    mps_formula::celestial_data::celestial_body_id_from_u32(id)
+        .map(mps_formula::celestial_data::get_celestial_body)
+}
+
+/// 取裸指针指向的 `RigidBodyBuilder` 的可变引用（builder 链式 set 用）。
+/// 0（null）则返回 `None`（与 catch_unwind 兜底一致，避免 panic）。
+fn builder_mut(builder: jlong) -> Option<&'static mut RigidBodyBuilder> {
+    if builder == 0 {
+        return None;
+    }
+    unsafe { (builder as *mut RigidBodyBuilder).as_mut() }
+}
+
+// 构造一个动态刚体 builder（质量 kg、初始位置/速度）。返回 `*mut` 指针
+// 给 Java；后续交给 `cosmosInsertBody` 插入。
+jni!(long cosmosSatelliteBuilder(double mass, double px, double py, double pz, double vx, double vy, double vz, double radius) {
+    to_jlong(Box::into_raw(Box::new(
+        mps_cosmos::bodies::satellite_builder(mass, Vector::new(px, py, pz), Vector::new(vx, vy, vz), radius)
+    )))
+});
+// 构造固定（静态）刚体 builder —— 适合做 n-body 引力源中心本体。
+jni!(long cosmosFixedBodyBuilder(double px, double py, double pz) {
+    to_jlong(Box::into_raw(Box::new(
+        mps_cosmos::bodies::fixed_body_builder(Vector::new(px, py, pz))
+    )))
+});
+// 链式设惯量/阻尼等常见 builder 属性后再交给 `cosmosInsertBody`。这里
+// 暴露线性/角阻尼、平移锁定、`gravity_scale` 几个最常用的。
+jni!(void cosmosBuilderSetLinearDamping(long builder, double value) {
+    if let Some(b) = builder_mut(builder) { b.linear_damping = value; }
+});
+jni!(void cosmosBuilderSetAngularDamping(long builder, double value) {
+    if let Some(b) = builder_mut(builder) { b.angular_damping = value; }
+});
+jni!(void cosmosBuilderSetGravityScale(long builder, double value) {
+    if let Some(b) = builder_mut(builder) { b.gravity_scale = value; }
+});
+// **激活**平移锁定（动态刚体不再平动，仅可转动）。
+// `RigidBodyBuilder::lock_translations` 是消费 self 的链式 API，这里
+// 把裸指针的 builder 取出、调用后再放回原地，等价于链尾 `.lock_translations()`。
+jni!(void cosmosBuilderLockTranslations(long builder) {
+    if builder != 0 {
+        unsafe {
+            let b = Box::from_raw(builder as *mut RigidBodyBuilder);
+            let b = b.lock_translations();
+            let _ = Box::into_raw(Box::new(b));
+        }
+    }
+});
+// 显式释放一个**未插入**的 builder。插入 `cosmosInsertBody` 后所有权已
+// 转移，**不要**再调本函数（会 double-free）。
+jni!(void cosmosBuilderDestroy(long builder) {
+    if builder != 0 { drop(unsafe { Box::from_raw(builder as *mut RigidBodyBuilder) }); }
+});
+
+// 创建一个 `CosmosWorld`。
+//
+// 参数：
+// - `dt`：积分步长（秒），合法范围 `0 < dt ≤ 30`；
+// - `solver_iterations`、`ccd_substeps`：rapier 求解器参数；
+// - `orbit_integration`：0 = `RapierForce`（默认），1 = `Verlet`，
+//   2 = `Yoshida4`，3 = `Yoshida4Kahan`，4 = `ForestRuth8`，5 = `ForestRuth8Kahan`；
+// - `verlet_substeps`：Verlet 路径的内部子步数（≥1，仅 `Verlet` 模式生效）；
+// - `n_body_softening_sq`：n-body 互引力软化平方项（m²），0 表示无软化。
+jni!(long cosmosWorldCreate(double dt, int solver_iterations, int ccd_substeps, int orbit_integration, int verlet_substeps, double n_body_softening_sq) {
+    let orbit_integration = match u32_from_jint(orbit_integration) {
+        1 => OrbitIntegration::Verlet,
+        2 => OrbitIntegration::Yoshida4,
+        3 => OrbitIntegration::Yoshida4Kahan,
+        4 => OrbitIntegration::ForestRuth8,
+        5 => OrbitIntegration::ForestRuth8Kahan,
+        _ => OrbitIntegration::RapierForce,
+    };
+    let cfg = CosmosWorldConfig {
+        gravity: Vector::ZERO,
+        dt,
+        solver_iterations: u32_from_jint(solver_iterations),
+        ccd_substeps: u32_from_jint(ccd_substeps),
+        n_body_softening_sq,
+        central_body: None,
+        orbit_integration,
+        verlet_substeps: u32_from_jint(verlet_substeps).max(1),
+        ..CosmosWorldConfig::default()
+    };
+    to_jlong(Box::into_raw(Box::new(CosmosWorld::new(cfg))))
+});
+jni!(void cosmosWorldDestroy(long world) {
+    if world != 0 { drop(unsafe { Box::from_raw(world as *mut CosmosWorld) }); }
+});
+
+// 设太阳位置（光压方向参考）。
+jni!(void cosmosWorldSetSunPosition(long world, double x, double y, double z) {
+    if let Some(w) = unsafe { (world as *mut CosmosWorld).as_mut() } {
+        w.set_sun_position(Vector::new(x, y, z));
+    }
+});
+
+// 设 n-body 中心天体（按整数 id：0=Sun,1=Mercury,2=Venus,3=Earth,4=Moon,
+// 5=Mars,6=Jupiter,7=Saturn,8=Uranus,9=Neptune）。`id < 0` 清除中心天体。
+jni!(boolean cosmosWorldSetCentralBody(long world, int id) {
+    let w = unsafe { (world as *mut CosmosWorld).as_mut() };
+    let Some(w) = w else { return Bool::FALSE.0 as jbyte; };
+    let body = if id < 0 { None } else { celestial_by_id(id) };
+    w.set_central_body(body);
+    Bool::TRUE.0 as jbyte
+});
+
+// 注册一个天体引力源。`celestial_id` 见 `cosmosWorldSetCentralBody`；
+// `max_sh_degree` 限制球谐展开最高阶（受 `body.max_degree` 上限约束）。
+// 返回注册到世界中的源索引（≥0 成功；-1 参数错）。
+jni!(int cosmosWorldAddCelestial(long world, int celestial_id, int max_sh_degree) {
+    let w = unsafe { (world as *mut CosmosWorld).as_mut() };
+    let Some(w) = w else { return -1; };
+    let Some(body) = celestial_by_id(celestial_id) else { return -1; };
+    let src = CelestialSource::new(body, u32_from_jint(max_sh_degree));
+    w.add_celestial(src) as jint
+});
+
+// 把已插入的刚体登记为 n-body 互引力质点源（给定质量 kg）。
+jni!(boolean cosmosWorldAddNBody(long world, long body, double mass) {
+    let w = unsafe { (world as *mut CosmosWorld).as_mut() };
+    let Some(w) = w else { return Bool::FALSE.0 as jbyte; };
+    w.add_n_body(unpack_handle(body), mass);
+    Bool::TRUE.0 as jbyte
+});
+
+// 一步到位：插入 builder 并把其质量登记为 n-body 源。builder 所有权转移
+// （插入后不可再 `cosmosBuilderDestroy`）。返回打包的 body 句柄（0 = 失败）。
+jni!(long cosmosWorldInsertBodyAsGravitySource(long world, long builder, double mass) {
+    let w = unsafe { (world as *mut CosmosWorld).as_mut() };
+    let Some(w) = w else { return 0; };
+    if builder == 0 { return 0; }
+    let b = *unsafe { Box::from_raw(builder as *mut RigidBodyBuilder) };
+    pack_handle(w.insert_body_as_gravity_source(b, mass))
+});
+
+// 插入 builder，返回打包的 body 句柄（0 = 失败）。builder 所有权转移。
+jni!(long cosmosWorldInsertBody(long world, long builder) {
+    let w = unsafe { (world as *mut CosmosWorld).as_mut() };
+    let Some(w) = w else { return 0; };
+    if builder == 0 { return 0; }
+    let b = *unsafe { Box::from_raw(builder as *mut RigidBodyBuilder) };
+    pack_handle(w.insert_body(b))
+});
+
+// 设置某刚体的环境扰动配置（大气阻力 + 太阳光压 + 太阳风动压 +
+// Chandrasekhar 动力学摩擦 —— 本次扩 11 参数是新接口 moonshoot4：太阳风与
+// 动摩擦签名向后兼容 由 ..Default::default() 保证 zero 即关闭）。
+// 旧 Kotlin 端用 9-arg `cosmosWorldSetPerturbation(legacy)`，新加扩展参数走
+// `cosmosWorldSetPerturbationExt` 可控开启太阳风/动摩擦等 扩展。
+jni!(boolean cosmosWorldSetPerturbation(
+    long world, long body,
+    double drag_coefficient, double area, int enable_drag,
+    double reflectivity, double optical_area, int enable_solar
+) {
+    let w = unsafe { (world as *mut CosmosWorld).as_mut() };
+    let Some(w) = w else { return Bool::FALSE.0 as jbyte; };
+    w.set_perturbation(unpack_handle(body), mps_cosmos::world::PerturbationConfig {
+        drag_coefficient, area, enable_drag: enable_drag != 0,
+        reflectivity, optical_area, enable_solar: enable_solar != 0,
+        ..Default::default()
+    });
+    Bool::TRUE.0 as jbyte
+});
+
+// 扩展版：开启所有 4 类环境扰动力（呼 参见 cosmos_world_set_perturbation。
+// 旧版仅大气阻力和光压；此为后加的太阳风动压与 Chandrasekhar 动力学摩擦）。
+jni!(boolean cosmosWorldSetPerturbationExt(
+    long world, long body,
+    double drag_coefficient, double area, int enable_drag,
+    double reflectivity, double optical_area, int enable_solar,
+    double solar_wind_proton_density, double solar_wind_speed,
+    double solar_wind_area, int enable_solar_wind,
+    double friction_background_density, double friction_coulomb_log,
+    int enable_dynamical_friction
+) {
+    let w = unsafe { (world as *mut CosmosWorld).as_mut() };
+    let Some(w) = w else { return Bool::FALSE.0 as jbyte; };
+    w.set_perturbation(unpack_handle(body), mps_cosmos::world::PerturbationConfig {
+        drag_coefficient, area, enable_drag: enable_drag != 0,
+        reflectivity, optical_area, enable_solar: enable_solar != 0,
+        solar_wind_proton_density, solar_wind_speed, solar_wind_area,
+        enable_solar_wind: enable_solar_wind != 0,
+        friction_background_density, friction_coulomb_log,
+        enable_dynamical_friction: enable_dynamical_friction != 0,
+        enable_eclipse: false,
+        enable_tidal: false,
+        love_number_k2: 0.299,
+        tidal_q: 12.0,
+        tidal_radius: 0.0,
+    });
+    Bool::TRUE.0 as jbyte
+});
+
+// 推进一步，返回一个 `int` 编码的 `StepResult`：
+// - `>0`：`Stepped(n)` —— 实际推进的秒数 ×1000（即 n_millisec）；
+// - `-1`：`Substepped`（拆子步完成；具体子步数/子步 dt 不便塞进单 int，
+//   如需细节用 `cosmosWorldStepDetailed`）；
+// - `-2`：`Skipped(NonFinite)`（dt 为 NaN/Inf）；
+// - `-3`：`Skipped(NonPositive)`（dt ≤ 0）；
+// - `-4`：`Skipped(TooLarge)`（dt 超过 30s 硬上限）。
+//
+// 这个"压成单 int"的设计是为了让 Java 端的常见 `if (r > 0)` 判断简单。
+jni!(int cosmosWorldStep(long world, double dt) {
+    let w = unsafe { (world as *mut CosmosWorld).as_mut() };
+    let Some(w) = w else { return -2; };
+    match w.step(dt) {
+        StepResult::Stepped(n) => ((n * 1000.0).round() as i64).max(1) as jint,
+        StepResult::Substepped { .. } => -1,
+        StepResult::Skipped(StepSkipReason::NonFinite) => -2,
+        StepResult::Skipped(StepSkipReason::NonPositive) => -3,
+        StepResult::Skipped(StepSkipReason::TooLarge) => -4,
+    }
+});
+
+// `step_n`：循环 `n` 次推进 `dt`，任一步非法整批拒。
+// 返回 0 = 成功；1 = NonFinite；2 = NonPositive；3 = TooLarge。
+jni!(int cosmosWorldStepN(long world, double dt, int n) {
+    let w = unsafe { (world as *mut CosmosWorld).as_mut() };
+    let Some(w) = w else { return 1; };
+    match w.step_n(dt, u32_from_jint(n)) {
+        Ok(()) => 0,
+        Err(StepSkipReason::NonFinite) => 1,
+        Err(StepSkipReason::NonPositive) => 2,
+        Err(StepSkipReason::TooLarge) => 3,
+    }
+});
+
+// 取刚体当前位置（3×f64）。`out_translation` 指向 24 字节 native 缓冲。
+// 返回 1 成功 / 0 句柄无效或 world 为 null。
+jni!(int cosmosBodyTranslationOut(long world, long body, long out_translation) {
+    let w = unsafe { (world as *const CosmosWorld).as_ref() };
+    let Some(w) = w else { return 0; };
+    let Some(p) = w.body_translation(unpack_handle(body)) else { return 0; };
+    if let Some(out) = unsafe { pm::<Vec3>(out_translation).as_mut() } {
+        out.x = p.x; out.y = p.y; out.z = p.z;
+    }
+    1
+});
+
+// 取刚体当前线速度（3×f64）。
+jni!(int cosmosBodyLinvelOut(long world, long body, long out_linvel) {
+    let w = unsafe { (world as *const CosmosWorld).as_ref() };
+    let Some(w) = w else { return 0; };
+    let Some(v) = w.body_linvel(unpack_handle(body)) else { return 0; };
+    if let Some(out) = unsafe { pm::<Vec3>(out_linvel).as_mut() } {
+        out.x = v.x; out.y = v.y; out.z = v.z;
+    }
+    1
+});
+
+// 取刚体质量（kg）。`NaN` 表示句柄无效。
+jni!(double cosmosBodyMass(long world, long body) {
+    let w = unsafe { (world as *const CosmosWorld).as_ref() };
+    let Some(w) = w else { return f64::NAN; };
+    w.body_mass(unpack_handle(body)).unwrap_or(f64::NAN)
+});
+
+// 当前动态刚体数量。
+jni!(int cosmosWorldDynamicBodyCount(long world) {
+    let w = unsafe { (world as *const CosmosWorld).as_ref() };
+    let Some(w) = w else { return 0; };
+    w.dynamic_body_count() as jint
+});
+
+// 动态刚体数量（用于 sizing cosmosWorldDynamicBodySnapshot：先拿到 N
+// 再在 Java 端分配 `long[N]` 与 `double[N * 7]` 直接 buffer）。与 mps-core
+// `worldDynamicBodySnapshotCount` ABI 平行（见 性能分析.MD §11.1/§12.1，
+// M1 + L1 落地基线）。
+jni!(int cosmosWorldDynamicBodySnapshotCount(long world) {
+    let w = unsafe { (world as *const CosmosWorld).as_ref() };
+    let Some(w) = w else { return 0; };
+    w.dynamic_body_count() as jint
+});
+
+// 批量快照动态刚体 handle + pose（7 f64/body：pos3 + quat4）。详见
+// mps-cosmos `cosmos_world_dynamic_body_snapshot` 文档。
+//
+// **签名平行 mps-core `worldDynamicBodySnapshot`**：`long world, long
+// out_handles, long out_values, int capacity` —— `out_handles` / `out_values`
+// 是 Java 端用 `Unsafe.allocateMemory` / `ByteBuffer.allocateDirect` 分配的
+// **native 直接内存指针**（不是 jbyteArray / jdoubleArray）。这样：
+//   - 0 JNI env 拷贝，1 次连续 native memcpy；
+//   - 0 Java heap 短命对象，0 minor GC 压力（性能分析.MD §11.2 / M2 的诉求
+//     在此形态下自动满足）；
+//   - Java 端可映射到 `MappedByteBuffer` 或 `MemorySegment` (Java 22+ FFM
+//     路径)，与 mps-core 路径用同一份代码模板。
+//
+// Java 端推荐用法（替代 N 次 cosmosBodyTranslationOut 往返）：
+//   int n = cosmosWorldDynamicBodySnapshotCount(world);
+//   long handlesPtr = Unsafe.allocateMemory(n * 8L);
+//   long valuesPtr  = Unsafe.allocateMemory(n * 7L * 8);
+//   int written = cosmosWorldDynamicBodySnapshot(world, handlesPtr, valuesPtr, n);
+//   // values[i*7..i*7+3] = pos, values[i*7+3..i*7+7] = quat(i,j,k,w)
+//
+// 容量非法 / world null 时返回 0；失败原因由 abiLastErrorCode() 报告。
+jni!(int cosmosWorldDynamicBodySnapshot(
+        long world,
+        long out_handles,
+        long out_values,
+        int capacity
+    ) {
+    mps_cosmos::ffi::cosmos_world_dynamic_body_snapshot(
+        world as isize as *const CosmosWorld,
+        out_handles as isize as *mut u64,
+        out_values as isize as *mut f64,
+        u32_from_jint(capacity),
+    ) as jint
+});
+
+// =========================================================================
+// Cosmos Shared Arena — zero-JNI physics state read/write
+//
+// 与 mps-core 的 `world*SharedArena` 平行：把 cosmos world 的共享内存 arena
+// 暴露给 Java，供其用 native-order `ByteBuffer` 做命令环写入 + body 槽零拷贝
+// 回读。底层调用 `mps_cosmos::ffi::cosmos_world_*`（与 `crates/mps-cosmos/
+// include/cosmos.h` 的 C ABI 一致）。布局契约见 `mps_cosmos::arena` 的常量
+// （HEADER_SIZE / BODY_SLOT_STRIDE / CMD_SLOT_STRIDE / OFF_*）。
+//
+// 句柄约定同 cosmos world：`long world` = `*mut CosmosWorld`（由
+// `cosmosWorldCreate` 返回）。`out_address` / `out_size` 是 Java 端用
+// `Unsafe.allocateMemory` 或 `ByteBuffer.allocateDirect` 分配的 8 字节 native
+// 指针，写入 arena 基地址 / 总字节大小。
+// =========================================================================
+
+// 创建共享 arena。`out_address` / `out_size` 传 0（null）可跳过对应输出。
+// 返回 1 = 成功；0 = 已存在 / 容量非法 / world 为 null（原因见
+// `abiLastErrorCode`）。
+jni!(boolean cosmosWorldCreateSharedArena(long world, int max_bodies, int max_commands, long out_address, long out_size) {
+    mps_cosmos::ffi::cosmos_world_create_shared_arena(
+        world as isize as *mut CosmosWorld,
+        u32_from_jint(max_bodies),
+        u32_from_jint(max_commands),
+        pm::<u64>(out_address),
+        pm::<u64>(out_size),
+    ) as jbyte
+});
+// 销毁共享 arena（若有的话）。world 为 null 是 no-op。销毁前 Java 必须已释放映射
+// 该 arena 的 `ByteBuffer`，否则 use-after-free。
+jni!(void cosmosWorldDestroySharedArena(long world) {
+    mps_cosmos::ffi::cosmos_world_destroy_shared_arena(world as isize as *mut CosmosWorld);
+});
+// 取 arena 基地址（无 arena 时返回 0）。供 Java 映射 `ByteBuffer` 的地址来源。
+jni!(long cosmosWorldGetSharedArenaAddress(long world) {
+    mps_cosmos::ffi::cosmos_world_get_shared_arena_address(world as isize as *const CosmosWorld) as jlong
+});
+// 取 arena 总字节大小（无 arena 时返回 0）。供 Java 映射 `ByteBuffer` 的容量来源。
+jni!(long cosmosWorldGetSharedArenaSize(long world) {
+    mps_cosmos::ffi::cosmos_world_get_shared_arena_size(world as isize as *const CosmosWorld) as jlong
+});
+
+/// Returns the cosmos arena wrapped as a Java DirectByteBuffer.
+///
+/// 与核心 `worldGetArenaDirectByteBuffer` 平行，仅指向 cosmos world 的 arena。
+/// 使用标准 JNI `NewDirectByteBuffer`：返回的 `ByteBuffer` 直接包裹 native arena
+/// 内存，Java 侧可用 `ByteBuffer` / `DoubleBuffer` 做零 JNI 读写。
+#[unsafe(export_name = "Java_org_polaris2023_mps_rapier_RapierNative_cosmosWorldGetArenaDirectByteBuffer")]
+#[allow(non_snake_case)]
+pub extern "system" fn cosmosWorldGetArenaDirectByteBuffer(
+    env: JNIEnv,
+    _class: jclass,
+    world: jlong,
+) -> ljni::sys::jobject {
+    catch_unwind(AssertUnwindSafe(|| {
+        let world = world as isize as *mut CosmosWorld;
+        let addr = mps_cosmos::ffi::cosmos_world_get_shared_arena_address(world);
+        let size = mps_cosmos::ffi::cosmos_world_get_shared_arena_size(world);
+        if addr == 0 || size == 0 {
+            return std::ptr::null_mut();
+        }
+        let env_raw: *mut JNIEnv = &raw const env as *mut _;
+        let env = unsafe { &mut *env_raw };
+        unsafe { env.new_direct_byte_buffer(addr as _, size as _) }
+            .map(|bb| bb.as_raw())
+            .unwrap_or(std::ptr::null_mut())
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}

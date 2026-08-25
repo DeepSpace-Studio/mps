@@ -1,7 +1,7 @@
 use anvilkit::core::math::Transform;
 use anvilkit::ecs::physics as ak_physics;
 use anvilkit::ecs::prelude::*;
-use hashbrown::HashMap;
+use dashmap::DashMap;
 use rapier3d::prelude::{ColliderBuilder, RigidBodyBuilder, RigidBodyType};
 
 use crate::rapier::aerodynamics;
@@ -20,18 +20,20 @@ const EPSILON: f64 = 1.0e-12;
 
 pub(crate) struct AnvilKitAppState {
     app: anvilkit::ecs::app::App,
-    entity_to_body: HashMap<Entity, RigidBodyHandleRaw>,
-    entity_to_collider: HashMap<Entity, ColliderHandleRaw>,
-    constraint_to_joint: HashMap<u64, ImpulseJointHandleRaw>,
+    entity_to_body: DashMap<Entity, RigidBodyHandleRaw>,
+    entity_to_collider: DashMap<Entity, ColliderHandleRaw>,
+    constraint_to_joint: DashMap<u64, ImpulseJointHandleRaw>,
     next_constraint_id: u64,
 }
 
 #[derive(Component, Clone, Copy)]
+#[allow(dead_code)] // `handle` is written when the component is inserted; read path lands with the reverse-lookup API.
 struct BodyLink {
     handle: RigidBodyHandleRaw,
 }
 
 #[derive(Component, Clone, Copy)]
+#[allow(dead_code)]
 struct ColliderLink {
     handle: ColliderHandleRaw,
 }
@@ -134,9 +136,9 @@ impl AnvilKitAppState {
         app.add_plugins(anvilkit::ecs::plugin::AnvilKitEcsPlugin);
         Self {
             app,
-            entity_to_body: HashMap::new(),
-            entity_to_collider: HashMap::new(),
-            constraint_to_joint: HashMap::new(),
+            entity_to_body: DashMap::new(),
+            entity_to_collider: DashMap::new(),
+            constraint_to_joint: DashMap::new(),
             next_constraint_id: 1,
         }
     }
@@ -241,7 +243,7 @@ impl AnvilKitAppState {
         for (entity, transform, body_type, pending_collider, pending_material) in entities {
             let translation = vec3_from_glam(transform.translation);
             let rotation = quat_from_glam(transform.rotation);
-            let body_handle = if let Some(handle) = self.entity_to_body.get(&entity).copied() {
+            let body_handle = if let Some(handle) = self.entity_to_body.get(&entity).map(|r| *r) {
                 handle
             } else {
                 let body = RigidBodyBuilder::new(body_type_from_raw(match body_type {
@@ -460,7 +462,11 @@ pub extern "C" fn anvilkit_app_entity_to_body(
         let Ok(entity) = Entity::try_from_bits(entity_bits) else {
             return 0;
         };
-        app.inner.entity_to_body.get(&entity).copied().unwrap_or(0)
+        app.inner
+            .entity_to_body
+            .get(&entity)
+            .map(|v| *v)
+            .unwrap_or(0)
     })
 }
 
@@ -482,7 +488,7 @@ pub extern "C" fn anvilkit_app_entity_to_collider(
         app.inner
             .entity_to_collider
             .get(&entity)
-            .copied()
+            .map(|v| *v)
             .unwrap_or(0)
     })
 }
@@ -516,10 +522,10 @@ pub extern "C" fn anvilkit_app_create_constraint(
         let Ok(entity2) = Entity::try_from_bits(entity2_bits) else {
             return 0;
         };
-        let Some(body1) = app.inner.entity_to_body.get(&entity1).copied() else {
+        let Some(body1) = app.inner.entity_to_body.get(&entity1).map(|v| *v) else {
             return 0;
         };
-        let Some(body2) = app.inner.entity_to_body.get(&entity2).copied() else {
+        let Some(body2) = app.inner.entity_to_body.get(&entity2).map(|v| *v) else {
             return 0;
         };
 
@@ -558,7 +564,7 @@ pub extern "C" fn anvilkit_app_constraint_to_joint(
         app.inner
             .constraint_to_joint
             .get(&constraint_id)
-            .copied()
+            .map(|v| *v)
             .unwrap_or(0)
     })
 }
@@ -581,7 +587,7 @@ pub extern "C" fn anvilkit_app_remove_constraint(
         let Some(world) = (unsafe { world.as_mut() }) else {
             return Bool::FALSE;
         };
-        let Some(handle) = app.inner.constraint_to_joint.remove(&constraint_id) else {
+        let Some((_, handle)) = app.inner.constraint_to_joint.remove(&constraint_id) else {
             return Bool::FALSE;
         };
         crate::rapier::joints::world_remove_impulse_joint(world, handle, wake_up)
@@ -615,7 +621,7 @@ pub extern "C" fn anvilkit_app_apply_aero_surfaces(
         let Ok(entity) = Entity::try_from_bits(entity_bits) else {
             return Bool::FALSE;
         };
-        let Some(handle) = app.inner.entity_to_body.get(&entity).copied() else {
+        let Some(handle) = app.inner.entity_to_body.get(&entity).map(|v| *v) else {
             return Bool::FALSE;
         };
 
@@ -665,7 +671,7 @@ pub extern "C" fn anvilkit_app_apply_aero_voxel_grid(
         let Ok(entity) = Entity::try_from_bits(entity_bits) else {
             return Bool::FALSE;
         };
-        let Some(handle) = app.inner.entity_to_body.get(&entity).copied() else {
+        let Some(handle) = app.inner.entity_to_body.get(&entity).map(|v| *v) else {
             return Bool::FALSE;
         };
 
@@ -713,7 +719,7 @@ pub extern "C" fn anvilkit_app_apply_fluid_aabb_forces(
         let Ok(entity) = Entity::try_from_bits(entity_bits) else {
             return Bool::FALSE;
         };
-        let Some(handle) = app.inner.entity_to_body.get(&entity).copied() else {
+        let Some(handle) = app.inner.entity_to_body.get(&entity).map(|v| *v) else {
             return Bool::FALSE;
         };
 
@@ -752,7 +758,7 @@ pub extern "C" fn anvilkit_app_apply_trajectory_forces(
         let Ok(entity) = Entity::try_from_bits(entity_bits) else {
             return Bool::FALSE;
         };
-        let Some(handle) = app.inner.entity_to_body.get(&entity).copied() else {
+        let Some(handle) = app.inner.entity_to_body.get(&entity).map(|v| *v) else {
             return Bool::FALSE;
         };
 

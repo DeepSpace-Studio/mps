@@ -249,6 +249,7 @@ fn builder_from_neural(desc: NeuralBoundsDesc, weights: &[f64]) -> *mut Collider
 
     Box::into_raw(Box::new(ColliderBuilderHandle {
         inner: ColliderBuilder::new(shape).position(pose),
+        voxel_source: None,
     }))
 }
 

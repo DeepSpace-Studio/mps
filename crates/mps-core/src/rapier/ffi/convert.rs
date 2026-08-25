@@ -9,7 +9,7 @@ use rapier3d::prelude::{
 
 use super::types::{
     BodyStatus, ColliderHandleRaw, ImpulseJointHandleRaw, InteractionGroupsDesc, JointAxisDesc,
-    JointTypeDesc, KdopPreset, NeuralActivation, Quat, QueryFilterDesc, RigidBodyHandleRaw,
+    JointTypeDesc, NeuralActivation, Quat, QueryFilterDesc, RigidBodyHandleRaw,
     ShapeCastOptionsDesc, ShapeDesc, ShapeType, Vec3, VoxelColliderMode,
 };
 use crate::rapier::forces::ForceLawType;
@@ -208,12 +208,13 @@ pub(crate) fn neural_activation_from_raw(value: u32) -> NeuralActivation {
     }
 }
 
-pub(crate) fn kdop_preset_from_raw(value: u32) -> KdopPreset {
+pub(crate) fn kdop_preset_from_raw(value: u32) -> rapier3d::geometry::KdopPreset {
+    use rapier3d::geometry::KdopPreset::*;
     match value {
-        14 => KdopPreset::K14,
-        18 => KdopPreset::K18,
-        26 => KdopPreset::K26,
-        _ => KdopPreset::K6,
+        14 => K14,
+        18 => K18,
+        26 => K26,
+        _ => K6,
     }
 }
 
@@ -224,6 +225,7 @@ pub(crate) fn joint_type_from_raw(value: u32) -> JointTypeDesc {
         3 => JointTypeDesc::Rope,
         4 => JointTypeDesc::Spring,
         5 => JointTypeDesc::Spherical,
+        6 => JointTypeDesc::Wheel,
         _ => JointTypeDesc::Fixed,
     }
 }
@@ -314,18 +316,18 @@ const FORCE_LAW_TYPE_TAGS: &[(ForceLawType, u32)] = &[
     (ForceLawType::FluidAABB, 11),
     (ForceLawType::MolecularLennardJones, 12),
     (ForceLawType::MolecularCoulomb, 13),
-    (ForceLawType::SpaceJ2, 14),
-    (ForceLawType::SpaceCMG, 15),
-    (ForceLawType::SpaceAtmosphericDrag, 16),
-    (ForceLawType::SpaceSolarRadiation, 17),
-    (ForceLawType::SpaceGravityGradient, 18),
-    (ForceLawType::SpaceMagneticTorquer, 19),
-    (ForceLawType::TrajectoryCoriolis, 20),
-    (ForceLawType::TrajectoryCentrifugal, 21),
-    (ForceLawType::TrajectoryGravity, 22),
+    // Tags 14–25 retired (space/trajectory/terrain variants removed after
+    // `mps-cosmos` took over celestial/n-body/drag). ControlPID keeps 23.
     (ForceLawType::ControlPID, 23),
-    (ForceLawType::CelestialGravity, 24),
-    (ForceLawType::TerrainGravity, 25),
+    // PHYSICS_EXPANSION_PLAN C1 variants occupy 27–29 (26 reserved for Custom).
+    (ForceLawType::SolarWindPressure, 27),
+    (ForceLawType::DynamicalFriction, 28),
+    (ForceLawType::MonDGravity, 29),
+    // C2–C4 variants occupy 30–33, matching `force_law_type_idx` in forces.rs.
+    (ForceLawType::EddingtonRadiationPressure, 30),
+    (ForceLawType::XrayIrradiation, 31),
+    (ForceLawType::PulsarMagneticDipole, 32),
+    (ForceLawType::JeansEscape, 33),
 ];
 
 /// Convert a u32 tag to `ForceLawType`.  Returns `None` for out-of-range tags.

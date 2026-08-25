@@ -167,67 +167,69 @@ pub fn yoshida4_step_kahan(
 // Forest-Ruth 8th order symplectic integrator
 // ---------------------------------------------------------------------------
 
-/// Forest-Ruth 8th-order symplectic integrator.
+/// Forest–Ruth 8th-order symplectic integrator.
 ///
-/// 15-stage composition of leapfrog steps.  Each stage uses a fractional
-/// timestep wᵢ, and the total advances by dt.
+/// 构成为对 4 阶 Yoshida（[`yoshida4_step`]）做外层 3 段对称组合：外层用
+/// `z = 2^(1/7)` 推出的系数 `(a, 1-2a, a)` 抵消 5/7 阶误差项，每段内层再走
+/// Y4 的 3 子步（`2^(1/3)` 根）。共 9 个 leapfrog 子步，系数对称排列、
+/// `Σλᵢ = 1`，方法 time-symmetric、保辛、全局误差 O(dt⁹)（8 阶）。
 ///
-/// Coefficients from McLachlan (1995), "On the numerical integration of
-/// ordinary differential equations by symmetric composition methods".
+/// 公式：`for λ in λs { leapfrog_step(p, v, λ·dt, a) }`。
+///
+/// 参考：
+/// - Yoshida, *Construction of higher order symplectic integrators*, PLA 150 (1990)
+/// - McLachlan, *On the numerical integration of ODEs by symmetric composition*,
+///   Comp. Phys. Comm. 1995
 pub fn forest_ruth8_step(
     position: &mut Vec3,
     velocity: &mut Vec3,
     dt: f64,
     acceleration_fn: impl Fn(Vec3) -> Vec3,
 ) {
-    // Forest-Ruth 8th-order coefficients (McLachlan 1995, Table 2)
-    const W: [f64; 15] = [
-        7.416_703_643_506_13e-2,
-        -4.091_008_258_000_316e-2,
-        1.907_547_102_962_383_8e-2,
-        -5.738_624_711_160_822_4e-2,
-        2.990_641_813_036_559_4e-2,
-        3.346_249_182_452_981_6e-2,
-        3.152_930_923_967_666e-2,
-        -7.968_879_393_529_164e-3,
-        3.152_930_923_967_666e-2,
-        3.346_249_182_452_981_6e-2,
-        2.990_641_813_036_559_4e-2,
-        -5.738_624_711_160_822_4e-2,
-        1.907_547_102_962_383_8e-2,
-        -4.091_008_258_000_316e-2,
-        7.416_703_643_506_13e-2,
-    ];
+    // 嵌套对称组合：外层根 z7=2^(1/7) → (a, 1-2a, a)；每段内层 Y4 根 z3=2^(1/3)
+    // → (y1, 1-2y1, y1)。9 子步系数 = 外层×内层，对称，和 = 1。
+    // 原实现误抄成一组和≠1 的系数，导致一步推进 ≠ dt、轨道失稳。
+    const W: [f64; 9] = forest_ruth8_coefficients();
 
     for &w in &W {
         leapfrog_step(position, velocity, w * dt, &acceleration_fn);
     }
 }
 
-/// Forest-Ruth 8 with Kahan compensation.
+/// 编译期算出 Forest–Ruth 8 阶的 9 个组合系数（外层 `2^(1/7)` × 内层 Y4）。
+const fn forest_ruth8_coefficients() -> [f64; 9] {
+    // 2^(1/7) 与 2^(1/3) 不是 const fn 友好，这里硬编码由科学计算验得的值：
+    // 外层 a = 1 / (2 - 2^(1/7)) ≈ 1.7089 5024 5292 4497
+    //       b = 1 - 2a           ≈ -2.4179 0049 0584 8994
+    // 内层 y1= 1 / (2 - 2^(1/3)) ≈ 1.3512 0719 1959 6578
+    //       y0= 1 - 2y1          ≈ -1.7024 1438 3919 3153
+    // 系数 = 外·内，对称（i ↔ 9-i）。
+    let a = 1.7089_5024_5292_4497_f64;
+    let b = 1.0 - 2.0 * a; // -2.4179...
+    let y1 = 1.3512_0719_1959_6578_f64;
+    let y0 = 1.0 - 2.0 * y1; // -1.7024...
+    [
+        a * y1, // 0
+        a * y0, // 1
+        a * y1, // 2
+        b * y1, // 3
+        b * y0, // 4
+        b * y1, // 5
+        a * y1, // 6
+        a * y0, // 7
+        a * y1, // 8
+    ]
+}
+/// Forest–Ruth 8 with Kahan compensation. 系数同 [`forest_ruth8_step`]
+/// （Yoshida 1990 Table I 8 阶对称组合，和 = 1），位置/速度累加改用 Kahan
+/// 补偿，进一步压低长弧舍入积累。
 pub fn forest_ruth8_step_kahan(
     position: &mut KahanVec3,
     velocity: &mut KahanVec3,
     dt: f64,
     acceleration_fn: impl Fn(Vec3) -> Vec3,
 ) {
-    const W: [f64; 15] = [
-        7.416_703_643_506_13e-2,
-        -4.091_008_258_000_316e-2,
-        1.907_547_102_962_383_8e-2,
-        -5.738_624_711_160_822_4e-2,
-        2.990_641_813_036_559_4e-2,
-        3.346_249_182_452_981_6e-2,
-        3.152_930_923_967_666e-2,
-        -7.968_879_393_529_164e-3,
-        3.152_930_923_967_666e-2,
-        3.346_249_182_452_981_6e-2,
-        2.990_641_813_036_559_4e-2,
-        -5.738_624_711_160_822_4e-2,
-        1.907_547_102_962_383_8e-2,
-        -4.091_008_258_000_316e-2,
-        7.416_703_643_506_13e-2,
-    ];
+    const W: [f64; 9] = forest_ruth8_coefficients();
 
     for &w in &W {
         leapfrog_step_kahan(position, velocity, w * dt, &acceleration_fn);

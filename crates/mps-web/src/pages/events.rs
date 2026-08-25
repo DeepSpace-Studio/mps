@@ -1,42 +1,98 @@
-use topcoat::router::page;
-use topcoat::view::view;
+use dioxus::prelude::*;
+use dioxus_i18n::t;
 
-/// Events page
-#[page("/events")]
-pub async fn events() -> topcoat::Result {
-    view! {
-        <div>
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #333;">
-                <div>
-                    <div style="font-size:12px;color:#4a9eff;letter-spacing:3px;text-transform:uppercase;font-family:monospace;margin-bottom:8px;">"/ EVENTS"</div>
-                    <h1 style="font-size:28px;font-weight:300;color:#fff;margin:0 0 10px;">"事件系统"</h1>
-                    <p style="font-size:14px;color:#999;line-height:1.7;margin:0;">"碰撞事件和接触力事件 — 锁自由设计，支持批量读取。"</p>
-                </div>
-                <div style="font-size:48px;font-weight:700;color:#333;font-family:monospace;line-height:1;">"01"</div>
-            </div>
-            <div style="background:#16213e;border:1px solid #333;border-radius:8px;padding:24px;margin-bottom:20px;">
-                <h2 style="color:#fff;font-size:20px;font-weight:400;margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid #333;">"事件类型"</h2>
-                <ul style="color:#999;line-height:2;padding-left:20px;">
-                    <li><strong style="color:#ddd;">"CollisionEvent"</strong> " — 碰撞开始/结束事件"</li>
-                    <li><strong style="color:#ddd;">"ContactForceEvent"</strong> " — 接触力事件"</li>
-                    <li><strong style="color:#ddd;">"IntersectionEvent"</strong> " — 传感器交集事件"</li>
-                </ul>
-            </div>
-            <div style="background:#16213e;border:1px solid #333;border-radius:8px;padding:24px;margin-bottom:20px;">
-                <h2 style="color:#fff;font-size:20px;font-weight:400;margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid #333;">"API"</h2>
-                <pre><code class="language-rust">
-"// 读取碰撞事件
-let mut events = Vec::new();
-world_get_collision_events(world, &mut events);
+/// Event System — collision + contact-force events, three dispatch modes, C-callback hook.
+pub fn Events() -> Element {
+    rsx! {
+        section { id: "sec-events", class: "doc-section",
 
-// 读取接触力事件
-let mut contacts = Vec::new();
-world_get_contact_force_events(world, &mut contacts);
+        div { class: "page-head",
+            div {
+                div { class: "page-tag", { t!("evt-tag") } }
+                h1 { class: "page-title", { t!("evt-title") } }
+                p { class: "page-desc", { t!("evt-desc") } }
+            }
+            div { class: "page-index", "06" }
+        }
 
-// 清除事件队列
-world_clear_events(world);"
-                </code></pre>
-            </div>
-        </div>
+        // ── Event types ───────────────────────────────────────────────────
+        div { class: "section-card",
+            h2 { { t!("evt-types-title") } }
+            p { class: "p-lead", { t!("evt-types-lead") } }
+            div { class: "table-wrap",
+                table {
+                    thead { tr {
+                        th { { t!("evt-col-type") } }
+                        th { { t!("evt-col-fields") } }
+                    } }
+                    tbody {
+                        tr {
+                            td { "CollisionEventRecord" }
+                            td { { t!("evt-row-collision") } }
+                        }
+                        tr {
+                            td { "ContactForceEventRecord" }
+                            td { { t!("evt-row-contact") } }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Dispatch modes ─────────────────────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("evt-modes-title") } }
+            div { class: "feature-grid",
+                div { class: "feature-card",
+                    h3 { { t!("evt-mode-poll-title") } }
+                    p { { t!("evt-mode-poll-desc") } }
+                }
+                div { class: "feature-card",
+                    h3 { { t!("evt-mode-callback-title") } }
+                    p { { t!("evt-mode-callback-desc") } }
+                }
+                div { class: "feature-card",
+                    h3 { { t!("evt-mode-both-title") } }
+                    p { { t!("evt-mode-both-desc") } }
+                }
+            }
+        }
+
+        // ── Ring buffer ───────────────────────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("evt-ring-title") } }
+            p { class: "p-muted", { t!("evt-ring-desc") } }
+            ul { class: "ul-plain",
+                li { { t!("evt-ring-li-1") } }
+                li { { t!("evt-ring-li-2") } }
+                li { { t!("evt-ring-li-3") } }
+            }
+        }
+
+        // ── ForceLaw dispatch ─────────────────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("evt-forces-title") } }
+            p { class: "p-lead", { t!("evt-forces-lead") } }
+            ul { class: "ul-plain",
+                li { { t!("evt-force-coulomb") } }
+                li { { t!("evt-force-airdrag") } }
+                li { { t!("evt-force-external") } }
+                li { { t!("evt-force-newton") } }
+                li { { t!("evt-force-custom") } }
+            }
+            p { class: "p-note", { t!("evt-forces-note") } }
+        }
+
+        // ── C callback ABI ────────────────────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("evt-abi-title") } }
+            div { class: "code-block",
+                pre { code {
+                    "// 注册碰撞回调：safe 端 Rust 转 unsafe extern \"C\"\ntypedef void (*CollisionEventFn)\n    (const void* ctx,\n     const CollisionEventRecord* event,\n     void* user);\nworld_set_collision_callback(world, fn, user);"
+                } }
+            }
+        }
+
+        }
     }
 }

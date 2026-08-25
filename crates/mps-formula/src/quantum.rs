@@ -651,3 +651,148 @@ pub fn angular_momentum_squared(j: f64) -> Option<f64> {
     let hbar = REDUCED_PLANCK;
     Some(hbar * hbar * j * (j + 1.0))
 }
+
+// ---------------------------------------------------------------------------
+// Photoelectric effect (Einstein)
+// ---------------------------------------------------------------------------
+
+/// Photoelectric threshold frequency: f₀ = W / h, where W is the work function.
+pub fn photoelectric_threshold(work_function: f64) -> Option<f64> {
+    if !work_function.is_finite() || work_function <= 0.0 {
+        return None;
+    }
+    Some(work_function / PLANCK)
+}
+
+/// Photoelectric maximum kinetic energy (Einstein): K_max = h·f − W.
+/// Returns 0 when the photon energy is below the work function (no emission).
+pub fn photoelectric_max_kinetic(frequency: f64, work_function: f64) -> Option<f64> {
+    if !frequency.is_finite()
+        || frequency < 0.0
+        || !work_function.is_finite()
+        || work_function < 0.0
+    {
+        return None;
+    }
+    let k = PLANCK * frequency - work_function;
+    Some(k.max(0.0))
+}
+
+// ---------------------------------------------------------------------------
+// Compton scattering
+// ---------------------------------------------------------------------------
+
+const COMPTON_C: f64 = 299_792_458.0;
+const COMPTON_M_E: f64 = 9.109_383_701_5e-31;
+
+/// Compton wavelength shift: Δλ = (h / m_e c)·(1 − cos θ).
+pub fn compton_wavelength_shift(scattering_angle: f64) -> Option<f64> {
+    if !scattering_angle.is_finite() {
+        return None;
+    }
+    let compton_wavelength = PLANCK / (COMPTON_M_E * COMPTON_C);
+    Some(compton_wavelength * (1.0 - scattering_angle.cos()))
+}
+
+/// Compton scattered wavelength: λ' = λ + Δλ.
+pub fn compton_scattered_wavelength(lambda: f64, scattering_angle: f64) -> Option<f64> {
+    if !lambda.is_finite() || lambda < 0.0 || !scattering_angle.is_finite() {
+        return None;
+    }
+    let shift = compton_wavelength_shift(scattering_angle)?;
+    Some(lambda + shift)
+}
+
+// ---------------------------------------------------------------------------
+// Two-level Rabi oscillation
+// ---------------------------------------------------------------------------
+
+/// Two-level Rabi oscillation excitation probability:
+/// P = [Ω² / (Ω² + δ²)] · sin²(½·√(Ω² + δ²)·t)
+/// where Ω is the (generalized) Rabi frequency and δ the detuning.
+pub fn rabi_oscillation_probability(rabi_frequency: f64, detuning: f64, time: f64) -> Option<f64> {
+    if !rabi_frequency.is_finite()
+        || rabi_frequency < 0.0
+        || !detuning.is_finite()
+        || !time.is_finite()
+        || time < 0.0
+    {
+        return None;
+    }
+    let omega = (rabi_frequency * rabi_frequency + detuning * detuning).sqrt();
+    if omega == 0.0 {
+        return Some(0.0);
+    }
+    let p =
+        (rabi_frequency * rabi_frequency / (omega * omega)) * (0.5 * omega * time).sin().powi(2);
+    Some(p.clamp(0.0, 1.0))
+}
+
+// ---------------------------------------------------------------------------
+// Landau levels
+// ---------------------------------------------------------------------------
+
+/// Landau energy level (non-relativistic, spinless): E_n = (n + ½)·(q·B/m)·ħ
+pub fn landau_level(
+    quantum_number: i32,
+    magnetic_field: f64,
+    charge: f64,
+    mass: f64,
+) -> Option<f64> {
+    if quantum_number < 0
+        || !magnetic_field.is_finite()
+        || !charge.is_finite()
+        || !mass.is_finite()
+        || mass <= 0.0
+    {
+        return None;
+    }
+    let n = quantum_number as f64;
+    Some((n + 0.5) * (charge * magnetic_field / mass) * REDUCED_PLANCK)
+}
+
+// ---------------------------------------------------------------------------
+// Einstein A (spontaneous emission) coefficient
+// ---------------------------------------------------------------------------
+
+const EINSTEIN_EPS0: f64 = 8.854_187_812_8e-12;
+
+/// Einstein A (spontaneous emission) coefficient for an electric-dipole
+/// transition: A = ω³·|d|² / (3·π·ε₀·ħ·c³), with ω = 2π·f.
+pub fn einstein_a_coefficient(transition_frequency: f64, dipole_moment: f64) -> Option<f64> {
+    if !transition_frequency.is_finite()
+        || transition_frequency < 0.0
+        || !dipole_moment.is_finite()
+        || dipole_moment < 0.0
+    {
+        return None;
+    }
+    let omega = 2.0 * PI * transition_frequency;
+    Some(
+        omega.powi(3) * dipole_moment * dipole_moment
+            / (3.0 * PI * EINSTEIN_EPS0 * REDUCED_PLANCK * COMPTON_C.powi(3)),
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Angular-momentum coupling (Clebsch–Gordan selection rule)
+// ---------------------------------------------------------------------------
+
+/// Clebsch–Gordan coupling overlap check.
+/// Returns 1.0 when (j1, j2, j3, m1, m2, m3) satisfy both the triangle
+/// inequality |j1−j2| ≤ j3 ≤ j1+j2 and the projection sum m1+m2 = m3;
+/// otherwise 0.0. (This is the *selection rule*, not the full CG coefficient.)
+pub fn clebsch_gordan_allowed(j1: f64, j2: f64, j3: f64, m1: f64, m2: f64, m3: f64) -> Option<f64> {
+    if !j1.is_finite()
+        || !j2.is_finite()
+        || !j3.is_finite()
+        || !m1.is_finite()
+        || !m2.is_finite()
+        || !m3.is_finite()
+    {
+        return None;
+    }
+    let triangle = (j1 - j2).abs() <= j3 + 1.0e-9 && j3 <= j1 + j2 + 1.0e-9;
+    let msum = (m1 + m2 - m3).abs() < 1.0e-9;
+    Some(if triangle && msum { 1.0 } else { 0.0 })
+}

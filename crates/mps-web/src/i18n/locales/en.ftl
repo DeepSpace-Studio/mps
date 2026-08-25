@@ -1,0 +1,613 @@
+# MPS Motion Physics System — English translations
+# Fluent .ftl format (https://projectfluent.org/)
+
+# ---- Navigation ----
+nav-home = Home
+nav-quickstart = Quickstart
+nav-architecture = Architecture
+nav-gravity = Gravity
+nav-integrators = Integrators
+nav-formula = Formula
+nav-voxel = Voxel
+nav-events = Events
+nav-arena = Arena
+nav-batch = Batch Colliders
+nav-cosmos = Cosmos
+nav-cosmos-class = Functionality
+nav-jni = JNI
+nav-ffm = FFM
+nav-api = API
+nav-more = More ▾
+
+# ── Short labels for galaxy planet buttons (≈60px diameter, 2-4 chars ideal) ──
+nav-planet-home = Home
+nav-planet-quickstart = Start
+nav-planet-architecture = Arch
+nav-planet-gravity = Gravity
+nav-planet-integrators = Integr
+nav-planet-formula = Formula
+nav-planet-api = API
+nav-planet-voxel = Voxel
+nav-planet-events = Events
+nav-planet-arena = Arena
+nav-planet-batch = Batch
+nav-planet-cosmos = Cosmos
+nav-planet-jni = JNI
+nav-planet-ffm = FFM
+
+# ---- Language switcher ----
+lang-zh = 中文
+lang-en = English
+
+# ---- Home page ----
+home-hero-tag = / MPS PHYSICS OBSERVATORY
+home-hero-title = Motion Physics System (Meters Per Second)
+home-hero-desc = High-precision Rust physics engine based on { $rapier }. Full API exposed via C FFI ({ $ffi } functions) and Java JNI ({ $jni } methods). { $tests } tests, { $gravity } gravity models, { $integrators } symplectic integrators, zero-copy shared-memory Arena, { $modules } formula modules and { $bodies } celestial bodies.
+home-cta-quickstart = Quickstart
+home-cta-api = API Reference
+
+home-stat-tests = Tests
+home-stat-formula-fns = Formula Fns
+home-stat-formula-modules = Formula Modules
+home-stat-celestial = Celestial Bodies
+
+home-section-directory = Module Directory
+home-section-formula-modules = Formula Modules ({ $count })
+home-section-key-features = Key Features
+home-section-architecture = Architecture
+
+home-mod-core-title = Core Engine
+home-mod-core-desc = World, rigid bodies, colliders, joints, queries, controllers
+home-mod-cosmos-title = Cosmos Rigid Body
+home-mod-cosmos-desc = CosmosWorld, Verlet orbit integration, n-body gravity, perturbations
+home-mod-physics-title = Physics Systems
+home-mod-physics-desc = Gravity, terrain, force registry, events, aerodynamics, fluid
+home-mod-formula-title = Domain Formulas
+home-mod-formula-desc = 107 pure formula modules (390+ functions) — spaceflight, astrophysics, nuclear, relativity, quantum, and more.
+home-mod-integration-title = Integration
+home-mod-integration-desc = Arena shared memory, JNI/FFM bindings, Java ecosystem
+home-mod-reference-title = Reference
+home-mod-reference-desc = Full API tables, precision & performance, optimization guide
+
+home-feat-gravity-title = High-Precision Gravity
+home-feat-gravity-desc = Spherical harmonics (EGM2008 8×8), ellipsoidal gravity, J2-J6 zonal harmonics, quadrupole tensor. Auto-selects optimal model by orbital altitude.
+home-feat-integrators-title = Symplectic Integrators
+home-feat-integrators-desc = Leapfrog, Yoshida 4th order, Forest-Ruth 8th order. Kahan compensation: 15→30 significant digits. Post-Newtonian 1PN+2PN corrections.
+home-feat-celestial-title = Built-in Celestials
+home-feat-celestial-desc = 10 solar system bodies with precision data (JPL DE441). Earth EGM2008, Moon LP165 + 12 Mascons (GRAIL), Mars Mars50c.
+home-feat-terrain-title = Terrain Gravity
+home-feat-terrain-desc = Polyhedral gravity (Werner-Scheeres), DEM terrain mass distribution, FFT acceleration. Lunar Mascon model prevents low-orbit decay.
+home-feat-registry-title = ForceRegistry
+home-feat-registry-desc = Typed force registry. Any force implementing ForceLaw trait auto-dispatches; world step auto-aggregates reports, no manual dispatch needed.
+home-feat-jni-title = JNI + Shared Memory
+home-feat-jni-desc = Java 21 JNI full binding ({ $count } methods). Shared-memory Arena (DirectByteBuffer) for zero-JNI read/write, only 1 world_step call per frame.
+
+home-callout = All formulas live in a standalone crate { $crate } — pure Rust, no Rapier or WorldHandle dependency.
+
+# ---- Formula mini-stat labels (home module grid) ----
+formula-cat-spaceflight = Spaceflight
+formula-cat-nuclear = Nuclear
+formula-cat-mechanics = Mechanics
+formula-cat-astrophysics = Astrophysics
+formula-cat-relativity = Relativity
+formula-cat-quantum = Quantum
+formula-cat-electromagnetism = Electromagnetism
+formula-cat-fluid = Fluid Dynamics
+
+# ---- Quickstart page ----
+quickstart-tag = / QUICKSTART
+quickstart-title = Quickstart
+quickstart-desc = Set up the MPS physics engine development environment from scratch.
+quickstart-step1-title = Install Rust Toolchain
+quickstart-step1-desc = Install Rust 1.75+ and cargo. Recommend using rustup.
+quickstart-step2-title = Clone the Repository
+quickstart-step2-desc = git clone and enter the rigid-body directory.
+quickstart-step3-title = Build the Core Library
+quickstart-step3-desc = cargo build --workspace compiles all crates.
+quickstart-step4-title = Run Tests
+quickstart-step4-desc = cargo test --workspace executes { $tests } integration tests.
+quickstart-step5-title = Generate C Headers
+quickstart-step5-desc = cargo build -p mps-core triggers cbindgen to generate rigid_body.h.
+
+# ---- Architecture page ----
+arch-tag = // MPS
+arch-title = Architecture Overview
+arch-desc = Crate layering and per-frame data flow from Java top to Rapier bottom.
+arch-stack-title = Crate stack
+arch-stack-lead = Top-to-bottom: Java bindings → C ABI → mps-core → Rapier3D-f64.
+arch-stack-diagram = Java 21 JNI / Java 25 FFM
+  └─ Rust C ABI (483 functions)
+       ├─ mps-formula  — 33 pure formula modules (300+ functions)
+       ├─ mps-core     — physics engine + Rapier wrapper (World, bodies, colliders, queries, events)
+       ├─ mps-cosmos   — cosmos rigid body (separate world, Verlet orbit integration)
+       ├─ mps-jni      — JNI bindings (311 methods, incl. cosmos batch)
+       ├─ mps-ffm      — FFM metadata
+       └─ mps-test     — integration tests (incl. cosmos 19)
+arch-layers-title = Layer responsibilities
+arch-layer-formula-title = mps-formula
+arch-layer-formula-desc = { $modules } pure formula modules (spaceflight / astrophysics / nuclear etc.). No WorldHandle dependency; callable from anywhere.
+arch-layer-core-title = mps-core
+arch-layer-core-desc = Rapier3D-f64 wrapper + shared Arena + C-ABI. World, bodies, colliders, joints, queries, force registry, event system.
+arch-layer-cosmos-title = mps-cosmos
+arch-layer-cosmos-desc = CosmosWorld: separate physics domain. Verlet orbit integration + n-body mutual gravity. Does not share World with mps-core.
+arch-layer-jni-title = mps-jni
+arch-layer-jni-desc = Java 21 JNI full bindings, { $methods } methods (including cosmos batch API).
+arch-layer-test-title = mps-test
+arch-layer-test-desc = { $tests } integration tests, also serves as the module-mirror crate verifying source structure.
+arch-layer-ffm-title = mps-ffm
+arch-layer-ffm-desc = Java 25 Foreign Function & Memory API metadata; gradually replacing JNI.
+arch-flow-title = Per-frame data flow
+arch-flow-lead = Java frame-renderer side, 5-step MPS loop:
+arch-flow-step-1 = Java reads Arena data in the DirectByteBuffer, updates body target positions / forces.
+arch-flow-step-2 = Exactly one world_step(world, dt) FFI call — the only sync point across the boundary.
+arch-flow-step-3 = mps-core dispatches internally: ForceRegistry aggregates forces → Rapier collision solver → joint solver → event dispatch.
+arch-flow-step-4 = Arena layout: position / velocity / force-accumulator SoA writes go directly back into the DirectByteBuffer.
+arch-flow-step-5 = Java side reads Arena zero-copy, renders / extracts physics. Events drained from ring buffer.
+arch-tenets-title = Design tenets
+arch-tenet-zero-copy = Zero-copy: Java and Rust swap body state via shared memory Arena; no per-object JNI read/write.
+arch-tenet-formula-pure = Pure formula layer: mps-formula doesn't depend on WorldHandle or Rapier; pure-function callable in any context.
+arch-tenet-ffi-stable = Stable C ABI: cbindgen generates rigid_body.h; every breaking change must bump the banner version.
+arch-build-title = Build pipeline
+arch-build-cbindgen = mps-core's build.rs triggers cbindgen at build time, emitting pub C-ABI types/functions into rigid_body.h.
+arch-build-xtask = xtask auto-counts TEST_COUNT / JNI_METHOD_COUNT / CORE_FFI_COUNT and refreshes mps-web/src/metrics.rs.
+
+# ---- Gravity page ----
+grav-tag = // mps-core
+grav-title = Gravity Models
+grav-desc = The gravity stack in mps-core is a pluggable ForceLaw: every model is registered through world_set_*_gravity and seeds the same Newtonian baseline, so you can swap fidelity without touching the solver.
+grav-models-title = Model catalogue
+grav-models-lead = Seven field models span the full fidelity range — from a two-body point mass to GRAIL-grade lunar Mascons. Pick by orbital regime; the engine can also auto-select.
+grav-col-name = Model
+grav-col-use = Best for
+grav-col-cost = Cost
+grav-row-newton = Deep-space cruise and two-body propagation where analytical gravity is enough.
+grav-row-sh = Low-Earth-orbit precision; EGM2008 spherical-harmonic expansion (8×8 by default).
+grav-row-ellipsoid = Fast first-order Earth oblateness for region-scale sims that don't need full SH.
+grav-row-zonal = Sectoral / zonal terms from J2 up to J6; mid-altitude satellite dynamics.
+grav-row-quad = Arbitrary quadrupole tensor for elongated or irregular primaries.
+grav-row-poly = Asteroid and irregular-body surfaces via the Werner–Scheeres polyhedron method.
+grav-row-mascon = Low lunar orbit using 12 GRAIL mass-anomaly tiles; prevents low-pass orbit decay.
+grav-bodies-title = Built-in bodies
+grav-body-earth-title = Earth (EGM2008)
+grav-body-earth-desc = 8×8 spherical-harmonic truncation at Jason / CHAMP / GRACE orbit-simulation grade.
+grav-body-moon-title = Moon (LP165 + Mascon)
+grav-body-moon-desc = LP165 spherical harmonics plus 12 GRAIL Mascon tiles; keeps low lunar orbit from crashing into terrain.
+grav-body-mars-title = Mars (Mars50c)
+grav-body-mars-desc = 50th-order harmonic truncation, with polar oblateness and a seasonal CO₂-cap approximation.
+grav-body-sun-title = Sun (point source)
+grav-body-sun-desc = JPL DE441 solar GM = 1.32712440018e20 m³/s² — the origin of every planetary perturbation.
+grav-auto-title = Auto model selection
+grav-auto-lead = When enabled, the engine switches the active field model from the body's current altitude and reference radius.
+grav-auto-note = Below ~200 km it uses spherical harmonics + Mascon; mid orbit falls back to J2–J6; high / deep-space uses the point mass. The cross-validation path (world_set_cross_validate_gravity) diffs two models per step for regression checks.
+grav-api-title = C ABI
+grav-api-desc = All gravity models register through the mps-core C-ABI and share one ForceLawType::NewtonianGravity slot, so only one law is active at a time:
+grav-bodies-grid-title = Body catalogue
+
+# ---- Integrators page ----
+int-tag = // mps-core
+int-title = Symplectic Integrators
+int-desc = Leapfrog, Yoshida-4 and Forest–Ruth 8th-order symplectic steppers, plus Kahan-compensated variants and post-Newtonian corrections — all in mps-formula::integrators.
+int-why-title = Why symplectic
+int-why-lead = Classical RK4 bleeds energy on long-duration orbital arcs and the orbit slowly spirals.
+int-why-body = Symplectic steppers preserve the Hamiltonian structure: the energy error stays bounded and oscillates instead of growing, so 10⁴-year propagations stay closed. Every stepper ships a _kahan variant that lifts f64 precision from ~15 to ~30 significant digits.
+int-catalog-title = Integrator catalogue
+int-col-name = Stepper
+int-col-order = Order
+int-col-notes = Notes
+int-row-leapfrog = Kick-Drift-Kick; 2nd-order, time-reversible; the everyday orbit workhorse.
+int-row-yoshida4 = 4th-order symmetric split (3 substeps); energy error ~O(dt⁴).
+int-row-forest-ruth = 8th-order Forest–Ruth class; deep-space high-precision planet approximation.
+int-kahan-title = Kahan error compensation
+int-kahan-lead = Every symplectic stepper has a _kahan variant; the Kahan summation compensates f64 truncation.
+int-kahan-li-1 = Standard form stays stable to ~15 significant digits.
+int-kahan-li-2 = The Kahan variant raises that to ~30 significant digits.
+int-kahan-li-3 = Use only when long-double-equivalent precision is required — about 2× slower.
+int-kahan-note = Kahan keeps a running compensation term c = (sum - t) - y for every addition.
+int-pn-title = Post-Newtonian corrections
+int-pn-lead = Near a large-GM body the relativistic term is no longer negligible.
+int-pn-li-1pn = post_newtonian_1pn — first-order post-Newtonian (Mercury perihelion advance).
+int-pn-li-2pn = post_newtonian_2pn — second-order post-Newtonian (Lense–Thirring on high-eccentricity orbits).
+int-pn-li-full = post_newtonian_full — all PN terms combined.
+int-adaptive-title = Adaptive step control
+int-adaptive-desc = adaptive_step_size + step_accepted let the stepper grow or shrink dt from a local error estimate:
+int-diag-title = Numerical diagnostics
+int-diag-energy = Specific energy ε = v²/2 − GM/r — must stay conserved.
+int-diag-am = Specific angular momentum h = r × v — strictly preserved by symplectic methods.
+int-diag-kepler = keplerian_elements() converts to six elements to monitor semi-major-axis drift.
+
+# ---- Formula page ----
+form-tag = // mps-formula
+form-title = Formula Modules
+form-desc = A standalone pure-Rust crate: 107 formula modules and 390+ public functions spanning spaceflight to quantum physics, with zero Rapier or WorldHandle dependency.
+form-intro-pure = All formulas live in the standalone crate mps-formula — pure Rust, no Rapier or WorldHandle dependency.
+form-mod-kepler = kepler.rs — Kepler equation iterative solver / element conversion
+form-mod-dynamics = dynamics.rs — orbit dynamics / two-centre approximation
+form-mod-perturbation = perturbation.rs — third-body perturbation / drag / solar pressure
+form-mod-propulsion = propulsion.rs — Tsiolkovsky / propellant budget
+form-mod-rotation = rotation.rs — rigid-body attitude dynamics / quaternions
+form-mod-thermal = thermal.rs — thermal balance / solar irradiance
+form-mod-debris = debris.rs — debris cloud evolution / collision probability
+form-mod-gnss = gnss.rs — GNSS pseudorange / multi-frequency
+form-mod-trajectory = trajectory.rs — Lambert problem / transfer orbit
+form-mod-astrophysics = astrophysics.rs — stellar structure / luminosity function
+form-mod-stellar = stellar.rs — main sequence / H-R diagram / evolution
+form-mod-galactic = galactic_dynamics.rs — rotation curves / density-wave theory
+form-mod-cosmology = cosmology.rs — FLRW metric / Hubble flow
+form-mod-helio = heliophysics.rs — solar wind / corona parameters
+form-mod-high-energy = high_energy_astro.rs — blackbody / synchrotron / inverse Compton
+form-mod-celestial = celestial_data.rs — JPL DE441 10-body precision parameters
+form-mod-planetary = planetary_science.rs — planetary interiors / tides
+form-mod-mechanics = material_mechanics.rs — stress / strain / yield
+form-mod-material = material_mechanics (subset) — elasticity tensor / anisotropy
+form-mod-biomech = biomechanics.rs — joint torque / muscle models
+form-mod-control = control_theory.rs — PID / LQR / state-space
+form-mod-chaos = chaos.rs — Lorenz / Rössler attractors
+form-mod-topology = topology.rs — homotopy / topological invariants
+form-mod-softbody = softbody.rs — soft body / spring-mass
+form-mod-relativity = relativity.rs — Lorentz transform / time dilation
+form-mod-transmission = transmission.rs — signal transmission / link budget
+form-mod-quantum = quantum.rs — Schrödinger equation / Hamiltonian / spin
+form-mod-em = electromagnetism.rs — Maxwell equations / Poynting vector
+form-mod-nuclear = nuclear.rs — decay / half-life / cross section
+form-mod-fluid = fluid.rs — Navier–Stokes / Euler / Bernoulli
+form-mod-plasma = plasma.rs — plasma frequency / MHD
+form-mod-superfluidity = superfluidity.rs — superfluid helium / two-fluid model
+form-mod-continuum = continuum.rs — continuum mechanics
+form-mod-physchem-title = Physics + Chemistry
+form-mod-physchem = physchem.rs — reaction kinetics / equilibrium constant
+form-mod-thermo = thermodynamics.rs — entropy / enthalpy / engine efficiency
+form-mod-molecular = molecular.rs — ideal gas / molecular dynamics
+form-mod-wave-optics = wave_optics.rs — interference / diffraction / polarization
+form-mod-acoustics = acoustics.rs — acoustics / Doppler
+form-mod-aero = aerodynamics.rs — lift / drag / airfoils
+form-support-title = Supporting modules
+form-support-intro = A few shared primitives inside mps-formula that all 33 modules reuse:
+form-call-title = Calling from Java
+form-call-desc = All formula functions are exposed via C ABI with no WorldHandle dependency:
+
+# ---- Voxel page ----
+vox-tag = // mps-core
+vox-title = Voxel System
+vox-desc = Dense voxel grid → collider build → polyhedron-gravity bridge, all inside mps-core.
+vox-overview-title = Overview
+vox-overview-lead = VoxelGrid + build_voxel_collider is the end-to-end pipeline from voxel map to simulation.
+vox-overview-body = Good for lunar-lander surface representation, irregular-terrain elevation maps, and proximity fly-by sims that need fast near-field collision.
+vox-grid-title = VoxelGrid data model
+vox-grid-desc = rapier::voxel::VoxelGrid<'a> borrows cells / dims / origin / scale:
+vox-grid-li-1 = cells: 8- or 16-bit occupancy (0 = empty, non-0 = solid)
+vox-grid-li-2 = dims + origin + scale: world-frame dimensions / origin / metres-per-voxel
+vox-grid-li-3 = Borrow semantics: grid doesn't own cells; can come directly from mmap or Java ByteBuffer
+vox-build-title = build_voxel_collider
+vox-build-lead = The entry function turns the grid into a Rapier collider and inserts it into the World.
+vox-build-note = Internally MarchingCubes + convex decomposition: roughly 1 m³ → 1 convex hull; complexity O(N log N).
+vox-terrain-title = Terrain-gravity bridge
+vox-terrain-desc = Voxel grids can be fed directly into rapier::terrain_gravity polyhedron gravity:
+vox-terrain-li-direct = terrain_gravity_direct — brute O(N²) vertex sum; baseline / validation.
+vox-terrain-li-fft = terrain_gravity_fft — frequency-domain convolution O(N log N); preferred for large grids.
+vox-terrain-li-poly = polyhedron_gravity — Werner–Scheeres raw API.
+vox-cases-title = Typical use cases
+vox-case-lunar-title = Lunar surface landing
+vox-case-lunar-desc = 100 m lunar grid + 12 Mascon blocks; simulate lander gravity-gradient disturbance on descent.
+vox-case-terrain-title = Terrain region mapping
+vox-case-terrain-desc = DEM elevation → VoxelGrid → simulation; pairs well with land-flight trajectory.
+vox-case-proximity-title = Near-field collision performance
+vox-case-proximity-desc = Because convex decomposition yields a bounded collider count, n-body mutual collision is O(N·log M).
+
+# ---- Events page ----
+evt-tag = // mps-core
+evt-title = Event System
+evt-desc = Collision and contact-force events with three dispatch modes and a C callback ABI — built on a lockless SPSC ring buffer.
+evt-types-title = Event types
+evt-types-lead = Two physics event records are emitted by world_step and drained through the event rings.
+evt-col-type = Type
+evt-col-fields = Fields
+evt-row-collision = started, collider1, collider2, sensor, removed
+evt-row-contact = collider1, collider2, total_force, max_force_direction, max_force_magnitude
+evt-modes-title = Dispatch modes
+evt-mode-poll-title = Poll
+evt-mode-poll-desc = Events are pushed to a background Vec; the application drains them on demand between frames.
+evt-mode-callback-title = Callback
+evt-mode-callback-desc = A direct unsafe extern "C" callback fires in real time; keep the callback free of heavy Rust work.
+evt-mode-both-title = Both
+evt-mode-both-desc = Events are both queued and dispatched to the callback — used for tests and hot replay.
+evt-ring-title = Ring buffer
+evt-ring-desc = The high-frequency path uses an SPSC EventRing<T>, lockless single-producer / single-consumer.
+evt-ring-li-1 = MAX_EVENT_RECORDS = 16 384 — capacity of one ring.
+evt-ring-li-2 = Producer: the Rapier callback thread inside world_step.
+evt-ring-li-3 = Consumer: the Java render-frame thread; drain() returns the latest N.
+evt-forces-title = ForceLaw dispatch
+evt-forces-lead = rapier::forces::ForceRegistry takes typed registrations; every step aggregates a ForceReport.
+evt-force-coulomb = CoulombFrictionLaw — static / dynamic friction with a velocity threshold.
+evt-force-airdrag = AirDragLaw — Reynolds-adaptive Stokes / Newton regime switching.
+evt-force-external = ExternalForceLaw — buoyancy + electromagnetic + spring + gravity composite.
+evt-force-newton = NewtonGravityLaw — body-to-body N-body pairwise attraction with scalable G.
+evt-force-custom = Custom ForceLaw trait — any force struct is scheduled automatically after register().
+evt-forces-note = ForceReport carries per-body total force / torque / type labels; handy for a debug overlay.
+evt-abi-title = C callback ABI
+evt-abi-desc = Collision / contact-force callback signatures are exposed as unsafe extern "C":
+
+# ---- Arena page ----
+arena-tag = // mps-core
+arena-title = Shared Memory Arena
+arena-desc = A DirectByteBuffer zero-copy bridge between Java and the Rust rigid-body state — one world_step call per frame, no per-object JNI.
+arena-why-title = Why an Arena
+arena-why-lead = Classic JNI per-object get/setField costs 10 ms+ per frame at 1000 bodies.
+arena-why-body = The shared Arena lays out rigid-body SoA data in one direct byte buffer; Java reads and writes without crossing the Rust boundary. Only one world_step FFI call happens per frame.
+arena-layout-title = Memory layout
+arena-layout-desc = rapier::shared_arena header + SoA slot array + recycle ring.
+arena-mods-title = Sub-modules
+arena-mod-header = header.rs — magic / version / capacity validation.
+arena-mod-layout = layout.rs — BodySlot field offset constants.
+arena-mod-ring = ring.rs — SPSC event ring reuse.
+arena-mod-holes = holes.rs — O(1) recycling of freed slots.
+arena-flow-title = Per-frame protocol
+arena-flow-step-1 = Java side: arena_write_* sets this frame's target positions / forces / torques.
+arena-flow-step-2 = A single world_step(world, dt) FFI call triggers the simulation.
+arena-flow-step-3 = arena_read_* reads updated positions / velocities straight from the DirectByteBuffer.
+arena-flow-note = No GetFieldID / CallObjectMethod anywhere; the JNI reference table stays empty, so there is no GC risk.
+arena-java-title = Java side example
+arena-java-desc = DirectByteBuffer + JNI is the standard Java 21 idiom:
+
+# ---- Cosmos page ----
+cosmos-tag = // mps-cosmos
+cosmos-title = Cosmos Rigid Body
+cosmos-desc = CosmosWorld — a separate orbital-scale physics domain, independent of mps-core's Rapier World.
+cosmos-what-title = What Cosmos is
+cosmos-what-lead = mps-cosmos provides an orbital physics domain that does not share a World with mps-core.
+cosmos-what-body = Unlike mps-core's Rapier stepping, CosmosWorld uses Verlet integration (verlet_step) and pairwise n-body mutual gravity (n_body_acceleration_reduce), with an SIMD far-field monopole path (far_field_monopole_simd) for the high-count case. It is built for long-duration orbital evolution without rigid-body contact solving.
+cosmos-mods-title = Sub-modules
+cosmos-mod-kepler-title = kepler.rs
+cosmos-mod-kepler-desc = Kepler equation iteration / six-element ↔ Cartesian conversion.
+cosmos-mod-dynamics-title = dynamics.rs
+cosmos-mod-dynamics-desc = Two-centre approximation / third-body perturbation / drag.
+cosmos-mod-perturbation-title = perturbation.rs
+cosmos-mod-perturbation-desc = Tidal / Yarkovsky / Poynting–Robertson.
+cosmos-mod-propulsion-title = propulsion.rs
+cosmos-mod-propulsion-desc = Tsiolkovsky equation / specific impulse / propellant budget.
+cosmos-mod-rotation-title = rotation.rs
+cosmos-mod-rotation-desc = Quaternion attitude dynamics / spin stabilization.
+cosmos-mod-thermal-title = thermal.rs
+cosmos-mod-thermal-desc = Thermal balance / solar irradiance / eclipse cycle.
+cosmos-mod-debris-title = debris.rs
+cosmos-mod-debris-desc = Debris cloud evolution / Kessler syndrome model.
+cosmos-mod-gnss-title = gnss.rs
+cosmos-mod-gnss-desc = L1 / L5 pseudorange / multi-frequency ionosphere-free solution.
+cosmos-nbody-title = n-body mutual gravity
+cosmos-nbody-lead = Every CosmosWorld frame computes GM · m / r² pairwise across all bodies, O(N²).
+cosmos-nbody-note = For N ≤ 20 the direct pairwise is faster than a BH tree; this is exactly the scale of a solar-system-level simulation.
+cosmos-bodies-title = Body catalogue ({ $count })
+cosmos-bodies-desc = JPL DE441 provides the GM, orbital elements, and phase of 10 primary bodies; injected into CosmosWorld at init.
+cosmos-jni-title = JNI integration
+cosmos-jni-desc = mps-jni exposes cosmos_batch_* methods: submit many spacecraft states at once rather than per-body; tracking-queue friendly.
+cosmos-arena-title = Shared-memory Arena (same as core)
+cosmos-arena-desc = Cosmos ships its own SharedArena (magic COSMAREN) — the orbital-scale twin of mps-core's shared_arena. Java reads/writes body state through a DirectByteBuffer with no per-body JNI, and cosmosWorldGetArenaDirectByteBuffer parallels worldGetArenaDirectByteBuffer.
+cosmos-class-title = Functionality by category
+cosmos-class-lead = Cosmos reuses several mps-core capabilities at orbital scale. Each group below maps a capability to its source module.
+cosmos-class-world-title = World & Bodies
+cosmos-class-world-desc = world.rs / bodies.rs — CosmosWorld, central body + sun, the 10-body DE441 catalogue, and batch insertion (cosmos_world_add_n_body).
+cosmos-class-gravity-title = Gravity
+cosmos-class-gravity-desc = gravity.rs — Newtonian point-mass and pairwise n-body mutual gravity (n_body_acceleration_reduce) with a SIMD far-field monopole path (far_field_monopole_simd).
+cosmos-class-integrator-title = Integrators
+cosmos-class-integrator-desc = integrator.rs — verlet_step, n-body acceleration reduce, and high-order + Kahan-compensated steppers (advance_highorder_kahan) for long arcs.
+cosmos-class-orbit-title = Orbit & Diagnostics
+cosmos-class-orbit-desc = orbit.rs / orbit_diagnostics.rs — six-element conversion, Hill radius (cosmos_hill_radius_for), and state snapshots for monitoring drift.
+cosmos-class-flight-title = Flight & Perturbation
+cosmos-class-flight-desc = flight/* (dynamics, trim, stability) and perturbation/* — two-centre dynamics, third-body / solar-pressure / drag perturbations, and attitude trim.
+cosmos-class-arena-title = Shared-memory Arena
+cosmos-class-arena-desc = arena.rs + ffi.rs — SharedArena (COSMAREN) with a seqlock-guarded body slot; exposed to Java as a DirectByteBuffer via cosmos_world_get_shared_arena_address / _size, mirroring core's arena bridge.
+
+# ---- Batch collider page ----
+batch-tag = // Box3D
+batch-title = Batch Collider Pipeline
+batch-desc = Box3D-style batch insertion + same-material merge + physics-feel presets; one ColliderSet::insert amortises N shapes.
+batch-pipeline-title = Pipeline
+batch-pipeline-lead = The upper layer pushes ColliderRequest records into a ColliderBatch manager, which merges compatible static shapes into a compound and inserts in one shot.
+batch-step-1-title = Build requests
+batch-step-1-desc = Populate a ColliderRequest array — shape, pose, material, collision groups, parent body.
+batch-step-2-title = Choose preset
+batch-step-2-desc = Pass a Box3DPreset to set default friction/restitution/density/erosion/damping/CCD substeps/solver iterations.
+batch-step-3-title = Merge and insert
+batch-step-3-desc = Same-material static shapes merge into a single compound collider; different materials or dynamic shapes are grouped and inserted separately.
+batch-step-4-title = Return handles
+batch-step-4-desc = Returns ColliderHandleRaw for each generated collider; the caller can use them for queries and further operations.
+batch-request-title = ColliderRequest fields
+batch-request-lead = Each request is a #[repr(C)] flat struct; build a contiguous array and pass (ptr, count) to the FFI.
+batch-col-field = Field
+batch-col-type = Type
+batch-col-desc = Description
+batch-col-scenario = Scenario
+batch-col-result = Result
+batch-field-shape = Shape descriptor (shape_type + a/b/c/d floats)
+batch-field-translation = Local translation relative to the merged collider origin
+batch-field-rotation = Unit quaternion local rotation
+batch-field-friction = Coulomb friction coefficient (>= 0)
+batch-field-restitution = Coefficient of restitution (>= 0, typically < 1)
+batch-field-density = Mass density (>= 0; ignored for static shapes)
+batch-field-collision-groups = Collision group memberships bitmask
+batch-field-solver-groups = Solver group memberships bitmask
+batch-field-body-parent = When non-zero, attaches collider to the given rigid body
+batch-field-is-sensor = When non-zero, the collider is a sensor (no collision response)
+batch-field-erosion-margin = Erosion margin; only meaningful for round shapes; 0 = no erosion
+batch-preset-title = Box3D physics-feel presets
+batch-preset-lead = Three built-in presets cover common sandbox physics scenarios; also available via FFI constructors.
+batch-preset-default-title = Default
+batch-preset-default-desc = Balanced — moderate friction, slight bounce, gentle damping. Good for general sandbox use.
+batch-preset-sticky-title = Sticky
+batch-preset-sticky-desc = No bounce, high friction. Good for ground/walls and static geometry.
+batch-preset-bouncy-title = Bouncy
+batch-preset-bouncy-desc = Low friction, high restitution, more CCD substeps. Good for bouncing/stacking demos.
+batch-merge-title = Merge strategy
+batch-merge-lead = The manager groups by material, collision groups, sensor flag, and parent body; same-group static shapes merge into a compound.
+batch-merge-same-material = Same material + same collision groups + static
+batch-merge-compound = Merged into a single compound collider (one insert)
+batch-merge-diff-material = Different material or different collision groups
+batch-merge-separate = Each gets its own collider (multiple inserts)
+batch-merge-dynamic-parent = Attached to a dynamic rigid body
+batch-merge-attach = Attached via insert_with_parent to the parent body
+batch-merge-sensor = Sensor flag is true
+batch-merge-sensor-result = Sensor collider does not participate in collision response, only triggers events
+batch-erosion-title = Erosion
+batch-erosion-lead = Rapier/parry has no built-in clone_eroded API; we rebuild the shape as its round variant with border_radius = erosion_margin.
+batch-erosion-cuboid = Converts a hard-edge cuboid to a round cuboid, reducing jitter when stacked.
+batch-erosion-cylinder = Cylinder to round cylinder; edge contact is smoother.
+batch-erosion-cone = Cone to round cone; the tip is blunted to prevent penetration.
+batch-erosion-note = Ball / Capsule shapes are already round; erosion does not change their geometry. Ball and unsupported shapes fall back to shape_from_desc.
+batch-ffi-title = FFI entry points
+batch-ffi-lead = All pub extern "C" fn; payloads are #[repr(C)] flat structs; cbindgen generates the rigid_body.h header.
+batch-limits-title = Capacity limits
+batch-limit-max-requests = MAX_BATCH_REQUESTS = 100 000 — maximum requests per batch.
+batch-limit-max-compound = MAX_COMPOUND_PARTS = 50 000 — maximum parts in a single compound.
+batch-limit-erosion-zero = When erosion_margin = 0, round-variant rebuild is skipped and the original shape is used directly.
+batch-example-title = Rust usage example
+batch-example-lead = Build a ColliderRequest array, pass to batch_add_colliders; same-material shapes auto-merge into a compound.
+
+# ---- JNI page ----
+jni-tag = // mps-jni
+jni-title = Java JNI Bindings
+jni-desc = mps-jni exports { $methods } methods to org.polaris2023.mps.rapier.RapierNative via the jni! / jni_e_c! macros.
+jni-codegen-title = Macro code generation
+jni-codegen-lead = Two declarative macros wrap a Rust closure into an export_named JNI symbol; type tables live in @ty / @default arms.
+jni-codegen-body = jni! handles plain methods that don't need JNIEnv; jni_e_c! adds the env / class types for callback-install methods and reuses jni!'s type table (see OPTIMIZATION.md §5.A).
+jni-codegen-note = The macro body wraps the closure in catch_unwind(AssertUnwindSafe); on failure it falls back to @default instead of aborting the JVM process.
+jni-panic-title = Panic isolation
+jni-panic-lead = Any Rust panic is mapped by catch_unwind to ERR_INTERNAL and a zero value of the declared return type.
+jni-panic-body = A JVM abort is almost unrecoverable, so each export fn has a panic net; the side effect is dirty state — callers should bracket suspect calls between world_step and check last_error_code().
+jni-mangle-title = Symbol mangling
+jni-mangle-desc = The export_name must match the Java class FQN exactly: '.' becomes underscore, and '_' inside an identifier becomes '_1'.
+jni-col-class = Java class
+jni-col-symbol = Exported symbol prefix
+jni-mangle-note = Forgetting _1 makes System.load succeed but dlsym fail → UnsatisfiedLinkError; RigidBodyNative must use mps_1rigid_1body, RapierNative needs no _1.
+jni-groups-title = API surface groups ({ $ffi } extern C entries)
+jni-group-abi-title = ABI / version
+jni-group-abi-desc = abiVersion / abiSupportsFfm / abiSupportsJni / last_error_code / last_error_message / clear.
+jni-group-world-title = world_*
+jni-group-world-desc = create / step / destroy / gravity / force-law install / event registration. 117 FFI entries.
+jni-group-rb-title = rigid_body_*
+jni-group-rb-desc = builder chain / state read-write / axis locks / mass_properties. 62 FFI entries.
+jni-group-collider-title = collider_*
+jni-group-collider-desc = shape build / friction restitution / collision groups / sensors. 75 FFI entries.
+jni-group-query-title = query_*
+jni-group-query-desc = ray_cast / shape_cast / point / intersection / R-tree culling. 58 FFI entries.
+jni-group-events-title = events / ForceLaw
+jni-group-events-desc = collision + contact-force ring buffer; Coulomb / AirDrag / Newton / custom force-law install.
+jni-group-forces-title = Physics force laws (C1–C4 expansion)
+jni-group-forces-desc = solar-wind dynamic pressure / Eddington radiation pressure / X-ray irradiation / pulsar magnetic-dipole torque / Jeans escape / MOND gravity.
+jni-group-aero-title = Aerodynamics / fluid
+jni-group-aero-desc = aero_apply_surfaces / aero_apply_voxel_grid / fluid AABB drag and buoyancy.
+jni-group-arena-title = Arena zero-copy bridge
+jni-group-arena-desc = arenaAsDirectByteBuffer / arena_read_double / arena_write_double — read/write physics state without JNI round-trips.
+jni-group-cosmos-title = cosmos_*
+jni-group-cosmos-desc = CosmosWorld create / celestial registration / n-body mutual gravity / Verlet advance / step_n batch.
+jni-group-spaceflight-title = spaceflight_*
+jni-group-spaceflight-desc = orbital perturbation / specific impulse / propellant budget / write acceleration output to a native buffer (out_accel).
+jni-handle-title = Handle packing
+jni-handle-lead = RigidBodyHandle folds into a single jlong: high 32 bits store the index, low 32 bits the generation, matching Rapier's into_raw_parts() order.
+jni-handle-note = Not splitting into two jints keeps ABI alignment with RigidBodyHandleRaw (a single u64) and avoids a generation race between two JNI reads.
+jni-arena-title = Zero-copy Arena bridge
+jni-arena-lead = arenaAsDirectByteBuffer uses NewDirectByteBuffer (a standard JNI API since Java 1.4) to expose the native Arena memory directly as a java.nio.ByteBuffer.
+jni-arena-body = The Java side reads/writes purely through DoubleBuffer with no JNI upcalls; the per-frame native→jdoubleArray copy disappears, and the hot path barely sees JNI scheduling.
+jni-deploy-title = Deployment
+jni-deploy-lib = The cargo build --release -p mps-jni product mps_rigid_body.dll goes into src/main/resources/natives/.
+jni-deploy-load = On the Java side, System.load("mps_rigid_body") per architecture; on failure UnsatisfiedLinkError will carry the offending symbol name.
+jni-deploy-version = ABI is negotiated via abiVersion(); mps-web self-reports v{ $version }, any runtime mismatch should cause the caller to abort.
+# ---- FFM page ----
+ffm-tag = // MPS
+ffm-title = Java FFM Bindings
+ffm-desc = ABI probing and version negotiation entrypoint for the Foreign Function & Memory API (JEP 454), targeting Java 25+ callers.
+ffm-what-title = FFM's role here
+ffm-what-lead = mps-ffm is a three-function lightweight crate: it only exposes the ABI version and per-end capability bits for runtime negotiation.
+ffm-what-body = The actual rigid_body.h entries are still down-called by the Java side directly through Linker.downcallHandle; crates/mps-ffm does NOT replicate any method signature. Its job is to let Java get abi_version() the moment the .dll/.so is loaded, and decide whether to take the FFM or JNI path.
+ffm-surface-title = ABI surface
+ffm-surface-lead = Three #[unsafe(no_mangle)] extern C functions with #[repr(C)] Bool return values.
+ffm-surface-note = Pure ABI probing with no world access; Java Linker down-calls these first, then switches into world_create / world_step etc.
+ffm-vs-title = JNI vs FFM comparison
+ffm-col-feature = Feature
+ffm-row-min-java = Minimum Java
+ffm-row-binding = Binding style
+ffm-row-jni-bind = Java native methods + javah header generation
+ffm-row-ffm-bind = Linker.downcallHandle + FunctionDescriptor
+ffm-row-overhead = Call overhead
+ffm-row-jni-over = High (Env per call)
+ffm-row-ffm-over = Near-native (compile-time ABI direct link)
+ffm-row-memory = Memory management
+ffm-row-jni-mem = GetXxxArrayElements + release
+ffm-row-ffm-mem = MemorySegment slicing the Arena directly
+ffm-row-panic = Panic handling
+ffm-row-jni-panic = catch_unwind maps to ERR_INTERNAL
+ffm-row-ffm-panic = Caller must respect Rust conventions on its own (UB otherwise)
+ffm-layout-title = Linker downcall layout
+ffm-layout-desc = The Java side writes a FunctionDescriptor from the C ABI describing args and return types; the Linker produces a method handle invoked via invokeExact.
+ffm-header-title = C ABI input
+ffm-header-lead = Java treats rigid_body.h as the contract and mirrors #[repr(C)] structs via memory layouts.
+ffm-header-cbindgen = The cbindgen-generated rigid_body.h (~5400 lines) is the single source of truth.
+ffm-header-structs = Vec3 / Quat / ShapeDesc / event records are all #[repr(C)] flat; Java MemoryLayout computes offsets.
+ffm-header-load = Linker + SymbolLookup.loaderLookup() loads mps_rigid_body with no JNIEnv dependency.
+ffm-header-note = Any cbindgen field change forces a Java layout update; abi_version() is the version gatekeeper.
+ffm-alloc-title = Allocation strategy
+ffm-alloc-segment-title = MemorySegment
+ffm-alloc-segment-desc = Each call allocates a temporary segment; the arena allocator closes them together with a clear lifetime.
+ffm-alloc-arena-title = Shared Arena
+ffm-alloc-arena-desc = Bulk state read/write goes through the mps-core Arena; Java gets a DirectByteBuffer wrapper, zero-copy.
+ffm-alloc-shared-title = Foundation
+ffm-alloc-shared-desc = JNI and FFM both share the mps-core Arena state — different routes, same destination.
+ffm-status-title = Current status
+ffm-status-body = mps-ffm remains a capability-probing crate; the full JEP 454 downcall bindings are constructed at runtime by the Java side — no generator path yet.
+# ---- API Reference page ----
+api-tag = // MPS
+api-title = API Reference
+api-desc = crates/mps-core/include/rigid_body.h exposes { $total } pub extern C entries.
+api-header-title = Header surface
+api-header-lead = cbindgen 0.29.4 generates it from mps-core's build.rs; { $total } FFI functions plus all #[repr(C)] types are listed.
+api-header-body = Do NOT hand-edit — any change comes from a pub extern C in mps-core's rapier module; build regenerates it.
+api-prefix-title = Function prefix groups
+api-prefix-lead = Each export function name has a physics-subsystem prefix; grepping the prefix lists all entries of that module.
+api-col-prefix = Prefix
+api-col-count = Count
+api-col-domain = Responsibility
+api-row-world = World / gravity / force laws / events / step
+api-row-rigid = RigidBody state / mass / axis locks
+api-row-collider = shapes / friction / collision groups / sensors
+api-row-query = ray cast / shape cast / point projection / sweeps
+api-prefix-note = The sum matches CORE_FFI_COUNT; unlisted prefixes (aero_ / fluid_ / trajectory_ / anvilkit_ / cosmos_ / molecular_ / events / force law) live in their domain sections.
+api-handles-title = Common handle types
+api-col-type = Type
+api-col-scope = Scope
+api-handle-world = Physics world; lifecycle from world_create to world_destroy.
+api-handle-rigid = Rigid body index+generation, packed as u64, reused across calls.
+api-handle-collider = Collider index+generation; may be detached from its parent rigid body.
+api-handle-rb-build = Builder chain; ownership transfers on insert_with_parent.
+api-handle-col-build = Collider builder; ownership transfers to world on build_insert.
+api-handle-joint = Joint builder; voided after world_add_impulse_joint succeeds.
+api-handle-rtree = Broad-phase R-tree for collider/query culling.
+api-handle-crbtree = C-side red-black tree for joints / collision pairs, O(log n) queries.
+api-handle-cc = Character controller handle wrapping capsule scan + contact solve.
+api-records-title = Flat record types
+api-records-lead = All #[repr(C)] flat, written cleanly by Java / JNI / FFM ends alike.
+api-record-vec3 = Vec3 — three f64 axes in x/y/z order.
+api-record-quat = Quat — (i, j, k, w) quaternion; builders convert to axis-angle.
+api-record-aabb = AabbDesc — min/max + user tag for query ranges.
+api-record-shape = ShapeDesc — shape_type + a/b/c/d params, covering sphere / cuboid / capsule / cone etc.
+api-record-event = CollisionEventRecord / ContactForceEventRecord — event ring buffer payloads.
+api-record-filter = QueryFilterDesc / InteractionGroupsDesc — query filter bitmasks.
+api-error-title = Error reporting
+api-error-lead = A thread-local error code + message; always check the function return value first.
+api-error-note = Subsequent calls in the same frame overwrite the previous error; you must last_error_clear() immediately after a read to judge the next failure cleanly.
+api-lifecycle-title = World lifecycle call sample
+api-stability-title = ABI stability contract
+api-stability-cbindgen = rigid_body.h is cbindgen-generated; skipping hand-edits is a hard error.
+api-stability-repr = All public structs are #[repr(C)] with fixed field order, alignment, and padding.
+api-stability-version = abi_version() is the mandatory negotiation entry; callers must abort on runtime mismatch.
+api-stability-redline = Formula modules may only expose crate-internal pub fn; only pub extern C fn enter rigid_body.h. The C ABI red line is guarded by cargo build -p mps-core + a header git diff.
+# ---- 404 page ----
+not-found-title = Page Not Found
+not-found-desc = The page you requested does not exist. Please return to the home page.
+not-found-back = Back to Home
+
+# ---- Footer ----
+footer-text = MPS Motion Physics System v{ $version } — GitHub
+nav-group-overview = Overview
+nav-group-core = mps-core
+nav-group-cosmos = mps-cosmos
+nav-group-formula = mps-formula
+nav-group-jni = mps-jni
+nav-group-ffm = mps-ffm

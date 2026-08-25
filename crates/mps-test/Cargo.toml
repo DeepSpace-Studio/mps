@@ -6,9 +6,12 @@ edition.workspace = true
 [dependencies]
 mps-formula = { path = "../mps-formula" }
 mps-core = { path = "../mps-core" }
+mps-cosmos = { path = "../mps-cosmos" }
+mps-ffm = { path = "../mps-ffm" }
 rapier3d = { workspace = true }
 smallvec = { workspace = true }
 hashbrown = { workspace = true }
 
 [features]
 anvilkit-bridge = ["mps-core/anvilkit-bridge"]
+relative-force = ["mps-core/relative-force"]

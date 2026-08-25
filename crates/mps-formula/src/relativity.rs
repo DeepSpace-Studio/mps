@@ -1060,3 +1060,204 @@ pub fn schwarzschild_effective_potential(r: f64, rs: f64, angular_momentum: f64)
     }
     Some((1.0 - rs / r) * (1.0 + angular_momentum * angular_momentum / (r * r)))
 }
+
+// ---------------------------------------------------------------------------
+// Gravitational-wave matched filtering (PHYSICS_EXPANSION_PLAN.md W6)
+// ---------------------------------------------------------------------------
+
+/// Matched-filter signal-to-noise ratio for a circular compact-binary
+/// inspiral against a flat (single-sided) noise PSD.  Order-of-magnitude
+/// estimate under the stationary-phase approximation:
+///
+/// ```text
+/// ρ² = 4 · ∫|h̃(f)|² / S_n(f) df
+/// ρ ≈ h_rss · sqrt(Δf / S_n)
+/// ```
+///
+/// Inputs:
+/// - `strain_rss` — root-sum-square strain amplitude `h_rss` [1/sqrt(Hz)]
+/// - `f_min`      — lower band edge [Hz] (e.g. 20 Hz for LIGO O4)
+/// - `f_max`      — upper band edge [Hz] (e.g. 400 Hz for post-merger cutoff)
+/// - `noise_psd`  — flat single-sided noise PSD `S_n` at the band centre
+///   [Hz^-1] (e.g. 1e-46 for early-aLIGO at 100 Hz)
+///
+/// Returns the matched-filter SNR (dimensionless).  Note: real LIGO uses a
+/// shaped PSD curve, not a single number; this is a compact closed-form
+/// estimate that generalises naturally when integrated against an actual
+/// PSD curve later (see PHYSICS_EXPANSION_PLAN.md W6 follow-up).
+pub fn gw_inspiral_snr(strain_rss: f64, f_min: f64, f_max: f64, noise_psd: f64) -> Option<f64> {
+    if !finite_positive(strain_rss)
+        || !finite_positive(f_min)
+        || !finite_positive(f_max)
+        || f_max <= f_min
+        || !finite_positive(noise_psd)
+    {
+        set_error(ERR_INVALID_ARGUMENT, "bad GW inspiral SNR args");
+        return None;
+    }
+    let bandwidth = f_max - f_min;
+    // ρ ≈ h_rss · sqrt(Δf / S_n) — root-sum-square convention; for
+    // root-power spectral density conventions this collapses the integral.
+    Some(strain_rss * (bandwidth / noise_psd).sqrt())
+}
+
+/// inspiral-time-to-coalescence for a circular binary in the quadrupole
+/// approximation (Peters & Mathews 1963, leading order):
+///
+/// ```text
+/// t_c = (5/256) · (c⁵ / G³) · (M_c⁵ / f⁵) · (π · f)^(-8/3)
+/// ```
+///
+/// Simplified (geometric units dropped back to SI): use chirp mass and the
+/// gravitational-wave frequency `f_gw` (twice the orbital frequency) to
+/// compute remaining inspiral time to coalescence.
+///
+/// Inputs:
+/// - `chirp_mass_kg` — M_c (pulsar-mass-plus-pulsar-mass-derived chirp mass)
+/// - `f_gw_hz`       — current gravitational-wave frequency [Hz]
+///
+/// Returns seconds until coalescence.  For reference, a 1.4 Msun + 1.4 Msun
+/// binary at f_gw = 100 Hz has t_c ≈ 2.2 s.
+pub fn gw_inspiral_time_to_coalescence(chirp_mass_kg: f64, f_gw_hz: f64) -> Option<f64> {
+    const G: f64 = 6.67430e-11;
+    if !finite_positive(chirp_mass_kg) || !finite_positive(f_gw_hz) {
+        set_error(ERR_INVALID_ARGUMENT, "bad GW t_c args");
+        return None;
+    }
+    // t_c = (5/256) · c^5 / (G^(5/3) · π^(8/3) · f_gw^(8/3) · M_c^(5/3))
+    // Standard inspiral formula from leading-order quadrupole radiation.
+    let f_pow = f_gw_hz.powf(8.0 / 3.0);
+    let m_pow = chirp_mass_kg.powf(5.0 / 3.0);
+    let numerator = 5.0 / 256.0 * SPEED_OF_LIGHT.powi(5);
+    let denominator = G.powf(5.0 / 3.0) * core::f64::consts::PI.powf(8.0 / 3.0) * f_pow * m_pow;
+    Some(numerator / denominator)
+}
+
+// ---------------------------------------------------------------------------
+// F. Relativistic kinematics relations
+// ---------------------------------------------------------------------------
+
+/// Relativistic total energy: E = γ·m·c².
+pub fn relativistic_total_energy(rest_mass: f64, lorentz_factor: f64) -> Option<f64> {
+    if !rest_mass.is_finite()
+        || rest_mass < 0.0
+        || !lorentz_factor.is_finite()
+        || lorentz_factor < 1.0
+    {
+        return None;
+    }
+    Some(lorentz_factor * rest_mass * SPEED_OF_LIGHT * SPEED_OF_LIGHT)
+}
+
+/// Relativistic momentum magnitude: p = γ·m·v.
+pub fn relativistic_momentum(rest_mass: f64, speed: f64) -> Option<f64> {
+    if !rest_mass.is_finite()
+        || rest_mass < 0.0
+        || !speed.is_finite()
+        || !(0.0..SPEED_OF_LIGHT).contains(&speed)
+    {
+        return None;
+    }
+    let beta = speed / SPEED_OF_LIGHT;
+    let gamma = 1.0 / (1.0 - beta * beta).sqrt();
+    Some(gamma * rest_mass * speed)
+}
+
+/// Energy–momentum relation (inverse of invariant mass): E = √(m²c⁴ + p²c²).
+pub fn relativistic_energy_from_momentum(rest_mass: f64, momentum: f64) -> Option<f64> {
+    if !rest_mass.is_finite() || rest_mass < 0.0 || !momentum.is_finite() || momentum < 0.0 {
+        return None;
+    }
+    let c2 = SPEED_OF_LIGHT * SPEED_OF_LIGHT;
+    Some((rest_mass * rest_mass * c2 * c2 + momentum * momentum * c2).sqrt())
+}
+
+/// Relativistic aberration of light: cos θ' = (cos θ − β) / (1 − β·cos θ).
+pub fn relativistic_aberration(cos_theta: f64, beta: f64) -> Option<f64> {
+    if !cos_theta.is_finite() || !beta.is_finite() || beta.abs() >= 1.0 {
+        return None;
+    }
+    let denom = 1.0 - beta * cos_theta;
+    if denom.abs() < 1.0e-12 {
+        return None;
+    }
+    Some(((cos_theta - beta) / denom).clamp(-1.0, 1.0))
+}
+
+/// Relativistic Doppler beaming (boost) factor: δ = 1 / [γ·(1 − β·cos θ)].
+pub fn relativistic_doppler_beaming_factor(beta: f64, cos_theta: f64) -> Option<f64> {
+    if !beta.is_finite() || !(0.0..1.0).contains(&beta) || !cos_theta.is_finite() {
+        return None;
+    }
+    let gamma = 1.0 / (1.0 - beta * beta).sqrt();
+    let denom = gamma * (1.0 - beta * cos_theta);
+    if denom.abs() < 1.0e-12 {
+        return None;
+    }
+    Some(1.0 / denom)
+}
+
+// ---------------------------------------------------------------------------
+// G. Black-hole geometry & thermodynamics
+// ---------------------------------------------------------------------------
+
+/// Photon-sphere radius (Schwarzschild): r_ph = 1.5·r_s = 3·G·M/c².
+pub fn photon_sphere_radius(mass: f64, g: f64) -> Option<f64> {
+    if !mass.is_finite() || mass <= 0.0 || !g.is_finite() || g <= 0.0 {
+        return None;
+    }
+    Some(3.0 * g * mass / (SPEED_OF_LIGHT * SPEED_OF_LIGHT))
+}
+
+const HAWKING_HBAR: f64 = 1.054_571_817e-34;
+const HAWKING_KB: f64 = 1.380_649e-23;
+
+/// Hawking temperature of a Schwarzschild black hole:
+/// T = ħ·c³ / (8·π·G·M·k_B).
+pub fn hawking_temperature(mass: f64, g: f64) -> Option<f64> {
+    if !mass.is_finite() || mass <= 0.0 || !g.is_finite() || g <= 0.0 {
+        return None;
+    }
+    Some(
+        HAWKING_HBAR * SPEED_OF_LIGHT.powi(3)
+            / (8.0 * std::f64::consts::PI * g * mass * HAWKING_KB),
+    )
+}
+
+// ---------------------------------------------------------------------------
+// H. Cosmological kinematics
+// ---------------------------------------------------------------------------
+
+/// Hubble-law recession velocity: v = H₀·d.
+pub fn hubble_recession_velocity(distance: f64, hubble_constant: f64) -> Option<f64> {
+    if !distance.is_finite()
+        || distance < 0.0
+        || !hubble_constant.is_finite()
+        || hubble_constant <= 0.0
+    {
+        return None;
+    }
+    Some(hubble_constant * distance)
+}
+
+/// Hubble-law luminosity distance from redshift (low-z): d = c·z / H₀.
+pub fn hubble_distance(redshift: f64, hubble_constant: f64) -> Option<f64> {
+    if !redshift.is_finite()
+        || redshift < 0.0
+        || !hubble_constant.is_finite()
+        || hubble_constant <= 0.0
+    {
+        return None;
+    }
+    Some(SPEED_OF_LIGHT * redshift / hubble_constant)
+}
+
+/// Flat matter-dominated universe lookback time:
+/// t_L = (2/3)·t_H·(1 − 1/√(1+z)), where t_H = 1/H₀ is the Hubble time.
+pub fn flat_universe_lookback_time(redshift: f64, hubble_time: f64) -> Option<f64> {
+    if !redshift.is_finite() || redshift < 0.0 || !hubble_time.is_finite() || hubble_time <= 0.0 {
+        return None;
+    }
+    let factor = 1.0 + redshift;
+    Some((2.0 / 3.0) * hubble_time * (1.0 - 1.0 / factor.sqrt()))
+}

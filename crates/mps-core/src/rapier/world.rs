@@ -1,19 +1,25 @@
 use rapier3d::prelude::{
-    ActiveHooks, BroadPhaseBvh, CCDSolver, ColliderSet, ImpulseJointSet, IntegrationParameters,
-    IslandManager, MultibodyJointSet, NarrowPhase, PhysicsPipeline, RigidBodySet, Vector,
+    ActiveHooks, BroadPhaseBvh, CCDSolver, ColliderHandle, ColliderSet, ImpulseJointSet,
+    IntegrationParameters, IslandManager, MultibodyJointSet, NarrowPhase, PhysicsPipeline,
+    RigidBodySet, Vector,
 };
 use std::sync::Arc;
+
+#[cfg(feature = "relative-force")]
+use dashmap::DashMap;
 
 use crate::rapier::error::{
     ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, ERR_UNSUPPORTED,
     clear_error, ffi_guard, set_error,
 };
 use crate::rapier::ffi::{
-    Bool, MAX_OUTPUT_CAPACITY, Quat, RigidBodyHandleRaw, Vec3, WorldHandle,
+    Bool, ColliderHandleRaw, MAX_OUTPUT_CAPACITY, Quat, RigidBodyHandleRaw, Vec3, WorldHandle,
     force_law_type_from_u32, isometry_from_parts, pack_rigid_body_handle, quat_finite,
-    quat_from_rapier, unpack_rigid_body_handle, vec3_finite, vec3_from_rapier, vec3_to_rapier,
+    quat_from_rapier, unpack_collider_handle, unpack_rigid_body_handle, vec3_finite,
+    vec3_from_rapier, vec3_to_rapier,
 };
 use crate::rapier::forces::{BodyForceLog, ForceFacade, ForceRegistry};
+use crate::rapier::terrain_gravity::TerrainGravitySource;
 
 const MAX_STEP_SECONDS: f64 = 1.0;
 
@@ -33,6 +39,27 @@ pub(crate) struct FrameWorkBuffers {
     pub(crate) pending_forces: smallvec::SmallVec<[crate::rapier::events::PendingForce; 128]>,
     /// Scratch buffer for arena command → handle mapping.
     pub(crate) arena_idx_map: Vec<Option<rapier3d::prelude::RigidBodyHandle>>,
+    /// Reusable `(handle, force)` accumulator shared across ForceLaw::apply() calls.
+    /// Cleared before each law runs; avoids per-law-per-frame SmallVec::new().
+    pub(crate) scratch_force_pairs:
+        smallvec::SmallVec<[(rapier3d::prelude::RigidBodyHandle, Vector); 64]>,
+    /// Secondary `(handle, force)` scratch (e.g. PulsarMagneticDipole fallback path).
+    pub(crate) scratch_force_pairs_alt:
+        smallvec::SmallVec<[(rapier3d::prelude::RigidBodyHandle, Vector); 64]>,
+    /// Reusable `(handle, mass, position)` buffer for pairwise gravity pre-collection.
+    /// Avoids per-frame SmallVec allocation in NewtonianGravityForceLaw::apply().
+    pub(crate) scratch_body_data:
+        smallvec::SmallVec<[(rapier3d::prelude::RigidBodyHandle, f64, Vector); 64]>,
+    /// P1.8: Coulomb hook 同步跟踪。`true` 时 `world_step` 末尾需要对一遍 collider
+    /// 把 `MODIFY_SOLVER_CONTACTS` bit 设上；扫描完成后清零、记录当时的 collider 数量，
+    /// 下次只在数量变化（新增/移除 collider）或 Coulomb law 切换时再扫。
+    pub(crate) coulomb_hook_dirty: bool,
+    /// P1.8: 上次完成 Coulomb hook 同步时的 `colliders.len()`，用于在 step 入口
+    /// 廉价判定是否有新插入/移除的 collider 破坏了既有 hook 状态。
+    pub(crate) coulomb_hook_last_collider_count: usize,
+    /// P1.9: arena handle 映射的「当前正文长度」——上一次 `arena_idx_map` rebuild
+    /// 时 `bodies.len()`。step 入口比较 `bodies.len()` 与此值，相等则跳过 clear+rebuild。
+    pub(crate) arena_idx_map_body_count: usize,
 }
 
 impl Default for FrameWorkBuffers {
@@ -42,6 +69,12 @@ impl Default for FrameWorkBuffers {
             friction_work: Vec::with_capacity(512),
             pending_forces: smallvec::SmallVec::new(),
             arena_idx_map: Vec::with_capacity(256),
+            scratch_force_pairs: smallvec::SmallVec::new(),
+            scratch_force_pairs_alt: smallvec::SmallVec::new(),
+            scratch_body_data: smallvec::SmallVec::new(),
+            coulomb_hook_dirty: true,
+            coulomb_hook_last_collider_count: 0,
+            arena_idx_map_body_count: 0,
         }
     }
 }
@@ -61,12 +94,23 @@ pub struct PhysicsWorld {
     pub(crate) hooks: crate::rapier::events::CallbackPhysicsHooks,
     pub(crate) events: Arc<crate::rapier::events::CollectingEventHandler>,
     pub(crate) force_registry: ForceRegistry,
+    /// Active terrain-gravity source (polyhedron / DEM / lunar-mascon), if any.
+    /// Mirrors the registered `TerrainGravity` force law so the character
+    /// controller can sample local gravity per-frame without re-parsing the law.
+    pub(crate) terrain_gravity_source: Option<TerrainGravitySource>,
     pub(crate) shared_arena: Option<Box<crate::rapier::shared_arena::SharedPhysicsArena>>,
+    /// Per-collider voxel source grid for in-place voxel edits. Keyed by the
+    /// `ColliderHandleRaw` returned at insert time; populated only for
+    /// colliders built from a voxel builder. Empty for non-voxel colliders.
+    pub(crate) voxel_grids: std::collections::HashMap<
+        crate::rapier::ffi::ColliderHandleRaw,
+        crate::rapier::voxel::VoxelCache,
+    >,
     /// Persistent per-frame work buffers — cleared and reused each `world_step`.
     pub(crate) buffers: FrameWorkBuffers,
-    /// 查询/步进串行化：step 与所有世界结构变更拿写锁，射线/形状查询拿读锁。
-    /// 物理线程独占变更，渲染线程并发查询时会先拿读锁，避免撕裂 BroadPhaseBvh 节点索引。
-    pub(crate) query_lock: parking_lot::RwLock<()>,
+    /// Relative force feature: per-body enabled state and local attachment point.
+    #[cfg(feature = "relative-force")]
+    pub(crate) relative_force: DashMap<RigidBodyHandleRaw, (bool, Vec3)>,
 }
 
 impl PhysicsWorld {
@@ -94,9 +138,28 @@ impl PhysicsWorld {
             hooks: crate::rapier::events::CallbackPhysicsHooks::new(events.clone()),
             events,
             force_registry: ForceRegistry::new(),
+            terrain_gravity_source: None,
             shared_arena: None,
+            voxel_grids: std::collections::HashMap::new(),
             buffers: FrameWorkBuffers::default(),
-            query_lock: parking_lot::RwLock::new(()),
+            #[cfg(feature = "relative-force")]
+            relative_force: DashMap::new(),
+        }
+    }
+
+    /// Enable or disable collision detection between two specific colliders,
+    /// regardless of their collision groups, solver hooks, or whether they are
+    /// connected by a joint.  Forwards to the narrow-phase's per-pair filter.
+    pub(crate) fn set_collision_enabled(
+        &mut self,
+        c1: ColliderHandle,
+        c2: ColliderHandle,
+        enabled: bool,
+    ) {
+        if enabled {
+            self.narrow_phase.enable_collision(c1, c2);
+        } else {
+            self.narrow_phase.disable_collision(c1, c2);
         }
     }
 }
@@ -151,8 +214,6 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
         let Some(world) = (unsafe { world.as_mut() }) else {
             return;
         };
-        // 写锁：整个步进期间禁止并发查询/结构变更，防止撕裂 BroadPhaseBvh
-        let _query_lock = world.inner.query_lock.write();
         if !delta_seconds.is_finite() || delta_seconds <= 0.0 || delta_seconds > MAX_STEP_SECONDS {
             return;
         }
@@ -175,12 +236,19 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
         if let Some(ref arena) = world.inner.shared_arena {
             let commands = arena.drain_commands();
             if !commands.is_empty() {
-                // Use persistent cached index map (P3 fix: avoid per-frame Vec rebuild)
-                let idx = &mut world.inner.buffers.arena_idx_map;
-                idx.clear();
-                for (h, _) in world.inner.bodies.iter() {
-                    idx.push(Some(h));
+                // P1.9: arena_idx_map 增量更新——只在 `bodies.len()` 与上次不一致时
+                // clear+rebuild；相等时 arena handle 顺序未变（rapier 维持插入次序），
+                // 直接复用既有内容，消除每帧 O(n) rebuild。
+                let n_bodies = world.inner.bodies.len();
+                if n_bodies != world.inner.buffers.arena_idx_map_body_count {
+                    let idx = &mut world.inner.buffers.arena_idx_map;
+                    idx.clear();
+                    for (h, _) in world.inner.bodies.iter() {
+                        idx.push(Some(h));
+                    }
+                    world.inner.buffers.arena_idx_map_body_count = n_bodies;
                 }
+                let idx = &world.inner.buffers.arena_idx_map;
                 for (cmd_type, body_idx, a0, a1, a2) in commands {
                     if let Some(Some(h)) = idx.get(body_idx as usize)
                         && let Some(body) = world.inner.bodies.get_mut(*h)
@@ -266,13 +334,25 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
             }
         }
 
-        // --- Coulomb hook setup ---
+        // --- Coulomb hook setup (P1.8: dirty flag + collider count guard) ---
+        // 稳态下整段退化为 O(1)（`coulomb_hook_dirty=false` 且 collider 数量不变
+        // 时跳过遍历），只在以下触发重扫：首帧 / Coulomb law 切换（setter 把
+        // dirty 标 true）/ collider 数量变化（新增/移除）。rebuild 完毕后清零
+        // dirty、记下当次 collider 数量，下次只在结构变化时再扫。
         let custom = world.inner.events.custom_physics();
         let coulomb_active = custom
             .coulomb_friction
             .is_some_and(|law| law.enabled.0 != 0);
 
-        if coulomb_active {
+        if !coulomb_active {
+            // Coulomb 没启用：下次启用时强制扫一次（dirty 已是此处不再设回
+            // false）。last_collider_count 同步清 0，保证重启用时即便 collider
+            // 数量恰好与上次记下的相等，dirty 也会驱动扫描。
+            world.inner.buffers.coulomb_hook_dirty = true;
+            world.inner.buffers.coulomb_hook_last_collider_count = 0;
+        } else if world.inner.buffers.coulomb_hook_dirty
+            || world.inner.colliders.len() != world.inner.buffers.coulomb_hook_last_collider_count
+        {
             let hook_bit = ActiveHooks::MODIFY_SOLVER_CONTACTS;
             for (_, collider) in world.inner.colliders.iter_mut() {
                 let current = collider.active_hooks();
@@ -280,6 +360,8 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
                     collider.set_active_hooks(current | hook_bit);
                 }
             }
+            world.inner.buffers.coulomb_hook_last_collider_count = world.inner.colliders.len();
+            world.inner.buffers.coulomb_hook_dirty = false;
         }
 
         // --- Force facade: the single entry-point for all force application ---
@@ -288,13 +370,21 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
         let mut body_log = std::mem::take(&mut world.inner.buffers.body_log);
         let mut pending_forces = std::mem::take(&mut world.inner.buffers.pending_forces);
         let mut friction_work = std::mem::take(&mut world.inner.buffers.friction_work);
+        let mut scratch_force_pairs = std::mem::take(&mut world.inner.buffers.scratch_force_pairs);
+        let mut scratch_force_pairs_alt =
+            std::mem::take(&mut world.inner.buffers.scratch_force_pairs_alt);
+        let mut scratch_body_data = std::mem::take(&mut world.inner.buffers.scratch_body_data);
         let mut facade = ForceFacade::new(
             &mut world.inner.bodies,
             &mut world.inner.colliders,
             &world.inner.narrow_phase,
+            world.inner.integration_parameters.dt,
             &mut body_log,
             &mut pending_forces,
             &mut friction_work,
+            &mut scratch_force_pairs,
+            &mut scratch_force_pairs_alt,
+            &mut scratch_body_data,
         );
 
         // 1. Registered ForceLaw list (from new system)
@@ -319,6 +409,10 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
         world.inner.buffers.body_log = empty_log;
         world.inner.buffers.pending_forces = std::mem::take(facade.pending_forces);
         world.inner.buffers.friction_work = std::mem::take(facade.friction_work);
+        world.inner.buffers.scratch_force_pairs = std::mem::take(facade.scratch_force_pairs);
+        world.inner.buffers.scratch_force_pairs_alt =
+            std::mem::take(facade.scratch_force_pairs_alt);
+        world.inner.buffers.scratch_body_data = std::mem::take(facade.scratch_body_data);
         if force_report
             .contributions
             .values()
@@ -344,6 +438,20 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
             &world.inner.hooks,
             &*world.inner.events,
         );
+
+        // 4b. Clear the persistent user force/torque on every dynamic body.
+        // Rapier's `add_force` is a *persistent* force that the step does NOT
+        // clear, so a law's force (or a one-shot FFI force) keeps acting on every
+        // subsequent frame until explicitly reset.  We clear it *after* the step,
+        // once it has already been integrated into velocity — so clearing here is
+        // harmless for the frame just simulated, but stops an unregistered law (or
+        // a spent one-shot force) from acting forever.  Registered laws re-apply
+        // their force each frame inside `apply_all` above, so they stay correct.
+        for (_, body) in world.inner.bodies.iter_mut() {
+            if body.is_dynamic() {
+                body.reset_forces(false);
+            }
+        }
 
         // 5. Flush shared arena body/collider state → Java zero-JNI read
         if let Some(ref arena) = world.inner.shared_arena {
@@ -452,7 +560,6 @@ pub extern "C" fn world_set_gravity(world: *mut WorldHandle, gravity: Vec3) {
         let Some(world) = (unsafe { world.as_mut() }) else {
             return;
         };
-        let _query_lock = world.inner.query_lock.write();
         if !vec3_finite(gravity) {
             return;
         }
@@ -532,7 +639,6 @@ pub extern "C" fn world_dynamic_body_snapshot_count(world: *const WorldHandle) -
         let Some(world) = (unsafe { world.as_ref() }) else {
             return 0;
         };
-        let _query_lock = world.inner.query_lock.read();
 
         world
             .inner
@@ -560,7 +666,6 @@ pub extern "C" fn world_dynamic_body_snapshot(
         let Some(world) = (unsafe { world.as_ref() }) else {
             return 0;
         };
-        let _query_lock = world.inner.query_lock.read();
         if out_handles.is_null()
             || out_values.is_null()
             || capacity == 0
@@ -613,7 +718,6 @@ pub extern "C" fn world_body_snapshot_count(world: *const WorldHandle) -> u32 {
         let Some(world) = (unsafe { world.as_ref() }) else {
             return 0;
         };
-        let _query_lock = world.inner.query_lock.read();
 
         world.inner.bodies.len().min(u32::MAX as usize) as u32
     })
@@ -638,7 +742,6 @@ pub extern "C" fn world_body_snapshot(
             set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
-        let _query_lock = world.inner.query_lock.read();
         if out_handles.is_null()
             || out_values.is_null()
             || capacity == 0
@@ -709,7 +812,6 @@ pub extern "C" fn world_update_body_poses(
             set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
-        let _query_lock = world.inner.query_lock.write();
         if handles.is_null() || values.is_null() || count == 0 || count > MAX_OUTPUT_CAPACITY {
             set_error(ERR_CAPACITY, "invalid body pose input");
             return 0;
@@ -779,7 +881,6 @@ pub extern "C" fn world_update_body_velocities(
             set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
-        let _query_lock = world.inner.query_lock.write();
         if handles.is_null() || values.is_null() || count == 0 || count > MAX_OUTPUT_CAPACITY {
             set_error(ERR_CAPACITY, "invalid body velocity input");
             return 0;
@@ -826,72 +927,6 @@ pub extern "C" fn world_update_body_velocities(
             clear_error();
         }
         updated
-    })
-}
-
-// ---------------------------------------------------------------------------
-// Convenience: register celestial gravity as a ForceLaw
-// ---------------------------------------------------------------------------
-
-/// Convert a u32 tag to `CelestialBodyId`.  Returns `None` for out-of-range
-/// values instead of relying on a range guard plus `transmute`.
-fn celestial_body_id_from_u32(
-    body_id: u32,
-) -> Option<crate::rapier::celestial_data::CelestialBodyId> {
-    use crate::rapier::celestial_data::CelestialBodyId;
-    match body_id {
-        0 => Some(CelestialBodyId::Sun),
-        1 => Some(CelestialBodyId::Mercury),
-        2 => Some(CelestialBodyId::Venus),
-        3 => Some(CelestialBodyId::Earth),
-        4 => Some(CelestialBodyId::Moon),
-        5 => Some(CelestialBodyId::Mars),
-        6 => Some(CelestialBodyId::Jupiter),
-        7 => Some(CelestialBodyId::Saturn),
-        8 => Some(CelestialBodyId::Uranus),
-        9 => Some(CelestialBodyId::Neptune),
-        _ => None,
-    }
-}
-
-/// Register celestial body gravity as a ForceLaw in the world's registry.
-///
-/// `body_id` maps to `CelestialBodyId` (0=Sun, 3=Earth, 4=Moon, 5=Mars, etc.).
-///
-/// Returns handle (non-zero) on success, 0 on invalid body_id.
-///
-/// # Safety
-/// `world` must be a valid pointer returned by `world_create` and not yet destroyed.
-#[unsafe(no_mangle)]
-pub extern "C" fn world_register_celestial_gravity(
-    world: *mut WorldHandle,
-    body_id: u32,
-    max_degree: u32,
-) -> u64 {
-    ffi_guard(0, || {
-        let Some(world) = (unsafe { world.as_mut() }) else {
-            set_error(ERR_NULL_POINTER, "world is null");
-            return 0;
-        };
-        let Some(id) = celestial_body_id_from_u32(body_id) else {
-            set_error(ERR_INVALID_ARGUMENT, "invalid celestial body ID");
-            return 0;
-        };
-        let body = crate::rapier::celestial_data::get_celestial_body(id);
-        let law = crate::rapier::interaction::CelestialGravityForceLaw {
-            body,
-            max_sh_degree: max_degree.min(body.max_degree),
-            enabled: true,
-        };
-
-        // P8: single traversal to find + unregister all existing celestial gravity laws
-        world
-            .inner
-            .force_registry
-            .unregister_by_type(crate::rapier::forces::ForceLawType::CelestialGravity);
-
-        clear_error();
-        world.inner.force_registry.register(Box::new(law)).raw()
     })
 }
 
@@ -1081,5 +1116,194 @@ pub extern "C" fn world_reset_shared_arena_events(world: *mut WorldHandle) {
         if let Some(ref arena) = world.inner.shared_arena {
             arena.reset_event_ring();
         }
+    })
+}
+
+/// Enable or disable relative force for a rigid body.
+/// When enabled, forces applied via `rigid_body_add_force_at_local_point`
+/// will be applied at the local attachment point instead of world coordinates.
+///
+/// # Safety
+/// `world` must be a valid pointer returned by `world_create` (or null).
+#[cfg(feature = "relative-force")]
+#[unsafe(no_mangle)]
+pub extern "C" fn world_set_relative_force_enabled(
+    world: *mut WorldHandle,
+    handle: RigidBodyHandleRaw,
+    enabled: Bool,
+    local_point: Vec3,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let Some(_) = world.inner.bodies.get(unpack_rigid_body_handle(handle)) else {
+            set_error(ERR_NOT_FOUND, "body was not found");
+            return Bool::FALSE;
+        };
+        if !vec3_finite(local_point) {
+            set_error(ERR_INVALID_ARGUMENT, "non-finite local point");
+            return Bool::FALSE;
+        }
+        world
+            .inner
+            .relative_force
+            .insert(handle, (enabled.0 != 0, local_point));
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Check if relative force is enabled for a rigid body.
+///
+/// # Safety
+/// `world` must be a valid pointer returned by `world_create` (or null).
+#[cfg(feature = "relative-force")]
+#[unsafe(no_mangle)]
+pub extern "C" fn world_get_relative_force_enabled(
+    world: *const WorldHandle,
+    handle: RigidBodyHandleRaw,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let Some(_) = world.inner.bodies.get(unpack_rigid_body_handle(handle)) else {
+            set_error(ERR_NOT_FOUND, "body was not found");
+            return Bool::FALSE;
+        };
+        let enabled = world
+            .inner
+            .relative_force
+            .get(&handle)
+            .map(|v| v.0)
+            .unwrap_or(false);
+        clear_error();
+        Bool(enabled as u8)
+    })
+}
+
+/// Get the local attachment point for relative force.
+///
+/// # Safety
+/// `world` must be a valid pointer returned by `world_create` (or null).
+#[cfg(feature = "relative-force")]
+#[unsafe(no_mangle)]
+pub extern "C" fn world_get_relative_force_local_point(
+    world: *const WorldHandle,
+    handle: RigidBodyHandleRaw,
+) -> Vec3 {
+    ffi_guard(Vec3::default(), || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Vec3::default();
+        };
+        let Some(_) = world.inner.bodies.get(unpack_rigid_body_handle(handle)) else {
+            set_error(ERR_NOT_FOUND, "body was not found");
+            return Vec3::default();
+        };
+        let local_point = world
+            .inner
+            .relative_force
+            .get(&handle)
+            .map(|v| v.1)
+            .unwrap_or(Vec3::default());
+        clear_error();
+        local_point
+    })
+}
+
+/// Set the local attachment point for relative force.
+///
+/// # Safety
+/// `world` must be a valid pointer returned by `world_create` (or null).
+#[cfg(feature = "relative-force")]
+#[unsafe(no_mangle)]
+pub extern "C" fn world_set_relative_force_local_point(
+    world: *mut WorldHandle,
+    handle: RigidBodyHandleRaw,
+    local_point: Vec3,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let Some(_) = world.inner.bodies.get(unpack_rigid_body_handle(handle)) else {
+            set_error(ERR_NOT_FOUND, "body was not found");
+            return Bool::FALSE;
+        };
+        if !vec3_finite(local_point) {
+            set_error(ERR_INVALID_ARGUMENT, "non-finite local point");
+            return Bool::FALSE;
+        }
+        // Insert-or-update: keep existing enabled state, only replace point.
+        world
+            .inner
+            .relative_force
+            .entry(handle)
+            .and_modify(|(_, point)| *point = local_point)
+            .or_insert((false, local_point));
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Remove relative force configuration for a rigid body.
+///
+/// # Safety
+/// `world` must be a valid pointer returned by `world_create` (or null).
+#[cfg(feature = "relative-force")]
+#[unsafe(no_mangle)]
+pub extern "C" fn world_remove_relative_force(
+    world: *mut WorldHandle,
+    handle: RigidBodyHandleRaw,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let removed = world.inner.relative_force.remove(&handle).is_some();
+        if !removed {
+            set_error(ERR_NOT_FOUND, "relative force not configured for this body");
+            return Bool::FALSE;
+        }
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Enable or disable collision detection between two specific colliders, regardless
+/// of their collision groups, solver hooks, or whether they are connected by a joint.
+///
+/// This surfaces the per-pair collision filtering exposed by Rapier's `World`
+/// (`set_collision_enabled`). Unlike collision groups, the two colliders need not
+/// belong to the same body or be jointed; any pair can be disabled. Disabling a
+/// pair that was previously disabled (or enabling a pair that was never disabled)
+/// is a no-op. The setting persists across `world_step` calls: a disabled pair's
+/// existing contact manifolds are cleared on the next step.
+///
+/// # Safety
+///
+/// `world` must be a valid pointer returned by `world_create` (or null). `collider1`
+/// and `collider2` must be valid `ColliderHandleRaw` values returned at insert time.
+#[unsafe(no_mangle)]
+pub extern "C" fn world_set_collision_enabled(
+    world: *mut WorldHandle,
+    collider1: ColliderHandleRaw,
+    collider2: ColliderHandleRaw,
+    enabled: Bool,
+) {
+    ffi_guard((), || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return;
+        };
+        let c1 = unpack_collider_handle(collider1);
+        let c2 = unpack_collider_handle(collider2);
+        world.inner.set_collision_enabled(c1, c2, enabled.0 != 0);
     })
 }

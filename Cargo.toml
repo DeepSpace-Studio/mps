@@ -2,11 +2,20 @@
 members = [
     "crates/mps-formula",
     "crates/mps-core",
+    "crates/mps-cosmos",
     "crates/mps-jni",
     "crates/mps-ffm",
     "crates/mps-test",
-    "crates/mps-web"
+    "crates/mps-web",
+    "crates/mps-build-common",
+    "crates/mps-bindgen-macro",
+    "crates/xtask"
 ]
+# The vendored `rapier/` folder is its own Cargo workspace (the user's local
+# rapier3d-f64 checkout). Exclude it so it isn't absorbed into this workspace;
+# `rapier3d-f64` is pulled in via a path dependency in [workspace.dependencies]
+# and keeps resolving its own `[workspace.package]` / `[workspace.dependencies]`.
+exclude = ["rapier", "docs"]
 resolver = "2"
 
 [workspace.package]
@@ -14,20 +23,20 @@ version = "0.1.4"
 edition = "2024"
 
 [workspace.dependencies]
-rapier3d = { package = "rapier3d-f64", version = "0.34.0", features = ["parallel"] }
+rapier3d = { package = "rapier3d-f64", path = "rapier/crates/rapier3d-f64", features = ["parallel"] }
 ljni = { version = "0.21.0", package = "jni" }
 parking_lot = "0.12.5"
 hashbrown = "0.17.1"
 smallvec = "1.15.2"
-mimalloc = "0.1.52"
 rayon = "1.12"
 anvilkit = { version = "0.1", features = ["rapier"] }
-bevy_ecs = { version = "0.19.0" }
-topcoat = { version = "0.4.0" }
+bevy_ecs = { version = "0.19" }
+dashmap = "7.0.0-rc2"
+wide = "1.6"
 
 # Profile settings only take effect at the workspace root.
 [profile.dev]
-panic = "abort"
+panic = "unwind"
 
 [profile.release]
 panic = "abort"

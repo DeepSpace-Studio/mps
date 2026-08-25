@@ -1,112 +1,137 @@
-use topcoat::router::page;
-use topcoat::view::view;
+use dioxus::prelude::*;
+use dioxus_i18n::t;
 
-/// Formula modules page
-#[page("/formula")]
-pub async fn formula() -> topcoat::Result {
-    let modules = [
-        (
-            "88",
-            "航天工程 (spaceflight)",
-            "轨道力学、姿态控制、热控、推进、环境",
-        ),
-        ("23", "核物理 (nuclear)", "衰变、结合能、裂变/聚变、中子学"),
-        (
-            "26",
-            "材料力学 (material_mechanics)",
-            "弹性、塑性、断裂、疲劳、梁理论",
-        ),
-        (
-            "19",
-            "天体物理 (astrophysics)",
-            "N体、Barnes-Hut、FMM、Lane-Emden、Eddington",
-        ),
-        (
-            "23",
-            "相对论 (relativity)",
-            "Lorentz、Schwarzschild、Kerr、ISCO、引力红移",
-        ),
-        ("20", "量子力学 (quantum)", "波函数、隧穿、谐振子、氢原子"),
-        (
-            "16",
-            "电磁学 (electromagnetism)",
-            "Lorentz、Faraday、Maxwell、Biot-Savart",
-        ),
-        (
-            "18",
-            "流体力学 (fluid)",
-            "浮力/阻力、SPH、Navier-Stokes、Bernoulli、湍流",
-        ),
-        ("7", "声学 (acoustics)", "模态分析、波动方程、共振、空间化"),
-        (
-            "8",
-            "分子动力学 (molecular)",
-            "Lennard-Jones、Coulomb、对势相互作用",
-        ),
-        ("5", "空气动力学 (aerodynamics)", "表面力、体素气动、力估算"),
-        ("4", "生物力学 (biomechanics)", "Hill 肌肉模型、关节约束"),
-        (
-            "6",
-            "混沌理论 (chaos)",
-            "Lorenz 吸引子、双摆、Lyapunov 指数",
-        ),
-        ("5", "连续介质力学 (continuum)", "FEM 形函数、应变/应力张量"),
-        ("7", "控制理论 (control_theory)", "PID、状态空间、MPC、LQR"),
-        (
-            "6",
-            "引力模型 (gravitational_models)",
-            "球谐展开、椭球、多面体",
-        ),
-        (
-            "7",
-            "积分器 (integrators)",
-            "Leapfrog、Yoshida 4、Forest-Ruth 8、后牛顿",
-        ),
-        ("4", "物理化学 (physchem)", "Gray-Scott 反应扩散、催化"),
-        ("7", "等离子体物理 (plasma)", "Debye 屏蔽、Vlasov、PIC、MHD"),
-        ("5", "软体 (softbody)", "XPBD 约束、超弹性本构模型"),
-        (
-            "4",
-            "超流 (superfluidity)",
-            "Gross-Pitaevskii、涡旋晶格、量子化环流",
-        ),
-        ("3", "拓扑学 (topology)", "持续同调、Betti 数"),
-        ("6", "弹道学 (trajectory)", "6DOF 弹道/滑翔轨迹、RK4 积分"),
-        ("3", "传动 (transmission)", "齿轮比、扭矩分配"),
-        (
-            "5",
-            "波动光学 (wave_optics)",
-            "Kirchhoff 衍射、Fresnel 传播、干涉",
-        ),
-    ];
+/// Formula Modules — 33 pure-Rust domain modules mapped to their category headings.
+pub fn Formula() -> Element {
+    rsx! {
+        section { id: "sec-formula", class: "doc-section",
 
-    view! {
-        <div>
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:30px; padding-bottom:20px; border-bottom:1px solid #333;">
-                <div>
-                    <div style="font-size:12px; color:#4a9eff; letter-spacing:3px; text-transform:uppercase; font-family:monospace; margin-bottom:8px;">
-                        "/ FORMULA MODULES"
-                    </div>
-                    <h1 style="font-size:28px;font-weight:300;color:#fff;margin:0 0 10px;">"公式模块"</h1>
-                    <p style="font-size:14px;color:#999;line-height:1.7;margin:0;">"mps-formula 提供 28 个模块 300+ 纯公式函数，覆盖物理、航天、工程等领域。"</p>
-                </div>
-                <div style="font-size:48px;font-weight:700;color:#333;font-family:monospace;line-height:1;">"01"</div>
-            </div>
-
-            <div class="callout" style="background:#0f1a2e;border-left:4px solid #4a9eff;padding:14px 18px;border-radius:4px;margin:20px 0;">
-                <p>"所有公式为纯 Rust 函数，不依赖 Rapier 或 WorldHandle。可在无物理引擎的环境中独立使用。"</p>
-            </div>
-
-            for (count, name, desc) in modules {
-                <div style="background:#16213e;border:1px solid #333;border-radius:8px;padding:16px 20px;margin-bottom:10px;display:flex;align-items:center;gap:16px;">
-                    <span style="background:#4a9eff;color:#1a1a2e;padding:4px 10px;border-radius:4px;font-weight:700;font-size:14px;white-space:nowrap;">(count)</span>
-                    <div style="flex:1;">
-                        <strong style="color:#fff;font-size:15px;">(name)</strong>
-                        <br>
-                        <small style="color:#888;font-size:13px;">(desc)</small>
-                    </div>
-                </div>
+        div { class: "page-head",
+            div {
+                div { class: "page-tag", { t!("form-tag") } }
+                h1 { class: "page-title", { t!("form-title") } }
+                p { class: "page-desc", { t!("form-desc") } }
             }
-        </div>
+            div { class: "page-index", "04" }
+        }
+
+        div { class: "callout-note",
+            p { { t!("form-intro-pure") } }
+        }
+
+        // ── Spaceflight (rasid 88 fn / 9 files) ────────────────────────────
+        div { class: "section-card",
+            h2 { { t!("formula-cat-spaceflight") } }
+            ul { class: "ul-plain",
+                li { { t!("form-mod-kepler") } }
+                li { { t!("form-mod-dynamics") } }
+                li { { t!("form-mod-perturbation") } }
+                li { { t!("form-mod-propulsion") } }
+                li { { t!("form-mod-rotation") } }
+                li { { t!("form-mod-thermal") } }
+                li { { t!("form-mod-debris") } }
+                li { { t!("form-mod-gnss") } }
+                li { { t!("form-mod-trajectory") } }
+            }
+        }
+
+        // ── Astrophysics & stellar physics ────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("formula-cat-astrophysics") } }
+            ul { class: "ul-plain",
+                li { { t!("form-mod-astrophysics") } }
+                li { { t!("form-mod-stellar") } }
+                li { { t!("form-mod-galactic") } }
+                li { { t!("form-mod-cosmology") } }
+                li { { t!("form-mod-helio") } }
+                li { { t!("form-mod-high-energy") } }
+                li { { t!("form-mod-celestial") } }
+                li { { t!("form-mod-planetary") } }
+            }
+        }
+
+        // ── Mechanics ──────────────────────────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("formula-cat-mechanics") } }
+            ul { class: "ul-plain",
+                li { { t!("form-mod-mechanics") } }
+                li { { t!("form-mod-material") } }
+                li { { t!("form-mod-biomech") } }
+                li { { t!("form-mod-control") } }
+                li { { t!("form-mod-chaos") } }
+                li { { t!("form-mod-topology") } }
+                li { { t!("form-mod-softbody") } }
+            }
+        }
+
+        // ── Relativity ─────────────────────────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("formula-cat-relativity") } }
+            ul { class: "ul-plain",
+                li { { t!("form-mod-relativity") } }
+                li { { t!("form-mod-transmission") } }
+            }
+        }
+
+        // ── Quantum & electromagnetism ────────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("formula-cat-quantum") } }
+            p { class: "p-muted", { t!("form-mod-quantum") } }
+        }
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("formula-cat-electromagnetism") } }
+            p { class: "p-muted", { t!("form-mod-em") } }
+        }
+
+        // ── Nuclear, thermodynamics & continuum ───────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("formula-cat-nuclear") } }
+            p { class: "p-muted", { t!("form-mod-nuclear") } }
+        }
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("formula-cat-fluid") } }
+            ul { class: "ul-plain",
+                li { { t!("form-mod-fluid") } }
+                li { { t!("form-mod-plasma") } }
+                li { { t!("form-mod-superfluidity") } }
+                li { { t!("form-mod-continuum") } }
+            }
+        }
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("form-mod-physchem-title") } }
+            ul { class: "ul-plain",
+                li { { t!("form-mod-physchem") } }
+                li { { t!("form-mod-thermo") } }
+                li { { t!("form-mod-molecular") } }
+                li { { t!("form-mod-wave-optics") } }
+                li { { t!("form-mod-acoustics") } }
+                li { { t!("form-mod-aero") } }
+            }
+        }
+
+        // ── Supporting modules ─────────────────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("form-support-title") } }
+            p { class: "p-muted", { t!("form-support-intro") } }
+            ul { class: "ul-plain",
+                li { "math.rs — finite-many / vec3 / clamp01 共享原语" }
+                li { "integrators.rs — Leapfrog / Yoshida 4 / Forest–Ruth 8 / Kahan / 1PN+2PN" }
+                li { "gravitational_models.rs — Legendre / 球谐 / Carlson RF·RD / 椭球 / J2 张量" }
+                li { "celestial_data.rs — JPL DE441 10 天体精密参数" }
+            }
+        }
+
+        // ── Calling from Java ──────────────────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("form-call-title") } }
+            p { class: "p-muted", { t!("form-call-desc") } }
+            div { class: "code-block",
+                pre { code {
+                    "// 全部公式函数经 C ABI 暴露，无 WorldHandle 依赖\n// 例：双椭球引力加速度\nVec3 a = mps_formula_ellipsoid_gravity(pos, body);\n// 例：Yoshida 4 阶辛积分器推进\nmps_formula_yoshida4_step(&mut pos, &mut vel, gm, dt);"
+                } }
+            }
+        }
+
+        }
     }
 }

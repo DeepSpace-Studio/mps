@@ -1,37 +1,56 @@
-# mps_rigid_body
+# mps — Motion Physics System
 
-`mps_rigid_body` is a Rust native physics library built on `rapier3d-f64`.
-It exposes one native `cdylib` to Java through both JNI and Java FFM.
+> **mps** is the project name. It is a double entendre:
+> - **m/s** — meters per second, the SI unit of velocity (the quantity this engine ultimately governs);
+> - **M**otion **P**hysics **S**ystem — the engine itself.
+>
+> The GitHub repository is named **`rigid-body`** (`Polari-Stars-MC/rigid-body`); within docs and code we refer to the project as **mps**.
 
-The project provides a stable Java-facing rigid body API while keeping Rapier-owned
-world state, bodies, colliders, events, and query pipelines inside Rust.
+`mps` is a Rust-native physics engine built on [`rapier3d-f64`](https://rapier.rs) (double-precision). It wraps Rapier's world state, bodies, colliders, events, and query pipelines behind a single stable native `cdylib` with a C ABI, and keeps all Rapier-owned state inside Rust.
+
+External consumers drive the simulation through opaque world/builder pointers and packed `u64` handles for rigid bodies, colliders, and joints — no Rapier types leak across the boundary.
 
 ```text
-Java 21 JNI / Java 25 FFM
-  └─ Rust C ABI / JNI wrappers
-       ├─ mps-formula — 28 pure formula modules (300+ functions)
-       ├─ mps-core — physics engine + Rapier wrapper
-       ├─ mps-jni — JNI bindings
-       └─ mps-ffm — FFM metadata
+mps (Motion Physics System)
+ └─ Rust workspace (rigid-body repo)
+      ├─ mps-formula — 28 pure physics/engineering formula modules (no Rapier)
+      ├─ mps-core     — physics world + Rapier wrapper + C ABI surface
+      ├─ mps-cosmos   — astrodynamics / flight-dynamics on top of mps-formula
+      ├─ mps-jni      — optional Java JNI bindings (consumes the C ABI)
+      ├─ mps-ffm      — optional Java 25 FFM metadata (consumes the C ABI)
+      ├─ mps-web      — Dioxus 0.7 documentation site (SSR)
+      ├─ mps-test     — integration test suite
+      ├─ mps-build-common — shared cbindgen helper
+      ├─ mps-bindgen-macro — #[java_struct]/#[java_enum] → Java codegen
+      └─ xtask        — workspace automation (metrics, java codegen)
 ```
+
+## Why f64
+
+Rapier is compiled with `rapier3d-f64` (64-bit floats) rather than the default f32 build. This doubles memory and slows some ops but preserves precision for long-duration orbital, aerospace, and multi-body simulations where f32 drift is unacceptable.
 
 ## Repository Layout
 
 ```text
 crates/
-  mps-core/       physics world, bodies, colliders, queries, events, forces, voxel
-  mps-formula/    28 pure physics/engineering formula modules
-  mps-jni/        Java JNI bindings
-  mps-ffm/        Java FFM metadata
-  mps-test/       332 integration tests
+  mps-core/      physics world, bodies, colliders, queries, events, forces, voxel
+  mps-formula/   28 pure physics/engineering formula modules
+  mps-cosmos/    astrodynamics & flight dynamics
+  mps-jni/       optional Java JNI bindings
+  mps-ffm/       optional Java 25 FFM metadata
+  mps-web/       Dioxus documentation site
+  mps-test/      integration tests
+  mps-build-common/  cbindgen helper shared by mps-core + mps-cosmos
+  mps-bindgen-macro/ #[java_struct]/#[java_enum] → Java source generator
+  xtask/         workspace automation
 
-docs/             documentation site (dark-theme, dual-language zh/en) — *moved to crates/mps-web/*
+docs/            legacy docs — moved into crates/mps-web/
+rapier/          vendored rapier3d-f64 fork (separate workspace, path dependency)
 ```
 
 ## Formula Library (mps-formula)
 
-The formula crate provides 28 modules with 300+ pure Rust functions covering
-physics, aerospace, and engineering domains. No dependency on Rapier or WorldHandle.
+The formula crate provides **28 modules** with 300+ pure Rust functions spanning physics, aerospace, and engineering. It has **zero dependency on Rapier or `WorldHandle`** — pure input→output computation, which keeps it trivially reusable and unit-testable.
 
 | Module | Functions | Domain |
 |--------|-----------|--------|
@@ -63,13 +82,18 @@ physics, aerospace, and engineering domains. No dependency on Rapier or WorldHan
 | `transmission` | 3 | gear ratios, torque distribution |
 | `wave_optics` | 5 | Kirchhoff diffraction, Fresnel propagation, interference |
 
+## Architecture: two layers
+
+Every physics capability follows a strict two-layer split so the math stays pure and the engine stays encapsulated:
+
+- **mps-formula** — pure computation. Takes values in, returns values out. No `WorldHandle`, no `RigidBody`, no Rapier state.
+- **mps-core** — C ABI surface + Rapier interaction. Reads body state, calls a formula, applies the resulting force/torque back into the world.
+
+All C ABI function names, parameters, error codes, and `_flag` variants are preserved for backward compatibility.
+
 ## Native API Surface
 
-The Rust crate defines C-compatible ABI types in `crates/mps-core/src/rapier/ffi/`.
-External callers use opaque native pointers for world and builder ownership,
-and packed `u64` handles for Rapier rigid bodies, colliders, and joints.
-
-Supported areas include:
+The C-compatible ABI lives in `crates/mps-core/src/rapier/ffi/`. Supported areas:
 
 - World creation, stepping, gravity, integration parameters, body snapshots.
 - Rigid body creation, insertion, pose/velocity mutation, forces, impulses, CCD, sleep/wakeup.
@@ -77,60 +101,16 @@ Supported areas include:
 - Air-drag and lift accumulation for surface samples, driven by Rapier rigid body motion.
 - Ray, point, AABB, OBB, sphere, shape-cast, and voxel-shaped queries.
 - Collision and contact-force event queues.
-- Joints and character controller through JNI.
-- Compact tree and RTree spatial indexes.
-- Extended bounds/collider builders: capsule, SSV, ellipsoid, prism, cylinder, shell, kDOP, FDH, neural bounds.
+- Joints and character controller.
+- Compact-tree and RTree spatial indexes.
+- Extended collider builders: capsule, SSV, ellipsoid, prism, cylinder, shell, kDOP, FDH, neural bounds.
 - Voxel collider construction from raw grids, AABB, and OBB.
-
-## Formula Modules
-
-Each formula module follows a two-layer architecture:
-
-- **mps-formula**: Pure computation — input values, output values, no `WorldHandle`, `RigidBody`, or Rapier state.
-- **mps-core**: C ABI wrappers + Rapier interaction — reads body state, calls formula, applies forces/torques.
-
-All existing C ABI function names, parameters, error codes, and `_flag` variants are preserved for backward compatibility.
-
-## Java Entry Points
-
-### Java 21 JNI
-
-`test21` uses `RigidBodyNative` JNI methods plus higher-level Java helpers in
-`org.polaris2023.msp_rigid_body.util`.
-
-Run:
-
-```powershell
-cd test21
-.\gradlew.bat check
-```
-
-### Java 25 FFM
-
-`test25` uses `RigidBodyFfm` with Java's Foreign Function & Memory API.
-It covers:
-
-- World, rigid body, collider, and CRbTree basics.
-- Voxel AABB/OBB build stats and collider creation.
-- Voxel AABB/OBB intersection queries.
-- Regular runtime queries: ray cast, point projection, AABB/OBB/sphere intersection, shape cast.
-- Rigid body runtime mutation: pose, velocity, force/torque, impulse, CCD, sleep/wakeup.
-- Air-drag and lift surface accumulation helpers for body motion.
-- Collider runtime mutation: pose, sensor, friction, restitution, groups, event bits, hooks, contact-force threshold.
-- Collision and contact-force event bulk reads plus event clearing.
-
-Run:
-
-```powershell
-cd test25
-.\gradlew.bat check
-```
 
 ## Voxel Colliders
 
 Voxel colliders can be created from:
 
-- Raw occupancy grids: native memory or Java `byte[]`.
+- Raw occupancy grids: native memory or a `byte[]` buffer.
 - Axis-aligned bounding boxes: `collider_builder_create_voxel_aabb`.
 - Oriented bounding boxes: `collider_builder_create_voxel_obb`.
 
@@ -141,48 +121,27 @@ Build modes are controlled by `VoxelColliderOptions`:
 - `GreedyCuboids`: merge adjacent solid voxels into larger cuboids.
 - `SurfaceMesh`: generate an exterior triangle mesh for large static voxel sets.
 
-`VoxelBuildStats` can be used before building to inspect cell count, solid count,
-selected mode, estimated parts, estimated vertices/triangles, and generated grid size.
+`VoxelBuildStats` can be used before building to inspect cell count, solid count, selected mode, estimated parts, estimated vertices/triangles, and generated grid size.
 
-Java 21 includes a `VoxelGrid` helper with:
-
-```text
-get, set, clear, solidCount, fillBox, fillAabb, fillSphere,
-copyFrom, union, subtract, intersect, toByteArray, address
-```
-
-## Verification
-
-Current verified commands:
+## Building & Testing
 
 ```powershell
-cargo test -p mps-test              # 332 integration tests
-cargo check --workspace              # full workspace check
-
-cd test21
-.\gradlew.bat check
-
-cd ..\test25
-.\gradlew.bat check
+cargo fmt --all --check        # formatting gate (CI)
+cargo clippy --all-targets -- -D warnings   # lint gate (CI)
+cargo test                     # full integration suite (mps-test)
+cargo check --workspace        # full workspace type-check
+cargo build --release          # build everything
 ```
 
-Expected result:
-
-```text
-Rust tests: passed
-Java 21 JNI smoke test: passed
-Java 25 FFM smoke test: passed
-```
+CI runs on Ubuntu, Windows, and macOS (`macos-latest`) via `.github/workflows/ci.yml`.
 
 ## Documentation
 
-Online documentation at `crates/mps-web/` — Rust SSR site built with Topcoat framework, serving docs at `https://Polari-Stars-MC.github.io/rigid-body/`.
+Online documentation lives in `crates/mps-web/` — a Rust SSR site built with Dioxus 0.7 + dioxus-i18n (Fluent), published at `https://Polari-Stars-MC.github.io/rigid-body/`.
 
-## Current Gaps
+The `.github/workflows/pages.yml` workflow builds the site with `cargo build -p mps-web --release` (subscribing the Dioxus Router to the GitHub Pages base path via `DIOXUS_ASSET_ROOT`), launches the binary as a local SSR server, and exports each route to `_site/<path>/index.html` for GitHub Pages.
 
-The main remaining integration work is Java 25 FFM parity for areas that already
-exist in Rust/JNI:
+**Forks:** the base path is derived from `${{ steps.configure-pages.outputs.base_path }}`, which auto-adapts to the fork's repository name — no hard-coded `/rigid-body` path in either the Rust code or the workflow. To deploy a fork:
 
-- Character controller.
-- Joints.
-- Advanced collider builders such as heightmap, convex hull, point-cloud bounds, kDOP, FDH, and neural bounds.
+1. Enable Actions in the fork's **Settings → Actions → General**.
+2. Set **Settings → Pages → Source** to *GitHub Actions*.

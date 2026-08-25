@@ -16,6 +16,8 @@ use crate::rapier::error::{
     ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, clear_error, ffi_guard, set_error,
 };
 use crate::rapier::ffi::{Bool, Vec3, vec3_finite, vec3_from_rapier, vec3_to_rapier};
+use crate::rapier::forces::{ForceFacade, ForceLaw, ForceLawType};
+use rapier3d::prelude::RigidBodyHandle;
 
 const MAX_VERTICES: u32 = 100_000;
 const MAX_FACES: u32 = 200_000;
@@ -742,6 +744,132 @@ pub extern "C" fn terrain_lunar_mascon_get(index: u32, out_mascon: *mut LunarMas
             Bool::FALSE
         }
     })
+}
+
+// ---------------------------------------------------------------------------
+// TerrainGravityLaw — drives the rigid-body world with terrain gravity
+// ---------------------------------------------------------------------------
+
+/// Which terrain gravity model drives the world.
+///
+/// All variants own their input data so the law can be registered into the
+/// `ForceRegistry` (which stores `Box<dyn ForceLaw>`) and cloned for FFI
+/// read-back without borrowing the caller's buffers.
+#[derive(Clone)]
+pub(crate) enum TerrainGravitySource {
+    /// Werner & Scheeres (1997) constant-density polyhedron — exact for any
+    /// closed triangulated body.  Per-frame cost is O(faces × dynamic_bodies),
+    /// so keep the face count modest for small asteroids (large bodies should
+    /// prefer the DEM or mascon models).
+    Polyhedron {
+        vertices: Vec<f64>,
+        faces: Vec<u32>,
+        n_vertices: u32,
+        n_faces: u32,
+        density: f64,
+    },
+    /// DEM surface-mass-distribution via direct summation
+    /// (`terrain_gravity_direct`).
+    Dem {
+        dem: Vec<f64>,
+        grid: TerrainGrid,
+        surface_density: f64,
+    },
+    /// Built-in lunar mascons (GRAIL-derived, Plummer-softened point masses).
+    Mascon,
+}
+
+/// Registered force law that samples terrain gravity at every dynamic body's
+/// position and applies `F = m · a` through the [`ForceFacade`].
+///
+/// Because it implements [`ForceLaw`], `world_step` invokes it automatically
+/// through `ForceRegistry::apply_all` — no special-casing in the step path.
+/// Sample the terrain-gravity acceleration at `pos` for the given `source`.
+///
+/// Shared by the registered [`TerrainGravityLaw`] (which applies `F = m·a` to
+/// dynamic rigid bodies through the force registry) and the character
+/// controller's `character_controller_move_shape_with_terrain` (which folds the
+/// resulting `½·a·dt²` free-fall displacement into the desired translation so a
+/// kinematic character falls toward and can stand on irregular terrain).
+pub(crate) fn terrain_gravity_acceleration(source: &TerrainGravitySource, pos: Vec3) -> Vec3 {
+    match source {
+        TerrainGravitySource::Polyhedron {
+            vertices,
+            faces,
+            n_vertices,
+            n_faces,
+            density,
+        } => {
+            let mut a = Vec3::default();
+            let _ = polyhedron_gravity(
+                pos,
+                vertices,
+                faces,
+                *n_vertices,
+                *n_faces,
+                *density,
+                &mut a,
+            );
+            a
+        }
+        TerrainGravitySource::Dem {
+            dem,
+            grid,
+            surface_density,
+        } => terrain_gravity_direct(pos, dem, *grid, *surface_density),
+        TerrainGravitySource::Mascon => lunar_mascon_gravity(pos),
+    }
+}
+
+pub(crate) struct TerrainGravityLaw {
+    pub source: TerrainGravitySource,
+    pub enabled: bool,
+}
+
+impl ForceLaw for TerrainGravityLaw {
+    fn law_type(&self) -> ForceLawType {
+        ForceLawType::TerrainGravity
+    }
+
+    fn enabled(&self) -> bool {
+        self.enabled
+    }
+
+    fn apply(&self, facade: &mut ForceFacade<'_>) {
+        // Skip cleanly if the world has no dynamic bodies (avoids allocating).
+        if facade.bodies.iter().filter(|(_, b)| b.is_dynamic()).count() == 0 {
+            return;
+        }
+
+        // Collect (handle, mass, position) for every non-trivial dynamic body.
+        // Positions are converted to the ffi `Vec3` type expected by the
+        // `terrain_gravity` pure functions.  A local vec (not the shared
+        // `scratch_body_data`, which stores rapier's `DVec3`) avoids borrow
+        // conflicts with `add_force` below.
+        let mut collected: Vec<(RigidBodyHandle, f64, Vec3)> =
+            Vec::with_capacity(facade.bodies.len());
+        for (h, b) in facade.bodies.iter() {
+            let mass = b.mass();
+            if b.is_dynamic() && mass > 0.0 {
+                collected.push((h, mass, vec3_from_rapier(b.translation())));
+            }
+        }
+
+        let source = self.law_type();
+        for (h, mass, pos) in collected {
+            let accel = terrain_gravity_acceleration(&self.source, pos);
+            // F = m · a
+            let force = vec3_to_rapier(accel) * mass;
+            facade.add_force(h, force, source);
+        }
+    }
+
+    fn clone_box(&self) -> Box<dyn ForceLaw> {
+        Box::new(Self {
+            source: self.source.clone(),
+            enabled: self.enabled,
+        })
+    }
 }
 
 // ---------------------------------------------------------------------------

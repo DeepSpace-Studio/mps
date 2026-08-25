@@ -501,6 +501,89 @@ pub extern "C" fn astro_relativistic_orbit_correction(
 /// Computes the fluid and rigid Roche limits of a primary body and tests an orbital
 /// distance against them.
 ///
+/// Returns `None` if any parameter is non-finite or non-positive. `orbital_distance`
+/// of 0.0 is allowed (treated as origin: `inside_*` flags become `false`).
+///
+/// Formula:
+///   fluid Roche limit  ≈ 2.44 · R_primary · (ρ_primary / ρ_secondary)^(1/3)
+///   rigid  Roche limit ≈ 1.26 · R_primary · (ρ_primary / ρ_secondary)^(1/3)
+///
+/// Coefficients 2.44 / 1.26 are the conventional values (fluid = Édouard Roche
+/// 1848; rigid ~ 1.26 for a rigid satellite held together only by self-gravity).
+pub fn roche_limit(
+    primary_radius: f64,
+    primary_density: f64,
+    secondary_density: f64,
+) -> Option<(f64, f64)> {
+    if !finite_positive(primary_radius)
+        || !finite_positive(primary_density)
+        || !finite_positive(secondary_density)
+    {
+        return None;
+    }
+    let ratio = (primary_density / secondary_density).cbrt();
+    Some((2.44 * primary_radius * ratio, 1.26 * primary_radius * ratio))
+}
+
+/// Same as [`roche_limit`] but also tests an orbital distance against the
+/// computed limits — the convenience analogue of the FFI
+/// [`RocheLimitReport`]. Returns `None` on invalid parameters; returns the
+/// report with `inside_fluid_limit`/`inside_rigid_limit` both `false` when
+/// `orbital_distance == 0.0` (no sensible crossing test at the origin).
+pub fn roche_limit_report(
+    primary_radius: f64,
+    primary_density: f64,
+    secondary_density: f64,
+    orbital_distance: f64,
+) -> Option<RocheLimitReport> {
+    if !finite_non_negative(orbital_distance) {
+        return None;
+    }
+    let (fluid, rigid) = roche_limit(primary_radius, primary_density, secondary_density)?;
+    Some(RocheLimitReport {
+        fluid_roche_limit: fluid,
+        rigid_roche_limit: rigid,
+        inside_fluid_limit: Bool::from(orbital_distance > 0.0 && orbital_distance < fluid),
+        inside_rigid_limit: Bool::from(orbital_distance > 0.0 && orbital_distance < rigid),
+    })
+}
+
+/// Hill sphere radius — the region around a satellite (mass `m_sec`) within
+/// which its gravity dominates over the tidal field of the primary body
+/// (mass `m_pri`). The companion criterion to the Roche limit: the Roche
+/// limit tells you *when a satellite breaks up under the primary's tide*;
+/// the Hill sphere tells you *when a smaller bound object stays bound to
+/// the satellite instead of being stripped by the primary*.
+///
+/// `r_H ≈ a · (1 - e) · (m_sec / (3 · m_pri))^(1/3)`
+///
+/// Inputs:
+/// - `primary_mass`     — M_pri in kg
+/// - `secondary_mass`   — m_sec in kg (the embedded body, e.g. a moon)
+/// - `semi_major_axis`  — a in metres (orbit of sec about pri)
+/// - `eccentricity`     — e, dimensionless, clamped to `0..=1`
+///
+/// Returns `None` if any mass/axis is non-finite or non-positive.
+pub fn hill_sphere_radius(
+    primary_mass: f64,
+    secondary_mass: f64,
+    semi_major_axis: f64,
+    eccentricity: f64,
+) -> Option<f64> {
+    if !finite_positive(primary_mass)
+        || !finite_positive(secondary_mass)
+        || !finite_positive(semi_major_axis)
+        || !eccentricity.is_finite()
+    {
+        return None;
+    }
+    let e = eccentricity.clamp(0.0, 1.0);
+    Some(semi_major_axis * (1.0 - e) * (secondary_mass / (3.0 * primary_mass)).cbrt())
+}
+
+/// Computes the fluid and rigid Roche limits of a primary body and tests an orbital
+/// distance against them.
+///
 /// # Safety
 ///
 /// `out_report` must point to writable memory for one `RocheLimitReport` element;
@@ -513,27 +596,20 @@ pub extern "C" fn astro_roche_limit(
     orbital_distance: f64,
     out_report: *mut RocheLimitReport,
 ) -> Bool {
-    if !finite_positive(primary_radius)
-        || !finite_positive(primary_density)
-        || !finite_positive(secondary_density)
-        || !finite_non_negative(orbital_distance)
-    {
+    let Some(report) = roche_limit_report(
+        primary_radius,
+        primary_density,
+        secondary_density,
+        orbital_distance,
+    ) else {
         set_error(ERR_INVALID_ARGUMENT, "invalid Roche limit parameters");
         return Bool::FALSE;
-    }
-    let ratio = (primary_density / secondary_density).cbrt();
-    let fluid = 2.44 * primary_radius * ratio;
-    let rigid = 1.26 * primary_radius * ratio;
-    let Some(out_report) = (unsafe { out_report.as_mut() }) else {
+    };
+    let Some(out) = (unsafe { out_report.as_mut() }) else {
         set_error(ERR_NULL_POINTER, "Roche limit output is null");
         return Bool::FALSE;
     };
-    *out_report = RocheLimitReport {
-        fluid_roche_limit: fluid,
-        rigid_roche_limit: rigid,
-        inside_fluid_limit: Bool::from(orbital_distance > 0.0 && orbital_distance < fluid),
-        inside_rigid_limit: Bool::from(orbital_distance > 0.0 && orbital_distance < rigid),
-    };
+    *out = report;
     clear_error();
     Bool::TRUE
 }

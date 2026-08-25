@@ -1,6 +1,8 @@
 pub mod api;
 pub mod architecture;
 pub mod arena;
+pub mod batch;
+pub mod cosmos;
 pub mod events;
 pub mod ffm;
 pub mod formula;
@@ -8,5 +10,6 @@ pub mod gravity;
 pub mod home;
 pub mod integrators;
 pub mod jni;
+pub mod not_found;
 pub mod quickstart;
 pub mod voxel;

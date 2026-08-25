@@ -1,4 +1,5 @@
 use std::slice;
+use std::sync::Arc;
 
 use rayon::prelude::*;
 
@@ -6,12 +7,14 @@ use rapier3d::math::{Pose, Rotation, Vector};
 use rapier3d::prelude::{ColliderBuilder, SharedShape};
 
 use crate::rapier::error::{
-    ERR_CAPACITY, ERR_INTERNAL, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, ffi_guard, set_error,
+    ERR_CAPACITY, ERR_INTERNAL, ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER,
+    ERR_UNSUPPORTED, ffi_guard, set_error,
 };
 use crate::rapier::ffi::{
     AabbDesc, Bool, ColliderBuilderHandle, ColliderHandleRaw, Obb, QueryFilterDesc,
     RigidBodyHandleRaw, Vec3, VoxelBuildStats, VoxelColliderMode, VoxelColliderOptions,
-    WorldHandle, quat_finite, quat_to_rapier, vec3_finite, voxel_collider_mode_from_raw,
+    WorldHandle, quat_finite, quat_to_rapier, unpack_collider_handle, vec3_finite,
+    voxel_collider_mode_from_raw,
 };
 
 const MAX_VOXEL_CELLS: usize = 262_144;
@@ -30,7 +33,7 @@ pub struct VoxelGrid<'a> {
     pub origin: Vec3,
 }
 
-struct OwnedVoxelGrid {
+pub(crate) struct OwnedVoxelGrid {
     voxels: Vec<u8>,
     size_x: usize,
     size_y: usize,
@@ -53,6 +56,48 @@ impl OwnedVoxelGrid {
             voxel_size_z: self.voxel_size_z,
             origin: self.origin,
         }
+    }
+
+    /// Flip a single cell to `solid` (0 = empty, non-zero = solid) and return
+    /// `true` if the cell actually changed. Out-of-range coordinates are
+    /// ignored and report `false` (no-op).
+    fn set_cell(&mut self, x: i64, y: i64, z: i64, solid: bool) -> bool {
+        if x < 0
+            || y < 0
+            || z < 0
+            || x as usize >= self.size_x
+            || y as usize >= self.size_y
+            || z as usize >= self.size_z
+        {
+            return false;
+        }
+        let Some(index) = self.as_grid().index(x as usize, y as usize, z as usize) else {
+            return false;
+        };
+        let new_value: u8 = if solid { 1 } else { 0 };
+        let changed = self.voxels[index] != new_value;
+        self.voxels[index] = new_value;
+        changed
+    }
+}
+
+/// Per-collider source grid retained so an inserted voxel collider can be
+/// edited in place (single cell or full overwrite) without re-uploading the
+/// whole grid from Java and without changing its `ColliderHandleRaw`.
+///
+/// Only colliders built from `collider_builder_create_voxels*` / `*_aabb` /
+/// `*_obb` carry a cache entry; everything else is `None`.
+pub(crate) struct VoxelCache {
+    pub(crate) grid: OwnedVoxelGrid,
+    pub(crate) options: VoxelColliderOptions,
+}
+
+impl VoxelCache {
+    /// Rebuild a `ColliderBuilder` from the current grid. Returns `None` when
+    /// the grid is empty (e.g. every cell was dug out) — callers should treat
+    /// that as "remove the collider" rather than `set_shape(None)`.
+    pub(crate) fn rebuild(&self) -> Option<ColliderBuilder> {
+        build_voxel_collider(&self.grid.as_grid(), self.options)
     }
 }
 
@@ -706,7 +751,10 @@ fn builder_from_owned_grid(
         return std::ptr::null_mut();
     };
 
-    Box::into_raw(Box::new(ColliderBuilderHandle { inner: builder }))
+    Box::into_raw(Box::new(ColliderBuilderHandle {
+        inner: builder,
+        voxel_source: Some(VoxelCache { grid, options }),
+    }))
 }
 
 fn create_voxels_with_options(
@@ -771,7 +819,27 @@ fn create_voxels_with_options(
         return std::ptr::null_mut();
     };
 
-    Box::into_raw(Box::new(ColliderBuilderHandle { inner: builder }))
+    // Retain an owned copy of the source grid so the collider can be edited in
+    // place / ray-picked later. Without this, `collider_voxel_edit`,
+    // `collider_set_voxels` and `collider_voxel_ray_pick` would see no cache.
+    let owned = OwnedVoxelGrid {
+        voxels: voxels.to_vec(),
+        size_x: size_x as usize,
+        size_y: size_y as usize,
+        size_z: size_z as usize,
+        voxel_size_x,
+        voxel_size_y,
+        voxel_size_z,
+        origin,
+    };
+
+    Box::into_raw(Box::new(ColliderBuilderHandle {
+        inner: builder,
+        voxel_source: Some(VoxelCache {
+            grid: owned,
+            options,
+        }),
+    }))
 }
 
 /// # Safety
@@ -1355,5 +1423,444 @@ pub extern "C" fn world_insert_dynamic_voxel_obb(
             Bool::TRUE,
         );
         body_handle
+    })
+}
+
+/// Flip a single voxel cell of an already-inserted voxel collider **in place**,
+/// rebuilding its shape and keeping the same `ColliderHandleRaw`.
+///
+/// `solid` is treated as boolean (non-zero = solid). The world must hold the
+/// voxel source grid for `handle` (i.e. the collider was built from
+/// `collider_builder_create_voxel*`). Out-of-range coordinates are a no-op that
+/// still returns `Bool::TRUE` (nothing to update). If the cell did not change,
+/// the collider is left untouched (no rebuild). When the last solid cell is
+/// removed and the grid becomes empty, the collider is removed from the world
+/// and its handle becomes invalid — callers should drop their reference.
+///
+/// # Safety
+/// `world` must be a valid pointer returned by `world_create`.
+#[unsafe(no_mangle)]
+pub extern "C" fn collider_voxel_cell_at_point(
+    world: *const WorldHandle,
+    collider: ColliderHandleRaw,
+    point: Vec3,
+    out_block: *mut VoxelCoord,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !vec3_finite(point) {
+            set_error(ERR_INVALID_ARGUMENT, "invalid point");
+            return Bool::FALSE;
+        }
+
+        let Some(cache) = world.inner.voxel_grids.get(&collider) else {
+            set_error(ERR_UNSUPPORTED, "collider is not a voxel collider");
+            if let Some(out) = unsafe { out_block.as_mut() } {
+                *out = VoxelCoord::default();
+            }
+            return Bool::FALSE;
+        };
+
+        let g = &cache.grid;
+        let ix = ((point.x - g.origin.x) / g.voxel_size_x).floor() as i64;
+        let iy = ((point.y - g.origin.y) / g.voxel_size_y).floor() as i64;
+        let iz = ((point.z - g.origin.z) / g.voxel_size_z).floor() as i64;
+        if ix < 0
+            || iy < 0
+            || iz < 0
+            || ix as usize >= g.size_x
+            || iy as usize >= g.size_y
+            || iz as usize >= g.size_z
+        {
+            if let Some(out) = unsafe { out_block.as_mut() } {
+                *out = VoxelCoord::default();
+            }
+            return Bool::FALSE;
+        }
+
+        if let Some(out) = unsafe { out_block.as_mut() } {
+            *out = VoxelCoord {
+                found: Bool::TRUE,
+                ix,
+                iy,
+                iz,
+                nx: 0.0,
+                ny: 0.0,
+                nz: 0.0,
+            };
+        }
+        Bool::TRUE
+    })
+}
+
+/// Read whether a single voxel cell of a voxel collider is solid (non-zero)
+/// or empty (zero) without modifying the grid.
+///
+/// The read counterpart of `collider_voxel_edit`: `edit` writes a cell, this
+/// one reads it back. It completes the in-place voxel editing toolkit so the
+/// mod no longer has to keep its own mirror copy of the grid just to answer
+/// "is this block solid?" — needed for block-break drops / place checks /
+/// standing-on-block queries (pair it with `collider_voxel_cell_at_point` to
+/// turn a world point into a (ix,iy,iz) and then ask this fn for its state).
+///
+/// # Output
+/// On success `out_solid` is written with the cell's solidity (non-zero if the
+/// byte at `(x,y,z)` is non-zero) and the function returns `TRUE`. On a null
+/// `world`, a non-voxel collider, or out-of-range coordinates it returns
+/// `FALSE` and writes `0` to `out_solid`.
+///
+/// # Errors
+/// Returns `Bool::FALSE` and sets an error code for a null `world`, or a
+/// `collider` that is not backed by a voxel grid (out-of-range coordinates use
+/// `ERR_INVALID_ARGUMENT`).
+#[unsafe(no_mangle)]
+pub extern "C" fn collider_voxel_read_cell(
+    world: *const WorldHandle,
+    collider: ColliderHandleRaw,
+    x: i64,
+    y: i64,
+    z: i64,
+    out_solid: *mut u8,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            if let Some(out) = unsafe { out_solid.as_mut() } {
+                *out = 0;
+            }
+            return Bool::FALSE;
+        };
+
+        let Some(cache) = world.inner.voxel_grids.get(&collider) else {
+            set_error(ERR_UNSUPPORTED, "collider is not a voxel collider");
+            if let Some(out) = unsafe { out_solid.as_mut() } {
+                *out = 0;
+            }
+            return Bool::FALSE;
+        };
+
+        let g = &cache.grid;
+        if x < 0
+            || y < 0
+            || z < 0
+            || x as usize >= g.size_x
+            || y as usize >= g.size_y
+            || z as usize >= g.size_z
+        {
+            set_error(ERR_INVALID_ARGUMENT, "cell coordinate out of range");
+            if let Some(out) = unsafe { out_solid.as_mut() } {
+                *out = 0;
+            }
+            return Bool::FALSE;
+        }
+
+        let plane = g.size_x * g.size_z;
+        let index = (y as usize) * plane + (z as usize) * g.size_x + (x as usize);
+        let solid = *g.voxels.get(index).unwrap_or(&0) != 0;
+
+        if let Some(out) = unsafe { out_solid.as_mut() } {
+            *out = u8::from(solid);
+        }
+        Bool::TRUE
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn collider_voxel_edit(
+    world: *mut WorldHandle,
+    handle: ColliderHandleRaw,
+    x: i64,
+    y: i64,
+    z: i64,
+    solid: i32,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+
+        let Some(cache) = world.inner.voxel_grids.get_mut(&handle) else {
+            set_error(
+                ERR_UNSUPPORTED,
+                "collider is not a voxel collider (no source grid)",
+            );
+            return Bool::FALSE;
+        };
+
+        let changed = cache.grid.set_cell(x, y, z, solid != 0);
+        if !changed {
+            return Bool::TRUE;
+        }
+
+        match cache.rebuild() {
+            Some(builder) => {
+                let collider_handle = unpack_collider_handle(handle);
+                if let Some(collider) = world.inner.colliders.get_mut(collider_handle) {
+                    collider.set_shape(SharedShape(Arc::from(builder.build().shape().clone_dyn())));
+                    Bool::TRUE
+                } else {
+                    set_error(ERR_NOT_FOUND, "collider not found");
+                    Bool::FALSE
+                }
+            }
+            // Grid is now empty: remove the collider and its cache entry.
+            None => {
+                world.inner.voxel_grids.remove(&handle);
+                world
+                    .inner
+                    .colliders
+                    .remove(
+                        unpack_collider_handle(handle),
+                        &mut world.inner.islands,
+                        &mut world.inner.bodies,
+                        true,
+                    )
+                    .is_some()
+                    .into()
+            }
+        }
+    })
+}
+
+/// Overwrite the entire voxel grid of an already-inserted voxel collider **in
+/// place**, rebuilding its shape and keeping the same `ColliderHandleRaw`.
+///
+/// This is the bulk counterpart of `collider_voxel_edit` for chunk reloads /
+/// regeneration: pass the full grid plus the same voxel sizing, origin, and
+/// build options used at creation time. When the new grid is empty the
+/// collider is removed (its handle becomes invalid).
+///
+/// # Safety
+/// `voxels` must point to at least `size_x * size_y * size_z` readable bytes
+/// for the duration of the call. `world` must be a valid `world_create` handle.
+#[unsafe(no_mangle)]
+pub extern "C" fn collider_set_voxels(
+    world: *mut WorldHandle,
+    handle: ColliderHandleRaw,
+    voxels: *const u8,
+    size_x: u32,
+    size_y: u32,
+    size_z: u32,
+    voxel_size_x: f64,
+    voxel_size_y: f64,
+    voxel_size_z: f64,
+    origin: Vec3,
+    mode: u32,
+    dynamic_body: i32,
+    small_voxel_limit: u32,
+    mesh_voxel_limit: u32,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if voxels.is_null() {
+            set_error(ERR_NULL_POINTER, "voxels is null");
+            return Bool::FALSE;
+        }
+        if size_x == 0
+            || size_y == 0
+            || size_z == 0
+            || !voxel_size_x.is_finite()
+            || voxel_size_x <= 0.0
+            || !voxel_size_y.is_finite()
+            || voxel_size_y <= 0.0
+            || !voxel_size_z.is_finite()
+            || voxel_size_z <= 0.0
+            || !origin.x.is_finite()
+            || !origin.y.is_finite()
+            || !origin.z.is_finite()
+        {
+            set_error(ERR_INVALID_ARGUMENT, "invalid voxel grid arguments");
+            return Bool::FALSE;
+        }
+        let Some(len) = (size_x as usize)
+            .checked_mul(size_y as usize)
+            .and_then(|xy| xy.checked_mul(size_z as usize))
+        else {
+            set_error(ERR_CAPACITY, "voxel grid size overflow");
+            return Bool::FALSE;
+        };
+        if len > MAX_VOXEL_CELLS {
+            set_error(ERR_CAPACITY, "voxel grid too large");
+            return Bool::FALSE;
+        }
+
+        let voxels = unsafe { slice::from_raw_parts(voxels, len) }.to_vec();
+        let options = VoxelColliderOptions {
+            mode,
+            dynamic_body: Bool((dynamic_body != 0) as u8),
+            small_voxel_limit,
+            mesh_voxel_limit,
+        };
+        let grid = OwnedVoxelGrid {
+            voxels,
+            size_x: size_x as usize,
+            size_y: size_y as usize,
+            size_z: size_z as usize,
+            voxel_size_x,
+            voxel_size_y,
+            voxel_size_z,
+            origin,
+        };
+
+        match build_voxel_collider(&grid.as_grid(), options) {
+            Some(builder) => {
+                let collider_handle = unpack_collider_handle(handle);
+                if let Some(collider) = world.inner.colliders.get_mut(collider_handle) {
+                    collider.set_shape(SharedShape(Arc::from(builder.build().shape().clone_dyn())));
+                    // Keep the cache in sync so later single-cell edits work.
+                    world
+                        .inner
+                        .voxel_grids
+                        .insert(handle, VoxelCache { grid, options });
+                    Bool::TRUE
+                } else {
+                    set_error(ERR_NOT_FOUND, "collider not found");
+                    Bool::FALSE
+                }
+            }
+            // New grid empty: remove the collider and its cache entry.
+            None => {
+                world.inner.voxel_grids.remove(&handle);
+                world
+                    .inner
+                    .colliders
+                    .remove(
+                        unpack_collider_handle(handle),
+                        &mut world.inner.islands,
+                        &mut world.inner.bodies,
+                        true,
+                    )
+                    .is_some()
+                    .into()
+            }
+        }
+    })
+}
+
+/// Output of `collider_voxel_ray_pick`: the voxel cell coordinate that a ray
+/// hit on a voxel collider, plus the surface normal at the hit (so the caller
+/// can derive the adjacent cell for "place on face").
+///
+/// `found` is `FALSE` when the ray missed, hit a different collider, or the
+/// resolved cell is out of the grid bounds.
+///
+/// Layout (C ABI, read by Java via `Unsafe`):
+/// `found` @0 (u8), `ix` @8, `iy` @16, `iz` @24 (i64),
+/// `nx` @32, `ny` @40, `nz` @48 (f64). `SIZEOF` = 56.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct VoxelCoord {
+    pub found: Bool,
+    pub ix: i64,
+    pub iy: i64,
+    pub iz: i64,
+    pub nx: f64,
+    pub ny: f64,
+    pub nz: f64,
+}
+
+/// Cast a ray restricted to a single voxel collider and resolve the hit back
+/// to the voxel cell coordinate in that collider's local grid.
+///
+/// Pairs with `collider_voxel_edit`: pick the cell a player's ray points at,
+/// then flip it. `origin` / `direction` / `max_toi` / `solid` mirror
+/// `query_cast_ray`. Returns `TRUE` and fills `out_block` only when the ray
+/// actually hit `collider` (a voxel collider with a retained source grid).
+///
+/// # Safety
+/// `world` must be a valid `world_create` handle; `out_block` may be null or
+/// must point to writable space for one `VoxelCoord`.
+#[unsafe(no_mangle)]
+pub extern "C" fn collider_voxel_ray_pick(
+    world: *const WorldHandle,
+    collider: ColliderHandleRaw,
+    origin: Vec3,
+    direction: Vec3,
+    max_toi: f64,
+    solid: Bool,
+    out_block: *mut VoxelCoord,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !vec3_finite(origin) || !vec3_finite(direction) || !max_toi.is_finite() || max_toi < 0.0
+        {
+            set_error(ERR_INVALID_ARGUMENT, "invalid ray parameters");
+            return Bool::FALSE;
+        }
+
+        let hit = crate::rapier::query::query_cast_ray(
+            world,
+            origin,
+            direction,
+            max_toi,
+            solid,
+            QueryFilterDesc::default(),
+        );
+        if hit.collider == 0 || hit.collider != collider {
+            if let Some(out) = unsafe { out_block.as_mut() } {
+                *out = VoxelCoord::default();
+            }
+            return Bool::FALSE;
+        }
+
+        let Some(cache) = world.inner.voxel_grids.get(&collider) else {
+            set_error(ERR_UNSUPPORTED, "collider is not a voxel collider");
+            if let Some(out) = unsafe { out_block.as_mut() } {
+                *out = VoxelCoord::default();
+            }
+            return Bool::FALSE;
+        };
+
+        let g = &cache.grid;
+        // Nudge the hit point a hair *into* the hit cell — i.e. opposite the
+        // surface normal — so a ray that lands on a cell *face* (the common
+        // case: the player aims at a block from outside) resolves to that
+        // cell instead of the empty space just past it. A nudge along the ray
+        // direction would push past the surface into the adjacent (or
+        // out-of-bounds) cell.
+        let eps = 1e-4;
+        let point = Vec3 {
+            x: origin.x + direction.x * hit.time_of_impact - hit.normal.x * eps,
+            y: origin.y + direction.y * hit.time_of_impact - hit.normal.y * eps,
+            z: origin.z + direction.z * hit.time_of_impact - hit.normal.z * eps,
+        };
+        let ix = ((point.x - g.origin.x) / g.voxel_size_x).floor() as i64;
+        let iy = ((point.y - g.origin.y) / g.voxel_size_y).floor() as i64;
+        let iz = ((point.z - g.origin.z) / g.voxel_size_z).floor() as i64;
+        if ix < 0
+            || iy < 0
+            || iz < 0
+            || ix as usize >= g.size_x
+            || iy as usize >= g.size_y
+            || iz as usize >= g.size_z
+        {
+            if let Some(out) = unsafe { out_block.as_mut() } {
+                *out = VoxelCoord::default();
+            }
+            return Bool::FALSE;
+        }
+
+        if let Some(out) = unsafe { out_block.as_mut() } {
+            *out = VoxelCoord {
+                found: Bool::TRUE,
+                ix,
+                iy,
+                iz,
+                nx: hit.normal.x,
+                ny: hit.normal.y,
+                nz: hit.normal.z,
+            };
+        }
+        Bool::TRUE
     })
 }

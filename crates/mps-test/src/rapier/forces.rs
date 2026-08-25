@@ -55,8 +55,22 @@ mod tests {
         log: &'a mut Vec<Option<BodyForceLog>>,
         pending: &'a mut SmallVec<[mps_core::rapier::events::PendingForce; 128]>,
         friction: &'a mut Vec<(RigidBodyHandle, RigidBodyHandle, Vector)>,
+        scratch_force_pairs: &'a mut SmallVec<[(RigidBodyHandle, Vector); 64]>,
+        scratch_force_pairs_alt: &'a mut SmallVec<[(RigidBodyHandle, Vector); 64]>,
+        scratch_body_data: &'a mut SmallVec<[(RigidBodyHandle, f64, Vector); 64]>,
     ) -> ForceFacade<'a> {
-        ForceFacade::new(bodies, colliders, narrow_phase, log, pending, friction)
+        ForceFacade::new(
+            bodies,
+            colliders,
+            narrow_phase,
+            1.0 / 60.0,
+            log,
+            pending,
+            friction,
+            scratch_force_pairs,
+            scratch_force_pairs_alt,
+            scratch_body_data,
+        )
     }
 
     #[test]
@@ -75,6 +89,9 @@ mod tests {
         let mut log: Vec<Option<BodyForceLog>> = Vec::new();
         let mut pending = SmallVec::new();
         let mut friction = Vec::new();
+        let mut scratch_force_pairs = SmallVec::new();
+        let mut scratch_force_pairs_alt = SmallVec::new();
+        let mut scratch_body_data = SmallVec::new();
         let mut facade = make_facade(
             &mut bodies,
             &mut colliders,
@@ -82,6 +99,9 @@ mod tests {
             &mut log,
             &mut pending,
             &mut friction,
+            &mut scratch_force_pairs,
+            &mut scratch_force_pairs_alt,
+            &mut scratch_body_data,
         );
         let report_before = facade.drain_report();
         assert_eq!(report_before.max_reynolds_number, 0.0);
@@ -108,6 +128,9 @@ mod tests {
         let mut log: Vec<Option<BodyForceLog>> = Vec::new();
         let mut pending = SmallVec::new();
         let mut friction = Vec::new();
+        let mut scratch_force_pairs = SmallVec::new();
+        let mut scratch_force_pairs_alt = SmallVec::new();
+        let mut scratch_body_data = SmallVec::new();
         let mut facade = make_facade(
             &mut bodies,
             &mut colliders,
@@ -115,6 +138,9 @@ mod tests {
             &mut log,
             &mut pending,
             &mut friction,
+            &mut scratch_force_pairs,
+            &mut scratch_force_pairs_alt,
+            &mut scratch_body_data,
         );
 
         reg.apply_at(0, &mut facade);
@@ -180,6 +206,9 @@ mod tests {
 
         let mut pending = SmallVec::new();
         let mut friction = Vec::new();
+        let mut scratch_force_pairs = SmallVec::new();
+        let mut scratch_force_pairs_alt = SmallVec::new();
+        let mut scratch_body_data = SmallVec::new();
         let mut facade = make_facade(
             &mut bodies,
             &mut colliders,
@@ -187,6 +216,9 @@ mod tests {
             &mut log,
             &mut pending,
             &mut friction,
+            &mut scratch_force_pairs,
+            &mut scratch_force_pairs_alt,
+            &mut scratch_body_data,
         );
 
         let force = Vector::new(10.0, 0.0, 0.0);
@@ -198,13 +230,13 @@ mod tests {
         ));
 
         let report = facade.drain_report();
-        let drag = report.contributions.get(&ForceLawType::AirDrag).unwrap();
+        let drag = report.contributions.get(ForceLawType::AirDrag).unwrap();
         assert_eq!(drag.body_count, 1);
         assert!((drag.total_force.x - 10.0).abs() < 1e-12);
 
         let grav = report
             .contributions
-            .get(&ForceLawType::PointGravity)
+            .get(ForceLawType::PointGravity)
             .unwrap();
         assert_eq!(grav.body_count, 1);
 
@@ -224,6 +256,9 @@ mod tests {
 
         let mut pending = SmallVec::new();
         let mut friction = Vec::new();
+        let mut scratch_force_pairs = SmallVec::new();
+        let mut scratch_force_pairs_alt = SmallVec::new();
+        let mut scratch_body_data = SmallVec::new();
         let mut facade = make_facade(
             &mut bodies,
             &mut colliders,
@@ -231,6 +266,9 @@ mod tests {
             &mut log,
             &mut pending,
             &mut friction,
+            &mut scratch_force_pairs,
+            &mut scratch_force_pairs_alt,
+            &mut scratch_body_data,
         );
         assert!(facade.add_force(handle, Vector::new(10.0, 0.0, 0.0), ForceLawType::AirDrag));
 
@@ -264,5 +302,70 @@ mod tests {
         assert_eq!(legacy.drag_body_count, 3);
         assert_eq!(legacy.total_drag_force.x, -10.0);
         assert!(legacy.total_external_force.x == -10.0);
+    }
+
+    #[test]
+    fn facade_persistent_and_event_forces_route_to_containers() {
+        use rapier3d::dynamics::force_containers::{ForceContainer, ForceKind, Persistence};
+
+        let mut bodies = RigidBodySet::new();
+        let mut colliders = ColliderSet::new();
+        let narrow_phase = NarrowPhase::new();
+        let h = bodies.insert(RigidBodyBuilder::dynamic().build());
+
+        let mut log: Vec<Option<BodyForceLog>> = Vec::new();
+        let mut pending = SmallVec::new();
+        let mut friction = Vec::new();
+        let mut scratch_force_pairs = SmallVec::new();
+        let mut scratch_force_pairs_alt = SmallVec::new();
+        let mut scratch_body_data = SmallVec::new();
+        let mut facade = make_facade(
+            &mut bodies,
+            &mut colliders,
+            &narrow_phase,
+            &mut log,
+            &mut pending,
+            &mut friction,
+            &mut scratch_force_pairs,
+            &mut scratch_force_pairs_alt,
+            &mut scratch_body_data,
+        );
+
+        // Persistent thrust: set once via the kind-classified container model.
+        let id = facade.add_persistent_force(
+            h,
+            Vector::new(0.0, 5.0, 0.0),
+            Vector::new(0.0, 0.0, 0.0),
+            None,
+            ForceKind::Thrust,
+        );
+        assert!(id != 0, "persistent force should be assigned an id");
+
+        // Transient event force: current step only.
+        let eid = facade.emit_event_force(
+            h,
+            Vector::new(1.0, 0.0, 0.0),
+            Vector::new(0.0, 0.0, 0.0),
+            None,
+            ForceKind::Event,
+        );
+        assert!(eid != 0, "event force should be assigned an id");
+
+        // Drain the report (records both forces); `facade`'s borrow of `bodies`
+        // ends here (NLL), so we can inspect the live containers on the body below.
+        let report = facade.drain_report();
+        assert!(!report.contributions.is_empty());
+
+        let c = bodies[h]
+            .force_container(ForceKind::Thrust)
+            .expect("thrust container created");
+        assert_eq!(c.persistence(), Persistence::Persistent);
+        assert_eq!(c.len(), 1);
+
+        let ec = bodies[h]
+            .force_container(ForceKind::Event)
+            .expect("event container created");
+        assert_eq!(ec.persistence(), Persistence::Transient);
+        assert_eq!(ec.len(), 1);
     }
 }

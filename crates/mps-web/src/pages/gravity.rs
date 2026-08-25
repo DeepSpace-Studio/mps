@@ -1,71 +1,87 @@
-use topcoat::router::page;
-use topcoat::view::view;
+use dioxus::prelude::*;
+use dioxus_i18n::t;
 
-/// Gravity models page
-#[page("/gravity")]
-pub async fn gravity() -> topcoat::Result {
-    view! {
-        <div>
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:30px; padding-bottom:20px; border-bottom:1px solid #333;">
-                <div>
-                    <div style="font-size:12px; color:#4a9eff; letter-spacing:3px; text-transform:uppercase; font-family:monospace; margin-bottom:8px;">
-                        "/ PHYSICS MODULE"
-                    </div>
-                    <h1 style="font-size:28px; font-weight:300; color:#fff; margin:0 0 10px;">"引力模型、天体参数与辛积分器"</h1>
-                    <p style="font-size:14px; color:#999; line-height:1.7; margin:0;">"内置 10 个太阳系天体精密参数，支持 5 种引力模型自动选择，以及 3 种辛积分器 + 后牛顿修正。"</p>
-                </div>
-                <div style="font-size:48px; font-weight:700; color:#333; font-family:monospace; line-height:1;">"01"</div>
-            </div>
+/// Gravity Models — Newton, spherical harmonics, ellipsoid, polyhedron, Lunar Mascon.
+pub fn Gravity() -> Element {
+    rsx! {
+        section { id: "sec-gravity", class: "doc-section",
 
-            <div style="background:#16213e; border:1px solid #333; border-radius:8px; padding:24px; margin-bottom:20px;">
-                <h2 style="color:#fff;font-size:20px;font-weight:400;margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid #333;">"内置天体参数"</h2>
-                <div style="overflow-x:auto;">
-                    <table>
-                        <thead>
-                            <tr><th>"ID"</th><th>"天体"</th><th>"GM (m³/s²)"</th><th>"赤道半径 (km)"</th><th>"J2"</th></tr>
-                        </thead>
-                        <tbody>
-                            <tr><td>"0"</td><td>"Sun"</td><td>"1.327×10²⁰"</td><td>"695,700"</td><td>"2.22×10⁻⁷"</td></tr>
-                            <tr><td>"1"</td><td>"Mercury"</td><td>"2.203×10¹³"</td><td>"2,440"</td><td>"6.0×10⁻⁵"</td></tr>
-                            <tr><td>"2"</td><td>"Venus"</td><td>"3.249×10¹⁴"</td><td>"6,052"</td><td>"4.46×10⁻⁶"</td></tr>
-                            <tr><td>"3"</td><td>"Earth"</td><td>"3.986×10¹⁴"</td><td>"6,378"</td><td>"1.083×10⁻³"</td></tr>
-                            <tr><td>"4"</td><td>"Moon"</td><td>"4.903×10¹²"</td><td>"1,737"</td><td>"2.033×10⁻⁴"</td></tr>
-                            <tr><td>"5"</td><td>"Mars"</td><td>"4.283×10¹³"</td><td>"3,396"</td><td>"1.960×10⁻³"</td></tr>
-                            <tr><td>"6"</td><td>"Jupiter"</td><td>"1.267×10¹⁷"</td><td>"71,492"</td><td>"1.474×10⁻²"</td></tr>
-                            <tr><td>"7"</td><td>"Saturn"</td><td>"3.793×10¹⁶"</td><td>"60,268"</td><td>"1.629×10⁻²"</td></tr>
-                            <tr><td>"8"</td><td>"Uranus"</td><td>"5.794×10¹⁵"</td><td>"25,559"</td><td>"3.343×10⁻³"</td></tr>
-                            <tr><td>"9"</td><td>"Neptune"</td><td>"6.835×10¹⁵"</td><td>"24,764"</td><td>"3.408×10⁻³"</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+        div { class: "page-head",
+            div {
+                div { class: "page-tag", { t!("grav-tag") } }
+                h1 { class: "page-title", { t!("grav-title") } }
+                p { class: "page-desc", { t!("grav-desc") } }
+            }
+            div { class: "page-index", "02" }
+        }
 
-            <div style="background:#16213e; border:1px solid #333; border-radius:8px; padding:24px; margin-bottom:20px;">
-                <h2 style="color:#fff;font-size:20px;font-weight:400;margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid #333;">"引力模型"</h2>
-                <p style="color:#aaa; line-height:1.7;">"MPS 支持 5 种引力模型，自动根据轨道高度和精度需求选择最优模型："</p>
-                <ul style="color:#999; line-height:2; padding-left:20px;">
-                    <li><strong style="color:#ddd;">"球谐展开"</strong> " — EGM2008 8×8 阶，地球最高精度"</li>
-                    <li><strong style="color:#ddd;">"椭球引力"</strong> " — 考虑天体扁率的简化模型"</li>
-                    <li><strong style="color:#ddd;">"J2-J6 带谐"</strong> " — 带谐项摄动修正"</li>
-                    <li><strong style="color:#ddd;">"四极张量"</strong> " — 完整引力梯度张量"</li>
-                    <li><strong style="color:#ddd;">"多面体引力"</strong> " — Werner-Scheeres 方法，适合不规则天体"</li>
-                </ul>
-            </div>
+        // ── Model catalogue ──────────────────────────────────────────────
+        div { class: "section-card",
+            h2 { { t!("grav-models-title") } }
+            p { class: "p-lead", { t!("grav-models-lead") } }
+            div { class: "table-wrap",
+                table {
+                    thead { tr {
+                        th { { t!("grav-col-name") } }
+                        th { { t!("grav-col-use") } }
+                        th { { t!("grav-col-cost") } }
+                    } }
+                    tbody {
+                        tr { td { "Point-mass / Newton" } td { { t!("grav-row-newton") } } td { "O(1)" } }
+                        tr { td { "Spherical harmonics" } td { { t!("grav-row-sh") } } td { "O(N²)" } }
+                        tr { td { "Ellipsoid" } td { { t!("grav-row-ellipsoid") } } td { "O(1)" } }
+                        tr { td { "Zonal / sectoral J2–J6" } td { { t!("grav-row-zonal") } } td { "O(N)" } }
+                        tr { td { "Quadrupole tensor" } td { { t!("grav-row-quad") } } td { "O(1)" } }
+                        tr { td { "Polyhedron (Werner–Scheeres)" } td { { t!("grav-row-poly") } } td { "O(F)" } }
+                        tr { td { "Lunar Mascon (GRAIL)" } td { { t!("grav-row-mascon") } } td { "O(M)" } }
+                    }
+                }
+            }
+        }
 
-            <div style="background:#16213e; border:1px solid #333; border-radius:8px; padding:24px; margin-bottom:20px;">
-                <h2 style="color:#fff;font-size:20px;font-weight:400;margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid #333;">"API"</h2>
-                <pre><code class="language-rust">
-"// 注册天体引力到 ForceRegistry
-world_register_celestial_gravity(world, CelestialBody::Earth,
-    GravityModel::SphericalHarmonics { degree: 8, order: 8 });
+        // ── Modelled bodies ──────────────────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("grav-bodies-title") } }
+            div { class: "feature-grid",
+                div { class: "feature-card",
+                    h3 { { t!("grav-body-earth-title") } }
+                    p { { t!("grav-body-earth-desc") } }
+                }
+                div { class: "feature-card",
+                    h3 { { t!("grav-body-moon-title") } }
+                    p { { t!("grav-body-moon-desc") } }
+                }
+                div { class: "feature-card",
+                    h3 { { t!("grav-body-mars-title") } }
+                    p { { t!("grav-body-mars-desc") } }
+                }
+                div { class: "feature-card",
+                    h3 { { t!("grav-body-sun-title") } }
+                    p { { t!("grav-body-sun-desc") } }
+                }
+            }
+        }
 
-// 设置引力参数
-world_set_gravity(world, &Vec3 { x: 0.0, y: -9.81, z: 0.0 });
+        // ── Auto selection ────────────────────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("grav-auto-title") } }
+            p { class: "p-lead", { t!("grav-auto-lead") } }
+            div { class: "callout-note",
+                p { { t!("grav-auto-note") } }
+            }
+        }
 
-// 设置积分参数
-world_set_integration_parameters(world, 1.0/60.0, 4, 1);"
-                </code></pre>
-            </div>
-        </div>
+        // ── C API surface ─────────────────────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("grav-api-title") } }
+            p { class: "p-muted", { t!("grav-api-desc") } }
+            div { class: "code-block",
+                pre { code {
+                    "// C ABI — mps-core\nworld_set_point_mass_gravity(world, gm);\nworld_set_spherical_harmonics(world, &egm2008);\nworld_set_polyhedron_gravity(world, &verts, &faces);\nlunar_mascon_gravity(position);"
+                } }
+            }
+        }
+
+        }
     }
 }

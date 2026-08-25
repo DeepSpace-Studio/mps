@@ -1,43 +1,80 @@
-use topcoat::router::page;
-use topcoat::view::view;
+use dioxus::prelude::*;
+use dioxus_i18n::t;
 
-/// Voxel colliders page
-#[page("/voxel")]
-pub async fn voxel() -> topcoat::Result {
-    view! {
-        <div>
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #333;">
-                <div>
-                    <div style="font-size:12px;color:#4a9eff;letter-spacing:3px;text-transform:uppercase;font-family:monospace;margin-bottom:8px;">"/ VOXEL"</div>
-                    <h1 style="font-size:28px;font-weight:300;color:#fff;margin:0 0 10px;">"Voxel 碰撞体"</h1>
-                    <p style="font-size:14px;color:#999;line-height:1.7;margin:0;">"体素碰撞体支持从原始网格、AABB 和 OBB 构建，支持多种构建模式。"</p>
-                </div>
-                <div style="font-size:48px;font-weight:700;color:#333;font-family:monospace;line-height:1;">"01"</div>
-            </div>
-            <div style="background:#16213e;border:1px solid #333;border-radius:8px;padding:24px;margin-bottom:20px;">
-                <h2 style="color:#fff;font-size:20px;font-weight:400;margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid #333;">"构建模式"</h2>
-                <ul style="color:#999;line-height:2;padding-left:20px;">
-                    <li><strong style="color:#ddd;">"Auto"</strong> " — 根据体素数量和刚体类型自动选择"</li>
-                    <li><strong style="color:#ddd;">"Cuboids"</strong> " — 每个固体体素一个立方体"</li>
-                    <li><strong style="color:#ddd;">"GreedyCuboids"</strong> " — 合并相邻固体体素"</li>
-                    <li><strong style="color:#ddd;">"SurfaceMesh"</strong> " — 生成外表面三角网格"</li>
-                </ul>
-            </div>
-            <div style="background:#16213e;border:1px solid #333;border-radius:8px;padding:24px;margin-bottom:20px;">
-                <h2 style="color:#fff;font-size:20px;font-weight:400;margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid #333;">"API"</h2>
-                <pre><code class="language-rust">
-"// 从原始网格创建
-let collider = collider_builder_create_voxel_aabb(
-    &grid, 128, 128, 128,
-    VoxelColliderOptions::GreedyCuboids
-);
+/// Voxel System — dense voxel grid + collider build + terrain gravity bridge.
+pub fn Voxel() -> Element {
+    rsx! {
+        section { id: "sec-voxel", class: "doc-section",
 
-// 从 OBB 创建
-let collider = collider_builder_create_voxel_obb(
-    &grid, &obb, options
-);"
-                </code></pre>
-            </div>
-        </div>
+        div { class: "page-head",
+            div {
+                div { class: "page-tag", { t!("vox-tag") } }
+                h1 { class: "page-title", { t!("vox-title") } }
+                p { class: "page-desc", { t!("vox-desc") } }
+            }
+            div { class: "page-index", "05" }
+        }
+
+        // ── Overview ──────────────────────────────────────────────────────
+        div { class: "section-card",
+            h2 { { t!("vox-overview-title") } }
+            p { class: "p-lead", { t!("vox-overview-lead") } }
+            p { class: "p-muted", { t!("vox-overview-body") } }
+        }
+
+        // ── VoxelGrid data model ───────────────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("vox-grid-title") } }
+            p { class: "p-muted", { t!("vox-grid-desc") } }
+            ul { class: "ul-plain",
+                li { { t!("vox-grid-li-1") } }
+                li { { t!("vox-grid-li-2") } }
+                li { { t!("vox-grid-li-3") } }
+            }
+        }
+
+        // ── build_voxel_collider pipeline ─────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("vox-build-title") } }
+            p { class: "p-lead", { t!("vox-build-lead") } }
+            div { class: "code-block",
+                pre { code {
+                    "// mps-core::rapier::voxel\nlet grid = VoxelGrid::borrow(&cells, &dims, &origin, scale);\nlet collider = build_voxel_collider(&grid, /* density */);\nworld_add_collider(world, collider);"
+                } }
+            }
+            p { class: "p-note", { t!("vox-build-note") } }
+        }
+
+        // ── Terrain gravity bridge ─────────────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("vox-terrain-title") } }
+            p { class: "p-muted", { t!("vox-terrain-desc") } }
+            ul { class: "ul-plain",
+                li { { t!("vox-terrain-li-direct") } }
+                li { { t!("vox-terrain-li-fft") } }
+                li { { t!("vox-terrain-li-poly") } }
+            }
+        }
+
+        // ── Use cases ──────────────────────────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("vox-cases-title") } }
+            div { class: "feature-grid",
+                div { class: "feature-card",
+                    h3 { { t!("vox-case-lunar-title") } }
+                    p { { t!("vox-case-lunar-desc") } }
+                }
+                div { class: "feature-card",
+                    h3 { { t!("vox-case-terrain-title") } }
+                    p { { t!("vox-case-terrain-desc") } }
+                }
+                div { class: "feature-card",
+                    h3 { { t!("vox-case-proximity-title") } }
+                    p { { t!("vox-case-proximity-desc") } }
+                }
+            }
+        }
+
+        }
     }
 }

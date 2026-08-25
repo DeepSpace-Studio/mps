@@ -1,72 +1,142 @@
-use topcoat::router::page;
-use topcoat::view::view;
+use dioxus::prelude::*;
+use dioxus_i18n::t;
 
-/// API reference page
-#[page("/api")]
-pub async fn api() -> topcoat::Result {
-    view! {
-        <div>
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #333;">
-                <div>
-                    <div style="font-size:12px;color:#4a9eff;letter-spacing:3px;text-transform:uppercase;font-family:monospace;margin-bottom:8px;">"/ REFERENCE"</div>
-                    <h1 style="font-size:28px;font-weight:300;color:#fff;margin:0 0 10px;">"API 参考"</h1>
-                    <p style="font-size:14px;color:#999;line-height:1.7;margin:0;">"所有 pub extern C 函数导出，按子系统分组。总计约 480 个函数。"</p>
-                </div>
-                <div style="font-size:48px;font-weight:700;color:#333;font-family:monospace;line-height:1;">"01"</div>
-            </div>
-            <div style="background:#16213e;border:1px solid #333;border-radius:8px;padding:24px;margin-bottom:20px;">
-                <h2 style="color:#fff;font-size:20px;font-weight:400;margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid #333;">"🌍 世界管理 (World)"</h2>
-                <div style="overflow-x:auto;">
-                    <table>
-                        <thead><tr><th>"C 函数"</th><th>"JNI"</th><th>"说明"</th></tr></thead>
-                        <tbody>
-                            <tr><td>"world_create"</td><td>"✓"</td><td>"创建物理世界，设置重力向量"</td></tr>
-                            <tr><td>"world_destroy"</td><td>"✓"</td><td>"销毁世界及所有资源"</td></tr>
-                            <tr><td>"world_step"</td><td>"✓"</td><td>"推进模拟 (包含 ForceRegistry 调度)"</td></tr>
-                            <tr><td>"world_set_gravity"</td><td>"✓"</td><td>"设置重力"</td></tr>
-                            <tr><td>"world_get_gravity_out"</td><td>"✓"</td><td>"读取重力"</td></tr>
-                            <tr><td>"world_set_integration_parameters"</td><td>"✓"</td><td>"设置 dt、求解器迭代次数、CCD 子步"</td></tr>
-                            <tr><td>"world_get_rigid_body_set_size"</td><td>"✓"</td><td>"刚体总数"</td></tr>
-                            <tr><td>"world_get_collider_set_size"</td><td>"✓"</td><td>"碰撞体总数"</td></tr>
-                            <tr><td>"world_body_snapshot"</td><td>"✓"</td><td>"批量快照所有刚体状态"</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+use crate::metrics::{CORE_FFI_COUNT, FFI_COLLIDER, FFI_QUERY, FFI_RIGID_BODY, FFI_WORLD};
 
-            <div style="background:#16213e;border:1px solid #333;border-radius:8px;padding:24px;margin-bottom:20px;">
-                <h2 style="color:#fff;font-size:20px;font-weight:400;margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid #333;">"🔩 刚体 (Rigid Body)"</h2>
-                <div style="overflow-x:auto;">
-                    <table>
-                        <thead><tr><th>"C 函数"</th><th>"JNI"</th><th>"说明"</th></tr></thead>
-                        <tbody>
-                            <tr><td>"rigid_body_builder_create"</td><td>"✓"</td><td>"创建刚体构建器"</td></tr>
-                            <tr><td>"rigid_body_builder_set_pos"</td><td>"✓"</td><td>"设置位置"</td></tr>
-                            <tr><td>"rigid_body_builder_set_rot"</td><td>"✓"</td><td>"设置旋转"</td></tr>
-                            <tr><td>"world_insert_rigid_body"</td><td>"✓"</td><td>"插入刚体到世界"</td></tr>
-                            <tr><td>"rigid_body_get_position"</td><td>"✓"</td><td>"读取位置"</td></tr>
-                            <tr><td>"rigid_body_set_velocity"</td><td>"✓"</td><td>"设置线速度"</td></tr>
-                            <tr><td>"rigid_body_apply_force"</td><td>"✓"</td><td>"施加力"</td></tr>
-                            <tr><td>"rigid_body_apply_impulse"</td><td>"✓"</td><td>"施加冲量"</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+/// API Reference — the C ABI surface of `mps-core` as exported in
+/// `crates/mps-core/include/rigid_body.h` by cbindgen.
+pub fn Api() -> Element {
+    rsx! {
+        section { id: "sec-api", class: "doc-section",
 
-            <div style="background:#16213e;border:1px solid #333;border-radius:8px;padding:24px;margin-bottom:20px;">
-                <h2 style="color:#fff;font-size:20px;font-weight:400;margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid #333;">"📦 碰撞体 (Collider)"</h2>
-                <div style="overflow-x:auto;">
-                    <table>
-                        <thead><tr><th>"C 函数"</th><th>"JNI"</th><th>"说明"</th></tr></thead>
-                        <tbody>
-                            <tr><td>"collider_builder_create"</td><td>"✓"</td><td>"创建碰撞体构建器"</td></tr>
-                            <tr><td>"collider_builder_set_half_extents"</td><td>"✓"</td><td>"设置半长宽"</td></tr>
-                            <tr><td>"collider_set_friction"</td><td>"✓"</td><td>"设置摩擦系数"</td></tr>
-                            <tr><td>"collider_set_restitution"</td><td>"✓"</td><td>"设置恢复系数"</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+        div { class: "page-head",
+            div {
+                div { class: "page-tag", { t!("api-tag") } }
+                h1 { class: "page-title", { t!("api-title") } }
+                p { class: "page-desc", { t!("api-desc", total: CORE_FFI_COUNT) } }
+            }
+            div { class: "page-index", "14" }
+        }
+
+        // ── Header surface ──────────────────────────────────────────────────
+        div { class: "section-card",
+            h2 { { t!("api-header-title") } }
+            p { class: "p-lead", { t!("api-header-lead", total: CORE_FFI_COUNT) } }
+            p { class: "p-muted", { t!("api-header-body") } }
+            div { class: "code-block",
+                pre { code {
+                    "// crates/mps-core/include/rigid_body.h\n// Generated with cbindgen:0.29.4 — do not edit by hand.\n#include <stdbool.h>\n#include <stdint.h>\n#include <stdlib.h>\n\ntypedef struct WorldHandle WorldHandle;\nuint32_t world_create(double dt, uint32_t iters, uint32_t ccd);"
+                } }
+            }
+        }
+
+        // ── Function prefix breakdown ───────────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("api-prefix-title") } }
+            p { class: "p-lead", { t!("api-prefix-lead") } }
+            div { class: "table-wrap",
+                table {
+                    thead { tr {
+                        th { { t!("api-col-prefix") } }
+                        th { { t!("api-col-count") } }
+                        th { { t!("api-col-domain") } }
+                    } }
+                    tbody {
+                        tr { td { "world_*" } td { { FFI_WORLD } } td { { t!("api-row-world") } } }
+                        tr { td { "rigid_body_*" } td { { FFI_RIGID_BODY } } td { { t!("api-row-rigid") } } }
+                        tr { td { "collider_*" } td { { FFI_COLLIDER } } td { { t!("api-row-collider") } } }
+                        tr { td { "query_*" } td { { FFI_QUERY } } td { { t!("api-row-query") } } }
+                    }
+                }
+            }
+            p { class: "p-note", { t!("api-prefix-note") } }
+        }
+
+        // ── Common handle types ────────────────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("api-handles-title") } }
+            div { class: "table-wrap",
+                table {
+                    thead { tr {
+                        th { { t!("api-col-type") } }
+                        th { { t!("api-col-scope") } }
+                    } }
+                    tbody {
+                        tr { td { "WorldHandle" } td { { t!("api-handle-world") } } }
+                        tr { td { "RigidBodyHandleRaw" } td { { t!("api-handle-rigid") } } }
+                        tr { td { "ColliderHandleRaw" } td { { t!("api-handle-collider") } } }
+                        tr { td { "RigidBodyBuilderHandle" } td { { t!("api-handle-rb-build") } } }
+                        tr { td { "ColliderBuilderHandle" } td { { t!("api-handle-col-build") } } }
+                        tr { td { "JointBuilderHandle" } td { { t!("api-handle-joint") } } }
+                        tr { td { "RTreeHandle" } td { { t!("api-handle-rtree") } } }
+                        tr { td { "CRbTreeHandle" } td { { t!("api-handle-crbtree") } } }
+                        tr { td { "CharacterControllerHandle" } td { { t!("api-handle-cc") } } }
+                    }
+                }
+            }
+        }
+
+        // ── Flat record types ──────────────────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("api-records-title") } }
+            p { class: "p-lead", { t!("api-records-lead") } }
+            ul { class: "ul-plain",
+                li { { t!("api-record-vec3") } }
+                li { { t!("api-record-quat") } }
+                li { { t!("api-record-aabb") } }
+                li { { t!("api-record-shape") } }
+                li { { t!("api-record-event") } }
+                li { { t!("api-record-filter") } }
+            }
+        }
+
+        // ── Error reporting ─────────────────────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("api-error-title") } }
+            p { class: "p-lead", { t!("api-error-lead") } }
+            div { class: "code-block",
+                pre { code {
+                    "// 错误码 + 线程局部消息两件套\n#define ERR_OK              0\n#define ERR_NULL_POINTER    1\n#define ERR_INVALID_ARGUMENT 2\n#define ERR_INTERNAL        3\n\nuint32_t last_error_code(void);\nconst char *last_error_message(void);\nvoid last_error_clear(void);"
+                } }
+            }
+            p { class: "p-note", { t!("api-error-note") } }
+        }
+
+        // ── World lifecycle ─────────────────────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("api-lifecycle-title") } }
+            div { class: "code-block",
+                pre { code {
+                    r#"// 1. 创建 world
+WorldHandle *w = world_create(dt, iters, ccd);
+
+// 2. 构造刚体 + 碰撞体
+RigidBodyBuilderHandle rb = rigid_body_builder_create(...);
+RigidBodyHandleRaw h   = world_add_rigid_body(w, rb);
+
+// 3. 步进
+world_step(w);
+
+// 4. 查询 + 读写状态
+Vec3 p; rigid_body_translation_out(w, h, &p);
+
+// 5. 销毁
+world_destroy(w);"#
+                } }
+            }
+        }
+
+        // ── ABI stability ──────────────────────────────────────────────────
+        div { class: "section-divider",
+            h2 { class: "section-heading", { t!("api-stability-title") } }
+            ul { class: "ul-plain",
+                li { { t!("api-stability-cbindgen") } }
+                li { { t!("api-stability-repr") } }
+                li { { t!("api-stability-version") } }
+                li { { t!("api-stability-redline") } }
+            }
+        }
+
+        }
     }
 }
