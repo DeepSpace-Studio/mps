@@ -34,6 +34,7 @@ use crate::rapier::ffi::{
 };
 use rapier3d::math::Vector;
 use rapier3d::prelude::soft_body::{SoftBody, SoftBodyId, SoftSolver};
+use std::collections::HashSet;
 
 const JOINT_TYPE_SPRING: u32 = 4;
 
@@ -805,6 +806,126 @@ pub extern "C" fn soft_body_configure_solver(
                 Bool::FALSE
             }
         }
+    })
+}
+
+// ── Phase 5c: 生物软体（复用 Phase 3 四面体 XPBD 体积约束）──────────────────
+//
+// `soft_body_build_tetra_mesh` 一次性灌入质点 + 四面体拓扑，自动为每个四面体
+// 的 6 条边建 XPBD 距离约束（去重），并切到 Xpbd 求解器。体积约束在
+// `SoftBody::step_xpbd` 内随四面体自动激活 —— 于是得到一个「史莱姆 / 水母」式
+// 可压缩可回弹的软体生物，无需任何新物理。
+// 该函数纯包裹 rapier 既有 API，不改动 fork。
+
+/// Build a tetrahedral-mesh soft body from raw particle positions and tetrahedra,
+/// then switch it to the XPBD solver so the volume constraints are active.
+///
+/// `particles` is a `particles_len`-long array of `Vec3`; `tets` is a flat array
+/// of `tets_len * 4` `u32` vertex indices (`[a,b,c,d, a,b,c,d, ...]`). For every
+/// tetrahedron, its 6 edges are added as XPBD distance constraints (deduplicated
+/// across shared edges). Finally the body is configured with `iterations`/`compliance`.
+///
+/// Returns the new `SoftBodyId` (as `u32`) or `u32::MAX` on error.
+///
+/// # Safety
+/// `world` must be a valid world pointer. `particles`/`tets` must point to arrays
+/// of at least `particles_len` / `tets_len*4` elements respectively.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_build_tetra_mesh(
+    world: *mut WorldHandle,
+    gravity: Vec3,
+    particles: *const Vec3,
+    particles_len: u32,
+    tets: *const u32,
+    tets_len: u32,
+    particle_mass: f64,
+    compliance: f64,
+    iterations: u32,
+) -> u32 {
+    ffi_guard(u32::MAX, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(
+                ERR_NULL_POINTER,
+                "soft_body_build_tetra_mesh: world is null",
+            );
+            return u32::MAX;
+        };
+        if particles.is_null() || particles_len == 0 || tets.is_null() || tets_len == 0 {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_build_tetra_mesh: empty input",
+            );
+            return u32::MAX;
+        }
+        if !vec3_finite(gravity)
+            || !particle_mass.is_finite()
+            || particle_mass <= 0.0
+            || !compliance.is_finite()
+            || compliance < 0.0
+            || iterations == 0
+        {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_build_tetra_mesh: bad gravity/mass/compliance/iterations",
+            );
+            return u32::MAX;
+        }
+        let plist = unsafe { std::slice::from_raw_parts(particles, particles_len as usize) };
+        let tlist = unsafe { std::slice::from_raw_parts(tets, tets_len as usize * 4) };
+
+        let mut body = SoftBody::new(vec3_to_rapier(gravity));
+        // Add particles (all dynamic; caller may pin later via soft_body_add_particle
+        // is not applicable to existing particles, so pins are added up-front by the
+        // caller through a separate pinned-particle path if needed).
+        for p in plist {
+            if !vec3_finite(*p) {
+                set_error(
+                    ERR_INVALID_ARGUMENT,
+                    "soft_body_build_tetra_mesh: non-finite particle",
+                );
+                return u32::MAX;
+            }
+            let i = body.add_particle(vec3_to_rapier(*p));
+            body.particles[i].inv_mass = 1.0 / particle_mass;
+        }
+
+        // Add tetrahedra + their 6 edges as XPBD distance constraints (dedup edges).
+        let mut edges: HashSet<(u32, u32)> = HashSet::new();
+        let mut tet_fail = false;
+        for t in tlist.as_chunks::<4>().0 {
+            let tet = [t[0], t[1], t[2], t[3]];
+            if body.add_tetrahedron(tet).is_none() {
+                tet_fail = true;
+                break;
+            }
+            for (a, b) in [
+                (tet[0], tet[1]),
+                (tet[0], tet[2]),
+                (tet[0], tet[3]),
+                (tet[1], tet[2]),
+                (tet[1], tet[3]),
+                (tet[2], tet[3]),
+            ] {
+                let (lo, hi) = if a <= b { (a, b) } else { (b, a) };
+                edges.insert((lo, hi));
+            }
+        }
+        if tet_fail {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_build_tetra_mesh: bad tetrahedron indices",
+            );
+            return u32::MAX;
+        }
+        for (lo, hi) in edges {
+            // compliance propagates to edges too; rest length captured from geometry.
+            body.add_distance_constraint(lo as usize, hi as usize, compliance);
+        }
+
+        body.configure_xpbd(iterations, compliance);
+        let id = world.inner.soft_bodies.insert(body);
+        clear_error();
+        id.0
     })
 }
 

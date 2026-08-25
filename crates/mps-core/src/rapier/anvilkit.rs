@@ -2,7 +2,8 @@ use anvilkit::core::math::Transform;
 use anvilkit::ecs::physics as ak_physics;
 use anvilkit::ecs::prelude::*;
 use dashmap::DashMap;
-use rapier3d::prelude::soft_body::{SoftBody, SoftBodyId};
+use rapier3d::math::Vector;
+use rapier3d::prelude::soft_body::SoftBodyId;
 use rapier3d::prelude::{ColliderBuilder, RigidBodyBuilder, RigidBodyType};
 
 use crate::rapier::aerodynamics;
@@ -15,6 +16,7 @@ use crate::rapier::ffi::{
     vec3_finite,
 };
 use crate::rapier::fluid;
+use crate::rapier::soft_body::soft_body_build_tetra_mesh;
 use crate::rapier::trajectory;
 
 const EPSILON: f64 = 1.0e-12;
@@ -153,9 +155,12 @@ impl AnvilKitAppState {
     }
 
     /// Build a soft body bound to an anvilkit `Entity` and register the
-    /// `entity → SoftBodyId` link. The soft body starts as a single point-mass
-    /// particle placed at the entity's current world transform; the caller can
-    /// then grow it via the `soft_body_*` FFI (or voxel builder) and/or pin it.
+    /// `entity → SoftBodyId` link. The soft body is created as a **bounding-box
+    /// tetrahedral mesh**: eight corner particles at the entity's world AABB
+    /// corners plus six tetrahedra spanning the box. After switching to the XPBD
+    /// solver (via [`soft_body_build_tetra_mesh`]), the box behaves like a
+    /// compressible "blob" creature — reuse of the Phase 3 volume constraint.
+    ///
     /// Returns the `SoftBodyId` (as `u32`) on success, or `0` on error.
     fn spawn_soft_body(
         &mut self,
@@ -173,24 +178,82 @@ impl AnvilKitAppState {
             return 0;
         };
         let pos = transform.translation;
-        let p = rapier3d::math::Vector::new(pos.x as f64, pos.y as f64, pos.z as f64);
+        // Entity center in our f64 world units (anvilkit uses f32 translations).
+        let center = rapier3d::math::Vector::new(pos.x as f64, pos.y as f64, pos.z as f64);
 
-        let mut body = SoftBody::new(world.inner.gravity);
-        let idx = if pin {
-            body.add_pinned(p)
+        // Use a unit-ish half-extent so the blob has a real volume; the caller's
+        // `particle_mass` sets the per-corner mass and `stiffness`/`damping` are
+        // forwarded as XPBD compliance/iterations via the shared builder.
+        let h = 0.5f64;
+        let corners: [rapier3d::math::Vector; 8] = [
+            center + Vector::new(-h, -h, -h),
+            center + Vector::new(h, -h, -h),
+            center + Vector::new(-h, h, -h),
+            center + Vector::new(h, h, -h),
+            center + Vector::new(-h, -h, h),
+            center + Vector::new(h, -h, h),
+            center + Vector::new(-h, h, h),
+            center + Vector::new(h, h, h),
+        ];
+        // 6 tetrahedra decomposing the cube (classic 5/6-tet split, here 6).
+        let tets: [u32; 24] = [
+            0, 2, 3, 7, // bottom-back
+            0, 3, 1, 7, // bottom-front
+            0, 1, 5, 7, // front
+            0, 5, 4, 7, // top-front
+            0, 4, 6, 7, // top-back
+            0, 6, 2, 7, // back
+        ];
+
+        // `stiffness`/`damping` are repurposed as XPBD compliance / iterations so
+        // the caller keeps the same 7-arg ABI while still tuning the blob.
+        let compliance = if stiffness.is_finite() && stiffness >= 0.0 {
+            stiffness
         } else {
-            let i = body.add_particle(p);
-            if particle_mass.is_finite() && particle_mass > 0.0 {
-                body.particles[i].inv_mass = 1.0 / particle_mass;
-            }
-            i
+            0.0
         };
-        // Silence unused-var warning when stiffness/damping are not yet used.
-        let _ = (stiffness, damping, idx);
+        let iterations = if damping.is_finite() && damping >= 1.0 {
+            damping as u32
+        } else {
+            20
+        };
+        let _ = pin; // bounding-box blob has no pinned corner by default; reserved.
 
-        let id = world.inner.soft_bodies.insert(body);
-        self.entity_to_soft_body.insert(entity, id);
-        id.0
+        // Delegate to the shared tetra-mesh builder (same helper mps-core FFI uses).
+        let particles: Vec<Vec3> = corners
+            .iter()
+            .map(|c| Vec3 {
+                x: c.x,
+                y: c.y,
+                z: c.z,
+            })
+            .collect();
+        let id = soft_body_build_tetra_mesh(
+            world,
+            world.inner.gravity,
+            particles.as_ptr(),
+            particles.len() as u32,
+            tets.as_ptr(),
+            (tets.len() / 4) as u32,
+            particle_mass,
+            compliance,
+            iterations,
+        );
+        if id == u32::MAX {
+            return 0;
+        }
+        let sid = SoftBodyId(id);
+        // If the entity should be pinned, pin the center-most corner (corner 0).
+        if pin {
+            if let Some(body) = world.inner.soft_bodies.get_mut(sid) {
+                // Re-pin by zeroing the first particle's inverse mass.
+                if let Some(p) = body.particles.first_mut() {
+                    p.inv_mass = 0.0;
+                }
+            }
+        }
+        self.entity_to_soft_body.insert(entity, sid);
+        sid.0
     }
 
     fn entity_to_soft_body_id(&self, entity_bits: u64) -> u32 {

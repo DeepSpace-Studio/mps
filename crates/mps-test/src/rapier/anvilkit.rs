@@ -87,7 +87,18 @@ mod tests {
                 .get(rapier3d::prelude::soft_body::SoftBodyId(sb_id))
         };
         let sb = sb.expect("soft body present in world");
-        assert_eq!(sb.particles.len(), 1, "single-particle soft body");
+        // Phase 5c: the bound soft body is a bounding-box tetra mesh — eight corner
+        // particles plus six tetrahedra (was a single point-mass before 5c).
+        assert_eq!(
+            sb.particles.len(),
+            8,
+            "bounding-box tetra soft body (8 corners)"
+        );
+        assert_eq!(
+            sb.tetrahedra.len(),
+            6,
+            "bounding-box tetra soft body (6 tetrahedra)"
+        );
 
         // A bogus entity yields no soft body.
         assert_eq!(

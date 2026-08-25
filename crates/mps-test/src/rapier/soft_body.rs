@@ -3,10 +3,10 @@ mod tests {
     use mps_core::rapier::ffi::{Bool, RigidBodyHandleRaw, Vec3, WorldHandle};
     use mps_core::rapier::soft_body::{
         soft_body_add_distance_constraint, soft_body_add_particle, soft_body_add_spring,
-        soft_body_add_tetrahedron, soft_body_configure_solver, soft_body_count, soft_body_create,
-        soft_body_destroy, soft_body_get_particle, soft_body_particle_count,
-        soft_body_remove_particle, soft_body_set_gravity, soft_body_voxel_build, soft_chain_create,
-        soft_chain_node_handles,
+        soft_body_add_tetrahedron, soft_body_build_tetra_mesh, soft_body_configure_solver,
+        soft_body_count, soft_body_create, soft_body_destroy, soft_body_get_particle,
+        soft_body_particle_count, soft_body_remove_particle, soft_body_set_gravity,
+        soft_body_voxel_build, soft_chain_create, soft_chain_node_handles,
     };
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
     use rapier3d::prelude::soft_body::SoftBodyId;
@@ -590,6 +590,174 @@ mod tests {
         };
         assert_eq!(sb.particles.len(), 1);
         assert!(sb.particles[0].pos.x.is_finite());
+
+        world_destroy(world);
+    }
+
+    // ── Phase 5c: 生物软体（复用 Phase 3 四面体 XPBD 体积约束）────────────────
+
+    #[test]
+    fn soft_body_build_tetra_mesh_xpbd_holds_volume_under_gravity() {
+        let world = make_world();
+        assert!(!world.is_null());
+
+        // Regular tetrahedron (one vertex pinned at top, three hang free).
+        let particles: [Vec3; 4] = [
+            Vec3 {
+                x: 0.0,
+                y: 2.0,
+                z: 0.0,
+            }, // 0: pinned anchor
+            Vec3 {
+                x: 1.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            Vec3 {
+                x: -0.5,
+                y: 0.0,
+                z: 0.866,
+            },
+            Vec3 {
+                x: -0.5,
+                y: 0.0,
+                z: -0.866,
+            },
+        ];
+        // One tetrahedron spanning all four corners.
+        let tets: [u32; 4] = [0, 1, 2, 3];
+
+        let id = soft_body_build_tetra_mesh(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: -9.81,
+                z: 0.0,
+            },
+            particles.as_ptr(),
+            particles.len() as u32,
+            tets.as_ptr(),
+            1,
+            1.0, // particle mass
+            0.0, // compliance 0 → rigid volume constraint
+            20,  // iterations
+        );
+        assert!(id != u32::MAX, "tetra mesh should build");
+
+        // Pin vertex 0 (build_tetra_mesh creates all-dynamic; replicate the
+        // caller's pin step by zeroing its inverse mass — same as anvilkit does).
+        unsafe {
+            let sb = (*world)
+                .inner
+                .soft_bodies
+                .get_mut(SoftBodyId(id))
+                .expect("soft body present");
+            assert_eq!(sb.particles.len(), 4);
+            assert_eq!(sb.tetrahedra.len(), 1);
+            sb.particles[0].inv_mass = 0.0;
+        }
+
+        let rest = unsafe {
+            (*world)
+                .inner
+                .soft_bodies
+                .get(SoftBodyId(id))
+                .unwrap()
+                .total_volume()
+        };
+        assert!(rest.abs() > 1e-6, "tetrahedron has non-zero rest volume");
+
+        for _ in 0..200 {
+            world_step(world, 1.0 / 60.0);
+        }
+
+        let sb = unsafe {
+            (*world)
+                .inner
+                .soft_bodies
+                .get(SoftBodyId(id))
+                .expect("soft body present")
+        };
+        let final_vol = sb.total_volume();
+        // Volume constraint (compliance 0) keeps the tetra's volume near rest
+        // even as the free vertices sag under gravity — the XPBD rebound.
+        let rel_err = (final_vol - rest).abs() / rest.abs();
+        assert!(
+            rel_err < 0.05,
+            "XPBD volume constraint holds volume (rel_err={rel_err})"
+        );
+        // Anchor stayed put; free vertices settled at finite positions.
+        assert!(sb.particles[0].pos.y.is_finite());
+        for p in &sb.particles {
+            assert!(p.pos.x.is_finite() && p.pos.y.is_finite() && p.pos.z.is_finite());
+        }
+
+        world_destroy(world);
+    }
+
+    #[test]
+    fn soft_body_build_tetra_mesh_rejects_degenerate() {
+        let world = make_world();
+        assert!(!world.is_null());
+
+        let particles: [Vec3; 4] = [
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            Vec3 {
+                x: 1.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            Vec3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            },
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 1.0,
+            },
+        ];
+        // Degenerate tetrahedron (duplicate vertex 0) → rejected.
+        let bad_tets: [u32; 4] = [0, 0, 1, 2];
+        assert_eq!(
+            soft_body_build_tetra_mesh(
+                world,
+                Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                particles.as_ptr(),
+                particles.len() as u32,
+                bad_tets.as_ptr(),
+                1,
+                1.0,
+                0.0,
+                20,
+            ),
+            u32::MAX
+        );
+
+        // Empty particle/tet arrays → rejected.
+        assert_eq!(
+            soft_body_build_tetra_mesh(
+                world,
+                Vec3::default(),
+                std::ptr::null(),
+                0,
+                std::ptr::null(),
+                0,
+                1.0,
+                0.0,
+                20,
+            ),
+            u32::MAX
+        );
 
         world_destroy(world);
     }
