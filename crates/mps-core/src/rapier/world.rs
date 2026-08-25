@@ -98,6 +98,11 @@ pub struct PhysicsWorld {
     /// is applied inside `SoftBody::step`; bound particles route their spring
     /// forces into the rigid-body `force_containers` via `write_spring_forces`.
     pub soft_bodies: SoftBodySet,
+    /// Phase 5d: per-soft-body voxel→particle mapping so a dug-out voxel cell can
+    /// be mapped back to the exact particle index to remove via `soft_body_voxel_dig`.
+    /// Keyed by `SoftBodyId.0`; populated only by `soft_body_voxel_build`.
+    pub(crate) voxel_soft_meta:
+        std::collections::HashMap<u32, crate::rapier::soft_body::VoxelSoftMeta>,
     pub(crate) hooks: crate::rapier::events::CallbackPhysicsHooks,
     pub(crate) events: Arc<crate::rapier::events::CollectingEventHandler>,
     pub(crate) force_registry: ForceRegistry,
@@ -143,6 +148,7 @@ impl PhysicsWorld {
             multibody_joints: MultibodyJointSet::new(),
             ccd_solver: CCDSolver::new(),
             soft_bodies: SoftBodySet::new(),
+            voxel_soft_meta: std::collections::HashMap::new(),
             hooks: crate::rapier::events::CallbackPhysicsHooks::new(events.clone()),
             events,
             force_registry: ForceRegistry::new(),

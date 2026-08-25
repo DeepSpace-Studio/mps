@@ -6,7 +6,7 @@ mod tests {
         soft_body_add_tetrahedron, soft_body_build_tetra_mesh, soft_body_configure_solver,
         soft_body_count, soft_body_create, soft_body_destroy, soft_body_get_particle,
         soft_body_particle_count, soft_body_remove_particle, soft_body_set_gravity,
-        soft_body_voxel_build, soft_chain_create, soft_chain_node_handles,
+        soft_body_voxel_build, soft_body_voxel_dig, soft_chain_create, soft_chain_node_handles,
     };
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
     use rapier3d::prelude::soft_body::SoftBodyId;
@@ -758,6 +758,130 @@ mod tests {
             ),
             u32::MAX
         );
+
+        world_destroy(world);
+    }
+
+    // ── Phase 5d: 区块破坏 → 软体重建联动 ──────────────────────────────────────
+
+    #[test]
+    fn soft_body_voxel_dig_removes_cell_particle_and_rebuilds_map() {
+        let world = make_world();
+        assert!(!world.is_null());
+
+        // 2x1x1 solid grid → particles [0,1] (cell (0,0,0)->p0, cell (1,0,0)->p1)
+        // + 1 spring p0-p1.
+        let sx = 2u32;
+        let sy = 1u32;
+        let sz = 1u32;
+        let voxels = vec![1u8; (sx * sy * sz) as usize];
+        let id = soft_body_voxel_build(
+            world,
+            voxels.as_ptr(),
+            voxels.len() as u32,
+            sx,
+            sy,
+            sz,
+            1.0,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            1.0,
+            50.0,
+            0.5,
+            Bool::FALSE,
+        );
+        assert!(id != u32::MAX);
+        assert_eq!(soft_body_particle_count(world, id), 2);
+
+        // Dig cell (0,0,0) → removes p0, spring dropped, map rebuilt (p1 shifts to 0).
+        assert_eq!(soft_body_voxel_dig(world, id, 0, 0, 0), Bool::TRUE);
+        assert_eq!(soft_body_particle_count(world, id), 1);
+        let sb = unsafe {
+            (*world)
+                .inner
+                .soft_bodies
+                .get(SoftBodyId(id))
+                .expect("soft body present")
+        };
+        assert_eq!(sb.springs.len(), 0, "incident spring removed with p0");
+        // The remaining particle is the old p1, now at index 0.
+        let mut pos = Vec3::default();
+        assert_eq!(
+            soft_body_get_particle(world, id, 0, &mut pos, std::ptr::null_mut()),
+            Bool::TRUE
+        );
+        assert!(
+            (pos.x - 1.5).abs() < 1e-9,
+            "remaining particle is old (1,0,0) at x=1.5"
+        );
+
+        // Dig the last cell → body empty.
+        assert_eq!(soft_body_voxel_dig(world, id, 1, 0, 0), Bool::TRUE);
+        assert_eq!(soft_body_particle_count(world, id), 0);
+
+        // Re-dig an already-dug/empty cell → FALSE.
+        assert_eq!(soft_body_voxel_dig(world, id, 0, 0, 0), Bool::FALSE);
+        // Out-of-bounds cell → FALSE.
+        assert_eq!(soft_body_voxel_dig(world, id, 9, 0, 0), Bool::FALSE);
+        // Unknown id → FALSE.
+        assert_eq!(soft_body_voxel_dig(world, 999, 0, 0, 0), Bool::FALSE);
+
+        world_destroy(world);
+    }
+
+    #[test]
+    fn soft_body_voxel_dig_keeps_body_steppable_after_collapse() {
+        let world = make_world();
+        assert!(!world.is_null());
+
+        // 3x1x1 chain → 3 particles + 2 springs. Dig the middle cell; the body
+        // must stay steppable (no dangling indices) and remaining particles finite.
+        let sx = 3u32;
+        let sy = 1u32;
+        let sz = 1u32;
+        let voxels = vec![1u8; (sx * sy * sz) as usize];
+        let id = soft_body_voxel_build(
+            world,
+            voxels.as_ptr(),
+            voxels.len() as u32,
+            sx,
+            sy,
+            sz,
+            1.0,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            1.0,
+            50.0,
+            0.5,
+            Bool::FALSE,
+        );
+        assert!(id != u32::MAX);
+        assert_eq!(soft_body_particle_count(world, id), 3);
+
+        for _ in 0..30 {
+            world_step(world, 1.0 / 60.0);
+        }
+        assert_eq!(soft_body_voxel_dig(world, id, 1, 0, 0), Bool::TRUE);
+        for _ in 0..30 {
+            world_step(world, 1.0 / 60.0);
+        }
+        let sb = unsafe {
+            (*world)
+                .inner
+                .soft_bodies
+                .get(SoftBodyId(id))
+                .expect("soft body present")
+        };
+        assert_eq!(sb.particles.len(), 2);
+        for p in &sb.particles {
+            assert!(p.pos.x.is_finite() && p.pos.y.is_finite() && p.pos.z.is_finite());
+        }
 
         world_destroy(world);
     }

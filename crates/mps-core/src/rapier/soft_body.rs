@@ -36,6 +36,21 @@ use rapier3d::math::Vector;
 use rapier3d::prelude::soft_body::{SoftBody, SoftBodyId, SoftSolver};
 use std::collections::HashSet;
 
+/// Phase 5d bookkeeping: which voxel cell maps to which soft-body particle.
+///
+/// Built by [`soft_body_voxel_build`] alongside the body, then consulted/updated
+/// by [`soft_body_voxel_dig`] so a dug-out cell can be mapped back to the exact
+/// particle to remove. `map[cell_linear] == particle_index` (or `-1` if the cell
+/// was empty or already dug). After each dig the map is rebuilt to mirror
+/// `SoftBody::remove_particle`'s index shift (every surviving index `> removed`
+/// is decremented).
+pub(crate) struct VoxelSoftMeta {
+    pub sx: usize,
+    pub sy: usize,
+    pub sz: usize,
+    pub map: Vec<i64>,
+}
+
 const JOINT_TYPE_SPRING: u32 = 4;
 
 /// Construct a rigid-body node (sphere) and insert it into the world.
@@ -469,6 +484,17 @@ pub extern "C" fn soft_body_voxel_build(
 
         clear_error();
         let id = world.inner.soft_bodies.insert(body);
+        // Phase 5d: record the voxel→particle mapping so a later dig can resolve
+        // which cell maps to which particle index (and rebuild after shifts).
+        world.inner.voxel_soft_meta.insert(
+            id.0,
+            VoxelSoftMeta {
+                sx,
+                sy: size_y as usize,
+                sz,
+                map: index.clone(),
+            },
+        );
         id.0
     })
 }
@@ -1073,5 +1099,86 @@ pub extern "C" fn soft_body_destroy(world: *mut WorldHandle, id: u32) -> Bool {
             set_error(ERR_NOT_FOUND, "soft_body_destroy: unknown id");
             Bool::FALSE
         }
+    })
+}
+
+// ── Phase 5d: 区块破坏 → 软体重建联动（Minecraft 闭环）──────────────────────
+//
+// 监听 voxel 地形 `set_cell` 破坏事件后，上层调用本 FFI：把被挖空的方块格
+// (cx,cy,cz) 经 `voxel_soft_meta` 映射到对应质点下标，调 `SoftBody::remove_particle`
+// 删该质点 + 其弹簧/约束，并就地重建映射（其余下标随 remove_particle 平移）。
+// 软体在新拓扑下继续仿真 —— 这就是「破坏方块 → 软体塌缩」的闭环原子操作。
+
+/// Dig out a single voxel cell of a soft body built via `soft_body_voxel_build`,
+/// removing the particle that occupies it (plus its incident springs/constraints)
+/// and rebuilding the voxel→particle map so further digs stay consistent.
+///
+/// Returns `Bool::TRUE` on success. `Bool::FALSE` if the body/id is unknown, the
+/// cell is out of bounds, or the cell is already empty/dug.
+///
+/// # Safety
+/// `world` must be a valid world pointer returned by `world_create`.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_voxel_dig(
+    world: *mut WorldHandle,
+    id: u32,
+    cell_x: u32,
+    cell_y: u32,
+    cell_z: u32,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_voxel_dig: world is null");
+            return Bool::FALSE;
+        };
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_voxel_dig: unknown id");
+            return Bool::FALSE;
+        };
+        let Some(meta) = world.inner.voxel_soft_meta.get_mut(&id) else {
+            set_error(
+                ERR_NOT_FOUND,
+                "soft_body_voxel_dig: body has no voxel mapping",
+            );
+            return Bool::FALSE;
+        };
+        // cell_linear uses the same layout as VoxelGrid::index / soft_body_voxel_build.
+        if cell_x as usize >= meta.sx || cell_y as usize >= meta.sy || cell_z as usize >= meta.sz {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_voxel_dig: cell out of bounds",
+            );
+            return Bool::FALSE;
+        }
+        let cell_linear = cell_x as usize + meta.sx * (cell_z as usize + meta.sz * cell_y as usize);
+        let p_idx = match meta.map.get(cell_linear).copied() {
+            Some(v) if v >= 0 => v as usize,
+            _ => {
+                set_error(
+                    ERR_INVALID_ARGUMENT,
+                    "soft_body_voxel_dig: cell is empty or already dug",
+                );
+                return Bool::FALSE;
+            }
+        };
+        if !body.remove_particle(p_idx) {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_voxel_dig: remove_particle failed",
+            );
+            return Bool::FALSE;
+        }
+        // Rebuild the map: the dug cell becomes -1; every surviving index that was
+        // > p_idx shifts down by one (mirrors SoftBody::remove_particle).
+        for m in meta.map.iter_mut() {
+            if *m == p_idx as i64 {
+                *m = -1;
+            } else if *m > p_idx as i64 {
+                *m -= 1;
+            }
+        }
+        clear_error();
+        Bool::TRUE
     })
 }

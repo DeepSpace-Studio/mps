@@ -4441,6 +4441,31 @@ Bool soft_body_configure_solver(struct WorldHandle *world,
                                 double compliance);
 
 /**
+ * Build a tetrahedral-mesh soft body from raw particle positions and tetrahedra,
+ * then switch it to the XPBD solver so the volume constraints are active.
+ *
+ * `particles` is a `particles_len`-long array of `Vec3`; `tets` is a flat array
+ * of `tets_len * 4` `u32` vertex indices (`[a,b,c,d, a,b,c,d, ...]`). For every
+ * tetrahedron, its 6 edges are added as XPBD distance constraints (deduplicated
+ * across shared edges). Finally the body is configured with `iterations`/`compliance`.
+ *
+ * Returns the new `SoftBodyId` (as `u32`) or `u32::MAX` on error.
+ *
+ * # Safety
+ * `world` must be a valid world pointer. `particles`/`tets` must point to arrays
+ * of at least `particles_len` / `tets_len*4` elements respectively.
+ */
+uint32_t soft_body_build_tetra_mesh(struct WorldHandle *world,
+                                    Vec3 gravity,
+                                    const Vec3 *particles,
+                                    uint32_t particles_len,
+                                    const uint32_t *tets,
+                                    uint32_t tets_len,
+                                    double particle_mass,
+                                    double compliance,
+                                    uint32_t iterations);
+
+/**
  * Number of live soft bodies in the world.
  *
  * # Safety
@@ -4490,6 +4515,23 @@ Bool soft_body_remove_particle(struct WorldHandle *world, uint32_t id, uint32_t 
  * `world` must be a valid world pointer.
  */
 Bool soft_body_destroy(struct WorldHandle *world, uint32_t id);
+
+/**
+ * Dig out a single voxel cell of a soft body built via `soft_body_voxel_build`,
+ * removing the particle that occupies it (plus its incident springs/constraints)
+ * and rebuilding the voxel→particle map so further digs stay consistent.
+ *
+ * Returns `Bool::TRUE` on success. `Bool::FALSE` if the body/id is unknown, the
+ * cell is out of bounds, or the cell is already empty/dug.
+ *
+ * # Safety
+ * `world` must be a valid world pointer returned by `world_create`.
+ */
+Bool soft_body_voxel_dig(struct WorldHandle *world,
+                         uint32_t id,
+                         uint32_t cell_x,
+                         uint32_t cell_y,
+                         uint32_t cell_z);
 
 /**
  * # Safety
