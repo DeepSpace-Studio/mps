@@ -44,6 +44,7 @@ pub use mps_formula::relativity;
 pub mod rigid_body;
 pub mod rtree;
 pub mod shared_arena;
+pub mod soft_body;
 pub use mps_formula::softbody;
 pub mod spaceflight;
 pub use mps_formula::stellar;

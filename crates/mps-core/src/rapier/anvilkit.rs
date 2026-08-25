@@ -2,6 +2,8 @@ use anvilkit::core::math::Transform;
 use anvilkit::ecs::physics as ak_physics;
 use anvilkit::ecs::prelude::*;
 use dashmap::DashMap;
+use rapier3d::math::Vector;
+use rapier3d::prelude::soft_body::SoftBodyId;
 use rapier3d::prelude::{ColliderBuilder, RigidBodyBuilder, RigidBodyType};
 
 use crate::rapier::aerodynamics;
@@ -14,6 +16,7 @@ use crate::rapier::ffi::{
     vec3_finite,
 };
 use crate::rapier::fluid;
+use crate::rapier::soft_body::soft_body_build_tetra_mesh;
 use crate::rapier::trajectory;
 
 const EPSILON: f64 = 1.0e-12;
@@ -22,6 +25,7 @@ pub(crate) struct AnvilKitAppState {
     app: anvilkit::ecs::app::App,
     entity_to_body: DashMap<Entity, RigidBodyHandleRaw>,
     entity_to_collider: DashMap<Entity, ColliderHandleRaw>,
+    entity_to_soft_body: DashMap<Entity, SoftBodyId>,
     constraint_to_joint: DashMap<u64, ImpulseJointHandleRaw>,
     next_constraint_id: u64,
 }
@@ -138,6 +142,7 @@ impl AnvilKitAppState {
             app,
             entity_to_body: DashMap::new(),
             entity_to_collider: DashMap::new(),
+            entity_to_soft_body: DashMap::new(),
             constraint_to_joint: DashMap::new(),
             next_constraint_id: 1,
         }
@@ -147,6 +152,118 @@ impl AnvilKitAppState {
         Entity::try_from_bits(entity_bits)
             .ok()
             .filter(|entity| self.app.world.entities().contains(*entity))
+    }
+
+    /// Build a soft body bound to an anvilkit `Entity` and register the
+    /// `entity → SoftBodyId` link. The soft body is created as a **bounding-box
+    /// tetrahedral mesh**: eight corner particles at the entity's world AABB
+    /// corners plus six tetrahedra spanning the box. After switching to the XPBD
+    /// solver (via [`soft_body_build_tetra_mesh`]), the box behaves like a
+    /// compressible "blob" creature — reuse of the Phase 3 volume constraint.
+    ///
+    /// Returns the `SoftBodyId` (as `u32`) on success, or `0` on error.
+    fn spawn_soft_body(
+        &mut self,
+        world: &mut WorldHandle,
+        entity_bits: u64,
+        particle_mass: f64,
+        stiffness: f64,
+        damping: f64,
+        pin: bool,
+    ) -> u32 {
+        let Some(entity) = self.entity_from_bits(entity_bits) else {
+            return 0;
+        };
+        let Some(transform) = self.app.world.get::<Transform>(entity) else {
+            return 0;
+        };
+        let pos = transform.translation;
+        // Entity center in our f64 world units (anvilkit uses f32 translations).
+        let center = rapier3d::math::Vector::new(pos.x as f64, pos.y as f64, pos.z as f64);
+
+        // Use a unit-ish half-extent so the blob has a real volume; the caller's
+        // `particle_mass` sets the per-corner mass and `stiffness`/`damping` are
+        // forwarded as XPBD compliance/iterations via the shared builder.
+        let h = 0.5f64;
+        let corners: [rapier3d::math::Vector; 8] = [
+            center + Vector::new(-h, -h, -h),
+            center + Vector::new(h, -h, -h),
+            center + Vector::new(-h, h, -h),
+            center + Vector::new(h, h, -h),
+            center + Vector::new(-h, -h, h),
+            center + Vector::new(h, -h, h),
+            center + Vector::new(-h, h, h),
+            center + Vector::new(h, h, h),
+        ];
+        // 6 tetrahedra decomposing the cube (classic 5/6-tet split, here 6).
+        let tets: [u32; 24] = [
+            0, 2, 3, 7, // bottom-back
+            0, 3, 1, 7, // bottom-front
+            0, 1, 5, 7, // front
+            0, 5, 4, 7, // top-front
+            0, 4, 6, 7, // top-back
+            0, 6, 2, 7, // back
+        ];
+
+        // `stiffness`/`damping` are repurposed as XPBD compliance / iterations so
+        // the caller keeps the same 7-arg ABI while still tuning the blob.
+        let compliance = if stiffness.is_finite() && stiffness >= 0.0 {
+            stiffness
+        } else {
+            0.0
+        };
+        let iterations = if damping.is_finite() && damping >= 1.0 {
+            damping as u32
+        } else {
+            20
+        };
+        let _ = pin; // bounding-box blob has no pinned corner by default; reserved.
+
+        // Delegate to the shared tetra-mesh builder (same helper mps-core FFI uses).
+        let particles: Vec<Vec3> = corners
+            .iter()
+            .map(|c| Vec3 {
+                x: c.x,
+                y: c.y,
+                z: c.z,
+            })
+            .collect();
+        let id = soft_body_build_tetra_mesh(
+            world,
+            world.inner.gravity,
+            particles.as_ptr(),
+            particles.len() as u32,
+            tets.as_ptr(),
+            (tets.len() / 4) as u32,
+            particle_mass,
+            compliance,
+            iterations,
+        );
+        if id == u32::MAX {
+            return 0;
+        }
+        let sid = SoftBodyId(id);
+        // If the entity should be pinned, pin the center-most corner (corner 0).
+        if pin {
+            if let Some(body) = world.inner.soft_bodies.get_mut(sid) {
+                // Re-pin by zeroing the first particle's inverse mass.
+                if let Some(p) = body.particles.first_mut() {
+                    p.inv_mass = 0.0;
+                }
+            }
+        }
+        self.entity_to_soft_body.insert(entity, sid);
+        sid.0
+    }
+
+    fn entity_to_soft_body_id(&self, entity_bits: u64) -> u32 {
+        let Some(entity) = self.entity_from_bits(entity_bits) else {
+            return 0;
+        };
+        self.entity_to_soft_body
+            .get(&entity)
+            .map(|v| v.0)
+            .unwrap_or(0)
     }
 
     fn spawn_body(&mut self, translation: Vec3, rotation: Quat, status: u32) -> u64 {
@@ -490,6 +607,49 @@ pub extern "C" fn anvilkit_app_entity_to_collider(
             .get(&entity)
             .map(|v| *v)
             .unwrap_or(0)
+    })
+}
+
+/// # Safety
+///
+/// `app` and `world` must be null or valid handles returned by
+/// `anvilkit_app_create` / the world-creation ABI.
+#[unsafe(no_mangle)]
+pub extern "C" fn anvilkit_app_spawn_soft_body(
+    app: *mut crate::rapier::ffi::AnvilKitAppHandle,
+    world: *mut WorldHandle,
+    entity_bits: u64,
+    particle_mass: f64,
+    stiffness: f64,
+    damping: f64,
+    pin: Bool,
+) -> u32 {
+    ffi_guard(0, || {
+        let Some(app) = (unsafe { app.as_mut() }) else {
+            return 0;
+        };
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            return 0;
+        };
+        let pin = pin == Bool::TRUE;
+        app.inner
+            .spawn_soft_body(world, entity_bits, particle_mass, stiffness, damping, pin)
+    })
+}
+
+/// # Safety
+///
+/// `app` must be null or a valid handle returned by `anvilkit_app_create`.
+#[unsafe(no_mangle)]
+pub extern "C" fn anvilkit_app_entity_to_soft_body(
+    app: *const crate::rapier::ffi::AnvilKitAppHandle,
+    entity_bits: u64,
+) -> u32 {
+    ffi_guard(0, || {
+        let Some(app) = (unsafe { app.as_ref() }) else {
+            return 0;
+        };
+        app.inner.entity_to_soft_body_id(entity_bits)
     })
 }
 

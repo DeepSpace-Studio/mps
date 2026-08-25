@@ -595,6 +595,28 @@ ColliderHandleRaw anvilkit_app_entity_to_collider(const struct AnvilKitAppHandle
  * `app` and `world` must be null or valid handles returned by
  * `anvilkit_app_create` / the world-creation ABI.
  */
+uint32_t anvilkit_app_spawn_soft_body(struct AnvilKitAppHandle *app,
+                                      struct WorldHandle *world,
+                                      uint64_t entity_bits,
+                                      double particle_mass,
+                                      double stiffness,
+                                      double damping,
+                                      Bool pin);
+
+/**
+ * # Safety
+ *
+ * `app` must be null or a valid handle returned by `anvilkit_app_create`.
+ */
+uint32_t anvilkit_app_entity_to_soft_body(const struct AnvilKitAppHandle *app,
+                                          uint64_t entity_bits);
+
+/**
+ * # Safety
+ *
+ * `app` and `world` must be null or valid handles returned by
+ * `anvilkit_app_create` / the world-creation ABI.
+ */
 uint64_t anvilkit_app_create_constraint(struct AnvilKitAppHandle *app,
                                         struct WorldHandle *world,
                                         uint64_t entity1_bits,
@@ -4251,6 +4273,308 @@ uint32_t rtree_query_aabb(struct RTreeHandle *tree,
                           AabbDesc aabb,
                           uint64_t *out_ids,
                           uint32_t capacity);
+
+/**
+ * Create a skeletal soft body as a chain (line) of spring-linked rigid nodes.
+ *
+ * Nodes are placed `spacing` apart along `axis` starting at the world origin (or
+ * at `anchor` if `anchor != 0`). Adjacent nodes are joined by a spring joint with
+ * the given `stiffness`/`damping`; the spring's rest length is `spacing`, so the
+ * chain behaves like a soft rope / articulated strand.
+ *
+ * # Parameters
+ * * `node_count` — number of nodes (must be ≥ 1).
+ * * `spacing` — distance between adjacent nodes / spring rest length (> 0).
+ * * `node_mass` — mass of each node (> 0).
+ * * `node_radius` — collision sphere radius of each node (> 0).
+ * * `anchor` — `RigidBodyHandleRaw` to pin the first node to (0 = first node is a
+ *   free/fixed root at the origin; pass a valid handle to hang from it).
+ * * `axis` — unit direction of the chain (need not be normalized; it is normalized
+ *   internally; must be finite and non-zero).
+ * * `stiffness` / `damping` — spring coefficients (≥ 0).
+ *
+ * # Returns
+ * The number of nodes successfully created (0 on error). On partial failure the
+ * already-created nodes/joints remain in the world (caller may clear the world).
+ *
+ * # Safety
+ * `world` must be a valid world pointer returned by `world_create`.
+ */
+uint32_t soft_chain_create(struct WorldHandle *world,
+                           uint32_t node_count,
+                           double spacing,
+                           double node_mass,
+                           double node_radius,
+                           RigidBodyHandleRaw anchor,
+                           Vec3 axis,
+                           double stiffness,
+                           double damping);
+
+/**
+ * Read back the node handles of a soft chain that was just created.
+ *
+ * Call [`soft_chain_create`] first; the chain's node handles are the last
+ * `count` *dynamic* bodies, but to avoid ambiguity this helper snapshots the
+ * *currently dynamic* bodies whose colliders are spheres of `node_radius`. For
+ * simplicity it returns the handles of all dynamic bodies currently in the world
+ * (callers typically create a fresh world per chain).
+ *
+ * # Safety
+ * `world` must be a valid world pointer; `out_handles` must point to writable
+ * memory for `capacity` handles.
+ */
+uint32_t soft_chain_node_handles(const struct WorldHandle *world,
+                                 RigidBodyHandleRaw *out_handles,
+                                 uint32_t capacity);
+
+/**
+ * Build a mass-spring soft body from a `VoxelGrid` (Minecraft chunk).
+ *
+ * One point-mass particle is placed at the center of every *solid* voxel
+ * (`voxels[i] != 0`). Face-adjacent solid voxels are connected by a Hookean
+ * spring with the given `stiffness`/`damping` and rest length equal to the
+ * cell spacing along that axis. The resulting [`SoftBody`] is inserted into the
+ * world's `soft_bodies` set and advanced by `world_step`.
+ *
+ * # Parameters
+ * * `voxels` — flat `size_x * size_y * size_z` array, indexing `x + size_x*(z +
+ *   size_z*y)`; non-zero = solid.
+ * * `size_x/y/z` — grid dimensions (each > 0, product ≤ `voxels.len()`).
+ * * `voxel_size` — world-space size of one cell edge (uniform; > 0).
+ * * `origin` — world-space position of the (0,0,0) cell corner.
+ * * `particle_mass` — mass of each solid-cell particle (> 0).
+ * * `stiffness` / `damping` — spring coefficients (≥ 0).
+ * * `pin_boundary` — when non-zero, particles whose cell touches the grid edge
+ *   are created pinned (`inv_mass = 0`), so the soft body is anchored to the
+ *   chunk boundary (useful for hanging terrain/structures from the world).
+ *
+ * # Returns
+ * The `SoftBodyId` (as `u32`) on success, or `0` on error (`ERR_*`).
+ *
+ * # Safety
+ * `world` must be a valid world pointer; `voxels` must point to `voxels_len`
+ * readable bytes.
+ */
+uint32_t soft_body_voxel_build(struct WorldHandle *world,
+                               const uint8_t *voxels,
+                               uint32_t voxels_len,
+                               uint32_t size_x,
+                               uint32_t size_y,
+                               uint32_t size_z,
+                               double voxel_size,
+                               Vec3 origin,
+                               double particle_mass,
+                               double stiffness,
+                               double damping,
+                               Bool pin_boundary);
+
+/**
+ * Set the per-body constant acceleration (gravity) of a soft body.
+ *
+ * This is the terrain-gravity coupling hook: the caller samples
+ * `terrain_gravity_acceleration` per step and writes the resulting vector here,
+ * so a soft body falls under planetary/spherical gravity instead of the world's
+ * uniform `gravity`. Returns `Bool::TRUE` on success.
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+Bool soft_body_set_gravity(struct WorldHandle *world, uint32_t id, Vec3 gravity);
+
+/**
+ * Create an empty soft body in the world and return its `SoftBodyId`.
+ *
+ * The body starts in the `MassSpring` solver; switch it to XPBD with
+ * [`soft_body_configure_solver`] if you intend to use distance/tetra constraints.
+ *
+ * # Returns
+ * The `SoftBodyId` (as `u32`) on success, or `u32::MAX` on error (`ERR_*`).
+ *
+ * # Safety
+ * `world` must be a valid world pointer returned by `world_create`.
+ */
+uint32_t soft_body_create(struct WorldHandle *world, Vec3 gravity);
+
+/**
+ * Add a particle to a soft body.
+ *
+ * * `mass` — particle mass (> 0, finite). Ignored when `pinned` is non-zero
+ *   (a pinned particle has infinite mass / `inv_mass = 0` and acts as an anchor).
+ * * `x/y/z` — initial world position (finite).
+ *
+ * # Returns
+ * The particle index (as `u32`) on success, or `u32::MAX` on error (`ERR_*`).
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+uint32_t soft_body_add_particle(struct WorldHandle *world,
+                                uint32_t id,
+                                double x,
+                                double y,
+                                double z,
+                                double mass,
+                                Bool pinned);
+
+/**
+ * Add a Hookean spring (edge) between two particles of a soft body.
+ *
+ * Used by the `MassSpring` solver. Returns `Bool::TRUE` on success.
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+Bool soft_body_add_spring(struct WorldHandle *world,
+                          uint32_t id,
+                          uint32_t a,
+                          uint32_t b,
+                          double stiffness,
+                          double damping);
+
+/**
+ * Add an XPBD distance constraint (edge) between two particles.
+ *
+ * Used by the `Xpbd` solver; switch the body to XPBD first with
+ * [`soft_body_configure_solver`]. Returns `Bool::TRUE` on success.
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+Bool soft_body_add_distance_constraint(struct WorldHandle *world,
+                                       uint32_t id,
+                                       uint32_t a,
+                                       uint32_t b,
+                                       double compliance);
+
+/**
+ * Add a tetrahedral volume element `[a, b, c, d]` to a soft body.
+ *
+ * Used by the `Xpbd` solver's volume-preservation constraint; the rest
+ * (reference) signed volume is cached at add time. Returns `Bool::TRUE` on
+ * success.
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+Bool soft_body_add_tetrahedron(struct WorldHandle *world,
+                               uint32_t id,
+                               uint32_t a,
+                               uint32_t b,
+                               uint32_t c,
+                               uint32_t d);
+
+/**
+ * Switch a soft body's solver.
+ *
+ * * `solver_mode` — `0` = `MassSpring` (Hookean springs, semi-implicit Euler);
+ *   `1` = `Xpbd { iterations, compliance }` (position-based distance + volume
+ *   constraints).
+ * * `iterations` — XPBD Gauss-Seidel iterations (> 0 when `solver_mode == 1`).
+ * * `compliance` — XPBD default compliance (≥ 0, finite).
+ *
+ * Returns `Bool::TRUE` on success.
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+Bool soft_body_configure_solver(struct WorldHandle *world,
+                                uint32_t id,
+                                uint32_t solver_mode,
+                                uint32_t iterations,
+                                double compliance);
+
+/**
+ * Build a tetrahedral-mesh soft body from raw particle positions and tetrahedra,
+ * then switch it to the XPBD solver so the volume constraints are active.
+ *
+ * `particles` is a `particles_len`-long array of `Vec3`; `tets` is a flat array
+ * of `tets_len * 4` `u32` vertex indices (`[a,b,c,d, a,b,c,d, ...]`). For every
+ * tetrahedron, its 6 edges are added as XPBD distance constraints (deduplicated
+ * across shared edges). Finally the body is configured with `iterations`/`compliance`.
+ *
+ * Returns the new `SoftBodyId` (as `u32`) or `u32::MAX` on error.
+ *
+ * # Safety
+ * `world` must be a valid world pointer. `particles`/`tets` must point to arrays
+ * of at least `particles_len` / `tets_len*4` elements respectively.
+ */
+uint32_t soft_body_build_tetra_mesh(struct WorldHandle *world,
+                                    Vec3 gravity,
+                                    const Vec3 *particles,
+                                    uint32_t particles_len,
+                                    const uint32_t *tets,
+                                    uint32_t tets_len,
+                                    double particle_mass,
+                                    double compliance,
+                                    uint32_t iterations);
+
+/**
+ * Number of live soft bodies in the world.
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+uint32_t soft_body_count(const struct WorldHandle *world);
+
+/**
+ * Number of particles in a soft body. Returns `u32::MAX` for an unknown id.
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+uint32_t soft_body_particle_count(const struct WorldHandle *world, uint32_t id);
+
+/**
+ * Read back a particle's position and velocity.
+ *
+ * `out_pos` / `out_vel` must point to writable `Vec3`; either may be null to
+ * skip that output. Returns `Bool::TRUE` on success.
+ *
+ * # Safety
+ * `world` must be a valid world pointer; `out_pos`/`out_vel` (if non-null) must
+ * point to writable `Vec3`.
+ */
+Bool soft_body_get_particle(const struct WorldHandle *world,
+                            uint32_t id,
+                            uint32_t index,
+                            Vec3 *out_pos,
+                            Vec3 *out_vel);
+
+/**
+ * Remove a particle (and every spring / distance constraint / tetrahedron that
+ * references it) from a soft body, keeping the remaining topology valid.
+ * Returns `Bool::TRUE` on success.
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+Bool soft_body_remove_particle(struct WorldHandle *world, uint32_t id, uint32_t index);
+
+/**
+ * Destroy a soft body, freeing its storage. Other live `SoftBodyId`s remain
+ * valid (the id slot becomes a tombstone). Returns `Bool::TRUE` on success.
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+Bool soft_body_destroy(struct WorldHandle *world, uint32_t id);
+
+/**
+ * Dig out a single voxel cell of a soft body built via `soft_body_voxel_build`,
+ * removing the particle that occupies it (plus its incident springs/constraints)
+ * and rebuilding the voxel→particle map so further digs stay consistent.
+ *
+ * Returns `Bool::TRUE` on success. `Bool::FALSE` if the body/id is unknown, the
+ * cell is out of bounds, or the cell is already empty/dug.
+ *
+ * # Safety
+ * `world` must be a valid world pointer returned by `world_create`.
+ */
+Bool soft_body_voxel_dig(struct WorldHandle *world,
+                         uint32_t id,
+                         uint32_t cell_x,
+                         uint32_t cell_y,
+                         uint32_t cell_z);
 
 /**
  * # Safety
