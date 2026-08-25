@@ -4339,6 +4339,108 @@ uint32_t soft_body_voxel_build(struct WorldHandle *world,
 Bool soft_body_set_gravity(struct WorldHandle *world, uint32_t id, Vec3 gravity);
 
 /**
+ * Create an empty soft body in the world and return its `SoftBodyId`.
+ *
+ * The body starts in the `MassSpring` solver; switch it to XPBD with
+ * [`soft_body_configure_solver`] if you intend to use distance/tetra constraints.
+ *
+ * # Returns
+ * The `SoftBodyId` (as `u32`) on success, or `u32::MAX` on error (`ERR_*`).
+ *
+ * # Safety
+ * `world` must be a valid world pointer returned by `world_create`.
+ */
+uint32_t soft_body_create(struct WorldHandle *world, Vec3 gravity);
+
+/**
+ * Add a particle to a soft body.
+ *
+ * * `mass` — particle mass (> 0, finite). Ignored when `pinned` is non-zero
+ *   (a pinned particle has infinite mass / `inv_mass = 0` and acts as an anchor).
+ * * `x/y/z` — initial world position (finite).
+ *
+ * # Returns
+ * The particle index (as `u32`) on success, or `u32::MAX` on error (`ERR_*`).
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+uint32_t soft_body_add_particle(struct WorldHandle *world,
+                                uint32_t id,
+                                double x,
+                                double y,
+                                double z,
+                                double mass,
+                                Bool pinned);
+
+/**
+ * Add a Hookean spring (edge) between two particles of a soft body.
+ *
+ * Used by the `MassSpring` solver. Returns `Bool::TRUE` on success.
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+Bool soft_body_add_spring(struct WorldHandle *world,
+                          uint32_t id,
+                          uint32_t a,
+                          uint32_t b,
+                          double stiffness,
+                          double damping);
+
+/**
+ * Add an XPBD distance constraint (edge) between two particles.
+ *
+ * Used by the `Xpbd` solver; switch the body to XPBD first with
+ * [`soft_body_configure_solver`]. Returns `Bool::TRUE` on success.
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+Bool soft_body_add_distance_constraint(struct WorldHandle *world,
+                                       uint32_t id,
+                                       uint32_t a,
+                                       uint32_t b,
+                                       double compliance);
+
+/**
+ * Add a tetrahedral volume element `[a, b, c, d]` to a soft body.
+ *
+ * Used by the `Xpbd` solver's volume-preservation constraint; the rest
+ * (reference) signed volume is cached at add time. Returns `Bool::TRUE` on
+ * success.
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+Bool soft_body_add_tetrahedron(struct WorldHandle *world,
+                               uint32_t id,
+                               uint32_t a,
+                               uint32_t b,
+                               uint32_t c,
+                               uint32_t d);
+
+/**
+ * Switch a soft body's solver.
+ *
+ * * `solver_mode` — `0` = `MassSpring` (Hookean springs, semi-implicit Euler);
+ *   `1` = `Xpbd { iterations, compliance }` (position-based distance + volume
+ *   constraints).
+ * * `iterations` — XPBD Gauss-Seidel iterations (> 0 when `solver_mode == 1`).
+ * * `compliance` — XPBD default compliance (≥ 0, finite).
+ *
+ * Returns `Bool::TRUE` on success.
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+Bool soft_body_configure_solver(struct WorldHandle *world,
+                                uint32_t id,
+                                uint32_t solver_mode,
+                                uint32_t iterations,
+                                double compliance);
+
+/**
  * # Safety
  * `out_probability` must be null or point to a valid, writable `CollisionProbability`.
  */

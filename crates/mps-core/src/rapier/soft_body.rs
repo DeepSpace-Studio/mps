@@ -33,6 +33,7 @@ use crate::rapier::ffi::{
     unpack_rigid_body_handle, vec3_finite, vec3_from_rapier, vec3_to_rapier,
 };
 use rapier3d::math::Vector;
+use rapier3d::prelude::soft_body::{SoftBody, SoftBodyId, SoftSolver};
 
 const JOINT_TYPE_SPRING: u32 = 4;
 
@@ -499,5 +500,310 @@ pub extern "C" fn soft_body_set_gravity(world: *mut WorldHandle, id: u32, gravit
         body.gravity = vec3_to_rapier(gravity);
         clear_error();
         Bool::TRUE
+    })
+}
+
+// ── Phase 5a: general soft-body builder (unlock arbitrary topology) ──────────
+//
+// Phase 4 只暴露了「voxel 网格 → 软体」与「设置重力」两个高层入口，外部调用方
+// （JNI/FFM/Minecraft）无法构造任意拓扑的软体（自定义质点、弹簧、XPBD 距离约束、
+// 四面体体积元）也无法切求解器。本组 FFI 把 rapier `SoftBody` 的 `add_particle` /
+// `add_pinned` / `add_spring` / `add_distance_constraint` / `add_tetrahedron` /
+// `configure_xpbd` 暴露出来，让上层能逐点搭建软体。
+//
+// 惯例：成功返回真实 id / 粒子下标（可为 0，首个软体/质点下标即 0）；失败返回
+// `u32::MAX`（`add_*`/`create`）或 `Bool::FALSE`（布尔类），并置 `ERR_*`。
+
+/// Create an empty soft body in the world and return its `SoftBodyId`.
+///
+/// The body starts in the `MassSpring` solver; switch it to XPBD with
+/// [`soft_body_configure_solver`] if you intend to use distance/tetra constraints.
+///
+/// # Returns
+/// The `SoftBodyId` (as `u32`) on success, or `u32::MAX` on error (`ERR_*`).
+///
+/// # Safety
+/// `world` must be a valid world pointer returned by `world_create`.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_create(world: *mut WorldHandle, gravity: Vec3) -> u32 {
+    ffi_guard(u32::MAX, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_create: world is null");
+            return u32::MAX;
+        };
+        if !vec3_finite(gravity) {
+            set_error(ERR_INVALID_ARGUMENT, "soft_body_create: bad gravity");
+            return u32::MAX;
+        }
+        clear_error();
+        let body = SoftBody::new(vec3_to_rapier(gravity));
+        let id = world.inner.soft_bodies.insert(body);
+        id.0
+    })
+}
+
+/// Add a particle to a soft body.
+///
+/// * `mass` — particle mass (> 0, finite). Ignored when `pinned` is non-zero
+///   (a pinned particle has infinite mass / `inv_mass = 0` and acts as an anchor).
+/// * `x/y/z` — initial world position (finite).
+///
+/// # Returns
+/// The particle index (as `u32`) on success, or `u32::MAX` on error (`ERR_*`).
+///
+/// # Safety
+/// `world` must be a valid world pointer.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_add_particle(
+    world: *mut WorldHandle,
+    id: u32,
+    x: f64,
+    y: f64,
+    z: f64,
+    mass: f64,
+    pinned: Bool,
+) -> u32 {
+    ffi_guard(u32::MAX, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_add_particle: world is null");
+            return u32::MAX;
+        };
+        if !x.is_finite() || !y.is_finite() || !z.is_finite() {
+            set_error(ERR_INVALID_ARGUMENT, "soft_body_add_particle: bad position");
+            return u32::MAX;
+        }
+        if pinned == Bool::FALSE && (!mass.is_finite() || mass <= 0.0) {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_add_particle: mass must be > 0",
+            );
+            return u32::MAX;
+        }
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_add_particle: unknown id");
+            return u32::MAX;
+        };
+        let pos = Vector::new(x, y, z);
+        let idx = if pinned == Bool::TRUE {
+            body.add_pinned(pos)
+        } else {
+            let i = body.add_particle(pos);
+            body.particles[i].inv_mass = 1.0 / mass;
+            i
+        };
+        clear_error();
+        idx as u32
+    })
+}
+
+/// Add a Hookean spring (edge) between two particles of a soft body.
+///
+/// Used by the `MassSpring` solver. Returns `Bool::TRUE` on success.
+///
+/// # Safety
+/// `world` must be a valid world pointer.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_add_spring(
+    world: *mut WorldHandle,
+    id: u32,
+    a: u32,
+    b: u32,
+    stiffness: f64,
+    damping: f64,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_add_spring: world is null");
+            return Bool::FALSE;
+        };
+        if !stiffness.is_finite() || stiffness < 0.0 || !damping.is_finite() || damping < 0.0 {
+            set_error(ERR_INVALID_ARGUMENT, "soft_body_add_spring: bad params");
+            return Bool::FALSE;
+        }
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_add_spring: unknown id");
+            return Bool::FALSE;
+        };
+        match body.add_spring(a as usize, b as usize, stiffness, damping) {
+            Some(_) => {
+                clear_error();
+                Bool::TRUE
+            }
+            None => {
+                set_error(
+                    ERR_INVALID_ARGUMENT,
+                    "soft_body_add_spring: bad particle indices",
+                );
+                Bool::FALSE
+            }
+        }
+    })
+}
+
+/// Add an XPBD distance constraint (edge) between two particles.
+///
+/// Used by the `Xpbd` solver; switch the body to XPBD first with
+/// [`soft_body_configure_solver`]. Returns `Bool::TRUE` on success.
+///
+/// # Safety
+/// `world` must be a valid world pointer.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_add_distance_constraint(
+    world: *mut WorldHandle,
+    id: u32,
+    a: u32,
+    b: u32,
+    compliance: f64,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(
+                ERR_NULL_POINTER,
+                "soft_body_add_distance_constraint: world is null",
+            );
+            return Bool::FALSE;
+        };
+        if !compliance.is_finite() || compliance < 0.0 {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_add_distance_constraint: bad compliance",
+            );
+            return Bool::FALSE;
+        }
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(
+                ERR_NOT_FOUND,
+                "soft_body_add_distance_constraint: unknown id",
+            );
+            return Bool::FALSE;
+        };
+        match body.add_distance_constraint(a as usize, b as usize, compliance) {
+            Some(_) => {
+                clear_error();
+                Bool::TRUE
+            }
+            None => {
+                set_error(
+                    ERR_INVALID_ARGUMENT,
+                    "soft_body_add_distance_constraint: bad particle indices",
+                );
+                Bool::FALSE
+            }
+        }
+    })
+}
+
+/// Add a tetrahedral volume element `[a, b, c, d]` to a soft body.
+///
+/// Used by the `Xpbd` solver's volume-preservation constraint; the rest
+/// (reference) signed volume is cached at add time. Returns `Bool::TRUE` on
+/// success.
+///
+/// # Safety
+/// `world` must be a valid world pointer.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_add_tetrahedron(
+    world: *mut WorldHandle,
+    id: u32,
+    a: u32,
+    b: u32,
+    c: u32,
+    d: u32,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_add_tetrahedron: world is null");
+            return Bool::FALSE;
+        };
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_add_tetrahedron: unknown id");
+            return Bool::FALSE;
+        };
+        match body.add_tetrahedron([a, b, c, d]) {
+            Some(_) => {
+                clear_error();
+                Bool::TRUE
+            }
+            None => {
+                set_error(
+                    ERR_INVALID_ARGUMENT,
+                    "soft_body_add_tetrahedron: bad/degenerate indices",
+                );
+                Bool::FALSE
+            }
+        }
+    })
+}
+
+/// Switch a soft body's solver.
+///
+/// * `solver_mode` — `0` = `MassSpring` (Hookean springs, semi-implicit Euler);
+///   `1` = `Xpbd { iterations, compliance }` (position-based distance + volume
+///   constraints).
+/// * `iterations` — XPBD Gauss-Seidel iterations (> 0 when `solver_mode == 1`).
+/// * `compliance` — XPBD default compliance (≥ 0, finite).
+///
+/// Returns `Bool::TRUE` on success.
+///
+/// # Safety
+/// `world` must be a valid world pointer.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_configure_solver(
+    world: *mut WorldHandle,
+    id: u32,
+    solver_mode: u32,
+    iterations: u32,
+    compliance: f64,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(
+                ERR_NULL_POINTER,
+                "soft_body_configure_solver: world is null",
+            );
+            return Bool::FALSE;
+        };
+        if !compliance.is_finite() || compliance < 0.0 {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_configure_solver: bad compliance",
+            );
+            return Bool::FALSE;
+        }
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_configure_solver: unknown id");
+            return Bool::FALSE;
+        };
+        match solver_mode {
+            0 => {
+                body.solver = SoftSolver::MassSpring;
+                clear_error();
+                Bool::TRUE
+            }
+            1 => {
+                if iterations == 0 {
+                    set_error(
+                        ERR_INVALID_ARGUMENT,
+                        "soft_body_configure_solver: iterations must be > 0",
+                    );
+                    return Bool::FALSE;
+                }
+                body.configure_xpbd(iterations, compliance);
+                clear_error();
+                Bool::TRUE
+            }
+            _ => {
+                set_error(
+                    ERR_INVALID_ARGUMENT,
+                    "soft_body_configure_solver: unknown solver_mode",
+                );
+                Bool::FALSE
+            }
+        }
     })
 }
