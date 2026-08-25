@@ -34,6 +34,7 @@ use crate::rapier::ffi::{
 };
 use rapier3d::math::Vector;
 use rapier3d::prelude::soft_body::{SoftBody, SoftBodyId, SoftSolver};
+use rapier3d::prelude::{ColliderBuilder, RigidBodyBuilder, RigidBodyHandle, RigidBodyType};
 use std::collections::HashSet;
 
 /// Phase 5d bookkeeping: which voxel cell maps to which soft-body particle.
@@ -1178,6 +1179,101 @@ pub extern "C" fn soft_body_voxel_dig(
                 *m -= 1;
             }
         }
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+// ── Phase 5f: 软体-刚体碰撞（proxy collider 桥接）──────────────────────────
+//
+// 给每个自由质点（inv_mass > 0）建一个动态 `RigidBody` + `Ball` collider（proxy，
+// `gravity_scale = 0`，质量 = 1/inv_mass）。`world_step` 在刚性步进前把质点力/位姿
+// 写入 proxy，narrow-phase/contact 自然作用于 proxy，步进后再把 proxy 受接触后的位姿
+// 读回质点 —— 软体于是被地形/实体挡住、反弹、堆叠。完全复用现有接触，不改 rapier 求解器。
+// `SoftBody.collide` 置 true 后 `SoftBody::step` 跳过自积分（位置由 proxy 驱动）。
+// pinned 质点（inv_mass == 0）不建 proxy，位置由外部固定。
+
+/// Enable or disable rigid-body collision coupling for a soft body.
+///
+/// When `enabled` is `Bool::TRUE`, one dynamic `Ball` collider (radius `particle_radius`)
+/// is created per free particle and registered in the world's collision-proxy table; the
+/// body's `collide` flag is set so the integration layer drives its particles from the
+/// proxies. When `Bool::FALSE`, any existing proxies are removed and `collide` is cleared.
+///
+/// Returns `Bool::TRUE` on success.
+///
+/// # Safety
+/// `world` must be a valid world pointer returned by `world_create`.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_enable_collision(
+    world: *mut WorldHandle,
+    id: u32,
+    particle_radius: f64,
+    enabled: Bool,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(
+                ERR_NULL_POINTER,
+                "soft_body_enable_collision: world is null",
+            );
+            return Bool::FALSE;
+        };
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_enable_collision: unknown id");
+            return Bool::FALSE;
+        };
+        if particle_radius <= 0.0 || !particle_radius.is_finite() {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_enable_collision: bad particle_radius",
+            );
+            return Bool::FALSE;
+        }
+        if enabled == Bool::FALSE {
+            // Tear down existing proxies.
+            if let Some(proxies) = world.inner.soft_body_proxies.remove(&id) {
+                for ph in proxies.into_iter().flatten() {
+                    world.inner.bodies.remove(
+                        ph,
+                        &mut world.inner.islands,
+                        &mut world.inner.colliders,
+                        &mut world.inner.impulse_joints,
+                        &mut world.inner.multibody_joints,
+                        false,
+                    );
+                }
+            }
+            body.collide = false;
+            clear_error();
+            return Bool::TRUE;
+        }
+        // Build proxies.
+        body.collide = true;
+        body.particle_radius = particle_radius;
+        let mut proxies: Vec<Option<RigidBodyHandle>> = Vec::with_capacity(body.particles.len());
+        for p in &body.particles {
+            if p.inv_mass == 0.0 {
+                proxies.push(None); // pinned: no proxy
+                continue;
+            }
+            let mass = 1.0 / p.inv_mass;
+            let rb = RigidBodyBuilder::new(RigidBodyType::Dynamic)
+                .gravity_scale(0.0)
+                .additional_mass(mass)
+                .translation(p.pos)
+                .linvel(p.vel)
+                .build();
+            let h = world.inner.bodies.insert(rb);
+            let col = ColliderBuilder::ball(particle_radius).build();
+            world
+                .inner
+                .colliders
+                .insert_with_parent(col, h, &mut world.inner.bodies);
+            proxies.push(Some(h));
+        }
+        world.inner.soft_body_proxies.insert(id, proxies);
         clear_error();
         Bool::TRUE
     })

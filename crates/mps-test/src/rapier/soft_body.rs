@@ -1,12 +1,13 @@
 #[cfg(test)]
 mod tests {
-    use mps_core::rapier::ffi::{Bool, RigidBodyHandleRaw, Vec3, WorldHandle};
+    use mps_core::rapier::ffi::{BodyStatus, Bool, RigidBodyHandleRaw, Vec3, WorldHandle};
     use mps_core::rapier::soft_body::{
         soft_body_add_distance_constraint, soft_body_add_particle, soft_body_add_spring,
         soft_body_add_tetrahedron, soft_body_build_tetra_mesh, soft_body_configure_solver,
-        soft_body_count, soft_body_create, soft_body_destroy, soft_body_get_particle,
-        soft_body_particle_count, soft_body_remove_particle, soft_body_set_gravity,
-        soft_body_voxel_build, soft_body_voxel_dig, soft_chain_create, soft_chain_node_handles,
+        soft_body_count, soft_body_create, soft_body_destroy, soft_body_enable_collision,
+        soft_body_get_particle, soft_body_particle_count, soft_body_remove_particle,
+        soft_body_set_gravity, soft_body_voxel_build, soft_body_voxel_dig, soft_chain_create,
+        soft_chain_node_handles,
     };
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
     use rapier3d::prelude::soft_body::SoftBodyId;
@@ -882,6 +883,86 @@ mod tests {
         for p in &sb.particles {
             assert!(p.pos.x.is_finite() && p.pos.y.is_finite() && p.pos.z.is_finite());
         }
+
+        world_destroy(world);
+    }
+
+    // ── Phase 5f: 软体-刚体碰撞 ──────────────────────────────────────────────
+    // 一个自由软体质点从地面上方下落，启用碰撞耦合后，其 proxy 球体与静态半空间
+    // 地面发生接触，质点应停在地面之上（≈粒子半径），而非穿透。禁用碰撞时则继续
+    // 自由下落穿过地面。
+    #[test]
+    fn soft_body_collision_stops_at_ground() {
+        let world = make_world();
+
+        // 静态地面：Fixed 刚体 + 法线朝上的半空间（实体在 y<0，上方为空）。
+        let ground_builder =
+            mps_core::rapier::rigid_body::rigid_body_builder_create(BodyStatus::Fixed as u32);
+        let ground = mps_core::rapier::rigid_body::rigid_body_builder_build(ground_builder);
+        let ground_handle = mps_core::rapier::rigid_body::world_insert_rigid_body(world, ground);
+        let ground_collider = mps_core::rapier::collider::collider_builder_build(
+            mps_core::rapier::collider::collider_builder_create_halfspace(Vec3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            }),
+        );
+        mps_core::rapier::collider::world_insert_collider_with_parent(
+            world,
+            ground_collider,
+            ground_handle,
+        );
+
+        // 单个自由质点，初始在地面上方 y=2.0，无弹簧（仅受重力）。
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: -9.81,
+                z: 0.0,
+            },
+        );
+        let _p = soft_body_add_particle(world, id, 0.0, 2.0, 0.0, 1.0, Bool::FALSE);
+        assert_eq!(
+            soft_body_enable_collision(world, id, 0.5, Bool::TRUE),
+            Bool::TRUE
+        );
+
+        let dt = 1.0 / 60.0;
+        for _ in 0..180 {
+            world_step(world, dt);
+        }
+
+        let mut pos = Vec3::default();
+        assert_eq!(
+            soft_body_get_particle(world, id, 0, &mut pos as *mut Vec3, std::ptr::null_mut()),
+            Bool::TRUE
+        );
+        // 地面在 y=0，粒子半径 0.5 → 静止位置应约 y≈0.5，且不得穿透到 y<0.4。
+        assert!(
+            pos.y > 0.4,
+            "collision-coupled particle must rest above the ground, got y={}",
+            pos.y
+        );
+
+        // 对比：禁用碰撞后，质点应自由穿过地面（y 继续下降）。
+        assert_eq!(
+            soft_body_enable_collision(world, id, 0.5, Bool::FALSE),
+            Bool::TRUE
+        );
+        for _ in 0..60 {
+            world_step(world, dt);
+        }
+        let mut pos2 = Vec3::default();
+        assert_eq!(
+            soft_body_get_particle(world, id, 0, &mut pos2 as *mut Vec3, std::ptr::null_mut()),
+            Bool::TRUE
+        );
+        assert!(
+            pos2.y < 0.4,
+            "without collision coupling the particle should fall through the ground, got y={}",
+            pos2.y
+        );
 
         world_destroy(world);
     }

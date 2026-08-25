@@ -1,4 +1,4 @@
-use rapier3d::prelude::soft_body::SoftBodySet;
+use rapier3d::prelude::soft_body::{SoftBodyId, SoftBodySet};
 use rapier3d::prelude::{
     ActiveHooks, BroadPhaseBvh, CCDSolver, ColliderHandle, ColliderSet, ImpulseJointSet,
     IntegrationParameters, IslandManager, MultibodyJointSet, NarrowPhase, PhysicsPipeline,
@@ -103,8 +103,21 @@ pub struct PhysicsWorld {
     /// Keyed by `SoftBodyId.0`; populated only by `soft_body_voxel_build`.
     pub(crate) voxel_soft_meta:
         std::collections::HashMap<u32, crate::rapier::soft_body::VoxelSoftMeta>,
+    /// Phase 5f: per-soft-body collision proxies. When a soft body has collision
+    /// coupling enabled (`SoftBody.collide == true`), each free particle is backed
+    /// by a dynamic `RigidBody` + `Ball` collider (keyed by `SoftBodyId.0`, parallel
+    /// to `SoftBody.particles`). The integration layer syncs particle forces/poses
+    /// into these proxies before the rigid-body step and reads the contacted poses
+    /// back afterwards. Pinned particles (inv_mass == 0) have no proxy (`None`).
+    pub(crate) soft_body_proxies:
+        std::collections::HashMap<u32, Vec<Option<rapier3d::prelude::RigidBodyHandle>>>,
     pub(crate) hooks: crate::rapier::events::CallbackPhysicsHooks,
     pub(crate) events: Arc<crate::rapier::events::CollectingEventHandler>,
+    /// World query lock. Acquired (read) by the synchronous query entry points
+    /// (`query.rs`/`controller.rs`/`joints.rs`) so a caller inspecting the world
+    /// mid-frame does not race the `world_step` integration. Restored after a
+    /// refactor dropped the field while leaving its (no-op) acquire sites in place.
+    pub(crate) query_lock: parking_lot::RwLock<()>,
     pub(crate) force_registry: ForceRegistry,
     /// Active terrain-gravity source (polyhedron / DEM / lunar-mascon), if any.
     /// Mirrors the registered `TerrainGravity` force law so the character
@@ -149,8 +162,10 @@ impl PhysicsWorld {
             ccd_solver: CCDSolver::new(),
             soft_bodies: SoftBodySet::new(),
             voxel_soft_meta: std::collections::HashMap::new(),
+            soft_body_proxies: std::collections::HashMap::new(),
             hooks: crate::rapier::events::CallbackPhysicsHooks::new(events.clone()),
             events,
+            query_lock: parking_lot::RwLock::new(()),
             force_registry: ForceRegistry::new(),
             terrain_gravity_source: None,
             shared_arena: None,
@@ -442,6 +457,31 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
         // `force_containers`, then advance the soft-body point masses (gravity +
         // Hookean springs) independently. Mirrors rapier's own `PhysicsWorld` step
         // order. Sleeping soft bodies are skipped inside `SoftBodySet::step`.
+        // Phase 5f: collision-coupled soft bodies are driven by proxy rigid bodies,
+        // so their particle forces/poses are pushed into the proxies *before* the
+        // rigid-body step (narrow-phase/contact then sees the latest positions).
+        for (sid_u32, proxies) in world.inner.soft_body_proxies.iter_mut() {
+            let sid = SoftBodyId(*sid_u32);
+            let Some(soft) = world.inner.soft_bodies.get_mut(sid) else {
+                continue;
+            };
+            if !soft.collide {
+                continue;
+            }
+            soft.compute_forces();
+            for (i, p) in soft.particles.iter().enumerate() {
+                let Some(Some(rb_h)) = proxies.get(i) else {
+                    continue; // pinned particle has no proxy
+                };
+                let Some(rb) = world.inner.bodies.get_mut(*rb_h) else {
+                    continue;
+                };
+                rb.set_translation(p.pos, false);
+                rb.set_linvel(p.vel, false);
+                rb.reset_forces(false);
+                rb.add_force(p.force, false);
+            }
+        }
         world
             .inner
             .soft_bodies
@@ -465,6 +505,32 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
             &world.inner.hooks,
             &*world.inner.events,
         );
+
+        // Phase 5f: read the contacted proxy poses back into the soft-body particles
+        // so collision response propagates into the soft body (free particles only;
+        // `SoftBody::step` is a no-op for `collide` bodies).
+        for (sid_u32, proxies) in &world.inner.soft_body_proxies {
+            let sid = SoftBodyId(*sid_u32);
+            let Some(soft) = world.inner.soft_bodies.get_mut(sid) else {
+                continue;
+            };
+            if !soft.collide {
+                continue;
+            }
+            for (i, p) in soft.particles.iter_mut().enumerate() {
+                let Some(Some(rb_h)) = proxies.get(i) else {
+                    continue;
+                };
+                let Some(rb) = world.inner.bodies.get(*rb_h) else {
+                    continue;
+                };
+                #[allow(clippy::clone_on_copy)]
+                {
+                    p.pos = rb.translation().clone();
+                    p.vel = rb.linvel().clone();
+                }
+            }
+        }
 
         // 4b. Clear the persistent user force/torque on every dynamic body.
         // Rapier's `add_force` is a *persistent* force that the step does NOT
