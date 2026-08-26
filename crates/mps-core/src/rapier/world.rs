@@ -490,6 +490,13 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
             .inner
             .soft_bodies
             .step(world.inner.integration_parameters.dt);
+        // Phase 14: world-level soft-soft (cross-body) collision. Runs after every
+        // body has stepped; only bodies with `cross_collision` set collide with each
+        // other (see `solve_cross_body_collisions`).
+        rapier3d::dynamics::soft_body::solve_cross_body_collisions(
+            &mut world.inner.soft_bodies,
+            world.inner.integration_parameters.dt,
+        );
 
         world.inner.pipeline.step(
             world.inner.gravity,

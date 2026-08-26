@@ -1124,6 +1124,56 @@ pub extern "C" fn soft_body_set_distance_constraint_compliance(
     })
 }
 
+/// # Phase 14 — 开启/关闭软体间的软软碰撞(soft-soft / cross-body)
+///
+/// 把 `id` 软体的软软碰撞设为 `radius`(粒子球半径)+ `stiffness`(XPBD 排斥约束柔度, `0`=硬)。
+/// 世界级 step 结束后,任意两个**都**开启了软软碰撞的软体,其自由质点中心距 `< 2·min(ra,rb)`
+/// 时沿连线被推开(各自视为该半径的球)。复用 Phase 12 的空间哈希 + XPBD 投影原语,但在
+/// world 层遍历软体对。只排 inter-body 对(同体内自碰撞由 Phase 12 处理)。
+/// 非法参数(`radius <= 0` / `stiffness < 0` / 非有限)返回 `Bool::FALSE` 且不开。
+///
+/// # Returns
+/// `Bool::TRUE` 成功开启;`id` 未知 / world 为 null / 参数非法 → `Bool::FALSE`。
+///
+/// # Safety
+/// `world` 必须有效;`radius` / `stiffness` 需为有限值。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_set_cross_collision(
+    world: *mut WorldHandle,
+    id: u32,
+    radius: f64,
+    stiffness: f64,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !radius.is_finite() || !stiffness.is_finite() {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_cross_collision: non-finite radius/stiffness",
+            );
+            return Bool::FALSE;
+        }
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_set_cross_collision: unknown id");
+            return Bool::FALSE;
+        };
+        if sb.set_cross_collision(radius, stiffness) {
+            clear_error();
+            Bool::TRUE
+        } else {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_cross_collision: radius<=0 or stiffness<0",
+            );
+            Bool::FALSE
+        }
+    })
+}
+
 // ── Phase 5a: general soft-body builder (unlock arbitrary topology) ──────────了「voxel 网格 → 软体」与「设置重力」两个高层入口，外部调用方
 // （JNI/FFM/Minecraft）无法构造任意拓扑的软体（自定义质点、弹簧、XPBD 距离约束、
 // 四面体体积元）也无法切求解器。本组 FFI 把 rapier `SoftBody` 的 `add_particle` /

@@ -4587,6 +4587,26 @@ Bool soft_body_set_distance_constraint_compliance(struct WorldHandle *world,
                                                   double compliance);
 
 /**
+ * # Phase 14 — 开启/关闭软体间的软软碰撞(soft-soft / cross-body)
+ *
+ * 把 `id` 软体的软软碰撞设为 `radius`(粒子球半径)+ `stiffness`(XPBD 排斥约束柔度, `0`=硬)。
+ * 世界级 step 结束后,任意两个**都**开启了软软碰撞的软体,其自由质点中心距 `< 2·min(ra,rb)`
+ * 时沿连线被推开(各自视为该半径的球)。复用 Phase 12 的空间哈希 + XPBD 投影原语,但在
+ * world 层遍历软体对。只排 inter-body 对(同体内自碰撞由 Phase 12 处理)。
+ * 非法参数(`radius <= 0` / `stiffness < 0` / 非有限)返回 `Bool::FALSE` 且不开。
+ *
+ * # Returns
+ * `Bool::TRUE` 成功开启;`id` 未知 / world 为 null / 参数非法 → `Bool::FALSE`。
+ *
+ * # Safety
+ * `world` 必须有效;`radius` / `stiffness` 需为有限值。
+ */
+Bool soft_body_set_cross_collision(struct WorldHandle *world,
+                                   uint32_t id,
+                                   double radius,
+                                   double stiffness);
+
+/**
  * Create an empty soft body in the world and return its `SoftBodyId`.
  *
  * The body starts in the `MassSpring` solver; switch it to XPBD with

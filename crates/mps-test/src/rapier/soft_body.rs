@@ -18,11 +18,11 @@ mod tests {
         soft_body_get_particle, soft_body_is_sleeping, soft_body_kinetic_energy,
         soft_body_particle_count, soft_body_read_edges, soft_body_read_particles,
         soft_body_read_tetrahedra, soft_body_read_triangles, soft_body_remove_particle,
-        soft_body_set_distance_constraint_compliance, soft_body_set_gravity,
-        soft_body_set_plasticity, soft_body_set_pressure, soft_body_set_self_collision,
-        soft_body_set_spring_stiffness, soft_body_set_tear_strain, soft_body_sleep,
-        soft_body_total_volume, soft_body_voxel_build, soft_body_voxel_dig, soft_body_wake,
-        soft_chain_create, soft_chain_node_handles,
+        soft_body_set_cross_collision, soft_body_set_distance_constraint_compliance,
+        soft_body_set_gravity, soft_body_set_plasticity, soft_body_set_pressure,
+        soft_body_set_self_collision, soft_body_set_spring_stiffness, soft_body_set_tear_strain,
+        soft_body_sleep, soft_body_total_volume, soft_body_voxel_build, soft_body_voxel_dig,
+        soft_body_wake, soft_chain_create, soft_chain_node_handles,
     };
     use mps_core::rapier::voxel::{collider_builder_create_voxels, collider_voxel_edit};
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
@@ -2289,6 +2289,136 @@ mod tests {
             soft_body_set_distance_constraint_compliance(world, id, 0, -1.0),
             Bool::FALSE
         );
+
+        world_destroy(world);
+    }
+
+    // ── Phase 14: 软软碰撞 — 两个软体的自由质点互相排斥,不穿透 ──────────────────
+    #[test]
+    fn soft_body_cross_collision_keeps_bodies_apart() {
+        // 两个软体各一个自由质点,初始间距 0.1 (< 2R=0.5),重力为 0。无软软碰撞时保持重合;
+        // 开启后它们之间的间距应被推到 >= 2R。
+        const R: f64 = 0.25;
+        fn min_inter_body_dist(enabled: bool) -> f64 {
+            let world = make_world();
+            assert!(!world.is_null());
+            let id_a = soft_body_create(
+                world,
+                Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+            );
+            let id_b = soft_body_create(
+                world,
+                Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+            );
+            assert_ne!(id_a, u32::MAX);
+            assert_ne!(id_b, u32::MAX);
+            assert_ne!(
+                soft_body_add_particle(world, id_a, 0.0, 0.0, 0.0, 1.0, Bool::FALSE),
+                u32::MAX
+            );
+            assert_ne!(
+                soft_body_add_particle(world, id_b, 0.1, 0.0, 0.0, 1.0, Bool::FALSE),
+                u32::MAX
+            );
+            if enabled {
+                assert_eq!(
+                    soft_body_set_cross_collision(world, id_a, R, 0.0),
+                    Bool::TRUE
+                );
+                assert_eq!(
+                    soft_body_set_cross_collision(world, id_b, R, 0.0),
+                    Bool::TRUE
+                );
+            }
+            for _ in 0..150 {
+                world_step(world, 1.0 / 60.0);
+            }
+            let ca = soft_body_particle_count(world, id_a);
+            let cb = soft_body_particle_count(world, id_b);
+            let mut pa = vec![Vec3::default(); ca as usize];
+            let mut pb = vec![Vec3::default(); cb as usize];
+            let _ =
+                soft_body_read_particles(world, id_a, pa.as_mut_ptr(), std::ptr::null_mut(), ca);
+            let _ =
+                soft_body_read_particles(world, id_b, pb.as_mut_ptr(), std::ptr::null_mut(), cb);
+            let mut m = f64::MAX;
+            for a in &pa {
+                for b in &pb {
+                    let d =
+                        ((a.x - b.x).powi(2) + (a.y - b.y).powi(2) + (a.z - b.z).powi(2)).sqrt();
+                    if d < m {
+                        m = d;
+                    }
+                }
+            }
+            world_destroy(world);
+            m
+        }
+
+        let d_off = min_inter_body_dist(false);
+        let d_on = min_inter_body_dist(true);
+        // 无碰撞:几乎重合(间距远小于 2R)。
+        assert!(
+            d_off < R,
+            "no cross-collision should let them overlap, got {d_off}"
+        );
+        // 有碰撞:最小间距被推到接近 2R 甚至更大。
+        assert!(
+            d_on >= 2.0 * R - 1e-3,
+            "cross-collision should keep bodies >= 2R apart: d_on={d_on} R={R}"
+        );
+    }
+
+    // ── Phase 14: 软软碰撞非法/未知参数返回 False 而不 panic ──────────────────────
+    #[test]
+    fn soft_body_set_cross_collision_rejects_invalid_args() {
+        let world = make_world();
+        assert!(!world.is_null());
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+        let _p = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
+
+        // 未知 id → False。
+        assert_eq!(
+            soft_body_set_cross_collision(world, u32::MAX, 0.2, 0.0),
+            Bool::FALSE
+        );
+        // 非有限 → False。
+        assert_eq!(
+            soft_body_set_cross_collision(world, id, f64::NAN, 0.0),
+            Bool::FALSE
+        );
+        // radius <= 0 → False。
+        assert_eq!(
+            soft_body_set_cross_collision(world, id, 0.0, 0.0),
+            Bool::FALSE
+        );
+        // stiffness < 0 → False。
+        assert_eq!(
+            soft_body_set_cross_collision(world, id, 0.2, -1.0),
+            Bool::FALSE
+        );
+        // 合法 → True。
+        assert_eq!(
+            soft_body_set_cross_collision(world, id, 0.2, 0.0),
+            Bool::TRUE
+        );
+
         world_destroy(world);
     }
 }
