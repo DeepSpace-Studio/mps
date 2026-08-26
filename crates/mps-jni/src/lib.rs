@@ -1741,5 +1741,7 @@ jni!(boolean softBodySetCrossCollision(long world, int id, double radius, double
 jni!(boolean softBodySetVolumeConservation(long world, int id, double compliance) { sb::soft_body_set_volume_conservation(m::<WH>(world), id as u32, compliance).0 as jbyte });
 // Phase 17: 软体间黏连(可撕黏附)
 jni!(boolean softBodySetCohesion(long world, int id, double radius, double stiffness, double breakDistance) { sb::soft_body_set_cohesion(m::<WH>(world), id as u32, radius, stiffness, breakDistance).0 as jbyte });
+// Phase 18: 全局内部阻尼
+jni!(boolean softBodySetDamping(long world, int id, double d) { sb::soft_body_set_damping(m::<WH>(world), id as u32, d).0 as jbyte });
 // Phase 5f: 软体-刚体碰撞（proxy collider 桥接）
 jni!(boolean softBodyEnableCollision(long world, int id, double particle_radius, int enabled) { sb::soft_body_enable_collision(m::<WH>(world), id as u32, particle_radius, jb(enabled)).0 as jbyte });

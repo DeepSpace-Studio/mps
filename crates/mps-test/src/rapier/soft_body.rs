@@ -21,7 +21,7 @@ mod tests {
         soft_body_get_particle, soft_body_is_sleeping, soft_body_kinetic_energy,
         soft_body_particle_count, soft_body_read_edges, soft_body_read_particles,
         soft_body_read_tetrahedra, soft_body_read_triangles, soft_body_remove_particle,
-        soft_body_set_cohesion, soft_body_set_cross_collision,
+        soft_body_set_cohesion, soft_body_set_cross_collision, soft_body_set_damping,
         soft_body_set_distance_constraint_compliance, soft_body_set_gravity,
         soft_body_set_plasticity, soft_body_set_pressure, soft_body_set_self_collision,
         soft_body_set_spring_stiffness, soft_body_set_tear_strain,
@@ -2916,6 +2916,99 @@ mod tests {
             soft_body_set_cohesion(world, id, 0.4, 0.05, f64::INFINITY),
             Bool::TRUE
         );
+        world_destroy(world);
+    }
+
+    // ── Phase 18: 内部阻尼 — 阻尼软体比无阻尼更快耗散速度(振荡收敛) ──────────────
+    #[test]
+    fn soft_body_damping_dissipates_velocity_faster() {
+        // 两个完全相同的单自由质点软体在重力下自由落体。一个设 damping=0.5,另一个 0。
+        // 多步后,阻尼体的速度幅值应明显低于无阻尼体(能量被内部阻尼耗散)。
+        fn speed_after(d: f64) -> f64 {
+            let world = make_world();
+            assert!(!world.is_null());
+            let id = soft_body_create(
+                world,
+                Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+            );
+            assert_ne!(id, u32::MAX);
+            assert_ne!(
+                soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE),
+                u32::MAX
+            );
+            soft_body_set_gravity(
+                world,
+                id,
+                Vec3 {
+                    x: 0.0,
+                    y: -9.81,
+                    z: 0.0,
+                },
+            );
+            assert_eq!(soft_body_set_damping(world, id, d), Bool::TRUE);
+            for _ in 0..60 {
+                world_step(world, 1.0 / 60.0);
+            }
+            let mut pos = Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            };
+            let mut vel = Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            };
+            assert_eq!(
+                soft_body_get_particle(world, id, 0, &mut pos as *mut Vec3, &mut vel as *mut Vec3),
+                Bool::TRUE
+            );
+            world_destroy(world);
+            (vel.x * vel.x + vel.y * vel.y + vel.z * vel.z).sqrt()
+        }
+
+        let v_none = speed_after(0.0);
+        let v_damped = speed_after(0.5);
+        // 无阻尼自由落体 1s 后速度≈9.81;阻尼体应明显更慢。
+        assert!(
+            v_damped < v_none * 0.7,
+            "damped speed {v_damped} should be << undamped {v_none}"
+        );
+        // 阻尼体确实被耗散(远小于自由落体理论值)。
+        assert!(v_damped < 5.0, "damped speed should be low, got {v_damped}");
+    }
+
+    // ── Phase 18: 内部阻尼非法/未知参数返回 False 而不 panic ──────────────────────
+    #[test]
+    fn soft_body_set_damping_rejects_invalid_args() {
+        let world = make_world();
+        assert!(!world.is_null());
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+        // 未知 id → False。
+        assert_eq!(soft_body_set_damping(world, u32::MAX, 0.1), Bool::FALSE);
+        // d>=1 → False。
+        assert_eq!(soft_body_set_damping(world, id, 1.0), Bool::FALSE);
+        assert_eq!(soft_body_set_damping(world, id, 2.0), Bool::FALSE);
+        // 负数 → False。
+        assert_eq!(soft_body_set_damping(world, id, -0.1), Bool::FALSE);
+        // 非有限 → False。
+        assert_eq!(soft_body_set_damping(world, id, f64::NAN), Bool::FALSE);
+        // 合法(0)→ True。
+        assert_eq!(soft_body_set_damping(world, id, 0.0), Bool::TRUE);
+        // 合法(0.5)→ True。
+        assert_eq!(soft_body_set_damping(world, id, 0.5), Bool::TRUE);
         world_destroy(world);
     }
 }

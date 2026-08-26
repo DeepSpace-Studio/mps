@@ -1226,6 +1226,49 @@ pub extern "C" fn soft_body_set_volume_conservation(
     })
 }
 
+/// # Phase 18 — 设置全局内部(结构)阻尼系数
+///
+/// 把 `id` 软体的 `damping` 设为 `d`。每个 step 里每个自由质点的速度乘以 `1 - d`
+/// (jelly / slime 式能量耗散),与 Phase 0 的弹簧轴向阻尼、Phase 13 的逐约束柔度正交。
+/// `d=0` 无阻尼;`d in [0,1)` 振荡收敛更快;`d>=1` 或非法(非有限/负数)返回 `Bool::FALSE`。
+///
+/// # Returns
+/// `Bool::TRUE` 成功设置;`id` 未知 / world 为 null / 参数非法 → `Bool::FALSE`。
+///
+/// # Safety
+/// `world` 必须有效;`d` 需为有限且 `0 <= d < 1`。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_set_damping(world: *mut WorldHandle, id: u32, d: f64) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !d.is_finite() {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_damping: non-finite damping",
+            );
+            return Bool::FALSE;
+        }
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_set_damping: unknown id");
+            return Bool::FALSE;
+        };
+        if sb.set_damping(d) {
+            clear_error();
+            Bool::TRUE
+        } else {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_damping: need 0 <= d < 1",
+            );
+            Bool::FALSE
+        }
+    })
+}
+
 /// # Phase 17 — 开启/关闭软体间黏连(可撕黏附 glue)
 ///
 /// 把 `id` 软体的 `cohesion` 设为 `CohesionParams{radius, stiffness, break_distance}`。
