@@ -1,12 +1,15 @@
 #[cfg(test)]
 mod tests {
-    use mps_core::rapier::collider::{collider_builder_build, world_insert_collider_with_parent};
+    use mps_core::rapier::collider::{
+        collider_builder_build, collider_builder_create_sphere, world_insert_collider_with_parent,
+    };
     use mps_core::rapier::ffi::VoxelColliderOptions;
     use mps_core::rapier::ffi::{
-        BodyStatus, Bool, ColliderHandleRaw, RigidBodyHandleRaw, Vec3, WorldHandle,
+        BodyStatus, Bool, ColliderHandleRaw, RigidBodyHandleRaw, Sphere, Vec3, WorldHandle,
     };
     use mps_core::rapier::rigid_body::{
-        rigid_body_builder_build, rigid_body_builder_create, rigid_body_builder_set_linvel,
+        rigid_body_builder_build, rigid_body_builder_create,
+        rigid_body_builder_set_additional_mass_properties, rigid_body_builder_set_linvel,
         rigid_body_builder_set_translation, rigid_body_get_translation, world_insert_rigid_body,
     };
     use mps_core::rapier::soft_body::{
@@ -2417,6 +2420,117 @@ mod tests {
         assert_eq!(
             soft_body_set_cross_collision(world, id, 0.2, 0.0),
             Bool::TRUE
+        );
+
+        world_destroy(world);
+    }
+
+    // ── Phase 15: 双向耦合 — 软体(经 proxy collider)撞动态刚体,刚体被反推且软体不穿透 ──
+    #[test]
+    fn soft_body_two_way_coupling_pushes_rigid_body() {
+        // 重动态球 R(质量 1.0)悬于 y=3.0;下方一个软体质点 P(质量 0.5, collide, 半径 0.4)从
+        // y=4.5 落下砸向 R。Phase 5f 的 proxy 是 dynamic 刚体 + 读回;Phase 15 又把 proxy
+        // collider 密度置 0,使 proxy 质量恰等于质点质量,动量传递对称。验证:
+        //  (1) R 被 P 反推而明显下移(R.y < 起始 - eps);
+        //  (2) P 没有穿透 R(P.y >= R.y - 半径和,即 P 停在 R 上方而不是穿过);
+        //  (3) P 自己下落了(P.y < 起始)。
+        let world = world_create(Vec3 {
+            x: 0.0,
+            y: -9.81,
+            z: 0.0,
+        });
+        assert!(!world.is_null());
+
+        // 动态刚体 R:球半径 0.5,质量 1.0,置于 (0, 3.0, 0)。
+        let rb = rigid_body_builder_create(BodyStatus::Dynamic as u32);
+        assert!(!rb.is_null());
+        rigid_body_builder_set_translation(
+            rb,
+            Vec3 {
+                x: 0.0,
+                y: 3.0,
+                z: 0.0,
+            },
+        );
+        rigid_body_builder_set_additional_mass_properties(
+            rb,
+            Vec3::default(),
+            1.0,
+            Vec3::default(),
+        );
+        let body_ptr = rigid_body_builder_build(rb);
+        assert!(!body_ptr.is_null());
+        let rh = world_insert_rigid_body(world, body_ptr);
+        assert_ne!(rh, 0);
+        let cb = collider_builder_create_sphere(Sphere {
+            center: Vec3::default(),
+            radius: 0.5,
+        });
+        assert!(!cb.is_null());
+        let cbuilt = collider_builder_build(cb);
+        assert!(!cbuilt.is_null());
+        let _ch: ColliderHandleRaw = world_insert_collider_with_parent(world, cbuilt, rh);
+
+        // 软体 P:单自由质点,质量 0.5,半径 0.4,从 y=4.0 落下(距 R 顶端仅 0.1),开启 collide。
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+        assert_ne!(
+            soft_body_add_particle(world, id, 0.0, 4.0, 0.0, 0.5, Bool::FALSE),
+            u32::MAX
+        );
+        // 软体有独立的 gravity 字段(由 world_step 复制世界重力),必须显式设定,P 才会下落。
+        soft_body_set_gravity(
+            world,
+            id,
+            Vec3 {
+                x: 0.0,
+                y: -9.81,
+                z: 0.0,
+            },
+        );
+        assert_eq!(
+            soft_body_enable_collision(world, id, 0.4, Bool::TRUE),
+            Bool::TRUE
+        );
+
+        let r_y0 = 3.0;
+        let p_y0 = 4.0;
+        for _ in 0..60 {
+            world_step(world, 1.0 / 60.0);
+        }
+
+        let r_pos = rigid_body_get_translation(world, rh);
+        let pc = soft_body_particle_count(world, id);
+        let mut pp = vec![Vec3::default(); pc as usize];
+        let _ = soft_body_read_particles(world, id, pp.as_mut_ptr(), std::ptr::null_mut(), pc);
+        // 单质点:取 y 最小者(即该粒子)。
+        let p_y = pp.iter().map(|v| v.y).fold(f64::INFINITY, f64::min);
+
+        // (1) P 确实下落并撞上 R(p_y 明显小于起始)。
+        assert!(
+            p_y < p_y0 - 0.3,
+            "soft particle should have fallen onto R, p_y={p_y}"
+        );
+        // (2) 双向耦合:R 被 P 反推而明显下移(r_y < 起始)。
+        assert!(
+            r_pos.y < r_y0 - 0.2,
+            "two-way coupling: rigid body must be pushed down by the soft body, r_y={}",
+            r_pos.y
+        );
+        // (3) P 停在 R 上方而不是穿透:R 球(半径 0.5)与质点球(半径 0.4)中心距应 >= 半径和。
+        //     同 x/z 时中心距 = |gap|(gap = R.y - P.y);gap 为负表示 P 在 R 上方接触。
+        //     若 P 穿透到 R 下方,则 gap 会变成明显正值(>= ~0.9)。故断言 gap 不显著为正。
+        let gap = r_pos.y - p_y;
+        assert!(
+            gap <= (0.4 + 0.5) - 0.2,
+            "soft particle must rest on top of (not tunnel through) the rigid body: gap={gap} (must not be >= ~0.7)"
         );
 
         world_destroy(world);

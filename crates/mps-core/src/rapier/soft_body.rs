@@ -2217,7 +2217,12 @@ pub extern "C" fn soft_body_enable_collision(
                 .linvel(p.vel)
                 .build();
             let h = world.inner.bodies.insert(rb);
-            let col = ColliderBuilder::ball(particle_radius).build();
+            // Phase 15: zero the collider's own density so the proxy's mass is *exactly*
+            // the particle mass (`additional_mass`) and not inflated by the ball's volume.
+            // A non-zero collider mass unbalances two-way momentum transfer (a light soft
+            // particle would drive an over-heavy proxy that cannot cleanly push dynamic
+            // rigid bodies). Density 0 keeps the reaction physically symmetric.
+            let col = ColliderBuilder::ball(particle_radius).density(0.0).build();
             world
                 .inner
                 .colliders
