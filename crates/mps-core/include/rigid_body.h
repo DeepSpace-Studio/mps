@@ -4464,6 +4464,29 @@ Bool soft_body_detach_particle(struct WorldHandle *world,
                                uint32_t particle);
 
 /**
+ * # Phase 9 — 设置撕裂阈值（应变阈值）
+ *
+ * 把 `id` 软体的撕裂阈值设为 `strain_to_break`（应变 = `(|len| − rest)/rest`，
+ * 即拉伸量相对静止长度的比例）。每步 `step` 开始时，任何应变超过该阈值的**结构边**
+ * （XPBD distance constraint 或 MassSpring spring）会被移除；失去任一结构边的三角形面
+ * 也会被删掉，使撕裂的布料停止渲染破损面。
+ *
+ * - `enabled != 0` 且 `strain_to_break > 0`：开启撕裂（阈值 = `strain_to_break`）。
+ * - `enabled == 0`：关闭撕裂（等同于 `tear_strain = None`，默认）。
+ * - `strain_to_break <= 0`：视为非法，关闭撕裂（避免首步即全撕）。
+ *
+ * # Returns
+ * `Bool::TRUE` 成功（含关闭）；`id` 未知 / world 为 null 返回 `Bool::FALSE`。
+ *
+ * # Safety
+ * `world` 必须有效；`strain_to_break` 需为有限值。
+ */
+Bool soft_body_set_tear_strain(struct WorldHandle *world,
+                               uint32_t id,
+                               double strain_to_break,
+                               uint8_t enabled);
+
+/**
  * Create an empty soft body in the world and return its `SoftBodyId`.
  *
  * The body starts in the `MassSpring` solver; switch it to XPBD with

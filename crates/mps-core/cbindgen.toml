@@ -317,4 +317,5 @@ include = [
   "soft_body_total_volume",
   "soft_body_attach_particle",
   "soft_body_detach_particle",
+  "soft_body_set_tear_strain",
 ]

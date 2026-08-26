@@ -841,6 +841,57 @@ pub extern "C" fn soft_body_detach_particle(
     })
 }
 
+/// # Phase 9 — 设置撕裂阈值（应变阈值）
+///
+/// 把 `id` 软体的撕裂阈值设为 `strain_to_break`（应变 = `(|len| − rest)/rest`，
+/// 即拉伸量相对静止长度的比例）。每步 `step` 开始时，任何应变超过该阈值的**结构边**
+/// （XPBD distance constraint 或 MassSpring spring）会被移除；失去任一结构边的三角形面
+/// 也会被删掉，使撕裂的布料停止渲染破损面。
+///
+/// - `enabled != 0` 且 `strain_to_break > 0`：开启撕裂（阈值 = `strain_to_break`）。
+/// - `enabled == 0`：关闭撕裂（等同于 `tear_strain = None`，默认）。
+/// - `strain_to_break <= 0`：视为非法，关闭撕裂（避免首步即全撕）。
+///
+/// # Returns
+/// `Bool::TRUE` 成功（含关闭）；`id` 未知 / world 为 null 返回 `Bool::FALSE`。
+///
+/// # Safety
+/// `world` 必须有效；`strain_to_break` 需为有限值。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_set_tear_strain(
+    world: *mut WorldHandle,
+    id: u32,
+    strain_to_break: f64,
+    enabled: u8,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !strain_to_break.is_finite() {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_tear_strain: non-finite threshold",
+            );
+            return Bool::FALSE;
+        }
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_set_tear_strain: unknown id");
+            return Bool::FALSE;
+        };
+        let strain = if enabled != 0 && strain_to_break > 0.0 {
+            Some(strain_to_break)
+        } else {
+            None
+        };
+        sb.set_tear_strain(strain);
+        clear_error();
+        Bool::TRUE
+    })
+}
+
 // ── Phase 5a: general soft-body builder (unlock arbitrary topology) ──────────
 //
 // Phase 4 只暴露了「voxel 网格 → 软体」与「设置重力」两个高层入口，外部调用方

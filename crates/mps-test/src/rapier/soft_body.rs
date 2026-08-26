@@ -18,8 +18,9 @@ mod tests {
         soft_body_get_particle, soft_body_is_sleeping, soft_body_kinetic_energy,
         soft_body_particle_count, soft_body_read_edges, soft_body_read_particles,
         soft_body_read_tetrahedra, soft_body_read_triangles, soft_body_remove_particle,
-        soft_body_set_gravity, soft_body_sleep, soft_body_total_volume, soft_body_voxel_build,
-        soft_body_voxel_dig, soft_body_wake, soft_chain_create, soft_chain_node_handles,
+        soft_body_set_gravity, soft_body_set_tear_strain, soft_body_sleep, soft_body_total_volume,
+        soft_body_voxel_build, soft_body_voxel_dig, soft_body_wake, soft_chain_create,
+        soft_chain_node_handles,
     };
     use mps_core::rapier::voxel::{collider_builder_create_voxels, collider_voxel_edit};
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
@@ -1655,6 +1656,135 @@ mod tests {
         );
         // 越界 detach particle → False。
         assert_eq!(soft_body_detach_particle(world, id, 99), Bool::FALSE);
+
+        world_destroy(world);
+    }
+
+    // ── Phase 9: 撕裂 — 应变超阈值的边被移除、破损面被删─────────────────────────
+    #[test]
+    fn soft_body_tears_when_strain_exceeds_threshold() {
+        let world = make_world();
+        assert!(!world.is_null());
+
+        // 无重力，纯外力把自由点往下猛拉，确保边被过度拉伸。
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+
+        // 6 个质点 3×2 网格在 y=2 平面；pin 顶部两角 p0,p1，其余自由。
+        let _p0 = soft_body_add_particle(world, id, -1.0, 2.0, 0.0, 1.0, Bool::TRUE);
+        let _p1 = soft_body_add_particle(world, id, 1.0, 2.0, 0.0, 1.0, Bool::TRUE);
+        let _p2 = soft_body_add_particle(world, id, -1.0, 1.0, 0.0, 1.0, Bool::FALSE);
+        let _p3 = soft_body_add_particle(world, id, 1.0, 1.0, 0.0, 1.0, Bool::FALSE);
+        let _p4 = soft_body_add_particle(world, id, -1.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        let _p5 = soft_body_add_particle(world, id, 1.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        // 4 个三角面（边自动成为 distance constraints）。
+        assert_eq!(soft_body_add_triangle(world, id, 0, 1, 3), Bool::TRUE);
+        assert_eq!(soft_body_add_triangle(world, id, 0, 3, 2), Bool::TRUE);
+        assert_eq!(soft_body_add_triangle(world, id, 1, 5, 3), Bool::TRUE);
+        assert_eq!(soft_body_add_triangle(world, id, 3, 5, 4), Bool::TRUE);
+        // XPBD 求解器。
+        assert_eq!(
+            soft_body_configure_solver(world, id, 1, 20, 0.0),
+            Bool::TRUE
+        );
+
+        // 开撕裂，阈值极低（1% 应变即断）。
+        assert_eq!(soft_body_set_tear_strain(world, id, 0.01, 1), Bool::TRUE);
+
+        // 记录初始边数（springs+distance_constraints）和面数。
+        let edges0 = soft_body_read_edges(world, id, std::ptr::null_mut(), 1024);
+        assert!(edges0 > 0);
+        let tris0 = soft_body_read_triangles(world, id, std::ptr::null_mut(), 1024);
+        assert!(tris0 > 0);
+
+        // 极端重力把自由点往下拽，边迅速超阈值被撕裂。
+        soft_body_set_gravity(
+            world,
+            id,
+            Vec3 {
+                x: 0.0,
+                y: -50.0,
+                z: 0.0,
+            },
+        );
+        for _ in 0..60 {
+            world_step(world, 1.0 / 60.0);
+        }
+
+        let edges1 = soft_body_read_edges(world, id, std::ptr::null_mut(), 1024);
+        let tris1 = soft_body_read_triangles(world, id, std::ptr::null_mut(), 1024);
+        // 撕裂后：边和面应减少（至少断开若干边）。
+        assert!(
+            edges1 < edges0,
+            "tearing should remove over-stretched edges: {edges1} >= {edges0}"
+        );
+        assert!(
+            tris1 < tris0,
+            "torn faces should be dropped: {tris1} >= {tris0}"
+        );
+        // 质点仍在、有限。
+        let count = soft_body_particle_count(world, id);
+        let mut pos = vec![Vec3::default(); count as usize];
+        let read =
+            soft_body_read_particles(world, id, pos.as_mut_ptr(), std::ptr::null_mut(), count);
+        assert_eq!(read, count);
+        for (i, p) in pos.iter().enumerate() {
+            assert!(
+                p.x.is_finite() && p.y.is_finite() && p.z.is_finite(),
+                "p{i} blew up"
+            );
+        }
+
+        // 关闭撕裂后不应再断边（剩余边保持稳定）。
+        assert_eq!(soft_body_set_tear_strain(world, id, 0.0, 0), Bool::TRUE);
+        let edges2 = soft_body_read_edges(world, id, std::ptr::null_mut(), 1024);
+        for _ in 0..30 {
+            world_step(world, 1.0 / 60.0);
+        }
+        let edges3 = soft_body_read_edges(world, id, std::ptr::null_mut(), 1024);
+        assert_eq!(
+            edges3, edges2,
+            "disabling tearing must stop further edge loss"
+        );
+
+        world_destroy(world);
+    }
+
+    // ── Phase 9: 撕裂非法/未知参数返回 False 而不 panic─────────────────────────
+    #[test]
+    fn soft_body_set_tear_strain_rejects_invalid_args() {
+        let world = make_world();
+        assert!(!world.is_null());
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+        let _p = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
+
+        // 未知 id → False。
+        assert_eq!(
+            soft_body_set_tear_strain(world, u32::MAX, 0.5, 1),
+            Bool::FALSE
+        );
+        // 非有限阈值 → False。
+        assert_eq!(
+            soft_body_set_tear_strain(world, id, f64::NAN, 1),
+            Bool::FALSE
+        );
+        // 合法调用 → True，且未 panic。
+        assert_eq!(soft_body_set_tear_strain(world, id, 0.3, 1), Bool::TRUE);
 
         world_destroy(world);
     }
