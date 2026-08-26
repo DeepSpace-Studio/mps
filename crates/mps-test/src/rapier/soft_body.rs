@@ -27,7 +27,8 @@ mod tests {
         soft_body_set_distance_constraint_compression, soft_body_set_gravity,
         soft_body_set_plasticity, soft_body_set_pressure, soft_body_set_self_collision,
         soft_body_set_self_collision_friction, soft_body_set_spring_stiffness,
-        soft_body_set_tear_strain, soft_body_set_volume_conservation, soft_body_sleep,
+        soft_body_set_tear_strain, soft_body_set_volume_conservation,
+        soft_body_subdivide_tetrahedra, soft_body_sleep,
         soft_body_total_volume, soft_body_voxel_build, soft_body_voxel_dig, soft_body_wake,
         soft_chain_create, soft_chain_node_handles,
     };
@@ -3343,6 +3344,104 @@ mod tests {
             soft_body_set_cross_collision_friction(world, id, 0.5),
             Bool::TRUE
         );
+        world_destroy(world);
+    }
+    // ── Phase 21: 自适应四面体细分(1→4 重心细分)— 加密体积网格 ──────────────
+    #[test]
+    fn soft_body_subdivide_tetrahedra_increases_resolution_and_stays_bounded() {
+        let world = make_world();
+        assert!(!world.is_null());
+        let id = soft_body_create(world, Vec3 { x: 0.0, y: 0.0, z: 0.0 });
+        assert_ne!(id, u32::MAX);
+        let p0 = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        let p1 = soft_body_add_particle(world, id, 1.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        let p2 = soft_body_add_particle(world, id, 0.0, 1.0, 0.0, 1.0, Bool::FALSE);
+        let p3 = soft_body_add_particle(world, id, 0.0, 0.0, 1.0, 1.0, Bool::FALSE);
+        assert_ne!(p0, u32::MAX);
+        assert_ne!(p1, u32::MAX);
+        assert_ne!(p2, u32::MAX);
+        assert_ne!(p3, u32::MAX);
+        assert_eq!(soft_body_add_tetrahedron(world, id, p0, p1, p2, p3), Bool::TRUE);
+        // XPBD 求解器 + 刚性体积约束(compliance 0)。
+        assert_eq!(soft_body_configure_solver(world, id, 1, 20, 0.0), Bool::TRUE);
+        assert_eq!(soft_body_set_volume_conservation(world, id, 0.0), Bool::TRUE);
+        // 钉住一个顶点(与现有体积测试一致),避免自由落体翻转。
+        unsafe {
+            (*world)
+                .inner
+                .soft_bodies
+                .get_mut(SoftBodyId(id))
+                .unwrap()
+                .particles[p0 as usize]
+                .inv_mass = 0.0;
+        }
+
+        let (n_particles, n_tets) = unsafe {
+            let sb = (*world).inner.soft_bodies.get(SoftBodyId(id)).unwrap();
+            (sb.particles.len(), sb.tetrahedra.len())
+        };
+        assert_eq!(n_particles, 4);
+        assert_eq!(n_tets, 1);
+
+        // 细分(非有限阈值 → 细分全部)。
+        let split = soft_body_subdivide_tetrahedra(world, id, f64::INFINITY);
+        assert_eq!(split, 1);
+
+        let (n_particles2, n_tets2) = unsafe {
+            let sb = (*world).inner.soft_bodies.get(SoftBodyId(id)).unwrap();
+            (sb.particles.len(), sb.tetrahedra.len())
+        };
+        // 1 个四面体 → 4 个子四面体;新增 1 个重心质点。
+        assert_eq!(n_tets2, 4, "one tet should become four");
+        assert_eq!(n_particles2, 5, "one centroid particle should be added");
+
+        // total_volume 是比值之和:细分后 = 子四面体个数(各自≈1)。
+        let vol_after_sub = soft_body_total_volume(world, id);
+        assert!((vol_after_sub - 4.0).abs() < 0.05, "4 unit-ratio sub-tets");
+
+        // 模拟若干步:位置必须有限(细分未引入爆炸),体积保持有界(不再暴涨 10^7)。
+        for _ in 0..200 {
+            world_step(world, 1.0 / 60.0);
+        }
+        let sb = unsafe {
+            (*world)
+                .inner
+                .soft_bodies
+                .get(SoftBodyId(id))
+                .unwrap()
+        };
+        for p in &sb.particles {
+            assert!(p.pos.x.is_finite() && p.pos.y.is_finite() && p.pos.z.is_finite());
+        }
+        let final_vol = soft_body_total_volume(world, id);
+        assert!(
+            final_vol < 50.0,
+            "volume stayed bounded after subdivision + steps (final_vol={final_vol})"
+        );
+        world_destroy(world);
+    }
+
+    // ── Phase 21: 细分自适应阈值 + 非法参数返回 0 ─────────────────────────────
+    #[test]
+    fn soft_body_subdivide_tetrahedra_respects_threshold_and_rejects_bad_args() {
+        let world = make_world();
+        assert!(!world.is_null());
+        let id = soft_body_create(world, Vec3 { x: 0.0, y: 0.0, z: 0.0 });
+        assert_ne!(id, u32::MAX);
+        let p0 = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        let p1 = soft_body_add_particle(world, id, 1.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        let p2 = soft_body_add_particle(world, id, 0.0, 1.0, 0.0, 1.0, Bool::FALSE);
+        let p3 = soft_body_add_particle(world, id, 0.0, 0.0, 1.0, 1.0, Bool::FALSE);
+        assert_eq!(soft_body_add_tetrahedron(world, id, p0, p1, p2, p3), Bool::TRUE);
+
+        // 未知 id → 返回 0。
+        assert_eq!(soft_body_subdivide_tetrahedra(world, u32::MAX, f64::INFINITY), 0);
+        // 边最长 = 1.0;阈值设很大(>1)→ 不细分(0)。
+        assert_eq!(soft_body_subdivide_tetrahedra(world, id, 100.0), 0);
+        // 阈值 = 0.5(< 1)→ 细分全部(1 个源四面体)。
+        assert_eq!(soft_body_subdivide_tetrahedra(world, id, 0.5), 1);
+        // 重心细分保留原始边长(仍 ≈1.0),第二次阈值 0.5 仍触发 —— 4 个子四面体全部再细分,返回 4。
+        assert_eq!(soft_body_subdivide_tetrahedra(world, id, 0.5), 4);
         world_destroy(world);
     }
 }

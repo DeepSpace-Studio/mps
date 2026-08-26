@@ -4790,6 +4790,23 @@ Bool soft_body_add_tetrahedron(struct WorldHandle *world,
                                uint32_t d);
 
 /**
+ * # Phase 21 - adaptive tetrahedral subdivision (1 -> 4 barycentric split).
+ *
+ * Inserts one new particle at the centroid of each source tetrahedron and replaces
+ * it with four sub-tetrahedra sharing that centroid. The four sub-volumes sum to the
+ * parent volume, so the XPBD volume-conservation constraint (Phase 16) stays
+ * consistent; the centroid is a vertex of every sub-tet, so no extra distance edges
+ * are added (that would over-constrain the solve). A source tet is split only when
+ * its longest edge exceeds `max_edge_len`; pass a non-finite value to subdivide all.
+ * The shell topology (`triangles`) is left untouched (volumetric refinement only).
+ * Returns the number of source tetrahedra actually split (0 if none qualified).
+ * Unknown id or a body with no tetrahedra returns 0 with no side effect.
+ */
+uint32_t soft_body_subdivide_tetrahedra(struct WorldHandle *world,
+                                        uint32_t id,
+                                        double max_edge_len);
+
+/**
  * Phase 6 — cloth: add a triangular face `[a, b, c]` to a soft body's shell
  * topology. The three structural edges are registered automatically as
  * distance constraints (rest length from current spacing); duplicate edges

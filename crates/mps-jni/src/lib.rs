@@ -1689,6 +1689,8 @@ jni!(long softBodyAddParticle(long world, int id, double x, double y, double z, 
 jni!(boolean softBodyAddSpring(long world, int id, int a, int b, double stiffness, double damping) { sb::soft_body_add_spring(m::<WH>(world), id as u32, a as u32, b as u32, stiffness, damping).0 as jbyte });
 jni!(boolean softBodyAddDistanceConstraint(long world, int id, int a, int b, double compliance) { sb::soft_body_add_distance_constraint(m::<WH>(world), id as u32, a as u32, b as u32, compliance).0 as jbyte });
 jni!(boolean softBodyAddTetrahedron(long world, int id, int a, int b, int c, int d) { sb::soft_body_add_tetrahedron(m::<WH>(world), id as u32, a as u32, b as u32, c as u32, d as u32).0 as jbyte });
+// Phase 21: 自适应四面体细分(1→4 重心细分)
+jni!(int softBodySubdivideTetrahedra(long world, int id, double maxEdgeLen) { sb::soft_body_subdivide_tetrahedra(m::<WH>(world), id as u32, maxEdgeLen) as jint });
 jni!(boolean softBodyAddTriangle(long world, int id, int a, int b, int c) { sb::soft_body_add_triangle(m::<WH>(world), id as u32, a as u32, b as u32, c as u32).0 as jbyte });
 jni!(boolean softBodyAddBending(long world, int id, int p, int q) { sb::soft_body_add_bending(m::<WH>(world), id as u32, p as u32, q as u32).0 as jbyte });
 jni!(boolean softBodyConfigureSolver(long world, int id, int solver_mode, int iterations, double compliance) { sb::soft_body_configure_solver(m::<WH>(world), id as u32, solver_mode as u32, iterations as u32, compliance).0 as jbyte });

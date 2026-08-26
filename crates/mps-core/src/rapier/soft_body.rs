@@ -1669,6 +1669,40 @@ pub extern "C" fn soft_body_add_tetrahedron(
     })
 }
 
+
+/// # Phase 21 - adaptive tetrahedral subdivision (1 -> 4 barycentric split).
+///
+/// Inserts one new particle at the centroid of each source tetrahedron and replaces
+/// it with four sub-tetrahedra sharing that centroid. The four sub-volumes sum to the
+/// parent volume, so the XPBD volume-conservation constraint (Phase 16) stays
+/// consistent; the centroid is a vertex of every sub-tet, so no extra distance edges
+/// are added (that would over-constrain the solve). A source tet is split only when
+/// its longest edge exceeds `max_edge_len`; pass a non-finite value to subdivide all.
+/// The shell topology (`triangles`) is left untouched (volumetric refinement only).
+/// Returns the number of source tetrahedra actually split (0 if none qualified).
+/// Unknown id or a body with no tetrahedra returns 0 with no side effect.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_subdivide_tetrahedra(
+    world: *mut WorldHandle,
+    id: u32,
+    max_edge_len: f64,
+) -> u32 {
+    ffi_guard(0, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_subdivide_tetrahedra: world is null");
+            return 0;
+        };
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_subdivide_tetrahedra: unknown id");
+            return 0;
+        };
+        let n = body.subdivide_tetrahedra(max_edge_len);
+        clear_error();
+        n as u32
+    })
+}
+
 /// Phase 6 — cloth: add a triangular face `[a, b, c]` to a soft body's shell
 /// topology. The three structural edges are registered automatically as
 /// distance constraints (rest length from current spacing); duplicate edges
