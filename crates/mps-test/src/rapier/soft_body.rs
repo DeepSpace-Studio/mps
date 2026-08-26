@@ -21,9 +21,10 @@ mod tests {
         soft_body_get_particle, soft_body_is_sleeping, soft_body_kinetic_energy,
         soft_body_particle_count, soft_body_read_edges, soft_body_read_particles,
         soft_body_read_tetrahedra, soft_body_read_triangles, soft_body_remove_particle,
-        soft_body_set_cross_collision, soft_body_set_distance_constraint_compliance,
-        soft_body_set_gravity, soft_body_set_plasticity, soft_body_set_pressure,
-        soft_body_set_self_collision, soft_body_set_spring_stiffness, soft_body_set_tear_strain,
+        soft_body_set_cohesion, soft_body_set_cross_collision,
+        soft_body_set_distance_constraint_compliance, soft_body_set_gravity,
+        soft_body_set_plasticity, soft_body_set_pressure, soft_body_set_self_collision,
+        soft_body_set_spring_stiffness, soft_body_set_tear_strain,
         soft_body_set_volume_conservation, soft_body_sleep, soft_body_total_volume,
         soft_body_voxel_build, soft_body_voxel_dig, soft_body_wake, soft_chain_create,
         soft_chain_node_handles,
@@ -2666,6 +2667,253 @@ mod tests {
         // 合法(软)→ True。
         assert_eq!(
             soft_body_set_volume_conservation(world, id, 0.05),
+            Bool::TRUE
+        );
+        world_destroy(world);
+    }
+
+    // ── Phase 17: 黏连 — 两自由质点(分属两体)在 capture 半径内被黏住(双体胶水) ────────
+    #[test]
+    fn soft_body_cohesion_glues_two_bodies_together() {
+        // 两体各一个自由质点,初始相距 0.5(cohesion radius=0.4 内)。开启黏连后引力把它们
+        // 拉到接触距离 0.4(胶水)。无 cohesion 时它们各自自由(无外力,保持原距)。
+        const RADIUS: f64 = 0.4;
+        const SEP: f64 = 0.5; // 初始中心距,在 capture 半径内。
+        const BREAK: f64 = 2.0; // 远大于 SEP,胶水不破。
+
+        fn build(enable: bool) -> f64 {
+            let world = make_world();
+            assert!(!world.is_null());
+            let ida = soft_body_create(
+                world,
+                Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+            );
+            let idb = soft_body_create(
+                world,
+                Vec3 {
+                    x: SEP,
+                    y: 0.0,
+                    z: 0.0,
+                },
+            );
+            assert_ne!(ida, u32::MAX);
+            assert_ne!(idb, u32::MAX);
+            assert_ne!(
+                soft_body_add_particle(world, ida, 0.0, 0.0, 0.0, 1.0, Bool::FALSE),
+                u32::MAX
+            );
+            assert_ne!(
+                soft_body_add_particle(world, idb, SEP, 0.0, 0.0, 1.0, Bool::FALSE),
+                u32::MAX
+            );
+            // 无重力,纯考察黏连对中心距的影响。
+            soft_body_set_gravity(
+                world,
+                ida,
+                Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+            );
+            soft_body_set_gravity(
+                world,
+                idb,
+                Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+            );
+            if enable {
+                assert_eq!(
+                    soft_body_set_cohesion(world, ida, RADIUS, 0.0, BREAK),
+                    Bool::TRUE
+                );
+                assert_eq!(
+                    soft_body_set_cohesion(world, idb, RADIUS, 0.0, BREAK),
+                    Bool::TRUE
+                );
+            }
+            for _ in 0..60 {
+                world_step(world, 1.0 / 60.0);
+            }
+            let mut pa = Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            };
+            let mut pb = Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            };
+            assert_eq!(
+                soft_body_get_particle(world, ida, 0, &mut pa as *mut Vec3, std::ptr::null_mut()),
+                Bool::TRUE
+            );
+            assert_eq!(
+                soft_body_get_particle(world, idb, 0, &mut pb as *mut Vec3, std::ptr::null_mut()),
+                Bool::TRUE
+            );
+            let dist =
+                ((pa.x - pb.x).powi(2) + (pa.y - pb.y).powi(2) + (pa.z - pb.z).powi(2)).sqrt();
+            world_destroy(world);
+            dist
+        }
+
+        let d_off = build(false);
+        let d_on = build(true);
+        // 无黏连: 无外力,中心距保持≈初始 SEP。
+        assert!(
+            (d_off - SEP).abs() < 1e-3,
+            "no cohesion: distance should stay {SEP}, got {d_off}"
+        );
+        // 有黏连(硬 glue, compliance 0): 两质点被拉到接触距离 RADIUS。
+        assert!(
+            (d_on - RADIUS).abs() < 0.05,
+            "cohesion: distance should snap to {RADIUS}, got {d_on}"
+        );
+    }
+
+    // ── Phase 17: 黏连可破断 — 初始间距 > break_distance 则本步不黏(胶水撕裂) ──────────
+    #[test]
+    fn soft_body_cohesion_breaks_when_beyond_break_distance() {
+        // 两体初始相距 1.5,cohesion radius=0.4,但 break_distance=0.6(<1.5):因为初始已超出
+        // break_distance,胶水不形成,两质点保持原距(不被吸引)。
+        const SEP: f64 = 1.5;
+        let world = make_world();
+        assert!(!world.is_null());
+        let ida = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        let idb = soft_body_create(
+            world,
+            Vec3 {
+                x: SEP,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        assert_ne!(ida, u32::MAX);
+        assert_ne!(idb, u32::MAX);
+        assert_ne!(
+            soft_body_add_particle(world, ida, 0.0, 0.0, 0.0, 1.0, Bool::FALSE),
+            u32::MAX
+        );
+        assert_ne!(
+            soft_body_add_particle(world, idb, SEP, 0.0, 0.0, 1.0, Bool::FALSE),
+            u32::MAX
+        );
+        soft_body_set_gravity(
+            world,
+            ida,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        soft_body_set_gravity(
+            world,
+            idb,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        assert_eq!(
+            soft_body_set_cohesion(world, ida, 0.4, 0.0, 0.6),
+            Bool::TRUE
+        );
+        assert_eq!(
+            soft_body_set_cohesion(world, idb, 0.4, 0.0, 0.6),
+            Bool::TRUE
+        );
+        for _ in 0..60 {
+            world_step(world, 1.0 / 60.0);
+        }
+        let mut pa = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        let mut pb = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        assert_eq!(
+            soft_body_get_particle(world, ida, 0, &mut pa as *mut Vec3, std::ptr::null_mut()),
+            Bool::TRUE
+        );
+        assert_eq!(
+            soft_body_get_particle(world, idb, 0, &mut pb as *mut Vec3, std::ptr::null_mut()),
+            Bool::TRUE
+        );
+        let dist = ((pa.x - pb.x).powi(2) + (pa.y - pb.y).powi(2) + (pa.z - pb.z).powi(2)).sqrt();
+        world_destroy(world);
+        // 胶水未形成 → 保持原距(≈SEP),不被吸引。
+        assert!(
+            (dist - SEP).abs() < 1e-2,
+            "cohesion should NOT form when initial gap > break_distance: dist={dist}, SEP={SEP}"
+        );
+    }
+
+    // ── Phase 17: 黏连非法/未知参数返回 False 而不 panic ──────────────────────
+    #[test]
+    fn soft_body_set_cohesion_rejects_invalid_args() {
+        let world = make_world();
+        assert!(!world.is_null());
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+        // 未知 id → False。
+        assert_eq!(
+            soft_body_set_cohesion(world, u32::MAX, 0.4, 0.0, 2.0),
+            Bool::FALSE
+        );
+        // radius<=0 → False。
+        assert_eq!(
+            soft_body_set_cohesion(world, id, 0.0, 0.0, 2.0),
+            Bool::FALSE
+        );
+        // stiffness<0 → False。
+        assert_eq!(
+            soft_body_set_cohesion(world, id, 0.4, -1.0, 2.0),
+            Bool::FALSE
+        );
+        // break_distance<=radius → False。
+        assert_eq!(
+            soft_body_set_cohesion(world, id, 0.4, 0.0, 0.4),
+            Bool::FALSE
+        );
+        // 非有限 → False。
+        assert_eq!(
+            soft_body_set_cohesion(world, id, 0.4, 0.0, f64::NAN),
+            Bool::FALSE
+        );
+        // 合法(硬胶)→ True。
+        assert_eq!(soft_body_set_cohesion(world, id, 0.4, 0.0, 2.0), Bool::TRUE);
+        // 合法(软胶, inf 永久)→ True。
+        assert_eq!(
+            soft_body_set_cohesion(world, id, 0.4, 0.05, f64::INFINITY),
             Bool::TRUE
         );
         world_destroy(world);

@@ -497,6 +497,13 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
             &mut world.inner.soft_bodies,
             world.inner.integration_parameters.dt,
         );
+        // Phase 17: world-level cohesion (adhesion / breakable glue) between bodies
+        // with `cohesion` set (see `solve_cohesion`). Runs after cross-collision so the
+        // two composes: bodies first repel on overlap, then glue together at contact.
+        rapier3d::dynamics::soft_body::solve_cohesion(
+            &mut world.inner.soft_bodies,
+            world.inner.integration_parameters.dt,
+        );
 
         world.inner.pipeline.step(
             world.inner.gravity,

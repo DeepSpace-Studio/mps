@@ -1226,6 +1226,51 @@ pub extern "C" fn soft_body_set_volume_conservation(
     })
 }
 
+/// # Phase 17 — 开启/关闭软体间黏连(可撕黏附 glue)
+///
+/// 把 `id` 软体的 `cohesion` 设为 `CohesionParams{radius, stiffness, break_distance}`。
+/// 开启后,本软体与*其它*也开了 cohesion 的软体之间:自由质点彼此进入 `radius` 即被互相
+/// 吸引到接触距离(`radius`),把两体黏在一起(Phase 9 撕裂的对偶)。bond 可破断:若某对
+/// 已被拉到 `break_distance` 之外,本步不再吸引(胶水撕裂)。`break_distance=inf` 表示永久胶。
+/// 关闭(`clear`)后不再黏连。非法参数(radius<=0 / stiffness<0 / break_distance<=radius /
+/// 任一为 NaN)返回 `Bool::FALSE` 且不开;注意 `break_distance=inf` 合法(永久胶)。
+///
+/// # Returns
+/// `Bool::TRUE` 成功开启;`id` 未知 / world 为 null / 参数非法 → `Bool::FALSE`。
+///
+/// # Safety
+/// `world` 必须有效;参数需为有限且符合约束。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_set_cohesion(
+    world: *mut WorldHandle,
+    id: u32,
+    radius: f64,
+    stiffness: f64,
+    break_distance: f64,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_set_cohesion: unknown id");
+            return Bool::FALSE;
+        };
+        if sb.set_cohesion(radius, stiffness, break_distance) {
+            clear_error();
+            Bool::TRUE
+        } else {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_cohesion: bad radius/stiffness/break_distance",
+            );
+            Bool::FALSE
+        }
+    })
+}
+
 // ── Phase 5a: general soft-body builder (unlock arbitrary topology) ──────────了「voxel 网格 → 软体」与「设置重力」两个高层入口，外部调用方
 // （JNI/FFM/Minecraft）无法构造任意拓扑的软体（自定义质点、弹簧、XPBD 距离约束、
 // 四面体体积元）也无法切求解器。本组 FFI 把 rapier `SoftBody` 的 `add_particle` /

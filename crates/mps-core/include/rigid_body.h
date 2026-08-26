@@ -4626,6 +4626,28 @@ Bool soft_body_set_volume_conservation(struct WorldHandle *world,
                                        double compliance);
 
 /**
+ * # Phase 17 — 开启/关闭软体间黏连(可撕黏附 glue)
+ *
+ * 把 `id` 软体的 `cohesion` 设为 `CohesionParams{radius, stiffness, break_distance}`。
+ * 开启后,本软体与*其它*也开了 cohesion 的软体之间:自由质点彼此进入 `radius` 即被互相
+ * 吸引到接触距离(`radius`),把两体黏在一起(Phase 9 撕裂的对偶)。bond 可破断:若某对
+ * 已被拉到 `break_distance` 之外,本步不再吸引(胶水撕裂)。`break_distance=inf` 表示永久胶。
+ * 关闭(`clear`)后不再黏连。非法参数(radius<=0 / stiffness<0 / break_distance<=radius /
+ * 任一为 NaN)返回 `Bool::FALSE` 且不开;注意 `break_distance=inf` 合法(永久胶)。
+ *
+ * # Returns
+ * `Bool::TRUE` 成功开启;`id` 未知 / world 为 null / 参数非法 → `Bool::FALSE`。
+ *
+ * # Safety
+ * `world` 必须有效;参数需为有限且符合约束。
+ */
+Bool soft_body_set_cohesion(struct WorldHandle *world,
+                            uint32_t id,
+                            double radius,
+                            double stiffness,
+                            double break_distance);
+
+/**
  * Create an empty soft body in the world and return its `SoftBodyId`.
  *
  * The body starts in the `MassSpring` solver; switch it to XPBD with
