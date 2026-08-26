@@ -4487,6 +4487,29 @@ Bool soft_body_set_tear_strain(struct WorldHandle *world,
                                uint8_t enabled);
 
 /**
+ * # Phase 10 — 设置塑性参数（永久变形 / 像橡皮泥 / 记忆棉）
+ *
+ * 把 `id` 软体的塑性设为 `PlasticityParams { yield_strain, creep }`：
+ * - 任何结构边（XPBD distance constraint 或 MassSpring spring）的弹性应变幅度
+ *   `|(|len| − rest)/rest|` 超过 `yield_strain` 时，每步把 rest_length 朝当前长度
+ *   方向移动 `creep`（夹到 `[0,1]`），使变形永久"冻住"而不是回弹。
+ * - `enabled != 0` 且 `yield_strain > 0`：开启塑性（threshold=yield_strain, rate=creep）。
+ * - `enabled == 0`：关闭塑性（等同于 `plasticity = None`，即完全弹性，默认）。
+ * - `yield_strain <= 0` 或 `creep <= 0`：视为非法，关闭塑性。
+ *
+ * # Returns
+ * `Bool::TRUE` 成功（含关闭）；`id` 未知 / world 为 null 返回 `Bool::FALSE`。
+ *
+ * # Safety
+ * `world` 必须有效；`yield_strain` / `creep` 需为有限值。
+ */
+Bool soft_body_set_plasticity(struct WorldHandle *world,
+                              uint32_t id,
+                              double yield_strain,
+                              double creep,
+                              uint8_t enabled);
+
+/**
  * Create an empty soft body in the world and return its `SoftBodyId`.
  *
  * The body starts in the `MassSpring` solver; switch it to XPBD with

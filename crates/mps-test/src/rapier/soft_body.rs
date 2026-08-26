@@ -18,9 +18,9 @@ mod tests {
         soft_body_get_particle, soft_body_is_sleeping, soft_body_kinetic_energy,
         soft_body_particle_count, soft_body_read_edges, soft_body_read_particles,
         soft_body_read_tetrahedra, soft_body_read_triangles, soft_body_remove_particle,
-        soft_body_set_gravity, soft_body_set_tear_strain, soft_body_sleep, soft_body_total_volume,
-        soft_body_voxel_build, soft_body_voxel_dig, soft_body_wake, soft_chain_create,
-        soft_chain_node_handles,
+        soft_body_set_gravity, soft_body_set_plasticity, soft_body_set_tear_strain,
+        soft_body_sleep, soft_body_total_volume, soft_body_voxel_build, soft_body_voxel_dig,
+        soft_body_wake, soft_chain_create, soft_chain_node_handles,
     };
     use mps_core::rapier::voxel::{collider_builder_create_voxels, collider_voxel_edit};
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
@@ -1785,6 +1785,118 @@ mod tests {
         );
         // 合法调用 → True，且未 panic。
         assert_eq!(soft_body_set_tear_strain(world, id, 0.3, 1), Bool::TRUE);
+
+        world_destroy(world);
+    }
+
+    // ── Phase 10: 塑性 — 超过屈服应变的边把形变永久冻入 rest_length─────────────
+    #[test]
+    fn soft_body_plasticity_freezes_deformation() {
+        // 观测方式：一个被弹簧从顶部锚点拽住的自由质点，在重力下垂。
+        //   * 弹性（无塑性）：弹簧始终拉回，节点停在靠近原长处（下坠少）。
+        //   * 塑性（creep=1, yield 很小）：弹簧一旦超屈服就永久把 rest_length 拉到
+        //     当前长度，弹簧"放弃"回拉 → 节点持续下坠得更远、更深。
+        // 两者都用 soft_body_read_particles 读位置（不依赖内部字段）。
+        fn sag(plastic: bool) -> f64 {
+            let world = make_world();
+            assert!(!world.is_null());
+            let id = soft_body_create(
+                world,
+                Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+            );
+            assert_ne!(id, u32::MAX);
+            // 关闭世界重力，仅用软体自身重力驱动下坠。
+            assert_eq!(
+                soft_body_set_gravity(
+                    world,
+                    id,
+                    Vec3 {
+                        x: 0.0,
+                        y: -30.0,
+                        z: 0.0
+                    }
+                ),
+                Bool::TRUE
+            );
+            // 锚点 p0 钉在 y=10；自由质点 p1 从 y=9 出发（初始弹簧长≈1）。
+            let _a = soft_body_add_particle(world, id, 0.0, 10.0, 0.0, 1.0, Bool::TRUE);
+            let _b = soft_body_add_particle(world, id, 0.0, 9.0, 0.0, 1.0, Bool::FALSE);
+            assert_eq!(
+                soft_body_add_spring(world, id, 0, 1, 200.0, 0.0),
+                Bool::TRUE
+            );
+            if plastic {
+                assert_eq!(
+                    soft_body_set_plasticity(world, id, 0.01, 1.0, 1),
+                    Bool::TRUE
+                );
+            }
+            for _ in 0..200 {
+                world_step(world, 1.0 / 60.0);
+            }
+            let count = soft_body_particle_count(world, id);
+            let mut pos = vec![Vec3::default(); count as usize];
+            let _r =
+                soft_body_read_particles(world, id, pos.as_mut_ptr(), std::ptr::null_mut(), count);
+            let y_free = pos[1].y;
+            world_destroy(world);
+            y_free
+        }
+
+        let y_elastic = sag(false);
+        let y_plastic = sag(true);
+        // 塑性让弹簧"放弃回拉"，自由节点下坠更深（y 更小）。
+        assert!(
+            y_plastic < y_elastic - 0.5,
+            "plasticity should let the node sag much further: plastic={y_plastic} elastic={y_elastic}"
+        );
+        assert!(y_plastic.is_finite() && y_elastic.is_finite());
+    }
+
+    // ── Phase 10: 塑性非法/未知参数返回 False 而不 panic─────────────────────────
+    #[test]
+    fn soft_body_set_plasticity_rejects_invalid_args() {
+        let world = make_world();
+        assert!(!world.is_null());
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+        let _p = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
+
+        // 未知 id → False。
+        assert_eq!(
+            soft_body_set_plasticity(world, u32::MAX, 0.1, 0.5, 1),
+            Bool::FALSE
+        );
+        // 非有限参数 → False。
+        assert_eq!(
+            soft_body_set_plasticity(world, id, f64::NAN, 0.5, 1),
+            Bool::FALSE
+        );
+        assert_eq!(
+            soft_body_set_plasticity(world, id, 0.1, f64::INFINITY, 1),
+            Bool::FALSE
+        );
+        // 合法调用 → True，且未 panic。
+        assert_eq!(
+            soft_body_set_plasticity(world, id, 0.05, 1.0, 1),
+            Bool::TRUE
+        );
+        // 关闭（enabled=0）→ True，且不再塑性化。
+        assert_eq!(
+            soft_body_set_plasticity(world, id, 0.05, 1.0, 0),
+            Bool::TRUE
+        );
 
         world_destroy(world);
     }

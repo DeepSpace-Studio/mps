@@ -892,6 +892,60 @@ pub extern "C" fn soft_body_set_tear_strain(
     })
 }
 
+/// # Phase 10 — 设置塑性参数（永久变形 / 像橡皮泥 / 记忆棉）
+///
+/// 把 `id` 软体的塑性设为 `PlasticityParams { yield_strain, creep }`：
+/// - 任何结构边（XPBD distance constraint 或 MassSpring spring）的弹性应变幅度
+///   `|(|len| − rest)/rest|` 超过 `yield_strain` 时，每步把 rest_length 朝当前长度
+///   方向移动 `creep`（夹到 `[0,1]`），使变形永久"冻住"而不是回弹。
+/// - `enabled != 0` 且 `yield_strain > 0`：开启塑性（threshold=yield_strain, rate=creep）。
+/// - `enabled == 0`：关闭塑性（等同于 `plasticity = None`，即完全弹性，默认）。
+/// - `yield_strain <= 0` 或 `creep <= 0`：视为非法，关闭塑性。
+///
+/// # Returns
+/// `Bool::TRUE` 成功（含关闭）；`id` 未知 / world 为 null 返回 `Bool::FALSE`。
+///
+/// # Safety
+/// `world` 必须有效；`yield_strain` / `creep` 需为有限值。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_set_plasticity(
+    world: *mut WorldHandle,
+    id: u32,
+    yield_strain: f64,
+    creep: f64,
+    enabled: u8,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !yield_strain.is_finite() || !creep.is_finite() {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_plasticity: non-finite parameter",
+            );
+            return Bool::FALSE;
+        }
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_set_plasticity: unknown id");
+            return Bool::FALSE;
+        };
+        let params = if enabled != 0 && yield_strain > 0.0 {
+            Some(rapier3d::dynamics::soft_body::PlasticityParams {
+                yield_strain,
+                creep,
+            })
+        } else {
+            None
+        };
+        sb.set_plasticity(params);
+        clear_error();
+        Bool::TRUE
+    })
+}
+
 // ── Phase 5a: general soft-body builder (unlock arbitrary topology) ──────────
 //
 // Phase 4 只暴露了「voxel 网格 → 软体」与「设置重力」两个高层入口，外部调用方
