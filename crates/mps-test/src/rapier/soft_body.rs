@@ -18,8 +18,9 @@ mod tests {
         soft_body_get_particle, soft_body_is_sleeping, soft_body_kinetic_energy,
         soft_body_particle_count, soft_body_read_edges, soft_body_read_particles,
         soft_body_read_tetrahedra, soft_body_read_triangles, soft_body_remove_particle,
-        soft_body_set_gravity, soft_body_set_plasticity, soft_body_set_pressure,
-        soft_body_set_self_collision, soft_body_set_tear_strain, soft_body_sleep,
+        soft_body_set_distance_constraint_compliance, soft_body_set_gravity,
+        soft_body_set_plasticity, soft_body_set_pressure, soft_body_set_self_collision,
+        soft_body_set_spring_stiffness, soft_body_set_tear_strain, soft_body_sleep,
         soft_body_total_volume, soft_body_voxel_build, soft_body_voxel_dig, soft_body_wake,
         soft_chain_create, soft_chain_node_handles,
     };
@@ -2135,6 +2136,159 @@ mod tests {
             Bool::TRUE
         );
 
+        world_destroy(world);
+    }
+
+    // ── Phase 13: 运行时改弹簧刚度 → 高刚度下垂更少 ──────────────────────────────
+    #[test]
+    fn soft_body_set_spring_stiffness_reduces_sag() {
+        // MassSpring 链:固定端点 + 3 个自由点,单条弹簧(index 0)把端点连到链。
+        // 低刚度下垂多,运行时改高刚度后下垂更少。
+        fn max_sag(stiff: f64) -> f64 {
+            let world = make_world();
+            assert!(!world.is_null());
+            let id = soft_body_create(
+                world,
+                Vec3 {
+                    x: 0.0,
+                    y: -9.81,
+                    z: 0.0,
+                },
+            );
+            assert_ne!(id, u32::MAX);
+            let _anc = soft_body_add_particle(world, id, 0.0, 5.0, 0.0, 1.0, Bool::TRUE);
+            for i in 1..4 {
+                let _ = soft_body_add_particle(world, id, i as f64, 5.0, 0.0, 1.0, Bool::FALSE);
+            }
+            // 全链初刚度 200。
+            for i in 0..3 {
+                let _ = soft_body_add_spring(world, id, i, i + 1, 200.0, 5.0);
+            }
+            // 运行时把第 0 条弹簧改为给定刚度。
+            assert_eq!(
+                soft_body_set_spring_stiffness(world, id, 0, stiff),
+                Bool::TRUE
+            );
+            for _ in 0..200 {
+                world_step(world, 1.0 / 60.0);
+            }
+            // 读自由点最低 y(锚点在 y=5,重力向下,越软越低)。
+            let count = soft_body_particle_count(world, id);
+            let mut pos = vec![Vec3::default(); count as usize];
+            let _r =
+                soft_body_read_particles(world, id, pos.as_mut_ptr(), std::ptr::null_mut(), count);
+            let mut min_y = f64::MAX;
+            for p in &pos {
+                if p.y < min_y {
+                    min_y = p.y;
+                }
+            }
+            world_destroy(world);
+            min_y
+        }
+
+        let sag_soft = max_sag(20.0); // 软
+        let sag_stiff = max_sag(5000.0); // 硬
+        assert!(
+            sag_stiff > sag_soft,
+            "stiffer spring should hold the chain higher: soft={sag_soft} stiff={sag_stiff}"
+        );
+
+        // 非法参数:未知 id / 越界 index / 负刚度 → False。
+        let world = make_world();
+        assert!(!world.is_null());
+        let id = soft_body_create(world, Vec3::default());
+        assert_ne!(id, u32::MAX);
+        assert_eq!(
+            soft_body_set_spring_stiffness(world, u32::MAX, 0, 100.0),
+            Bool::FALSE
+        );
+        assert_eq!(
+            soft_body_set_spring_stiffness(world, id, 999, 100.0),
+            Bool::FALSE
+        );
+        assert_eq!(
+            soft_body_set_spring_stiffness(world, id, 0, -1.0),
+            Bool::FALSE
+        );
+        assert_eq!(
+            soft_body_set_spring_stiffness(world, id, 0, f64::NAN),
+            Bool::FALSE
+        );
+        world_destroy(world);
+    }
+
+    // ── Phase 13: 运行时改 XPBD 距离约束柔度 → 高柔度拉伸更多 ───────────────────
+    #[test]
+    fn soft_body_set_distance_constraint_compliance_increases_stretch() {
+        // XPBD 水平单杆:锚点 (0,0,0),自由点 (1,0,0),重力向下(-y)把杆往下拉→拉伸。
+        // compliance=0(硬)几乎不拉伸;运行时改为高柔度后明显拉伸。用 1 次迭代让柔度可见
+        // (多迭代会把约束完全收敛,抹掉柔度差异)。
+        fn rod_len(compliance: f64) -> f64 {
+            let world = make_world();
+            assert!(!world.is_null());
+            let id = soft_body_create(
+                world,
+                Vec3 {
+                    x: 0.0,
+                    y: -9.81,
+                    z: 0.0,
+                },
+            );
+            assert_ne!(id, u32::MAX);
+            let _anc = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::TRUE);
+            let _free = soft_body_add_particle(world, id, 1.0, 0.0, 0.0, 1.0, Bool::FALSE);
+            // 单迭代:让 compliance 在稳态下可见。
+            assert_eq!(soft_body_configure_solver(world, id, 1, 1, 0.0), Bool::TRUE);
+            assert_eq!(
+                soft_body_add_distance_constraint(world, id, 0, 1, 0.0),
+                Bool::TRUE
+            );
+            // 运行时改柔度(初始 0 → 给定值)。
+            assert_eq!(
+                soft_body_set_distance_constraint_compliance(world, id, 0, compliance),
+                Bool::TRUE
+            );
+            for _ in 0..300 {
+                world_step(world, 1.0 / 60.0);
+            }
+            // 自由点相对锚点的欧氏距离 = 当前杆长。
+            let count = soft_body_particle_count(world, id);
+            let mut pos = vec![Vec3::default(); count as usize];
+            let _r =
+                soft_body_read_particles(world, id, pos.as_mut_ptr(), std::ptr::null_mut(), count);
+            let len = ((pos[1].x - pos[0].x).powi(2)
+                + (pos[1].y - pos[0].y).powi(2)
+                + (pos[1].z - pos[0].z).powi(2))
+            .sqrt();
+            world_destroy(world);
+            len
+        }
+
+        let len_rigid = rod_len(0.0);
+        let len_soft = rod_len(50.0);
+        assert!(
+            len_soft > len_rigid + 0.01,
+            "higher compliance should stretch more: rigid={len_rigid} soft={len_soft}"
+        );
+
+        // 非法参数:未知 id / 越界 index / 负柔度 → False。
+        let world = make_world();
+        assert!(!world.is_null());
+        let id = soft_body_create(world, Vec3::default());
+        assert_ne!(id, u32::MAX);
+        assert_eq!(
+            soft_body_set_distance_constraint_compliance(world, u32::MAX, 0, 0.0),
+            Bool::FALSE
+        );
+        assert_eq!(
+            soft_body_set_distance_constraint_compliance(world, id, 999, 0.0),
+            Bool::FALSE
+        );
+        assert_eq!(
+            soft_body_set_distance_constraint_compliance(world, id, 0, -1.0),
+            Bool::FALSE
+        );
         world_destroy(world);
     }
 }

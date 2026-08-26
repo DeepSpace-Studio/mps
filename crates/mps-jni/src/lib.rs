@@ -1731,5 +1731,9 @@ jni!(boolean softBodySetPlasticity(long world, int id, double yieldStrain, doubl
 jni!(boolean softBodySetPressure(long world, int id, double pressure) { sb::soft_body_set_pressure(m::<WH>(world), id as u32, pressure).0 as jbyte });
 // Phase 12: 软体自碰撞(self-collision)：空间哈希 broad-phase + 逐迭代位置投影
 jni!(boolean softBodySetSelfCollision(long world, int id, double radius, double stiffness) { sb::soft_body_set_self_collision(m::<WH>(world), id as u32, radius, stiffness).0 as jbyte });
+// Phase 13: 运行时改单条弹簧刚度(Hookean k)
+jni!(boolean softBodySetSpringStiffness(long world, int id, int index, double stiffness) { sb::soft_body_set_spring_stiffness(m::<WH>(world), id as u32, index as u32, stiffness).0 as jbyte });
+// Phase 13: 运行时改单条 XPBD 距离约束柔度(compliance α)
+jni!(boolean softBodySetDistanceConstraintCompliance(long world, int id, int index, double compliance) { sb::soft_body_set_distance_constraint_compliance(m::<WH>(world), id as u32, index as u32, compliance).0 as jbyte });
 // Phase 5f: 软体-刚体碰撞（proxy collider 桥接）
 jni!(boolean softBodyEnableCollision(long world, int id, double particle_radius, int enabled) { sb::soft_body_enable_collision(m::<WH>(world), id as u32, particle_radius, jb(enabled)).0 as jbyte });

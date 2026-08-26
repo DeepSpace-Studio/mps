@@ -1039,6 +1039,91 @@ pub extern "C" fn soft_body_set_self_collision(
     })
 }
 
+/// # Phase 13 — 运行时改单条弹簧刚度
+///
+/// 把 `id` 软体里下标 `index`(由 `soft_body_add_spring` 返回)的弹簧刚度(Hookean `k`)改为 `stiffness`。
+/// 用于构造后就地调材质异质性(例如把"骨骼"弹簧调硬、"腱"调软),无需重建拓扑。
+/// `stiffness < 0` 或非有限 → 返回 `Bool::FALSE` 且不改。
+///
+/// # Returns
+/// `Bool::TRUE` 修改成功;`id` 未知 / `index` 越界 / world 为 null / 参数非法 → `Bool::FALSE`。
+///
+/// # Safety
+/// `world` 必须有效;`stiffness` 需为有限非负值。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_set_spring_stiffness(
+    world: *mut WorldHandle,
+    id: u32,
+    index: u32,
+    stiffness: f64,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_set_spring_stiffness: unknown id");
+            return Bool::FALSE;
+        };
+        if sb.set_spring_stiffness(index as usize, stiffness) {
+            clear_error();
+            Bool::TRUE
+        } else {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_spring_stiffness: bad index or negative/non-finite stiffness",
+            );
+            Bool::FALSE
+        }
+    })
+}
+
+/// # Phase 13 — 运行时改单条 XPBD 距离约束柔度
+///
+/// 把 `id` 软体里下标 `index`(由 `soft_body_add_distance_constraint` 返回)的 XPBD 距离约束柔度
+/// (compliance α)改为 `compliance`。XPBD 求解器逐约束读取各自柔度(见 `step_xpbd`),因此不同边
+/// 可拥有不同刚度。`compliance < 0` 或非有限 → 返回 `Bool::FALSE` 且不改。
+///
+/// # Returns
+/// `Bool::TRUE` 修改成功;`id` 未知 / `index` 越界 / world 为 null / 参数非法 → `Bool::FALSE`。
+///
+/// # Safety
+/// `world` 必须有效;`compliance` 需为有限非负值。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_set_distance_constraint_compliance(
+    world: *mut WorldHandle,
+    id: u32,
+    index: u32,
+    compliance: f64,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(
+                ERR_NOT_FOUND,
+                "soft_body_set_distance_constraint_compliance: unknown id",
+            );
+            return Bool::FALSE;
+        };
+        if sb.set_distance_constraint_compliance(index as usize, compliance) {
+            clear_error();
+            Bool::TRUE
+        } else {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_distance_constraint_compliance: bad index or negative/non-finite compliance",
+            );
+            Bool::FALSE
+        }
+    })
+}
+
 // ── Phase 5a: general soft-body builder (unlock arbitrary topology) ──────────了「voxel 网格 → 软体」与「设置重力」两个高层入口，外部调用方
 // （JNI/FFM/Minecraft）无法构造任意拓扑的软体（自定义质点、弹簧、XPBD 距离约束、
 // 四面体体积元）也无法切求解器。本组 FFI 把 rapier `SoftBody` 的 `add_particle` /

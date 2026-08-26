@@ -4551,6 +4551,42 @@ Bool soft_body_set_self_collision(struct WorldHandle *world,
                                   double stiffness);
 
 /**
+ * # Phase 13 — 运行时改单条弹簧刚度
+ *
+ * 把 `id` 软体里下标 `index`(由 `soft_body_add_spring` 返回)的弹簧刚度(Hookean `k`)改为 `stiffness`。
+ * 用于构造后就地调材质异质性(例如把"骨骼"弹簧调硬、"腱"调软),无需重建拓扑。
+ * `stiffness < 0` 或非有限 → 返回 `Bool::FALSE` 且不改。
+ *
+ * # Returns
+ * `Bool::TRUE` 修改成功;`id` 未知 / `index` 越界 / world 为 null / 参数非法 → `Bool::FALSE`。
+ *
+ * # Safety
+ * `world` 必须有效;`stiffness` 需为有限非负值。
+ */
+Bool soft_body_set_spring_stiffness(struct WorldHandle *world,
+                                    uint32_t id,
+                                    uint32_t index,
+                                    double stiffness);
+
+/**
+ * # Phase 13 — 运行时改单条 XPBD 距离约束柔度
+ *
+ * 把 `id` 软体里下标 `index`(由 `soft_body_add_distance_constraint` 返回)的 XPBD 距离约束柔度
+ * (compliance α)改为 `compliance`。XPBD 求解器逐约束读取各自柔度(见 `step_xpbd`),因此不同边
+ * 可拥有不同刚度。`compliance < 0` 或非有限 → 返回 `Bool::FALSE` 且不改。
+ *
+ * # Returns
+ * `Bool::TRUE` 修改成功;`id` 未知 / `index` 越界 / world 为 null / 参数非法 → `Bool::FALSE`。
+ *
+ * # Safety
+ * `world` 必须有效;`compliance` 需为有限非负值。
+ */
+Bool soft_body_set_distance_constraint_compliance(struct WorldHandle *world,
+                                                  uint32_t id,
+                                                  uint32_t index,
+                                                  double compliance);
+
+/**
  * Create an empty soft body in the world and return its `SoftBodyId`.
  *
  * The body starts in the `MassSpring` solver; switch it to XPBD with
