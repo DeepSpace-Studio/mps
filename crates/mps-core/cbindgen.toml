@@ -320,4 +320,5 @@ include = [
   "soft_body_set_tear_strain",
   "soft_body_set_plasticity",
   "soft_body_set_pressure",
+  "soft_body_set_self_collision",
 ]

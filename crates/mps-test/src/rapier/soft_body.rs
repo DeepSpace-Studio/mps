@@ -19,8 +19,9 @@ mod tests {
         soft_body_particle_count, soft_body_read_edges, soft_body_read_particles,
         soft_body_read_tetrahedra, soft_body_read_triangles, soft_body_remove_particle,
         soft_body_set_gravity, soft_body_set_plasticity, soft_body_set_pressure,
-        soft_body_set_tear_strain, soft_body_sleep, soft_body_total_volume, soft_body_voxel_build,
-        soft_body_voxel_dig, soft_body_wake, soft_chain_create, soft_chain_node_handles,
+        soft_body_set_self_collision, soft_body_set_tear_strain, soft_body_sleep,
+        soft_body_total_volume, soft_body_voxel_build, soft_body_voxel_dig, soft_body_wake,
+        soft_chain_create, soft_chain_node_handles,
     };
     use mps_core::rapier::voxel::{collider_builder_create_voxels, collider_voxel_edit};
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
@@ -2024,6 +2025,115 @@ mod tests {
         assert_eq!(soft_body_set_pressure(world, id, 1.5), Bool::TRUE);
         // 关闭（<=0）→ True，且不再充气。
         assert_eq!(soft_body_set_pressure(world, id, 0.0), Bool::TRUE);
+
+        world_destroy(world);
+    }
+
+    // ── Phase 12: 自碰撞 — 紧密堆叠的自由质点保持分离(不穿透)────────────────────
+    #[test]
+    fn soft_body_self_collision_keeps_particles_separated() {
+        // 10 个自由质点在竖直方向密集堆叠 + 重力。无自碰撞时全部塌缩到同一点;
+        // 开启自碰撞(半径 r)后任意两点最小间距应 >= ~2r。
+        const N: usize = 10;
+        const R: f64 = 0.25;
+        fn min_pair_dist(self_col: bool) -> f64 {
+            let world = make_world();
+            assert!(!world.is_null());
+            let id = soft_body_create(
+                world,
+                Vec3 {
+                    x: 0.0,
+                    y: -9.81,
+                    z: 0.0,
+                },
+            );
+            assert_ne!(id, u32::MAX);
+            for i in 0..N {
+                // 竖直堆叠,间距 0.1 (< 2R),重力下会塌缩。
+                let _ =
+                    soft_body_add_particle(world, id, 0.0, (i as f64) * 0.1, 0.0, 1.0, Bool::FALSE);
+            }
+            if self_col {
+                assert_eq!(soft_body_set_self_collision(world, id, R, 0.0), Bool::TRUE);
+            }
+            for _ in 0..200 {
+                world_step(world, 1.0 / 60.0);
+            }
+            let count = soft_body_particle_count(world, id);
+            let mut pos = vec![Vec3::default(); count as usize];
+            let _r =
+                soft_body_read_particles(world, id, pos.as_mut_ptr(), std::ptr::null_mut(), count);
+            let mut m = f64::MAX;
+            for i in 0..count as usize {
+                for j in (i + 1)..count as usize {
+                    let dx = pos[i].x - pos[j].x;
+                    let dy = pos[i].y - pos[j].y;
+                    let dz = pos[i].z - pos[j].z;
+                    let d = (dx * dx + dy * dy + dz * dz).sqrt();
+                    if d < m {
+                        m = d;
+                    }
+                }
+            }
+            world_destroy(world);
+            m
+        }
+
+        let sep_off = min_pair_dist(false);
+        let sep_on = min_pair_dist(true);
+        // 无自碰撞:塌缩到几乎重合(间距远小于 2R)。
+        assert!(
+            sep_off < R,
+            "no self-collision should let them collapse, got {sep_off}"
+        );
+        // 有自碰撞:最小间距应被推到接近 2R 甚至更大。
+        assert!(
+            sep_on >= 2.0 * R - 1e-3,
+            "self-collision should keep particles >= 2R apart: sep_on={sep_on} R={R}"
+        );
+    }
+
+    // ── Phase 12: 自碰撞非法/未知参数返回 False 而不 panic───────────────────────
+    #[test]
+    fn soft_body_set_self_collision_rejects_invalid_args() {
+        let world = make_world();
+        assert!(!world.is_null());
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+        let _p = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
+
+        // 未知 id → False。
+        assert_eq!(
+            soft_body_set_self_collision(world, u32::MAX, 0.2, 0.0),
+            Bool::FALSE
+        );
+        // 非有限 → False。
+        assert_eq!(
+            soft_body_set_self_collision(world, id, f64::NAN, 0.0),
+            Bool::FALSE
+        );
+        // radius <= 0 → False (且保持关闭)。
+        assert_eq!(
+            soft_body_set_self_collision(world, id, 0.0, 0.0),
+            Bool::FALSE
+        );
+        // stiffness < 0 → False。
+        assert_eq!(
+            soft_body_set_self_collision(world, id, 0.2, -1.0),
+            Bool::FALSE
+        );
+        // 合法 → True，且未 panic。
+        assert_eq!(
+            soft_body_set_self_collision(world, id, 0.2, 0.0),
+            Bool::TRUE
+        );
 
         world_destroy(world);
     }

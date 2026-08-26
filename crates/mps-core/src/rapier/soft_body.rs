@@ -985,8 +985,61 @@ pub extern "C" fn soft_body_set_pressure(world: *mut WorldHandle, id: u32, press
         Bool::TRUE
     })
 }
-//
-// Phase 4 只暴露了「voxel 网格 → 软体」与「设置重力」两个高层入口，外部调用方
+
+/// # Phase 12 — 开启/关闭软体自碰撞(self-collision)
+///
+/// 把 `id` 软体的自碰撞设为 `radius`(粒子球半径)+ `stiffness`(XPBD 排斥约束柔度, `0`=硬)。
+/// 每步求解中,任意两个自由质点中心距 `< 2*radius` 时沿连线被推开(各自视为该半径的球),
+/// 但**直接结构邻居**(已有 distance_constraint 边相连的质点对)被排除,不误判为碰撞。
+/// 采用均匀空间哈希做 broad-phase,在 MassSpring 与 XPBD 两条路径内逐迭代投影,纯位置约束,
+/// 不引入新求解器力学。非法参数(`radius <= 0` / `stiffness < 0` / 非有限)返回 `Bool::FALSE` 且不开。
+///
+/// # Returns
+/// `Bool::TRUE` 成功开启;`id` 未知 / world 为 null / 参数非法返回 `Bool::FALSE`。
+///
+/// # Safety
+/// `world` 必须有效;`radius` / `stiffness` 需为有限值。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_set_self_collision(
+    world: *mut WorldHandle,
+    id: u32,
+    radius: f64,
+    stiffness: f64,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !radius.is_finite() || !stiffness.is_finite() {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_self_collision: non-finite radius/stiffness",
+            );
+            return Bool::FALSE;
+        }
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_set_self_collision: unknown id");
+            return Bool::FALSE;
+        };
+        // set_self_collision rejects bad params (returns false). A valid-id rejection
+        // is a parameter error -> report FALSE (mirrors soft_body_set_pressure /
+        // soft_body_set_plasticity convention for invalid arguments).
+        let ok = sb.set_self_collision(radius, stiffness);
+        if !ok {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_self_collision: radius<=0 or stiffness<0",
+            );
+            return Bool::FALSE;
+        }
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+// ── Phase 5a: general soft-body builder (unlock arbitrary topology) ──────────了「voxel 网格 → 软体」与「设置重力」两个高层入口，外部调用方
 // （JNI/FFM/Minecraft）无法构造任意拓扑的软体（自定义质点、弹簧、XPBD 距离约束、
 // 四面体体积元）也无法切求解器。本组 FFI 把 rapier `SoftBody` 的 `add_particle` /
 // `add_pinned` / `add_spring` / `add_distance_constraint` / `add_tetrahedron` /

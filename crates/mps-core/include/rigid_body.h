@@ -4531,6 +4531,26 @@ Bool soft_body_set_pressure(struct WorldHandle *world,
                             double pressure);
 
 /**
+ * # Phase 12 — 开启/关闭软体自碰撞(self-collision)
+ *
+ * 把 `id` 软体的自碰撞设为 `radius`(粒子球半径)+ `stiffness`(XPBD 排斥约束柔度, `0`=硬)。
+ * 每步求解中,任意两个自由质点中心距 `< 2*radius` 时沿连线被推开(各自视为该半径的球),
+ * 但**直接结构邻居**(已有 distance_constraint 边相连的质点对)被排除,不误判为碰撞。
+ * 采用均匀空间哈希做 broad-phase,在 MassSpring 与 XPBD 两条路径内逐迭代投影,纯位置约束,
+ * 不引入新求解器力学。非法参数(`radius <= 0` / `stiffness < 0` / 非有限)返回 `Bool::FALSE` 且不开。
+ *
+ * # Returns
+ * `Bool::TRUE` 成功开启;`id` 未知 / world 为 null / 参数非法返回 `Bool::FALSE`。
+ *
+ * # Safety
+ * `world` 必须有效;`radius` / `stiffness` 需为有限值。
+ */
+Bool soft_body_set_self_collision(struct WorldHandle *world,
+                                  uint32_t id,
+                                  double radius,
+                                  double stiffness);
+
+/**
  * Create an empty soft body in the world and return its `SoftBodyId`.
  *
  * The body starts in the `MassSpring` solver; switch it to XPBD with
