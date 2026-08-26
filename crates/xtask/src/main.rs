@@ -155,6 +155,48 @@ fn count_core_ffi(workspace_root: &Path) -> usize {
     count
 }
 
+/// Count distinct gravity models exposed through `world_set_*_gravity` C-ABI setters
+/// in `crates/mps-core/src/rapier` (e.g. `world_set_gravity`, `world_set_newton_gravity`,
+/// `world_set_mond_gravity`, `world_set_cross_validate_gravity`). Returns 0 on failure.
+fn count_gravity_models(workspace_root: &Path) -> usize {
+    use std::collections::HashSet;
+    let dir = workspace_root.join("crates/mps-core/src/rapier");
+    let mut seen = HashSet::new();
+    for entry in WalkDir::new(&dir).into_iter().filter_map(|e| e.ok()) {
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) != Some("rs") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        for line in content.lines() {
+            let t = line.trim_start();
+            if (t.starts_with("pub extern \"C\"")
+                || t.starts_with("pub(crate) extern \"C\"")
+                || t.starts_with("pub unsafe extern \"C\"")
+                || t.starts_with("pub(crate) unsafe extern \"C\""))
+                && t.contains("fn ")
+            {
+                let Some(after) = t.split("fn ").nth(1) else {
+                    continue;
+                };
+                let name = after
+                    .split(|c: char| !(c.is_alphanumeric() || c == '_'))
+                    .next()
+                    .unwrap_or("");
+                if name.starts_with("world_set_")
+                    && name.contains("gravity")
+                    && !name.ends_with("_flag")
+                {
+                    seen.insert(name.to_string());
+                }
+            }
+        }
+    }
+    seen.len()
+}
+
 /// Read the workspace `version` from the root `Cargo.toml`.
 fn read_workspace_version(workspace_root: &Path) -> String {
     let toml = workspace_root.join("Cargo.toml");
@@ -298,7 +340,7 @@ fn dump_metrics(workspace_root: &Path) -> Result<String, String> {
         "crates/mps-formula/src/celestial_data.rs",
         "CelestialBodyId",
     );
-    let gravity_models = count_pub_mods(workspace_root, &["crates/mps-core/src/gravity"]);
+    let gravity_models = count_gravity_models(workspace_root);
     let integrators = count_enum_variants(
         workspace_root,
         "crates/mps-cosmos/src/world.rs",

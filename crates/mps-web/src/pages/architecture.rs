@@ -22,7 +22,7 @@ pub fn Architecture() -> Element {
             h2 { { t!("arch-stack-title") } }
             p { class: "p-lead", { t!("arch-stack-lead") } }
             div { class: "code-block",
-                pre { code { { t!("arch-stack-diagram") } } }
+                pre { code { { t!("arch-stack-diagram", modules: FORMULA_MODULE_COUNT, methods: JNI_METHOD_COUNT) } } }
             }
         }
 

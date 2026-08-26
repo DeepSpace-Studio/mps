@@ -21,6 +21,7 @@ use crate::pages::integrators::Integrators;
 use crate::pages::jni::Jni;
 use crate::pages::quickstart::Quickstart;
 use crate::pages::voxel::Voxel;
+use crate::pages::soft_body::SoftBody;
 
 /// The whole documentation, rendered as one inline page. A sticky TOC provides
 /// in-page navigation via native `#sec-...` anchor scrolling — no router, no
@@ -74,6 +75,7 @@ pub fn Home() -> Element {
             Integrators {}
             Formula {}
             Voxel {}
+            SoftBody {}
             Events {}
             Arena {}
             Batch {}

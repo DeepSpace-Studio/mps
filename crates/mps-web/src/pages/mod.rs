@@ -12,4 +12,5 @@ pub mod integrators;
 pub mod jni;
 pub mod not_found;
 pub mod quickstart;
+pub mod soft_body;
 pub mod voxel;

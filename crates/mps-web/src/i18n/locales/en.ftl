@@ -9,6 +9,7 @@ nav-gravity = Gravity
 nav-integrators = Integrators
 nav-formula = Formula
 nav-voxel = Voxel
+nav-soft-body = Soft Body
 nav-events = Events
 nav-arena = Arena
 nav-batch = Batch Colliders
@@ -63,7 +64,7 @@ home-mod-cosmos-desc = CosmosWorld, Verlet orbit integration, n-body gravity, pe
 home-mod-physics-title = Physics Systems
 home-mod-physics-desc = Gravity, terrain, force registry, events, aerodynamics, fluid
 home-mod-formula-title = Domain Formulas
-home-mod-formula-desc = 107 pure formula modules (390+ functions) — spaceflight, astrophysics, nuclear, relativity, quantum, and more.
+home-mod-formula-desc = 107 pure formula modules (557 functions) — spaceflight, astrophysics, nuclear, relativity, quantum, and more.
 home-mod-integration-title = Integration
 home-mod-integration-desc = Arena shared memory, JNI/FFM bindings, Java ecosystem
 home-mod-reference-title = Reference
@@ -116,11 +117,11 @@ arch-desc = Crate layering and per-frame data flow from Java top to Rapier botto
 arch-stack-title = Crate stack
 arch-stack-lead = Top-to-bottom: Java bindings → C ABI → mps-core → Rapier3D-f64.
 arch-stack-diagram = Java 21 JNI / Java 25 FFM
-  └─ Rust C ABI (483 functions)
-       ├─ mps-formula  — 33 pure formula modules (300+ functions)
+  └─ Rust C ABI (720 functions)
+       ├─ mps-formula  — { $modules } pure formula modules (557 functions)
        ├─ mps-core     — physics engine + Rapier wrapper (World, bodies, colliders, queries, events)
        ├─ mps-cosmos   — cosmos rigid body (separate world, Verlet orbit integration)
-       ├─ mps-jni      — JNI bindings (311 methods, incl. cosmos batch)
+       ├─ mps-jni      — JNI bindings ({ $methods } methods, incl. cosmos batch)
        ├─ mps-ffm      — FFM metadata
        └─ mps-test     — integration tests (incl. cosmos 19)
 arch-layers-title = Layer responsibilities
@@ -218,7 +219,7 @@ int-diag-kepler = keplerian_elements() converts to six elements to monitor semi-
 # ---- Formula page ----
 form-tag = // mps-formula
 form-title = Formula Modules
-form-desc = A standalone pure-Rust crate: 107 formula modules and 390+ public functions spanning spaceflight to quantum physics, with zero Rapier or WorldHandle dependency.
+form-desc = A standalone pure-Rust crate: 107 formula modules and 557 public functions spanning spaceflight to quantum physics, with zero Rapier or WorldHandle dependency.
 form-intro-pure = All formulas live in the standalone crate mps-formula — pure Rust, no Rapier or WorldHandle dependency.
 form-mod-kepler = kepler.rs — Kepler equation iterative solver / element conversion
 form-mod-dynamics = dynamics.rs — orbit dynamics / two-centre approximation
@@ -261,7 +262,7 @@ form-mod-wave-optics = wave_optics.rs — interference / diffraction / polarizat
 form-mod-acoustics = acoustics.rs — acoustics / Doppler
 form-mod-aero = aerodynamics.rs — lift / drag / airfoils
 form-support-title = Supporting modules
-form-support-intro = A few shared primitives inside mps-formula that all 33 modules reuse:
+form-support-intro = A few shared primitives inside mps-formula that all 107 modules reuse:
 form-call-title = Calling from Java
 form-call-desc = All formula functions are exposed via C ABI with no WorldHandle dependency:
 
@@ -611,3 +612,78 @@ nav-group-cosmos = mps-cosmos
 nav-group-formula = mps-formula
 nav-group-jni = mps-jni
 nav-group-ffm = mps-ffm
+# ---- Soft Body (Phases 0–21) ----
+soft-tag = Soft Body
+soft-title = Soft Body Physics
+soft-desc = XPBD / MassSpring deformable bodies — cloth, tetrahedral volume meshes, voxel terrain, and 22 capability upgrades delivered across Phases 0–21.
+
+soft-overview-title = Overview
+soft-overview-lead = A soft body is a collection of particles connected by distance constraints (XPBD) and/or springs (MassSpring), optionally wrapped in a triangle shell or a tetrahedral volume mesh.
+soft-overview-body = Every soft body owns an independent gravity field, a sleep/wake state, and a set of XPBD distance constraints plus MassSpring springs. The solver is selected per body via soft_body_configure_solver — XPBD for stiff structural cloth/flesh, MassSpring for bouncy rope/jelly. All state is exposed read-write through the Arena, so Java reads particles/tetrahedra/triangles/edges with zero per-object JNI.
+
+soft-solver-title = Solver
+soft-solver-desc = Two solvers share the same particle buffer; switch with soft_body_configure_solver(world, id, solver, iterations, dt).
+soft-solver-li-1 = XPBD — rigid-compliance distance constraints with per-constraint compliance and compression; pairs with tetrahedral volume conservation for incompressible flesh.
+soft-solver-li-2 = MassSpring — Hookean springs (soft_body_add_spring) with per-spring stiffness; cheap and stable for ropes, cloth, and gelatin.
+soft-solver-li-3 = Per-constraint anisotropic compliance (soft_body_set_distance_constraint_compliance) lets an edge resist stretch differently along its axis for directional stiffness.
+
+soft-data-title = Data Model
+soft-data-desc = A soft body is four parallel arrays plus two constraint sets; all are Arena-readable.
+soft-data-li-1 = Particles — soft_body_add_particle(pos, inv_mass, pinned); read via soft_body_read_particles.
+soft-data-li-2 = Tetrahedra — soft_body_add_tetrahedron(a,b,c,d) for volume meshes; rest volume cached for conservation; read via soft_body_read_tetrahedra.
+soft-data-li-3 = Triangles — soft_body_add_triangle(a,b,c) build the shell; read via soft_body_read_triangles.
+soft-data-li-4 = Edges — springs and distance constraints; read via soft_body_read_edges.
+
+soft-cap-title = Capability Matrix (Phases 0–21)
+soft-cap-lead = Each card maps to a real soft_body_* FFI delivered in the workspace.
+
+soft-cap-01-title = Base Body & Particles
+soft-cap-01-desc = soft_body_create + soft_body_add_particle; free or pinned particles with independent inv_mass. The foundation every later feature builds on.
+soft-cap-02-title = Triangle Shell
+soft-cap-02-desc = soft_body_add_triangle registers the 3 structural edges as distance constraints; the shell drives cloth and surface contact.
+soft-cap-03-title = Tetrahedral Volume Mesh
+soft-cap-03-desc = soft_body_add_tetrahedron + soft_body_build_tetra_mesh build an incompressible volumetric body; rest volumes are cached for volume conservation.
+soft-cap-04-title = Springs (MassSpring)
+soft-cap-04-desc = soft_body_add_spring + soft_body_set_spring_stiffness — Hookean links for ropes, cloth, and jelly with tunable stiffness.
+soft-cap-05-title = Distance Constraints
+soft-cap-05-desc = soft_body_add_distance_constraint with per-constraint compliance and compression; the XPBD structural backbone.
+soft-cap-06-title = Cloth & Bending
+soft-cap-06-desc = soft_body_add_bending adds angular bending resistance on top of the triangle shell for stiff fabric and fol-do-not-collapse surfaces.
+soft-cap-07-title = Wind Field
+soft-cap-07-desc = soft_body_apply_wind + soft_body_clear_wind — aerodynamic drag on the shell using triangle normals; flags via soft_body_apply_wind_flag.
+soft-cap-08-title = Sleep Diagnostics
+soft-cap-08-desc = soft_body_is_sleeping / soft_body_sleep / soft_body_wake — persistent-island sleep states keep a settled body off the solver.
+soft-cap-09-title = Rigid Anchoring
+soft-cap-09-desc = soft_body_attach_particle / soft_body_detach_particle bind a particle to a rigid body (fixed point, rope end, pinned cloth corner).
+soft-cap-10-title = Tearing
+soft-cap-10-desc = soft_body_set_tear_strain — a distance constraint breaks when its strain exceeds the threshold, so cloth rips under load.
+soft-cap-11-title = Plasticity
+soft-cap-11-desc = soft_body_set_plasticity — constraints retain a fraction of deformation as permanent offset, so soft bodies dent and stay dented.
+soft-cap-12-title = Pressurization
+soft-cap-12-desc = soft_body_set_pressure — an internal pressure force inflates the tetrahedral mesh (balloons, airbags, bladders).
+soft-cap-13-title = Self-Collision
+soft-cap-13-desc = soft_body_set_self_collision — particles repel each other within a radius; keeps a folded body from passing through itself.
+soft-cap-14-title = Soft–Soft Collision
+soft-cap-14-desc = soft_body_set_cross_collision — two soft bodies resolve contact against each other (piling, stacking, squishing).
+soft-cap-15-title = Independent Gravity
+soft-cap-15-desc = soft_body_set_gravity — each body carries its own gravity vector, decoupled from the world gravity used by rigid bodies.
+soft-cap-16-title = Volume Conservation
+soft-cap-16-desc = soft_body_set_volume_conservation + soft_body_total_volume — an XPBD constraint holds total tetrahedral volume (incompressible flesh, water balloons).
+soft-cap-17-title = Cohesion
+soft-cap-17-desc = soft_body_set_cohesion — nearby particles inside a capture radius are pulled together (surface tension, sticky droplets, wet sand).
+soft-cap-18-title = Structural Damping
+soft-cap-18-desc = soft_body_set_damping — velocity-proportional damping suppresses jitter and rings the body to rest.
+soft-cap-19-title = Anisotropic Compliance
+soft-cap-19-desc = soft_body_set_distance_constraint_compliance — per-edge directional compliance for stiff-warp / soft-weft cloth and directional flesh.
+soft-cap-20-title = Soft–Soft Friction
+soft-cap-20-desc = soft_body_set_self_collision_friction + soft_body_set_cross_collision_friction — Coulomb tangential damping on self and cross contacts (μ ∈ [0,1]).
+soft-cap-21-title = Adaptive Tetrahedral Subdivision
+soft-cap-21-desc = soft_body_subdivide_tetrahedra — barycentric 1→4 split of tets whose longest edge exceeds a threshold; sub-volumes sum to the parent so volume stays conserved.
+soft-cap-22-title = Read/Write API
+soft-cap-22-desc = soft_body_read_particles / _read_tetrahedra / _read_triangles / _read_edges + soft_body_get_particle — the full body state flows through the zero-copy Arena.
+
+soft-api-title = FFI Surface
+soft-api-desc = The soft-body subsystem is exposed symmetrically across C FFI, Java JNI, and the integration tests.
+soft-api-stat-ffi = C FFI functions
+soft-api-stat-jni = JNI methods
+soft-api-stat-tests = integration tests

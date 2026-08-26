@@ -25,7 +25,7 @@ pub const FORMULA_MODULE_COUNT: &str = "107";
 /// Number of `CelestialBodyId` variants (built-in celestial bodies).
 pub const CELESTIAL_COUNT: &str = "10";
 /// Number of `pub mod` gravity model submodules under mps-core/src/gravity.
-pub const GRAVITY_MODEL_COUNT: &str = "0";
+pub const GRAVITY_MODEL_COUNT: &str = "4";
 /// Number of `OrbitIntegration` variants (integrator selection).
 pub const INTEGRATOR_COUNT: &str = "6";
 /// `pub extern "C" fn world_*` declarations in mps-core/rapier.

@@ -9,6 +9,7 @@ nav-gravity = 引力模型
 nav-integrators = 积分器
 nav-formula = 公式模块
 nav-voxel = 体素
+nav-soft-body = 软体
 nav-events = 事件
 nav-arena = Arena
 nav-batch = 批量碰撞体
@@ -63,7 +64,7 @@ home-mod-cosmos-desc = CosmosWorld、Verlet 轨道积分、n-body 互引力、�
 home-mod-physics-title = 物理系统
 home-mod-physics-desc = 引力、地形、力注册表、事件系统、空气动力学、流体
 home-mod-formula-title = 领域公式
-home-mod-formula-desc = 107 个纯公式模块（390+ 函数）— 航天、天体物理、核物理、相对论、量子等。
+home-mod-formula-desc = 107 个纯公式模块（557 函数）— 航天、天体物理、核物理、相对论、量子等。
 home-mod-integration-title = 集成方案
 home-mod-integration-desc = Arena 共享内存、JNI/FFM 绑定、Java 生态
 home-mod-reference-title = 参考资料
@@ -116,11 +117,11 @@ arch-desc = 自 Java 顶部到 Rapier 底部的 crate 分层与每帧数据流�
 arch-stack-title = crate 堆栈
 arch-stack-lead = 自顶向下：Java 绑定 → C ABI → mps-core → Rapier3D-f64。
 arch-stack-diagram = Java 21 JNI / Java 25 FFM
-  └─ Rust C ABI (483 functions)
-       ├─ mps-formula  — 33 pure formula modules (300+ functions)
+  └─ Rust C ABI (720 functions)
+       ├─ mps-formula  — { $modules } pure formula modules (557 functions)
        ├─ mps-core     — physics engine + Rapier wrapper (World, bodies, colliders, queries, events)
        ├─ mps-cosmos   — cosmos rigid body (separate world, Verlet orbit integration)
-       ├─ mps-jni      — JNI bindings (311 methods, incl. cosmos batch)
+       ├─ mps-jni      — JNI bindings ({ $methods } methods, incl. cosmos batch)
        ├─ mps-ffm      — FFM metadata
        └─ mps-test     — integration tests (incl. cosmos 19)
 arch-layers-title = 各层职责
@@ -218,7 +219,7 @@ int-diag-kepler = keplerian_elements() 转六根数，监控半长轴漂移。
 # ---- Formula page ----
 form-tag = // mps-formula
 form-title = 公式模块
-form-desc = 独立纯 Rust crate：107 个公式模块、390+ 个公开函数，覆盖航天到量子物理，零 Rapier / WorldHandle 依赖。
+form-desc = 独立纯 Rust crate：107 个公式模块、557 个公开函数，覆盖航天到量子物理，零 Rapier / WorldHandle 依赖。
 form-intro-pure = 全部公式位于独立 crate mps-formula — 纯 Rust 实现，不依赖 Rapier 或 WorldHandle。
 form-mod-kepler = kepler.rs — 开普勒方程迭代解 / 六根数转换
 form-mod-dynamics = dynamics.rs — 轨道动力学 / 双中心近似
@@ -261,7 +262,7 @@ form-mod-wave-optics = wave_optics.rs — 干涉 / 衍射 / 偏振
 form-mod-acoustics = acoustics.rs — 声学 / 多普勒
 form-mod-aero = aerodynamics.rs — 升力 / 阻力 / 翼型
 form-support-title = 辅助模块
-form-support-intro = mps-formula 内部几个共享原语，被 33 个模块复用：
+form-support-intro = mps-formula 内部几个共享原语，被 107 个模块复用：
 form-call-title = 从 Java 调用
 form-call-desc = 所有公式函数都经 C ABI 暴露，无 WorldHandle 依赖：
 
@@ -611,3 +612,78 @@ nav-group-cosmos = mps-cosmos
 nav-group-formula = mps-formula
 nav-group-jni = mps-jni
 nav-group-ffm = mps-ffm
+# ---- 软体(Phase 0–21) ----
+soft-tag = 软体
+soft-title = 软体物理
+soft-desc = XPBD / MassSpring 可变形体 —— 布料、四面体体积网格、体素地形,以及 Phase 0–21 交付的 22 项能力升级。
+
+soft-overview-title = 概述
+soft-overview-lead = 软体是一组质点,由距离约束(XPBD)和/或弹簧(MassSpring)连接,可外裹三角壳或四面体体积网格。
+soft-overview-body = 每个软体拥有独立的重力场、休眠/唤醒状态,以及一组 XPBD 距离约束加 MassSpring 弹簧。求解器经 soft_body_configure_solver 按体切换 —— XPBD 用于刚性结构布料/肉体,MassSpring 用于弹性绳索/果冻。全部状态经 Arena 可读写,Java 以零逐对象 JNI 读取质点/四面体/三角/边。
+
+soft-solver-title = 求解器
+soft-solver-desc = 两套求解器共用同一质点缓冲;用 soft_body_configure_solver(world, id, solver, iterations, dt) 切换。
+soft-solver-li-1 = XPBD —— 刚性柔度距离约束,逐约束设定 compliance 与压缩;配合四面体体积守恒实现不可压肉体。
+soft-solver-li-2 = MassSpring —— 胡克弹簧(soft_body_add_spring),逐弹簧刚度;绳索、布料、凝胶便宜又稳定。
+soft-solver-li-3 = 逐约束各向异性柔度(soft_body_set_distance_constraint_compliance)让一条边沿轴向抗拉伸不同,实现定向刚度。
+
+soft-data-title = 数据模型
+soft-data-desc = 软体是四个并行数组加两组约束;全部可由 Arena 读取。
+soft-data-li-1 = 质点 —— soft_body_add_particle(pos, inv_mass, pinned);经 soft_body_read_particles 读取。
+soft-data-li-2 = 四面体 —— soft_body_add_tetrahedron(a,b,c,d) 构体积网格;静止体积缓存用于守恒;经 soft_body_read_tetrahedra 读取。
+soft-data-li-3 = 三角 —— soft_body_add_triangle(a,b,c) 构外壳;经 soft_body_read_triangles 读取。
+soft-data-li-4 = 边 —— 弹簧与距离约束;经 soft_body_read_edges 读取。
+
+soft-cap-title = 能力矩阵(Phase 0–21)
+soft-cap-lead = 每张卡片对应工作区中一个真实的 soft_body_* FFI。
+
+soft-cap-01-title = 基础体与质点
+soft-cap-01-desc = soft_body_create + soft_body_add_particle;自由或钉住的质点带独立 inv_mass。后续所有功能的地基。
+soft-cap-02-title = 三角外壳
+soft-cap-02-desc = soft_body_add_triangle 把 3 条结构边登记为距离约束;外壳驱动布料与表面接触。
+soft-cap-03-title = 四面体体积网格
+soft-cap-03-desc = soft_body_add_tetrahedron + soft_body_build_tetra_mesh 构不可压体积体;静止体积缓存用于体积守恒。
+soft-cap-04-title = 弹簧(MassSpring)
+soft-cap-04-desc = soft_body_add_spring + soft_body_set_spring_stiffness —— 胡克链接,用于绳索、布料、凝胶,刚度可调。
+soft-cap-05-title = 距离约束
+soft-cap-05-desc = soft_body_add_distance_constraint 带逐约束 compliance 与压缩;XPBD 结构骨架。
+soft-cap-06-title = 布料与弯曲
+soft-cap-06-desc = soft_body_add_bending 在三角壳之上加角度弯曲抗力,用于硬挺布料与可折叠表面。
+soft-cap-07-title = 风力场
+soft-cap-07-desc = soft_body_apply_wind + soft_body_clear_wind —— 用三角法线对外壳做气动阻力;标志位经 soft_body_apply_wind_flag。
+soft-cap-08-title = 休眠诊断
+soft-cap-08-desc = soft_body_is_sleeping / soft_body_sleep / soft_body_wake —— 持久岛屿休眠态让静止体退出求解。
+soft-cap-09-title = 锚定刚体
+soft-cap-09-desc = soft_body_attach_particle / soft_body_detach_particle 把质点绑到刚体(固定点、绳端、钉住的布角)。
+soft-cap-10-title = 撕裂
+soft-cap-10-desc = soft_body_set_tear_strain —— 距离约束应变超阈值即断裂,布料在载荷下撕裂。
+soft-cap-11-title = 塑性
+soft-cap-11-desc = soft_body_set_plasticity —— 约束保留一部分形变为永久偏移,软体凹陷并维持凹陷。
+soft-cap-12-title = 充气
+soft-cap-12-desc = soft_body_set_pressure —— 内部压力把四面体网格吹胀(气球、气囊、膀胱)。
+soft-cap-13-title = 自碰撞
+soft-cap-13-desc = soft_body_set_self_collision —— 质点在半径内互斥;防止折叠体穿透自身。
+soft-cap-14-title = 软软碰撞
+soft-cap-14-desc = soft_body_set_cross_collision —— 两个软体互相解算接触(堆叠、挤压、互压)。
+soft-cap-15-title = 独立重力
+soft-cap-15-desc = soft_body_set_gravity —— 每个体带自己的重力向量,与世界给刚体的重力解耦。
+soft-cap-16-title = 体积守恒
+soft-cap-16-desc = soft_body_set_volume_conservation + soft_body_total_volume —— XPBD 约束维持四面体总体积(不可压肉体、水球)。
+soft-cap-17-title = 黏连
+soft-cap-17-desc = soft_body_set_cohesion —— 捕获半径内近邻质点相互吸引(表面张力、黏滴、湿沙)。
+soft-cap-18-title = 结构阻尼
+soft-cap-18-desc = soft_body_set_damping —— 速度比例阻尼抑制抖动,让体趋于静止。
+soft-cap-19-title = 各向异性柔度
+soft-cap-19-desc = soft_body_set_distance_constraint_compliance —— 逐边定向柔度,用于硬经软纬布料与定向肉体。
+soft-cap-20-title = 软软摩擦
+soft-cap-20-desc = soft_body_set_self_collision_friction + soft_body_set_cross_collision_friction —— 自碰撞与跨体接触上的库伦切向阻尼(μ ∈ [0,1])。
+soft-cap-21-title = 自适应四面体细分
+soft-cap-21-desc = soft_body_subdivide_tetrahedra —— 最长边超阈值的四面体做重心 1→4 细分;子体积之和恰为父体积,体积守恒。
+soft-cap-22-title = 读写 API
+soft-cap-22-desc = soft_body_read_particles / _read_tetrahedra / _read_triangles / _read_edges + soft_body_get_particle —— 完整体状态经零拷贝 Arena 流动。
+
+soft-api-title = FFI 接口面
+soft-api-desc = 软体子系统在 C FFI、Java JNI、集成测试三方对称暴露。
+soft-api-stat-ffi = C FFI 函数
+soft-api-stat-jni = JNI 方法
+soft-api-stat-tests = 集成测试
