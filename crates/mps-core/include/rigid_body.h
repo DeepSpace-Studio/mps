@@ -4427,6 +4427,43 @@ double soft_body_kinetic_energy(const struct WorldHandle *world, uint32_t id);
 double soft_body_total_volume(const struct WorldHandle *world, uint32_t id);
 
 /**
+ * # Phase 8 — 锚定软体任意质点到刚体
+ *
+ * 把 `id` 软体的第 `particle` 号质点绑定到刚体 `body`，使其刚性跟随该刚体的
+ * 平移/旋转。`attach_point` 为绑点世界坐标（通常用该质点当前位置）；函数内部
+ * 把它换算成刚体局部坐标存储，故跟随刚体运动时不会漂移。绑定后该质点停止本地
+ * 积分，其弹簧/阻尼力改由 `SoftBodySet::write_spring_forces` 路由进刚体的
+ * `force_containers`（软体拖动刚体）。
+ *
+ * # Returns
+ * `Bool::TRUE` 成功；`particle` 越界 / `body` 不存在 / world 为 null 返回 `Bool::FALSE`。
+ *
+ * # Safety
+ * `world` 必须有效；`attach_point` 各分量需为有限值。
+ */
+Bool soft_body_attach_particle(struct WorldHandle *world,
+                               uint32_t id,
+                               uint32_t particle,
+                               RigidBodyHandleRaw body,
+                               Vec3 attach_point);
+
+/**
+ * # Phase 8 — 解除质点与刚体的锚定
+ *
+ * 把 `id` 软体的第 `particle` 号质点从任何已绑定刚体上解绑，恢复为自由（本地积分）
+ * 质点。已自由则视为成功（幂等）。
+ *
+ * # Returns
+ * `Bool::TRUE` 成功（含已自由）；`particle` 越界 / world 为 null 返回 `Bool::FALSE`。
+ *
+ * # Safety
+ * `world` 必须有效。
+ */
+Bool soft_body_detach_particle(struct WorldHandle *world,
+                               uint32_t id,
+                               uint32_t particle);
+
+/**
  * Create an empty soft body in the world and return its `SoftBodyId`.
  *
  * The body starts in the `MassSpring` solver; switch it to XPBD with

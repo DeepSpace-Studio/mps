@@ -739,6 +739,108 @@ pub extern "C" fn soft_body_total_volume(world: *const WorldHandle, id: u32) -> 
     })
 }
 
+/// # Phase 8 — 锚定软体任意质点到刚体
+///
+/// 把 `id` 软体的第 `particle` 号质点绑定到刚体 `body`，使其刚性跟随该刚体的
+/// 平移/旋转。`attach_point` 为绑点世界坐标（通常用该质点当前位置）；函数内部
+/// 把它换算成刚体局部坐标存储，故跟随刚体运动时不会漂移。绑定后该质点停止本地
+/// 积分，其弹簧/阻尼力改由 `SoftBodySet::write_spring_forces` 路由进刚体的
+/// `force_containers`（软体拖动刚体）。
+///
+/// # Returns
+/// `Bool::TRUE` 成功；`particle` 越界 / `body` 不存在 / world 为 null 返回 `Bool::FALSE`。
+///
+/// # Safety
+/// `world` 必须有效；`attach_point` 各分量需为有限值。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_attach_particle(
+    world: *mut WorldHandle,
+    id: u32,
+    particle: u32,
+    body: RigidBodyHandleRaw,
+    attach_point: Vec3,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !vec3_finite(attach_point) {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_attach_particle: non-finite point",
+            );
+            return Bool::FALSE;
+        }
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_attach_particle: unknown id");
+            return Bool::FALSE;
+        };
+        let rbh = unpack_rigid_body_handle(body);
+        if world.inner.bodies.get(rbh).is_none() {
+            set_error(ERR_NOT_FOUND, "soft_body_attach_particle: unknown body");
+            return Bool::FALSE;
+        }
+        let pt = vec3_to_rapier(attach_point);
+        match sb.attach_particle(particle as usize, rbh, pt, &world.inner.bodies) {
+            true => {
+                clear_error();
+                Bool::TRUE
+            }
+            false => {
+                set_error(
+                    ERR_INVALID_ARGUMENT,
+                    "soft_body_attach_particle: particle out of range",
+                );
+                Bool::FALSE
+            }
+        }
+    })
+}
+
+/// # Phase 8 — 解除质点与刚体的锚定
+///
+/// 把 `id` 软体的第 `particle` 号质点从任何已绑定刚体上解绑，恢复为自由（本地积分）
+/// 质点。已自由则视为成功（幂等）。
+///
+/// # Returns
+/// `Bool::TRUE` 成功（含已自由）；`particle` 越界 / world 为 null 返回 `Bool::FALSE`。
+///
+/// # Safety
+/// `world` 必须有效。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_detach_particle(
+    world: *mut WorldHandle,
+    id: u32,
+    particle: u32,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_detach_particle: unknown id");
+            return Bool::FALSE;
+        };
+        match sb.detach_particle(particle as usize) {
+            true => {
+                clear_error();
+                Bool::TRUE
+            }
+            false => {
+                set_error(
+                    ERR_INVALID_ARGUMENT,
+                    "soft_body_detach_particle: particle out of range",
+                );
+                Bool::FALSE
+            }
+        }
+    })
+}
+
 // ── Phase 5a: general soft-body builder (unlock arbitrary topology) ──────────
 //
 // Phase 4 只暴露了「voxel 网格 → 软体」与「设置重力」两个高层入口，外部调用方

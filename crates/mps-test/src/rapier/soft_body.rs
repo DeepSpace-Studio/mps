@@ -6,19 +6,20 @@ mod tests {
         BodyStatus, Bool, ColliderHandleRaw, RigidBodyHandleRaw, Vec3, WorldHandle,
     };
     use mps_core::rapier::rigid_body::{
-        rigid_body_builder_build, rigid_body_builder_create, world_insert_rigid_body,
+        rigid_body_builder_build, rigid_body_builder_create, rigid_body_builder_set_linvel,
+        rigid_body_builder_set_translation, rigid_body_get_translation, world_insert_rigid_body,
     };
     use mps_core::rapier::soft_body::{
         soft_body_add_bending, soft_body_add_distance_constraint, soft_body_add_particle,
         soft_body_add_spring, soft_body_add_tetrahedron, soft_body_add_triangle,
-        soft_body_apply_wind, soft_body_build_tetra_mesh, soft_body_clear_wind,
-        soft_body_configure_solver, soft_body_count, soft_body_create, soft_body_destroy,
-        soft_body_enable_collision, soft_body_get_particle, soft_body_is_sleeping,
-        soft_body_kinetic_energy, soft_body_particle_count, soft_body_read_edges,
-        soft_body_read_particles, soft_body_read_tetrahedra, soft_body_read_triangles,
-        soft_body_remove_particle, soft_body_set_gravity, soft_body_sleep, soft_body_total_volume,
-        soft_body_voxel_build, soft_body_voxel_dig, soft_body_wake, soft_chain_create,
-        soft_chain_node_handles,
+        soft_body_apply_wind, soft_body_attach_particle, soft_body_build_tetra_mesh,
+        soft_body_clear_wind, soft_body_configure_solver, soft_body_count, soft_body_create,
+        soft_body_destroy, soft_body_detach_particle, soft_body_enable_collision,
+        soft_body_get_particle, soft_body_is_sleeping, soft_body_kinetic_energy,
+        soft_body_particle_count, soft_body_read_edges, soft_body_read_particles,
+        soft_body_read_tetrahedra, soft_body_read_triangles, soft_body_remove_particle,
+        soft_body_set_gravity, soft_body_sleep, soft_body_total_volume, soft_body_voxel_build,
+        soft_body_voxel_dig, soft_body_wake, soft_chain_create, soft_chain_node_handles,
     };
     use mps_core::rapier::voxel::{collider_builder_create_voxels, collider_voxel_edit};
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
@@ -1497,6 +1498,163 @@ mod tests {
         assert_eq!(soft_body_is_sleeping(world, u32::MAX), Bool::FALSE);
         assert_eq!(soft_body_sleep(world, u32::MAX), Bool::FALSE);
         assert_eq!(soft_body_kinetic_energy(world, u32::MAX), 0.0);
+
+        world_destroy(world);
+    }
+
+    // ── Phase 8: 锚定软体任意质点到刚体，质点刚性跟随刚体平移──────────────────
+    #[test]
+    fn soft_body_attach_particle_follows_rigid_body_translation() {
+        let world = make_world();
+        assert!(!world.is_null());
+
+        // 一个匀速沿 +X 移动的刚体，初位置 x=5。
+        let builder = rigid_body_builder_create(BodyStatus::Dynamic as u32);
+        rigid_body_builder_set_translation(
+            builder,
+            Vec3 {
+                x: 5.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        rigid_body_builder_set_linvel(
+            builder,
+            Vec3 {
+                x: 1.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        let body = rigid_body_builder_build(builder);
+        let body_h = world_insert_rigid_body(world, body);
+        assert_ne!(body_h, 0u64);
+
+        // 软体：单个自由质点，初始在 (5,0,0)（与刚体同位置，作为绑点）。
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+        let p0 = soft_body_add_particle(world, id, 5.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        assert_eq!(p0, 0);
+
+        // 把质点 0 锚定到刚体（绑点 = 质点当前世界位置）。
+        assert_eq!(
+            soft_body_attach_particle(
+                world,
+                id,
+                0,
+                body_h,
+                Vec3 {
+                    x: 5.0,
+                    y: 0.0,
+                    z: 0.0
+                }
+            ),
+            Bool::TRUE
+        );
+
+        // 步进若干步：刚体应沿 +X 移动，质点需刚性跟随。
+        for _ in 0..30 {
+            world_step(world, 1.0 / 60.0);
+        }
+
+        let tx = rigid_body_get_translation(world, body_h);
+        // 刚体已平移：x ≈ 5 + 30/60 = 5.5。
+        assert!(
+            tx.x > 5.3 && tx.x < 5.7,
+            "rigid body should have moved: tx.x={}",
+            tx.x
+        );
+
+        // 绑定的质点应跟随刚体（位置 ≈ 刚体翻译，有限且不发散）。
+        let count = soft_body_particle_count(world, id);
+        let mut pos = vec![Vec3::default(); count as usize];
+        let read =
+            soft_body_read_particles(world, id, pos.as_mut_ptr(), std::ptr::null_mut(), count);
+        assert_eq!(read, count);
+        assert!(pos[0].x.is_finite() && pos[0].y.is_finite() && pos[0].z.is_finite());
+        assert!(
+            (pos[0].x - tx.x).abs() < 1e-6,
+            "bound particle must track body translation: pos.x={} tx.x={}",
+            pos[0].x,
+            tx.x
+        );
+        assert!(
+            (pos[0].y - tx.y).abs() < 1e-6,
+            "bound particle must track body translation: pos.y={} tx.y={}",
+            pos[0].y,
+            tx.y
+        );
+
+        // 解绑后质点恢复自由（不再强制贴合刚体）。
+        assert_eq!(soft_body_detach_particle(world, id, 0), Bool::TRUE);
+        world_step(world, 1.0 / 60.0);
+        let count2 = soft_body_particle_count(world, id);
+        let mut pos2 = vec![Vec3::default(); count2 as usize];
+        let _ =
+            soft_body_read_particles(world, id, pos2.as_mut_ptr(), std::ptr::null_mut(), count2);
+        assert!(
+            pos2[0].x.is_finite(),
+            "detached particle must remain finite"
+        );
+
+        world_destroy(world);
+    }
+
+    // ── Phase 8: 非法参数返回 False 而不 panic──────────────────────────────
+    #[test]
+    fn soft_body_attach_particle_rejects_invalid_args() {
+        let world = make_world();
+        assert!(!world.is_null());
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+        let _p0 = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
+
+        // 不存在的 body → False。
+        assert_eq!(
+            soft_body_attach_particle(
+                world,
+                id,
+                0,
+                u64::MAX,
+                Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0
+                }
+            ),
+            Bool::FALSE
+        );
+        // 越界 particle → False。
+        assert_eq!(
+            soft_body_attach_particle(
+                world,
+                id,
+                99,
+                0,
+                Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0
+                }
+            ),
+            Bool::FALSE
+        );
+        // 越界 detach particle → False。
+        assert_eq!(soft_body_detach_particle(world, id, 99), Bool::FALSE);
 
         world_destroy(world);
     }

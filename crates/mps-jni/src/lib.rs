@@ -1720,5 +1720,8 @@ jni!(boolean softBodyWake(long world, int id) { sb::soft_body_wake(m::<WH>(world
 jni!(boolean softBodyIsSleeping(long world, int id) { sb::soft_body_is_sleeping(cp::<WH>(world), id as u32).0 as jbyte });
 jni!(double softBodyKineticEnergy(long world, int id) { sb::soft_body_kinetic_energy(cp::<WH>(world), id as u32) });
 jni!(double softBodyTotalVolume(long world, int id) { sb::soft_body_total_volume(cp::<WH>(world), id as u32) });
+// Phase 8: 锚定软体任意质点到刚体 + 解绑
+jni!(boolean softBodyAttachParticle(long world, int id, int particle, long body, double ax, double ay, double az) { sb::soft_body_attach_particle(m::<WH>(world), id as u32, particle as u32, body as u64, Vec3 { x: ax, y: ay, z: az }).0 as jbyte });
+jni!(boolean softBodyDetachParticle(long world, int id, int particle) { sb::soft_body_detach_particle(m::<WH>(world), id as u32, particle as u32).0 as jbyte });
 // Phase 5f: 软体-刚体碰撞（proxy collider 桥接）
 jni!(boolean softBodyEnableCollision(long world, int id, double particle_radius, int enabled) { sb::soft_body_enable_collision(m::<WH>(world), id as u32, particle_radius, jb(enabled)).0 as jbyte });

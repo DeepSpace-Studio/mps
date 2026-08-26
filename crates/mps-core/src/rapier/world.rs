@@ -532,6 +532,15 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
             }
         }
 
+        // Phase 8: after the rigid pipeline has integrated, snap bound soft-body
+        // particles to their rigid bodies' new world transforms (so an anchored
+        // flag/cloth follows a moving object). Runs after `pipeline.step` so the
+        // followers see the post-integration poses.
+        world
+            .inner
+            .soft_bodies
+            .follow_rigid_bodies(&world.inner.bodies);
+
         // 4b. Clear the persistent user force/torque on every dynamic body.
         // Rapier's `add_force` is a *persistent* force that the step does NOT
         // clear, so a law's force (or a one-shot FFI force) keeps acting on every
