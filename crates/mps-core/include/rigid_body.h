@@ -4510,6 +4510,27 @@ Bool soft_body_set_plasticity(struct WorldHandle *world,
                               uint8_t enabled);
 
 /**
+ * # Phase 11 — 设置内部气压（充气 / 气球模型）
+ *
+ * 把 `id` 软体的内部气压设为 `pressure`（力/面积）。每步在 `compute_forces`（MassSpring）
+ * 与 `step_xpbd`（预测步）中，对每个**闭合三角网格**的自由质点沿面法向施加向外推力
+ * `F = pressure · area`，把闭合壳"吹胀"。`pressure > 0` 开启；`pressure <= 0` 视为关闭
+ * （等同于 `pressure = None`，默认）。
+ *
+ * 纯外力，与风场同构；不引入新求解器力学。需 `self.triangles` 构成闭合流形才能像真气球，
+ * 开口薄片会沿单面法向鼓起。
+ *
+ * # Returns
+ * `Bool::TRUE` 成功；`id` 未知 / world 为 null 返回 `Bool::FALSE`。
+ *
+ * # Safety
+ * `world` 必须有效；`pressure` 需为有限值。
+ */
+Bool soft_body_set_pressure(struct WorldHandle *world,
+                            uint32_t id,
+                            double pressure);
+
+/**
  * Create an empty soft body in the world and return its `SoftBodyId`.
  *
  * The body starts in the `MassSpring` solver; switch it to XPBD with

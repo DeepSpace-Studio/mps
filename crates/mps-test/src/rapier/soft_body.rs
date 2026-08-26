@@ -18,9 +18,9 @@ mod tests {
         soft_body_get_particle, soft_body_is_sleeping, soft_body_kinetic_energy,
         soft_body_particle_count, soft_body_read_edges, soft_body_read_particles,
         soft_body_read_tetrahedra, soft_body_read_triangles, soft_body_remove_particle,
-        soft_body_set_gravity, soft_body_set_plasticity, soft_body_set_tear_strain,
-        soft_body_sleep, soft_body_total_volume, soft_body_voxel_build, soft_body_voxel_dig,
-        soft_body_wake, soft_chain_create, soft_chain_node_handles,
+        soft_body_set_gravity, soft_body_set_plasticity, soft_body_set_pressure,
+        soft_body_set_tear_strain, soft_body_sleep, soft_body_total_volume, soft_body_voxel_build,
+        soft_body_voxel_dig, soft_body_wake, soft_chain_create, soft_chain_node_handles,
     };
     use mps_core::rapier::voxel::{collider_builder_create_voxels, collider_voxel_edit};
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
@@ -1897,6 +1897,133 @@ mod tests {
             soft_body_set_plasticity(world, id, 0.05, 1.0, 0),
             Bool::TRUE
         );
+
+        world_destroy(world);
+    }
+
+    // ── Phase 11: 充气 — 闭合三角网格被内部气压吹胀（半径增大）─────────────────
+    #[test]
+    fn soft_body_pressure_inflates_closed_mesh() {
+        // 八面体（6 顶点、8 三角面）闭合壳，无重力，开启气压后半径应增大。
+        fn mean_radius(pressure: Option<f64>) -> f64 {
+            let world = make_world();
+            assert!(!world.is_null());
+            let id = soft_body_create(
+                world,
+                Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+            );
+            assert_ne!(id, u32::MAX);
+            // 无重力。
+            assert_eq!(
+                soft_body_set_gravity(
+                    world,
+                    id,
+                    Vec3 {
+                        x: 0.0,
+                        y: 0.0,
+                        z: 0.0
+                    }
+                ),
+                Bool::TRUE
+            );
+            // 八面体顶点（±1,0,0）(0,±1,0) (0,0,±1)。
+            let v = [
+                (1.0, 0.0, 0.0),
+                (-1.0, 0.0, 0.0),
+                (0.0, 1.0, 0.0),
+                (0.0, -1.0, 0.0),
+                (0.0, 0.0, 1.0),
+                (0.0, 0.0, -1.0),
+            ];
+            for (x, y, z) in v {
+                let _ = soft_body_add_particle(world, id, x, y, z, 1.0, Bool::FALSE);
+            }
+            // 8 个三角面（带符号顺序使法向一致）。
+            let faces = [
+                (0, 2, 4),
+                (2, 1, 4),
+                (1, 3, 4),
+                (3, 0, 4),
+                (0, 3, 5),
+                (3, 1, 5),
+                (1, 2, 5),
+                (2, 0, 5),
+            ];
+            for (a, b, c) in faces {
+                assert_eq!(soft_body_add_triangle(world, id, a, b, c), Bool::TRUE);
+            }
+            if let Some(p) = pressure {
+                assert_eq!(soft_body_set_pressure(world, id, p), Bool::TRUE);
+            }
+            for _ in 0..120 {
+                world_step(world, 1.0 / 60.0);
+            }
+            let count = soft_body_particle_count(world, id);
+            let mut pos = vec![Vec3::default(); count as usize];
+            let _r =
+                soft_body_read_particles(world, id, pos.as_mut_ptr(), std::ptr::null_mut(), count);
+            // 质心 + 平均半径。
+            let mut cx = 0.0;
+            let mut cy = 0.0;
+            let mut cz = 0.0;
+            for p in &pos {
+                cx += p.x;
+                cy += p.y;
+                cz += p.z;
+            }
+            let n = count as f64;
+            cx /= n;
+            cy /= n;
+            cz /= n;
+            let mut r = 0.0;
+            for p in &pos {
+                let dx = p.x - cx;
+                let dy = p.y - cy;
+                let dz = p.z - cz;
+                r += (dx * dx + dy * dy + dz * dz).sqrt();
+            }
+            r /= n;
+            world_destroy(world);
+            r
+        }
+
+        let r_no_pressure = mean_radius(None);
+        let r_pressurized = mean_radius(Some(2.0));
+        // 气压把闭合壳吹胀 → 半径明显大于静止（≈1.0）。
+        assert!(
+            r_pressurized > r_no_pressure + 0.1,
+            "pressure should inflate the mesh: pressurized={r_pressurized} baseline={r_no_pressure}"
+        );
+    }
+
+    // ── Phase 11: 气压非法/未知参数返回 False 而不 panic─────────────────────────
+    #[test]
+    fn soft_body_set_pressure_rejects_invalid_args() {
+        let world = make_world();
+        assert!(!world.is_null());
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+        let _p = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
+
+        // 未知 id → False。
+        assert_eq!(soft_body_set_pressure(world, u32::MAX, 1.0), Bool::FALSE);
+        // 非有限气压 → False。
+        assert_eq!(soft_body_set_pressure(world, id, f64::NAN), Bool::FALSE);
+        // 合法调用 → True，且未 panic。
+        assert_eq!(soft_body_set_pressure(world, id, 1.5), Bool::TRUE);
+        // 关闭（<=0）→ True，且不再充气。
+        assert_eq!(soft_body_set_pressure(world, id, 0.0), Bool::TRUE);
 
         world_destroy(world);
     }

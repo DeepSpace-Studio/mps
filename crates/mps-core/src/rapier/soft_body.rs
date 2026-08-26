@@ -946,7 +946,45 @@ pub extern "C" fn soft_body_set_plasticity(
     })
 }
 
-// ── Phase 5a: general soft-body builder (unlock arbitrary topology) ──────────
+/// # Phase 11 — 设置内部气压（充气 / 气球模型）
+///
+/// 把 `id` 软体的内部气压设为 `pressure`（力/面积）。每步在 `compute_forces`（MassSpring）
+/// 与 `step_xpbd`（预测步）中，对每个**闭合三角网格**的自由质点沿面法向施加向外推力
+/// `F = pressure · area`，把闭合壳"吹胀"。`pressure > 0` 开启；`pressure <= 0` 视为关闭
+/// （等同于 `pressure = None`，默认）。
+///
+/// 纯外力，与风场同构；不引入新求解器力学。需 `self.triangles` 构成闭合流形才能像真气球，
+/// 开口薄片会沿单面法向鼓起。
+///
+/// # Returns
+/// `Bool::TRUE` 成功；`id` 未知 / world 为 null 返回 `Bool::FALSE`。
+///
+/// # Safety
+/// `world` 必须有效；`pressure` 需为有限值。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_set_pressure(world: *mut WorldHandle, id: u32, pressure: f64) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !pressure.is_finite() {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_pressure: non-finite pressure",
+            );
+            return Bool::FALSE;
+        }
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_set_pressure: unknown id");
+            return Bool::FALSE;
+        };
+        sb.set_pressure(pressure);
+        clear_error();
+        Bool::TRUE
+    })
+}
 //
 // Phase 4 只暴露了「voxel 网格 → 软体」与「设置重力」两个高层入口，外部调用方
 // （JNI/FFM/Minecraft）无法构造任意拓扑的软体（自定义质点、弹簧、XPBD 距离约束、

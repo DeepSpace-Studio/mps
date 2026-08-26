@@ -1727,5 +1727,7 @@ jni!(boolean softBodyDetachParticle(long world, int id, int particle) { sb::soft
 jni!(boolean softBodySetTearStrain(long world, int id, double strainToBreak, int enabled) { sb::soft_body_set_tear_strain(m::<WH>(world), id as u32, strainToBreak, enabled as u8).0 as jbyte });
 // Phase 10: 塑性（永久变形，橡皮泥/记忆棉）
 jni!(boolean softBodySetPlasticity(long world, int id, double yieldStrain, double creep, int enabled) { sb::soft_body_set_plasticity(m::<WH>(world), id as u32, yieldStrain, creep, enabled as u8).0 as jbyte });
+// Phase 11: 充气/气压（闭合三角网格沿法向吹胀）
+jni!(boolean softBodySetPressure(long world, int id, double pressure) { sb::soft_body_set_pressure(m::<WH>(world), id as u32, pressure).0 as jbyte });
 // Phase 5f: 软体-刚体碰撞（proxy collider 桥接）
 jni!(boolean softBodyEnableCollision(long world, int id, double particle_radius, int enabled) { sb::soft_body_enable_collision(m::<WH>(world), id as u32, particle_radius, jb(enabled)).0 as jbyte });

@@ -319,4 +319,5 @@ include = [
   "soft_body_detach_particle",
   "soft_body_set_tear_strain",
   "soft_body_set_plasticity",
+  "soft_body_set_pressure",
 ]
