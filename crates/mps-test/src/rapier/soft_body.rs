@@ -27,10 +27,9 @@ mod tests {
         soft_body_set_distance_constraint_compression, soft_body_set_gravity,
         soft_body_set_plasticity, soft_body_set_pressure, soft_body_set_self_collision,
         soft_body_set_self_collision_friction, soft_body_set_spring_stiffness,
-        soft_body_set_tear_strain, soft_body_set_volume_conservation,
-        soft_body_subdivide_tetrahedra, soft_body_sleep,
-        soft_body_total_volume, soft_body_voxel_build, soft_body_voxel_dig, soft_body_wake,
-        soft_chain_create, soft_chain_node_handles,
+        soft_body_set_tear_strain, soft_body_set_volume_conservation, soft_body_sleep,
+        soft_body_subdivide_tetrahedra, soft_body_total_volume, soft_body_voxel_build,
+        soft_body_voxel_dig, soft_body_wake, soft_chain_create, soft_chain_node_handles,
     };
     use mps_core::rapier::voxel::{collider_builder_create_voxels, collider_voxel_edit};
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
@@ -3351,7 +3350,14 @@ mod tests {
     fn soft_body_subdivide_tetrahedra_increases_resolution_and_stays_bounded() {
         let world = make_world();
         assert!(!world.is_null());
-        let id = soft_body_create(world, Vec3 { x: 0.0, y: 0.0, z: 0.0 });
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
         assert_ne!(id, u32::MAX);
         let p0 = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
         let p1 = soft_body_add_particle(world, id, 1.0, 0.0, 0.0, 1.0, Bool::FALSE);
@@ -3361,10 +3367,19 @@ mod tests {
         assert_ne!(p1, u32::MAX);
         assert_ne!(p2, u32::MAX);
         assert_ne!(p3, u32::MAX);
-        assert_eq!(soft_body_add_tetrahedron(world, id, p0, p1, p2, p3), Bool::TRUE);
+        assert_eq!(
+            soft_body_add_tetrahedron(world, id, p0, p1, p2, p3),
+            Bool::TRUE
+        );
         // XPBD 求解器 + 刚性体积约束(compliance 0)。
-        assert_eq!(soft_body_configure_solver(world, id, 1, 20, 0.0), Bool::TRUE);
-        assert_eq!(soft_body_set_volume_conservation(world, id, 0.0), Bool::TRUE);
+        assert_eq!(
+            soft_body_configure_solver(world, id, 1, 20, 0.0),
+            Bool::TRUE
+        );
+        assert_eq!(
+            soft_body_set_volume_conservation(world, id, 0.0),
+            Bool::TRUE
+        );
         // 钉住一个顶点(与现有体积测试一致),避免自由落体翻转。
         unsafe {
             (*world)
@@ -3403,13 +3418,7 @@ mod tests {
         for _ in 0..200 {
             world_step(world, 1.0 / 60.0);
         }
-        let sb = unsafe {
-            (*world)
-                .inner
-                .soft_bodies
-                .get(SoftBodyId(id))
-                .unwrap()
-        };
+        let sb = unsafe { (*world).inner.soft_bodies.get(SoftBodyId(id)).unwrap() };
         for p in &sb.particles {
             assert!(p.pos.x.is_finite() && p.pos.y.is_finite() && p.pos.z.is_finite());
         }
@@ -3426,16 +3435,29 @@ mod tests {
     fn soft_body_subdivide_tetrahedra_respects_threshold_and_rejects_bad_args() {
         let world = make_world();
         assert!(!world.is_null());
-        let id = soft_body_create(world, Vec3 { x: 0.0, y: 0.0, z: 0.0 });
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
         assert_ne!(id, u32::MAX);
         let p0 = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
         let p1 = soft_body_add_particle(world, id, 1.0, 0.0, 0.0, 1.0, Bool::FALSE);
         let p2 = soft_body_add_particle(world, id, 0.0, 1.0, 0.0, 1.0, Bool::FALSE);
         let p3 = soft_body_add_particle(world, id, 0.0, 0.0, 1.0, 1.0, Bool::FALSE);
-        assert_eq!(soft_body_add_tetrahedron(world, id, p0, p1, p2, p3), Bool::TRUE);
+        assert_eq!(
+            soft_body_add_tetrahedron(world, id, p0, p1, p2, p3),
+            Bool::TRUE
+        );
 
         // 未知 id → 返回 0。
-        assert_eq!(soft_body_subdivide_tetrahedra(world, u32::MAX, f64::INFINITY), 0);
+        assert_eq!(
+            soft_body_subdivide_tetrahedra(world, u32::MAX, f64::INFINITY),
+            0
+        );
         // 边最长 = 1.0;阈值设很大(>1)→ 不细分(0)。
         assert_eq!(soft_body_subdivide_tetrahedra(world, id, 100.0), 0);
         // 阈值 = 0.5(< 1)→ 细分全部(1 个源四面体)。

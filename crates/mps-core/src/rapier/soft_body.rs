@@ -1669,7 +1669,6 @@ pub extern "C" fn soft_body_add_tetrahedron(
     })
 }
 
-
 /// # Phase 21 - adaptive tetrahedral subdivision (1 -> 4 barycentric split).
 ///
 /// Inserts one new particle at the centroid of each source tetrahedron and replaces
@@ -1689,7 +1688,10 @@ pub extern "C" fn soft_body_subdivide_tetrahedra(
 ) -> u32 {
     ffi_guard(0, || {
         let Some(world) = (unsafe { world.as_mut() }) else {
-            set_error(ERR_NULL_POINTER, "soft_body_subdivide_tetrahedra: world is null");
+            set_error(
+                ERR_NULL_POINTER,
+                "soft_body_subdivide_tetrahedra: world is null",
+            );
             return 0;
         };
         let sid = SoftBodyId(id);
