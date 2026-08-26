@@ -323,6 +323,7 @@ include = [
   "soft_body_set_self_collision",
   "soft_body_set_spring_stiffness",
   "soft_body_set_distance_constraint_compliance",
+  "soft_body_set_distance_constraint_compression",
   "soft_body_set_cross_collision",
   "soft_body_set_volume_conservation",
   "soft_body_set_cohesion",

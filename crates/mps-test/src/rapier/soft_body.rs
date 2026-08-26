@@ -22,7 +22,8 @@ mod tests {
         soft_body_particle_count, soft_body_read_edges, soft_body_read_particles,
         soft_body_read_tetrahedra, soft_body_read_triangles, soft_body_remove_particle,
         soft_body_set_cohesion, soft_body_set_cross_collision, soft_body_set_damping,
-        soft_body_set_distance_constraint_compliance, soft_body_set_gravity,
+        soft_body_set_distance_constraint_compliance,
+        soft_body_set_distance_constraint_compression, soft_body_set_gravity,
         soft_body_set_plasticity, soft_body_set_pressure, soft_body_set_self_collision,
         soft_body_set_spring_stiffness, soft_body_set_tear_strain,
         soft_body_set_volume_conservation, soft_body_sleep, soft_body_total_volume,
@@ -3009,6 +3010,166 @@ mod tests {
         assert_eq!(soft_body_set_damping(world, id, 0.0), Bool::TRUE);
         // 合法(0.5)→ True。
         assert_eq!(soft_body_set_damping(world, id, 0.5), Bool::TRUE);
+        world_destroy(world);
+    }
+
+    // ── Phase 19: 各向异性柔度 — 压缩侧更软时,受压质点更易被压入(穿透更深) ──────────
+    #[test]
+    fn soft_body_anisotropic_compliance_compression_yields_more() {
+        // A 固定于点(0,0,0);B 自由于点(0,1,0);边 A-B rest=1.0。上拉重力把 B 拉向 A,
+        // 使边处于压缩状态(len<rest)。比较「刚性压缩柔度(α_c=0)」与「软压缩柔度(α_c=50)」:
+        // 刚性压缩把 B 顶在 ~rest;软压缩让 B 被压入更靠近 A。拉伸柔度两端都设 0(刚性)。
+        fn min_dist_to_a(compression: f64) -> f64 {
+            let world = make_world();
+            assert!(!world.is_null());
+            let id = soft_body_create(
+                world,
+                Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+            );
+            assert_ne!(id, u32::MAX);
+            let a = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::TRUE);
+            let b = soft_body_add_particle(world, id, 0.0, 1.0, 0.0, 1.0, Bool::FALSE);
+            assert_ne!(a, u32::MAX);
+            assert_ne!(b, u32::MAX);
+            // 切换到 XPBD 求解器,高密度迭代保证收敛。
+            assert_eq!(
+                soft_body_configure_solver(world, id, 1, 30, 0.0),
+                Bool::TRUE
+            );
+            // add_distance_constraint 返回 Bool(成功);本体内仅一条边,索引为 0。
+            assert_eq!(
+                soft_body_add_distance_constraint(world, id, a, b, 0.0),
+                Bool::TRUE
+            );
+            let e: u32 = 0;
+            // 拉伸侧刚性(α_s=0),压缩侧按参数。
+            assert_eq!(
+                soft_body_set_distance_constraint_compliance(world, id, e, 0.0),
+                Bool::TRUE
+            );
+            assert_eq!(
+                soft_body_set_distance_constraint_compression(world, id, e, compression),
+                Bool::TRUE
+            );
+            // 下压重力 → B 向 A 压缩(len<rest,进入压缩分支)。
+            assert_eq!(
+                soft_body_set_gravity(
+                    world,
+                    id,
+                    Vec3 {
+                        x: 0.0,
+                        y: -50.0,
+                        z: 0.0
+                    }
+                ),
+                Bool::TRUE
+            );
+            let mut min_d = f64::INFINITY;
+            for _ in 0..120 {
+                world_step(world, 1.0 / 60.0);
+                let mut pos = Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                };
+                let mut vel = Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                };
+                assert_eq!(
+                    soft_body_get_particle(
+                        world,
+                        id,
+                        b as u32,
+                        &mut pos as *mut Vec3,
+                        &mut vel as *mut Vec3
+                    ),
+                    Bool::TRUE
+                );
+                let d = (pos.x * pos.x + pos.y * pos.y + pos.z * pos.z).sqrt();
+                if d < min_d {
+                    min_d = d;
+                }
+            }
+            world_destroy(world);
+            min_d
+        }
+
+        let d_rigid = min_dist_to_a(0.0);
+        let d_soft = min_dist_to_a(50.0);
+        // 刚性压缩把 B 顶在 ~rest=1.0;软压缩让 B 压入更靠近 A。
+        assert!(
+            d_rigid > 0.8,
+            "rigid compression should hold near rest, got {d_rigid}"
+        );
+        assert!(
+            d_soft < d_rigid,
+            "soft compression (d={d_soft}) should let B penetrate closer to A than rigid (d={d_rigid})"
+        );
+    }
+
+    // ── Phase 19: 各向异性柔度非法/未知参数返回 False 而不 panic ──────────────────────
+    #[test]
+    fn soft_body_set_distance_constraint_compression_rejects_invalid_args() {
+        let world = make_world();
+        assert!(!world.is_null());
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+        let p0 = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        let p1 = soft_body_add_particle(world, id, 1.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        assert_ne!(p0, u32::MAX);
+        assert_ne!(p1, u32::MAX);
+        assert_eq!(
+            soft_body_configure_solver(world, id, 1, 10, 0.0),
+            Bool::TRUE
+        );
+        assert_eq!(
+            soft_body_add_distance_constraint(world, id, p0, p1, 0.0),
+            Bool::TRUE
+        );
+        let e: u32 = 0;
+        // 未知 id → False。
+        assert_eq!(
+            soft_body_set_distance_constraint_compression(world, u32::MAX, e, 1.0),
+            Bool::FALSE
+        );
+        // 越界 index → False。
+        assert_eq!(
+            soft_body_set_distance_constraint_compression(world, id, 999, 1.0),
+            Bool::FALSE
+        );
+        // 负数 → False。
+        assert_eq!(
+            soft_body_set_distance_constraint_compression(world, id, e, -1.0),
+            Bool::FALSE
+        );
+        // 非有限 → False。
+        assert_eq!(
+            soft_body_set_distance_constraint_compression(world, id, e, f64::NAN),
+            Bool::FALSE
+        );
+        // 合法 → True。
+        assert_eq!(
+            soft_body_set_distance_constraint_compression(world, id, e, 10.0),
+            Bool::TRUE
+        );
+        // 合法(0)→ True(各向同性)。
+        assert_eq!(
+            soft_body_set_distance_constraint_compression(world, id, e, 0.0),
+            Bool::TRUE
+        );
         world_destroy(world);
     }
 }

@@ -1735,6 +1735,8 @@ jni!(boolean softBodySetSelfCollision(long world, int id, double radius, double 
 jni!(boolean softBodySetSpringStiffness(long world, int id, int index, double stiffness) { sb::soft_body_set_spring_stiffness(m::<WH>(world), id as u32, index as u32, stiffness).0 as jbyte });
 // Phase 13: 运行时改单条 XPBD 距离约束柔度(compliance α)
 jni!(boolean softBodySetDistanceConstraintCompliance(long world, int id, int index, double compliance) { sb::soft_body_set_distance_constraint_compliance(m::<WH>(world), id as u32, index as u32, compliance).0 as jbyte });
+// Phase 19: 各向异性柔度(压缩侧)
+jni!(boolean softBodySetDistanceConstraintCompression(long world, int id, int index, double compression) { sb::soft_body_set_distance_constraint_compression(m::<WH>(world), id as u32, index as u32, compression).0 as jbyte });
 // Phase 14: 软软碰撞(soft-soft / cross-body)：world 层空间哈希 + 逐软体对投影
 jni!(boolean softBodySetCrossCollision(long world, int id, double radius, double stiffness) { sb::soft_body_set_cross_collision(m::<WH>(world), id as u32, radius, stiffness).0 as jbyte });
 // Phase 16: 体积守恒约束(独立柔度)

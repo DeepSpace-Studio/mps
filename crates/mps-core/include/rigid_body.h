@@ -4587,6 +4587,27 @@ Bool soft_body_set_distance_constraint_compliance(struct WorldHandle *world,
                                                   double compliance);
 
 /**
+ * # Phase 19 — 设置某条距离约束的「压缩」柔度(各向异性柔度)
+ *
+ * 把 `id` 软体第 `index` 条距离约束的**压缩** XPBD 柔度 `α_c` 设为 `compression`。
+ * 该约束原本只有单一 `compliance`(拉伸/压缩共用,各向同性)。本函数令其独立在
+ * **压缩**(`len < rest`,被压短)时采用 `compression` 柔度——布料/泡沫可「抗拉伸但易折叠」,
+ * 是标准的各向异性 XPBD 行为。`stretch` 柔度仍由 `soft_body_set_distance_constraint_compliance`
+ * 控制;二者相等即回到各向同性。求解器每个迭代按当前应变符号选用对应柔度。
+ * 非法参数(`index` 越界 / `compression` 为负或非有限)返回 `Bool::FALSE`。
+ *
+ * # Returns
+ * `Bool::TRUE` 成功;`id` 未知 / 约束 `index` 越界 / 参数非法 → `Bool::FALSE`。
+ *
+ * # Safety
+ * `world` 必须有效;`index` 须在 `[0, 约束数)`;`compression >= 0` 且有限。
+ */
+Bool soft_body_set_distance_constraint_compression(struct WorldHandle *world,
+                                                   uint32_t id,
+                                                   uint32_t index,
+                                                   double compression);
+
+/**
  * # Phase 14 — 开启/关闭软体间的软软碰撞(soft-soft / cross-body)
  *
  * 把 `id` 软体的软软碰撞设为 `radius`(粒子球半径)+ `stiffness`(XPBD 排斥约束柔度, `0`=硬)。
