@@ -4628,6 +4628,28 @@ Bool soft_body_set_cross_collision(struct WorldHandle *world,
                                    double stiffness);
 
 /**
+ * # Phase 20 — 设置自碰撞接触摩擦系数 μ(0 ≤ μ ≤ 1)
+ *
+ * 需要先 `soft_body_set_self_collision` 开启自碰撞。μ 控制接触处切向相对速度被阻尼的比例
+ * (μ=0 无摩擦, μ=1 完全消除切向滑动, Coulomb 风格)。非法参数(非有限 / 越界 / 未开启自碰撞)
+ * 返回 `Bool::FALSE` 且不改动状态。
+ */
+Bool soft_body_set_self_collision_friction(struct WorldHandle *world,
+                                           uint32_t id,
+                                           double mu);
+
+/**
+ * # Phase 20 — 设置软软(跨体)碰撞接触摩擦系数 μ(0 ≤ μ ≤ 1)
+ *
+ * 需要先 `soft_body_set_cross_collision` 开启跨体碰撞。语义同自碰撞摩擦:阻尼接触切向相对
+ * 速度。实际生效的 μ 为两体 `min(μ_a, μ_b)`(任一体无摩擦则该接触无摩擦)。非法参数返回
+ * `Bool::FALSE`。
+ */
+Bool soft_body_set_cross_collision_friction(struct WorldHandle *world,
+                                            uint32_t id,
+                                            double mu);
+
+/**
  * # Phase 16 — 开启/关闭体积守恒约束(独立柔度, 与距离求解器解耦)
  *
  * 把 `id` 软体的四面体体积约束柔度设为 `compliance`(`0`=硬/不可压缩)。开启后 `step_xpbd`

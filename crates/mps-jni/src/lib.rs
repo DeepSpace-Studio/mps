@@ -1739,6 +1739,9 @@ jni!(boolean softBodySetDistanceConstraintCompliance(long world, int id, int ind
 jni!(boolean softBodySetDistanceConstraintCompression(long world, int id, int index, double compression) { sb::soft_body_set_distance_constraint_compression(m::<WH>(world), id as u32, index as u32, compression).0 as jbyte });
 // Phase 14: 软软碰撞(soft-soft / cross-body)：world 层空间哈希 + 逐软体对投影
 jni!(boolean softBodySetCrossCollision(long world, int id, double radius, double stiffness) { sb::soft_body_set_cross_collision(m::<WH>(world), id as u32, radius, stiffness).0 as jbyte });
+// Phase 20: 软软接触摩擦(自碰撞 / 跨体)
+jni!(boolean softBodySetSelfCollisionFriction(long world, int id, double mu) { sb::soft_body_set_self_collision_friction(m::<WH>(world), id as u32, mu).0 as jbyte });
+jni!(boolean softBodySetCrossCollisionFriction(long world, int id, double mu) { sb::soft_body_set_cross_collision_friction(m::<WH>(world), id as u32, mu).0 as jbyte });
 // Phase 16: 体积守恒约束(独立柔度)
 jni!(boolean softBodySetVolumeConservation(long world, int id, double compliance) { sb::soft_body_set_volume_conservation(m::<WH>(world), id as u32, compliance).0 as jbyte });
 // Phase 17: 软体间黏连(可撕黏附)

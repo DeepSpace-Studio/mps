@@ -21,14 +21,15 @@ mod tests {
         soft_body_get_particle, soft_body_is_sleeping, soft_body_kinetic_energy,
         soft_body_particle_count, soft_body_read_edges, soft_body_read_particles,
         soft_body_read_tetrahedra, soft_body_read_triangles, soft_body_remove_particle,
-        soft_body_set_cohesion, soft_body_set_cross_collision, soft_body_set_damping,
+        soft_body_set_cohesion, soft_body_set_cross_collision,
+        soft_body_set_cross_collision_friction, soft_body_set_damping,
         soft_body_set_distance_constraint_compliance,
         soft_body_set_distance_constraint_compression, soft_body_set_gravity,
         soft_body_set_plasticity, soft_body_set_pressure, soft_body_set_self_collision,
-        soft_body_set_spring_stiffness, soft_body_set_tear_strain,
-        soft_body_set_volume_conservation, soft_body_sleep, soft_body_total_volume,
-        soft_body_voxel_build, soft_body_voxel_dig, soft_body_wake, soft_chain_create,
-        soft_chain_node_handles,
+        soft_body_set_self_collision_friction, soft_body_set_spring_stiffness,
+        soft_body_set_tear_strain, soft_body_set_volume_conservation, soft_body_sleep,
+        soft_body_total_volume, soft_body_voxel_build, soft_body_voxel_dig, soft_body_wake,
+        soft_chain_create, soft_chain_node_handles,
     };
     use mps_core::rapier::voxel::{collider_builder_create_voxels, collider_voxel_edit};
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
@@ -3168,6 +3169,178 @@ mod tests {
         // 合法(0)→ True(各向同性)。
         assert_eq!(
             soft_body_set_distance_constraint_compression(world, id, e, 0.0),
+            Bool::TRUE
+        );
+        world_destroy(world);
+    }
+
+    // ── Phase 20: 软软(跨体)碰撞摩擦 — μ=1 比 μ=0 更快阻尼切向相对滑动 ────────
+    #[test]
+    fn soft_body_cross_collision_friction_damps_tangential_slip() {
+        // 两个独立软体,各 1 个自由质点,沿 X 相距 0.5(< 2·radius=0.6 → 接触)。
+        // 体 A 重力 0,体 B 重力沿 +Y。world_step 里 B 的质点相对 A 产生切向(沿 Y)相对滑动,
+        // 跨体碰撞的法向(X)把两者推开,摩擦(μ)阻尼切向(Y)相对速度。μ=1 应大幅削减 B 的 Y
+        // 速度,μ=0 则切向速度基本保留。比较末态 |v_y|。
+        fn final_tangential_speed(mu: f64) -> f64 {
+            let world = make_world();
+            assert!(!world.is_null());
+            let a = soft_body_create(
+                world,
+                Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+            );
+            let b = soft_body_create(
+                world,
+                Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+            );
+            assert_ne!(a, u32::MAX);
+            assert_ne!(b, u32::MAX);
+            let pa = soft_body_add_particle(world, a, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
+            let pb = soft_body_add_particle(world, b, 0.5, 0.0, 0.0, 1.0, Bool::FALSE);
+            assert_ne!(pa, u32::MAX);
+            assert_ne!(pb, u32::MAX);
+            assert_eq!(soft_body_configure_solver(world, a, 1, 10, 0.0), Bool::TRUE);
+            assert_eq!(soft_body_configure_solver(world, b, 1, 10, 0.0), Bool::TRUE);
+            // 跨体碰撞 + 摩擦。
+            assert_eq!(
+                soft_body_set_cross_collision(world, a, 0.3, 0.0),
+                Bool::TRUE
+            );
+            assert_eq!(
+                soft_body_set_cross_collision(world, b, 0.3, 0.0),
+                Bool::TRUE
+            );
+            assert_eq!(
+                soft_body_set_cross_collision_friction(world, a, mu),
+                Bool::TRUE
+            );
+            assert_eq!(
+                soft_body_set_cross_collision_friction(world, b, mu),
+                Bool::TRUE
+            );
+            // 体 A 不动,体 B 受切向(沿 Y)重力 → 相对切向滑动。
+            assert_eq!(
+                soft_body_set_gravity(
+                    world,
+                    b,
+                    Vec3 {
+                        x: 0.0,
+                        y: 5.0,
+                        z: 0.0
+                    }
+                ),
+                Bool::TRUE
+            );
+            let mut vy = 0.0f64;
+            for _ in 0..60 {
+                world_step(world, 1.0 / 60.0);
+                let mut pos = Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                };
+                let mut vel = Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                };
+                assert_eq!(
+                    soft_body_get_particle(
+                        world,
+                        b,
+                        pb as u32,
+                        &mut pos as *mut Vec3,
+                        &mut vel as *mut Vec3
+                    ),
+                    Bool::TRUE
+                );
+                vy = vel.y;
+            }
+            world_destroy(world);
+            vy.abs()
+        }
+
+        let vy_none = final_tangential_speed(0.0);
+        let vy_full = final_tangential_speed(1.0);
+        // 每步摩擦把切向相对速度扣掉 μ 比例;μ=1 的末态切向速度应明显小于 μ=0。
+        assert!(
+            vy_full < vy_none,
+            "full friction (vy={vy_full}) should leave less tangential speed than none (vy={vy_none})"
+        );
+    }
+
+    // ── Phase 20: 自碰撞/跨体碰撞摩擦非法或越界参数返回 False 而不 panic ──────────
+    #[test]
+    fn soft_body_set_collision_friction_rejects_invalid_args() {
+        let world = make_world();
+        assert!(!world.is_null());
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+        // 未开启自碰撞时设摩擦 → False。
+        assert_eq!(
+            soft_body_set_self_collision_friction(world, id, 0.5),
+            Bool::FALSE
+        );
+        // 未开启跨体碰撞时设摩擦 → False。
+        assert_eq!(
+            soft_body_set_cross_collision_friction(world, id, 0.5),
+            Bool::FALSE
+        );
+        // 开启自碰撞后再测。
+        assert_eq!(
+            soft_body_set_self_collision(world, id, 0.3, 0.0),
+            Bool::TRUE
+        );
+        assert_eq!(
+            soft_body_set_self_collision_friction(world, id, 0.5),
+            Bool::TRUE
+        );
+        // 未知 id → False。
+        assert_eq!(
+            soft_body_set_self_collision_friction(world, u32::MAX, 0.5),
+            Bool::FALSE
+        );
+        // 负数 → False。
+        assert_eq!(
+            soft_body_set_self_collision_friction(world, id, -0.1),
+            Bool::FALSE
+        );
+        // >1 → False。
+        assert_eq!(
+            soft_body_set_self_collision_friction(world, id, 1.5),
+            Bool::FALSE
+        );
+        // 非有限 → False。
+        assert_eq!(
+            soft_body_set_self_collision_friction(world, id, f64::NAN),
+            Bool::FALSE
+        );
+        // 合法边界 → True。
+        assert_eq!(
+            soft_body_set_self_collision_friction(world, id, 1.0),
+            Bool::TRUE
+        );
+        // 开启跨体碰撞后合法 → True。
+        assert_eq!(
+            soft_body_set_cross_collision(world, id, 0.3, 0.0),
+            Bool::TRUE
+        );
+        assert_eq!(
+            soft_body_set_cross_collision_friction(world, id, 0.5),
             Bool::TRUE
         );
         world_destroy(world);
