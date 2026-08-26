@@ -24,8 +24,9 @@ mod tests {
         soft_body_set_cross_collision, soft_body_set_distance_constraint_compliance,
         soft_body_set_gravity, soft_body_set_plasticity, soft_body_set_pressure,
         soft_body_set_self_collision, soft_body_set_spring_stiffness, soft_body_set_tear_strain,
-        soft_body_sleep, soft_body_total_volume, soft_body_voxel_build, soft_body_voxel_dig,
-        soft_body_wake, soft_chain_create, soft_chain_node_handles,
+        soft_body_set_volume_conservation, soft_body_sleep, soft_body_total_volume,
+        soft_body_voxel_build, soft_body_voxel_dig, soft_body_wake, soft_chain_create,
+        soft_chain_node_handles,
     };
     use mps_core::rapier::voxel::{collider_builder_create_voxels, collider_voxel_edit};
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
@@ -2533,6 +2534,140 @@ mod tests {
             "soft particle must rest on top of (not tunnel through) the rigid body: gap={gap} (must not be >= ~0.7)"
         );
 
+        world_destroy(world);
+    }
+
+    // ── Phase 16: 体积守恒 — 四面体软体在动态下总体积保持≈静止(硬约束) ──────────────
+    #[test]
+    fn soft_body_volume_conservation_holds_total_volume() {
+        // 建一个四面体软体(4 质点 + 6 条距离边 + 1 个四面体),距离求解器设得很软,
+        // 开启体积守恒(compliance=0, 硬)。多步动态后总体积应仍≈静止体积;若关闭则会明显漂移。
+        // `soft_body_total_volume` 返回的是"当前体积 / 静止体积"的比值(=1.0 表示守恒)。
+        const REST: f64 = 1.0;
+
+        fn build_and_step(enable: bool) -> f64 {
+            let world = make_world();
+            assert!(!world.is_null());
+            let id = soft_body_create(
+                world,
+                Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+            );
+            assert_ne!(id, u32::MAX);
+            // 4 个质点, 全部自由(质量 1)。
+            assert_ne!(
+                soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE),
+                u32::MAX
+            );
+            assert_ne!(
+                soft_body_add_particle(world, id, 1.0, 0.0, 0.0, 1.0, Bool::FALSE),
+                u32::MAX
+            );
+            assert_ne!(
+                soft_body_add_particle(world, id, 0.0, 1.0, 0.0, 1.0, Bool::FALSE),
+                u32::MAX
+            );
+            assert_ne!(
+                soft_body_add_particle(world, id, 0.0, 0.0, 1.0, 1.0, Bool::FALSE),
+                u32::MAX
+            );
+            // 6 条距离边(顺从, compliance 0.2)。
+            let edges = [[0u32, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]];
+            for e in edges {
+                assert_eq!(
+                    soft_body_add_distance_constraint(world, id, e[0], e[1], 0.2),
+                    Bool::TRUE
+                );
+            }
+            // 1 个四面体。
+            assert_eq!(soft_body_add_tetrahedron(world, id, 0, 1, 2, 3), Bool::TRUE);
+            // 距离求解器很软; XPBD solver, 20 迭代。
+            assert_eq!(
+                soft_body_configure_solver(world, id, 1, 20, 0.2),
+                Bool::TRUE
+            );
+            if enable {
+                assert_eq!(
+                    soft_body_set_volume_conservation(world, id, 0.0),
+                    Bool::TRUE
+                );
+            }
+            // 重力向下, 让四面体整体下落 / 受数值扰动。
+            soft_body_set_gravity(
+                world,
+                id,
+                Vec3 {
+                    x: 0.0,
+                    y: -9.81,
+                    z: 0.0,
+                },
+            );
+            for _ in 0..120 {
+                world_step(world, 1.0 / 60.0);
+            }
+            let v = soft_body_total_volume(world, id);
+            world_destroy(world);
+            v
+        }
+
+        let v_off = build_and_step(false);
+        let v_on = build_and_step(true);
+        // 开启硬体积守恒: 体积比值与 1.0(守恒)相对偏差很小。
+        assert!(
+            (v_on - REST).abs() / REST < 0.05,
+            "volume conservation ON should keep total volume ≈ rest: v_on={v_on}, rest={REST}"
+        );
+        // 关闭: 体积守恒回退到软求解器; 开启不应比关闭更糟(单调性锁定)。
+        let drift_off = (v_off - REST).abs() / REST;
+        let drift_on = (v_on - REST).abs() / REST;
+        assert!(
+            drift_on <= drift_off + 1e-6,
+            "volume conservation should not increase drift: drift_on={drift_on} drift_off={drift_off}"
+        );
+    }
+
+    // ── Phase 16: 体积守恒非法/未知参数返回 False 而不 panic ──────────────────────
+    #[test]
+    fn soft_body_set_volume_conservation_rejects_invalid_args() {
+        let world = make_world();
+        assert!(!world.is_null());
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+        // 未知 id → False。
+        assert_eq!(
+            soft_body_set_volume_conservation(world, u32::MAX, 0.0),
+            Bool::FALSE
+        );
+        // 负数 → False。
+        assert_eq!(
+            soft_body_set_volume_conservation(world, id, -1.0),
+            Bool::FALSE
+        );
+        // 非有限 → False。
+        assert_eq!(
+            soft_body_set_volume_conservation(world, id, f64::NAN),
+            Bool::FALSE
+        );
+        // 合法(硬)→ True。
+        assert_eq!(
+            soft_body_set_volume_conservation(world, id, 0.0),
+            Bool::TRUE
+        );
+        // 合法(软)→ True。
+        assert_eq!(
+            soft_body_set_volume_conservation(world, id, 0.05),
+            Bool::TRUE
+        );
         world_destroy(world);
     }
 }

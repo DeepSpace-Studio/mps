@@ -4607,6 +4607,25 @@ Bool soft_body_set_cross_collision(struct WorldHandle *world,
                                    double stiffness);
 
 /**
+ * # Phase 16 — 开启/关闭体积守恒约束(独立柔度, 与距离求解器解耦)
+ *
+ * 把 `id` 软体的四面体体积约束柔度设为 `compliance`(`0`=硬/不可压缩)。开启后 `step_xpbd`
+ * 里每条四面体体积约束用 `α̃ = compliance / dt²` 求解 —— 与距离求解器的 compliance 无关,
+ * 因此可以让边很软而体积保持硬(不可压 blob)。与 Phase 11 气压正交:气压是向外吹胀的力,
+ * 本约束是把总体积拉回静止值。关闭(`clear`)后体积约束回退到全局求解器 compliance。
+ * 非法参数(非有限 / 负数)返回 `Bool::FALSE` 且不开。
+ *
+ * # Returns
+ * `Bool::TRUE` 成功开启;`id` 未知 / world 为 null / 参数非法 → `Bool::FALSE`。
+ *
+ * # Safety
+ * `world` 必须有效;`compliance` 需为有限非负值。
+ */
+Bool soft_body_set_volume_conservation(struct WorldHandle *world,
+                                       uint32_t id,
+                                       double compliance);
+
+/**
  * Create an empty soft body in the world and return its `SoftBodyId`.
  *
  * The body starts in the `MassSpring` solver; switch it to XPBD with

@@ -1174,6 +1174,58 @@ pub extern "C" fn soft_body_set_cross_collision(
     })
 }
 
+/// # Phase 16 — 开启/关闭体积守恒约束(独立柔度, 与距离求解器解耦)
+///
+/// 把 `id` 软体的四面体体积约束柔度设为 `compliance`(`0`=硬/不可压缩)。开启后 `step_xpbd`
+/// 里每条四面体体积约束用 `α̃ = compliance / dt²` 求解 —— 与距离求解器的 compliance 无关,
+/// 因此可以让边很软而体积保持硬(不可压 blob)。与 Phase 11 气压正交:气压是向外吹胀的力,
+/// 本约束是把总体积拉回静止值。关闭(`clear`)后体积约束回退到全局求解器 compliance。
+/// 非法参数(非有限 / 负数)返回 `Bool::FALSE` 且不开。
+///
+/// # Returns
+/// `Bool::TRUE` 成功开启;`id` 未知 / world 为 null / 参数非法 → `Bool::FALSE`。
+///
+/// # Safety
+/// `world` 必须有效;`compliance` 需为有限非负值。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_set_volume_conservation(
+    world: *mut WorldHandle,
+    id: u32,
+    compliance: f64,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !compliance.is_finite() {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_volume_conservation: non-finite compliance",
+            );
+            return Bool::FALSE;
+        }
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(
+                ERR_NOT_FOUND,
+                "soft_body_set_volume_conservation: unknown id",
+            );
+            return Bool::FALSE;
+        };
+        if sb.set_volume_conservation(compliance) {
+            clear_error();
+            Bool::TRUE
+        } else {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_volume_conservation: negative/non-finite compliance",
+            );
+            Bool::FALSE
+        }
+    })
+}
+
 // ── Phase 5a: general soft-body builder (unlock arbitrary topology) ──────────了「voxel 网格 → 软体」与「设置重力」两个高层入口，外部调用方
 // （JNI/FFM/Minecraft）无法构造任意拓扑的软体（自定义质点、弹簧、XPBD 距离约束、
 // 四面体体积元）也无法切求解器。本组 FFI 把 rapier `SoftBody` 的 `add_particle` /

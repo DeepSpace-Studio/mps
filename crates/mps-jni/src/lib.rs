@@ -1737,5 +1737,7 @@ jni!(boolean softBodySetSpringStiffness(long world, int id, int index, double st
 jni!(boolean softBodySetDistanceConstraintCompliance(long world, int id, int index, double compliance) { sb::soft_body_set_distance_constraint_compliance(m::<WH>(world), id as u32, index as u32, compliance).0 as jbyte });
 // Phase 14: 软软碰撞(soft-soft / cross-body)：world 层空间哈希 + 逐软体对投影
 jni!(boolean softBodySetCrossCollision(long world, int id, double radius, double stiffness) { sb::soft_body_set_cross_collision(m::<WH>(world), id as u32, radius, stiffness).0 as jbyte });
+// Phase 16: 体积守恒约束(独立柔度)
+jni!(boolean softBodySetVolumeConservation(long world, int id, double compliance) { sb::soft_body_set_volume_conservation(m::<WH>(world), id as u32, compliance).0 as jbyte });
 // Phase 5f: 软体-刚体碰撞（proxy collider 桥接）
 jni!(boolean softBodyEnableCollision(long world, int id, double particle_radius, int enabled) { sb::soft_body_enable_collision(m::<WH>(world), id as u32, particle_radius, jb(enabled)).0 as jbyte });
