@@ -175,6 +175,15 @@ pub fn SoftBody() -> Element {
                 }
             }
 
+            // ── Phase 25 FFI <-> JNI map ──────────────────────────────────
+            div { class: "section-divider",
+                h2 { class: "section-heading", { t!("soft-p25-map-title") } }
+                p { class: "p-muted", { t!("soft-p25-map-note") } }
+                div { class: "code-block",
+                    pre { code { { t!("soft-p25-map-body") } } }
+                }
+            }
+
             // ── API surface ────────────────────────────────────────────────
             div { class: "section-divider",
                 h2 { class: "section-heading", { t!("soft-api-title") } }

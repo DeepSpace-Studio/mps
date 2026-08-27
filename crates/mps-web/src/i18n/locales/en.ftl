@@ -697,6 +697,18 @@ soft-p25-5-desc = soft_body_state_size + soft_body_save_state + soft_body_restor
 soft-p25-6-title = Per-Particle Velocity Write
 soft-p25-6-desc = soft_body_set_particle_velocity — overwrite particle.vel; pinned / out-of-range / unknown id return FALSE. The write counterpart to soft_body_get_particle.
 
+soft-p25-map-title = Phase 25 FFI <-> JNI  (zero-fork, mps-core only)
+soft-p25-map-note = Each C FFI maps 1:1 to a Java JNI method. All eight walk the SoftBody public fields directly and never touch the rapier3d fork. Return + guard column shows the success type and the failure path.
+soft-p25-map-body = FFI                                      JNI                               ret / guard
+  soft_body_read_contact_force        softBodyReadContactForce        u32 count / bad id -> 0
+  soft_body_apply_particle_impulse     softBodyApplyParticleImpulse     bool / pinned skip, bad id -> false
+  soft_body_read_aabb                  softBodyReadAabb                 bool / null out ptr ok
+  soft_body_clone                      softBodyClone                    u32 new id / fail -> u32::MAX
+  soft_body_state_size                 softBodyStateSize                u32 bytes / fail -> u32::MAX
+  soft_body_save_state                 softBodySaveState                u32 written / small buf -> u32::MAX
+  soft_body_restore_state              softBodyRestoreState             u32 new id / bad magic -> u32::MAX
+  soft_body_set_particle_velocity      softBodySetParticleVelocity      bool / pinned|oob|bad id -> false
+
 soft-api-title = FFI Surface
 soft-api-desc = The soft-body subsystem is exposed symmetrically across C FFI, Java JNI, and the integration tests.
 soft-api-stat-ffi = C FFI functions

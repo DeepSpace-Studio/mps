@@ -697,6 +697,18 @@ soft-p25-5-desc = soft_body_state_size + soft_body_save_state + soft_body_restor
 soft-p25-6-title = 逐粒子速度写入
 soft-p25-6-desc = soft_body_set_particle_velocity —— 覆盖 particle.vel;钉住/越界/未知 id 返回 FALSE。是 soft_body_get_particle 的写入对偶。
 
+soft-p25-map-title = Phase 25 FFI ↔ JNI(零 fork,仅 mps-core)
+soft-p25-map-note = 每个 C FFI 与 Java JNI 方法一一对应。八个都直接遍历 SoftBody 的 pub 字段,绝不改动 rapier3d fork。返回/守卫列给出成功类型与失败路径。
+soft-p25-map-body = FFI                                      JNI                               ret / guard
+  soft_body_read_contact_force        softBodyReadContactForce        u32 count / 坏 id -> 0
+  soft_body_apply_particle_impulse     softBodyApplyParticleImpulse     bool / 钉住跳过,坏 id -> false
+  soft_body_read_aabb                  softBodyReadAabb                 bool / 输出指针可 null
+  soft_body_clone                      softBodyClone                    u32 新 id / 失败 -> u32::MAX
+  soft_body_state_size                 softBodyStateSize                u32 字节数 / 失败 -> u32::MAX
+  soft_body_save_state                 softBodySaveState                u32 写入数 / 缓冲过小 -> u32::MAX
+  soft_body_restore_state              softBodyRestoreState             u32 新 id / 坏 magic -> u32::MAX
+  soft_body_set_particle_velocity      softBodySetParticleVelocity      bool / 钉住|越界|坏 id -> false
+
 soft-api-title = FFI 接口面
 soft-api-desc = 软体子系统在 C FFI、Java JNI、集成测试三方对称暴露。
 soft-api-stat-ffi = C FFI 函数
