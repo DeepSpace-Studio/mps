@@ -23,14 +23,98 @@ pub fn Formula() -> Element {
         div { class: "section-card",
             h2 { { t!("formula-cat-spaceflight") } }
             ul { class: "ul-plain",
-                li { id: "form-mod-kepler", { t!("form-mod-kepler") } }
-                li { id: "form-mod-dynamics", { t!("form-mod-dynamics") } }
-                li { id: "form-mod-perturbation", { t!("form-mod-perturbation") } }
-                li { id: "form-mod-propulsion", { t!("form-mod-propulsion") } }
-                li { id: "form-mod-rotation", { t!("form-mod-rotation") } }
-                li { id: "form-mod-thermal", { t!("form-mod-thermal") } }
-                li { id: "form-mod-debris", { t!("form-mod-debris") } }
-                li { id: "form-mod-gnss", { t!("form-mod-gnss") } }
+                li { id: "form-mod-kepler",
+                    span { class: "mod-name", { t!("form-mod-kepler") } }
+                    ul { class: "ul-plain mod-fns",
+                    li { code { "kepler_period" } }
+                    li { code { "hohmann_transfer" } }
+                    li { code { "lambert_universal_variable" } }
+                    li { code { "state_to_elements" } }
+                    li { code { "elements_to_state" } }
+                    li { code { "tsiolkovsky_delta_v" } }
+                    li { code { "bi_elliptic_transfer_delta_v" } }
+                    li { code { "plane_change_delta_v" } }
+                    }
+                }
+                li { id: "form-mod-dynamics",
+                    span { class: "mod-name", { t!("form-mod-dynamics") } }
+                    ul { class: "ul-plain mod-fns",
+                    li { code { "variational_two_body" } }
+                    li { code { "mass_properties_two_body" } }
+                    li { code { "manipulator_dynamics_diag" } }
+                    li { code { "flexible_mode_derivative" } }
+                    li { code { "slosh_pendulum_derivative" } }
+                    li { code { "docking_glideslope_command" } }
+                    li { code { "artificial_potential_guidance" } }
+                    li { code { "cw_derivative" } }
+                    }
+                }
+                li { id: "form-mod-perturbation",
+                    span { class: "mod-name", { t!("form-mod-perturbation") } }
+                    ul { class: "ul-plain mod-fns",
+                    li { code { "atmospheric_drag_acceleration" } }
+                    li { code { "solar_radiation_pressure_acceleration" } }
+                    li { code { "gauss_variational_equations" } }
+                    li { code { "atmospheric_density_scale_height" } }
+                    li { code { "solar_activity_density_correction" } }
+                    li { code { "igrf_tilted_dipole" } }
+                    }
+                }
+                li { id: "form-mod-propulsion",
+                    span { class: "mod-name", { t!("form-mod-propulsion") } }
+                    ul { class: "ul-plain mod-fns",
+                    li { code { "hall_thruster_performance" } }
+                    li { code { "solar_panel_power" } }
+                    li { code { "spe_oxygen_rate" } }
+                    li { code { "sabatier_methane_rate" } }
+                    li { code { "battery_equivalent_circuit" } }
+                    li { code { "co" } }
+                    }
+                }
+                li { id: "form-mod-rotation",
+                    span { class: "mod-name", { t!("form-mod-rotation") } }
+                    ul { class: "ul-plain mod-fns",
+                    li { code { "quaternion_derivative" } }
+                    li { code { "rigid_body_euler_derivative" } }
+                    li { code { "gravity_gradient_torque" } }
+                    li { code { "cmg_robust_pseudoinverse_diag" } }
+                    li { code { "triad_attitude" } }
+                    li { code { "least_squares_attitude_two_vector" } }
+                    li { code { "ekf_predict_scalar" } }
+                    }
+                }
+                li { id: "form-mod-thermal",
+                    span { class: "mod-name", { t!("form-mod-thermal") } }
+                    ul { class: "ul-plain mod-fns",
+                    li { code { "sutton_graves_heat_rate" } }
+                    li { code { "thermal_balance" } }
+                    li { code { "heat_pipe_thermal_resistance" } }
+                    li { code { "radiator_power" } }
+                    li { code { "reentry_peak_g_load" } }
+                    li { code { "single_phase_loop_heat_transfer" } }
+                    }
+                }
+                li { id: "form-mod-debris",
+                    span { class: "mod-name", { t!("form-mod-debris") } }
+                    ul { class: "ul-plain mod-fns",
+                    li { code { "debris_collision_probability" } }
+                    li { code { "whipple_critical_projectile_diameter" } }
+                    li { code { "eclipse_duration_circular" } }
+                    li { code { "lagrange_collinear_gamma" } }
+                    li { code { "lense_thirring_precession_rate" } }
+                    li { code { "atomic_oxygen_erosion" } }
+                    }
+                }
+                li { id: "form-mod-gnss",
+                    span { class: "mod-name", { t!("form-mod-gnss") } }
+                    ul { class: "ul-plain mod-fns",
+                    li { code { "gnss_pseudorange" } }
+                    li { code { "gnss_double_difference_carrier_phase" } }
+                    li { code { "radar_range_rate" } }
+                    li { code { "friis_link" } }
+                    li { code { "friis_wavelength_from_frequency" } }
+                    }
+                }
                 li { { t!("form-mod-trajectory") } }
             }
         }
