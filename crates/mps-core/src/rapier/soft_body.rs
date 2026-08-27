@@ -2296,7 +2296,78 @@ pub extern "C" fn soft_body_read_triangles(
     })
 }
 
+// ── Phase 22: 逐边应力 / 张力读数（仅供渲染层 / 上层逻辑使用，不改求解器）──────
+//
+// 软体现在能回读位置 / 拓扑（read_particles / read_edges / read_tetrahedra /
+// read_triangles），但**没有逐边张力**——调试可视化（颜色映射应力）和"撕裂风险"
+// 逻辑只能靠自己算边长。补一个纯读数 FFI：对每个结构边（弹簧 + XPBD 距离约束）
+// 返回归一化应变 strain = (len - rest) / rest（rest==0 → 0.0）。长度从现有质点
+// 位置现算，不改 fork、不动求解器，沿用 read_edges 的 marshalling 形态。
+
+/// Read per-edge normalized strain (stress proxy) for a soft body.
+///
+/// Edges are enumerated in the same order as [`soft_body_read_edges`]: every
+/// `Spring` first, then every `DistanceConstraint`. For each edge the function
+/// writes `strain = (current_len - rest) / rest` (0.0 when `rest == 0`) into
+/// `out_strain[..]`. Returns the total edge count (so the caller can size its
+/// buffer); when `out_strain` is null or `capacity` is 0 the count is returned
+/// without writing.
+///
+/// This is a pure read-out for debug visualisation / "tear risk" UI; it does
+/// not affect the solver. Symmetry / determinism are irrelevant because no state
+/// is mutated.
+///
+/// # Safety
+/// `world` must be a valid world pointer. `out_strain` must point to an array of
+/// at least `capacity` `f64` elements when non-null.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_read_stress(
+    world: *const WorldHandle,
+    id: u32,
+    out_strain: *mut f64,
+    capacity: u32,
+) -> u32 {
+    ffi_guard(0, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_read_stress: world is null");
+            return 0;
+        };
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_read_stress: unknown id");
+            return 0;
+        };
+        let total = body.springs.len() + body.distance_constraints.len();
+        let cap = capacity as usize;
+        if !out_strain.is_null() && cap > 0 {
+            let slice = unsafe { std::slice::from_raw_parts_mut(out_strain, cap) };
+            let mut w = 0usize;
+            for s in body.springs.iter() {
+                if w >= cap {
+                    break;
+                }
+                let len = (body.particles[s.a].pos - body.particles[s.b].pos).length();
+                let rest = s.rest_length;
+                slice[w] = if rest > 0.0 { (len - rest) / rest } else { 0.0 };
+                w += 1;
+            }
+            for d in body.distance_constraints.iter() {
+                if w >= cap {
+                    break;
+                }
+                let len = (body.particles[d.a].pos - body.particles[d.b].pos).length();
+                let rest = d.rest;
+                slice[w] = if rest > 0.0 { (len - rest) / rest } else { 0.0 };
+                w += 1;
+            }
+        }
+        clear_error();
+        total as u32
+    })
+}
+
 // ── Phase 5d: 区块破坏 → 软体重建联动（Minecraft 闭环）──────────────────────
+
 //
 // 监听 voxel 地形 `set_cell` 破坏事件后，上层调用本 FFI：把被挖空的方块格
 // (cx,cy,cz) 经 `voxel_soft_meta` 映射到对应质点下标，调 `SoftBody::remove_particle`

@@ -4981,6 +4981,29 @@ uint32_t soft_body_read_triangles(const struct WorldHandle *world,
                                   uint32_t capacity);
 
 /**
+ * Read per-edge normalized strain (stress proxy) for a soft body.
+ *
+ * Edges are enumerated in the same order as [`soft_body_read_edges`]: every
+ * `Spring` first, then every `DistanceConstraint`. For each edge the function
+ * writes `strain = (current_len - rest) / rest` (0.0 when `rest == 0`) into
+ * `out_strain[..]`. Returns the total edge count (so the caller can size its
+ * buffer); when `out_strain` is null or `capacity` is 0 the count is returned
+ * without writing.
+ *
+ * This is a pure read-out for debug visualisation / "tear risk" UI; it does
+ * not affect the solver. Symmetry / determinism are irrelevant because no state
+ * is mutated.
+ *
+ * # Safety
+ * `world` must be a valid world pointer. `out_strain` must point to an array of
+ * at least `capacity` `f64` elements when non-null.
+ */
+uint32_t soft_body_read_stress(const struct WorldHandle *world,
+                               uint32_t id,
+                               double *out_strain,
+                               uint32_t capacity);
+
+/**
  * Dig out a single voxel cell of a soft body built via `soft_body_voxel_build`,
  * removing the particle that occupies it (plus its incident springs/constraints)
  * and rebuilding the voxel→particle map so further digs stay consistent.

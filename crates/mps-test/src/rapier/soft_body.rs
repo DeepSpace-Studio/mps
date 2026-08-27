@@ -20,8 +20,8 @@ mod tests {
         soft_body_destroy, soft_body_detach_particle, soft_body_enable_collision,
         soft_body_get_particle, soft_body_is_sleeping, soft_body_kinetic_energy,
         soft_body_particle_count, soft_body_read_edges, soft_body_read_particles,
-        soft_body_read_tetrahedra, soft_body_read_triangles, soft_body_remove_particle,
-        soft_body_set_cohesion, soft_body_set_cross_collision,
+        soft_body_read_stress, soft_body_read_tetrahedra, soft_body_read_triangles,
+        soft_body_remove_particle, soft_body_set_cohesion, soft_body_set_cross_collision,
         soft_body_set_cross_collision_friction, soft_body_set_damping,
         soft_body_set_distance_constraint_compliance,
         soft_body_set_distance_constraint_compression, soft_body_set_gravity,
@@ -3465,5 +3465,59 @@ mod tests {
         // 重心细分保留原始边长(仍 ≈1.0),第二次阈值 0.5 仍触发 —— 4 个子四面体全部再细分,返回 4。
         assert_eq!(soft_body_subdivide_tetrahedra(world, id, 0.5), 4);
         world_destroy(world);
+    }
+    // ── Phase 22: 逐边应力 / 张力读数（纯只读，供渲染 / 撕裂风险 UI）──────────────
+    #[test]
+    fn soft_body_read_stress_reflects_stretched_edge() {
+        let world = make_world();
+        assert!(!world.is_null());
+
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: -9.81,
+                z: 0.0,
+            },
+        );
+        // Pin A at origin; B hangs 1.0 below it. Gravity pulls B further down,
+        // so the spring edge stretches → positive strain after a step.
+        let a = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::TRUE) as usize;
+        let b = soft_body_add_particle(world, id, 0.0, -1.0, 0.0, 1.0, Bool::FALSE) as usize;
+        soft_body_add_spring(world, id, a as u32, b as u32, 100.0, 5.0);
+
+        // At rest (before stepping) strain ≈ 0.
+        let mut rest = vec![0.0f64; 1];
+        assert_eq!(soft_body_read_stress(world, id, rest.as_mut_ptr(), 1), 1);
+        assert!((rest[0]).abs() < 1e-9, "strain should be 0 before stepping");
+
+        // Step once: B falls under gravity, spring stretches.
+        world_step(world, 1.0 / 60.0);
+        let mut strained = vec![0.0f64; 1];
+        assert_eq!(
+            soft_body_read_stress(world, id, strained.as_mut_ptr(), 1),
+            1
+        );
+        assert!(
+            strained[0] > 1e-6,
+            "gravity should stretch the hanging edge → positive strain, got {}",
+            strained[0]
+        );
+
+        // Unknown id → 0, no panic (edge-case guard).
+        assert_eq!(
+            soft_body_read_stress(world, u32::MAX, std::ptr::null_mut(), 0),
+            0
+        );
+        world_destroy(world);
+    }
+
+    #[test]
+    fn soft_body_read_stress_rejects_bad_world() {
+        // Null world → 0 (no panic).
+        assert_eq!(
+            soft_body_read_stress(std::ptr::null_mut(), 0, std::ptr::null_mut(), 0),
+            0
+        );
     }
 }
