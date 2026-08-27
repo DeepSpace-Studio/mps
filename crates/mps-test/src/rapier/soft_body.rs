@@ -15,16 +15,16 @@ mod tests {
     use mps_core::rapier::soft_body::{
         soft_body_add_bending, soft_body_add_distance_constraint, soft_body_add_particle,
         soft_body_add_spring, soft_body_add_tetrahedron, soft_body_add_triangle,
-        soft_body_apply_wind, soft_body_attach_particle, soft_body_build_tetra_mesh,
-        soft_body_clear_wind, soft_body_configure_solver, soft_body_count, soft_body_create,
-        soft_body_destroy, soft_body_detach_particle, soft_body_enable_collision,
-        soft_body_get_particle, soft_body_is_sleeping, soft_body_kinetic_energy,
-        soft_body_particle_count, soft_body_read_contact_force, soft_body_read_edges,
-        soft_body_read_normals, soft_body_read_particles, soft_body_read_stress,
-        soft_body_read_tetrahedra, soft_body_read_triangles, soft_body_remove_particle,
-        soft_body_scale_rest_length, soft_body_set_cohesion, soft_body_set_cross_collision,
-        soft_body_set_cross_collision_friction, soft_body_set_damping,
-        soft_body_set_distance_constraint_compliance,
+        soft_body_apply_particle_impulse, soft_body_apply_wind, soft_body_attach_particle,
+        soft_body_build_tetra_mesh, soft_body_clear_wind, soft_body_configure_solver,
+        soft_body_count, soft_body_create, soft_body_destroy, soft_body_detach_particle,
+        soft_body_enable_collision, soft_body_get_particle, soft_body_is_sleeping,
+        soft_body_kinetic_energy, soft_body_particle_count, soft_body_read_contact_force,
+        soft_body_read_edges, soft_body_read_normals, soft_body_read_particles,
+        soft_body_read_stress, soft_body_read_tetrahedra, soft_body_read_triangles,
+        soft_body_remove_particle, soft_body_scale_rest_length, soft_body_set_cohesion,
+        soft_body_set_cross_collision, soft_body_set_cross_collision_friction,
+        soft_body_set_damping, soft_body_set_distance_constraint_compliance,
         soft_body_set_distance_constraint_compression, soft_body_set_gravity,
         soft_body_set_plasticity, soft_body_set_pressure, soft_body_set_self_collision,
         soft_body_set_self_collision_friction, soft_body_set_spring_stiffness,
@@ -3846,6 +3846,163 @@ mod tests {
         assert_eq!(fx, vec![0.0, 0.0]);
         assert_eq!(fy, vec![0.0, 0.0]);
         assert_eq!(fz, vec![0.0, 0.0]);
+        world_destroy(world);
+    } // ── Phase 25 #2: 单粒子冲量（纯 mps-core，零 fork 改动）──────────────────────
+    // 给一个自由质点施加冲量 J，速度应变为 v += J * inv_mass；施加一步后位置也跟着动。
+    // pinned 质点（inv_mass==0）施加冲量后速度不变；越界/坏参返回 Bool::FALSE。
+    #[test]
+    fn soft_body_apply_particle_impulse_changes_velocity() {
+        let world = make_world();
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        ); // 无重力
+        // 自由质点 inv_mass=1 (m=1)，pinned 质点 inv_mass=0。
+        let free = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        let pinned = soft_body_add_particle(world, id, 10.0, 0.0, 0.0, 1.0, Bool::TRUE);
+
+        // 自由质点：施加 (2,0,0)，inv_mass=1 → v 应为 (2,0,0)。
+        assert_eq!(
+            soft_body_apply_particle_impulse(world, id, free, 2.0, 0.0, 0.0),
+            Bool::TRUE
+        );
+        let mut pos = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        let mut vel = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        assert_eq!(
+            soft_body_get_particle(world, id, free, &mut pos, &mut vel),
+            Bool::TRUE
+        );
+        assert!(
+            (vel.x - 2.0).abs() < 1e-9,
+            "free particle vx should be 2, got {}",
+            vel.x
+        );
+        assert!((vel.y).abs() < 1e-9 && (vel.z).abs() < 1e-9);
+
+        // 再叠一次冲量 (0,3,0) → v=(2,3,0)。
+        assert_eq!(
+            soft_body_apply_particle_impulse(world, id, free, 0.0, 3.0, 0.0),
+            Bool::TRUE
+        );
+        assert_eq!(
+            soft_body_get_particle(world, id, free, &mut pos, &mut vel),
+            Bool::TRUE
+        );
+        assert!((vel.x - 2.0).abs() < 1e-9 && (vel.y - 3.0).abs() < 1e-9);
+
+        // 施加一步：位置应沿 v 平移（无重力、无约束）。
+        let before = pos.clone();
+        world_step(world, 1.0 / 60.0);
+        assert_eq!(
+            soft_body_get_particle(world, id, free, &mut pos, &mut vel),
+            Bool::TRUE
+        );
+        assert!(
+            (pos.x - before.x - vel.x / 60.0).abs() < 1e-6,
+            "free particle should move by v*dt along x"
+        );
+        assert!((pos.y - before.y - vel.y / 60.0).abs() < 1e-6);
+
+        // pinned 质点：inv_mass=0 → 冲量不产生速度变化，但仍算成功。
+        let mut ppos = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        let mut pvel = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        assert_eq!(
+            soft_body_apply_particle_impulse(world, id, pinned, 100.0, 0.0, 0.0),
+            Bool::TRUE
+        );
+        assert_eq!(
+            soft_body_get_particle(world, id, pinned, &mut ppos, &mut pvel),
+            Bool::TRUE
+        );
+        assert!(
+            (pvel.x).abs() < 1e-9,
+            "pinned particle velocity must stay 0, got {}",
+            pvel.x
+        );
+
+        // 坏参数：越界 index / 非有限冲量 / 未知 id / 空 world。
+        assert_eq!(
+            soft_body_apply_particle_impulse(world, id, 999, 1.0, 0.0, 0.0),
+            Bool::FALSE
+        );
+        assert_eq!(
+            soft_body_apply_particle_impulse(world, id, free, f64::NAN, 0.0, 0.0),
+            Bool::FALSE
+        );
+        assert_eq!(
+            soft_body_apply_particle_impulse(world, u32::MAX, free, 1.0, 0.0, 0.0),
+            Bool::FALSE
+        );
+        assert_eq!(
+            soft_body_apply_particle_impulse(std::ptr::null_mut(), id, free, 1.0, 0.0, 0.0),
+            Bool::FALSE
+        );
+
+        world_destroy(world);
+    }
+
+    #[test]
+    fn soft_body_apply_particle_impulse_scales_with_inv_mass() {
+        // 同一冲量 J 下，重质点 (inv_mass 小) 速度变化 < 轻质点。
+        let world = make_world();
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        let light = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE); // mass=1, inv=1
+        let heavy = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 4.0, Bool::FALSE); // mass=4, inv=0.25
+        soft_body_apply_particle_impulse(world, id, light, 4.0, 0.0, 0.0);
+        soft_body_apply_particle_impulse(world, id, heavy, 4.0, 0.0, 0.0);
+        let mut p = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        let mut lvel = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        let mut hvel = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        assert_eq!(
+            soft_body_get_particle(world, id, light, &mut p, &mut lvel),
+            Bool::TRUE
+        );
+        assert_eq!(
+            soft_body_get_particle(world, id, heavy, &mut p, &mut hvel),
+            Bool::TRUE
+        );
+        assert!((lvel.x - 4.0).abs() < 1e-9, "light vx=4, got {}", lvel.x);
+        assert!((hvel.x - 1.0).abs() < 1e-9, "heavy vx=1, got {}", hvel.x);
+        assert!(hvel.x < lvel.x, "heavy should move less than light");
         world_destroy(world);
     }
 }

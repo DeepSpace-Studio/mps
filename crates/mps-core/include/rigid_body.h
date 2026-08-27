@@ -4931,6 +4931,31 @@ Bool soft_body_get_particle(const struct WorldHandle *world,
 Bool soft_body_remove_particle(struct WorldHandle *world, uint32_t id, uint32_t index);
 
 /**
+ * Apply a linear impulse to a single soft-body particle.
+ *
+ * The impulse `J = (fx, fy, fz)` changes the particle velocity by `J * inv_mass`,
+ * i.e. `p.vel += J * p.inv_mass`. For collision-coupled bodies the updated velocity
+ * is pushed into the particle's proxy rigid body at the next step (see the
+ * soft-body/rigid-body coupling loop), so a contact reaction naturally follows; for
+ * non-coupled bodies the fork integrator consumes `p.vel` directly. Pinned particles
+ * (`inv_mass == 0`, e.g. anchors) are unaffected. This is the primitive for
+ * grab/poke/kick interactions on a single vertex. Pure state mutation: no solver
+ * structural change.
+ *
+ * Returns `Bool::TRUE` on success, `Bool::FALSE` if `world` is null, `id` is unknown,
+ * `index` is out of bounds, or any component of the impulse is non-finite.
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+Bool soft_body_apply_particle_impulse(struct WorldHandle *world,
+                                      uint32_t id,
+                                      uint32_t index,
+                                      double fx,
+                                      double fy,
+                                      double fz);
+
+/**
  * Destroy a soft body, freeing its storage. Other live `SoftBodyId`s remain
  * valid (the id slot becomes a tombstone). Returns `Bool::TRUE` on success.
  *

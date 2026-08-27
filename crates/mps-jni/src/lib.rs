@@ -1706,6 +1706,7 @@ jni!(long softBodyCount(long world) { sb::soft_body_count(cp::<WH>(world)) as jl
 jni!(long softBodyParticleCount(long world, int id) { sb::soft_body_particle_count(cp::<WH>(world), id as u32) as jlong });
 jni!(boolean softBodyGetParticle(long world, int id, int index, long out_pos, long out_vel) { sb::soft_body_get_particle(cp::<WH>(world), id as u32, index as u32, pm::<Vec3>(out_pos), pm::<Vec3>(out_vel)).0 as jbyte });
 jni!(boolean softBodyRemoveParticle(long world, int id, int index) { sb::soft_body_remove_particle(m::<WH>(world), id as u32, index as u32).0 as jbyte });
+jni!(boolean softBodyApplyParticleImpulse(long world, int id, int index, double fx, double fy, double fz) { sb::soft_body_apply_particle_impulse(m::<WH>(world), id as u32, index as u32, fx, fy, fz).0 as jbyte });
 jni!(boolean softBodyDestroy(long world, int id) { sb::soft_body_destroy(m::<WH>(world), id as u32).0 as jbyte });
 
 // Phase 5i: 拓扑读回（渲染用）— 批量读回粒子位置/逆质量 + 边 + 四面体。

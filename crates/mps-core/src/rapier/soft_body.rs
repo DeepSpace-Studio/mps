@@ -2107,6 +2107,71 @@ pub extern "C" fn soft_body_remove_particle(world: *mut WorldHandle, id: u32, in
     })
 }
 
+/// Apply a linear impulse to a single soft-body particle.
+///
+/// The impulse `J = (fx, fy, fz)` changes the particle velocity by `J * inv_mass`,
+/// i.e. `p.vel += J * p.inv_mass`. For collision-coupled bodies the updated velocity
+/// is pushed into the particle's proxy rigid body at the next step (see the
+/// soft-body/rigid-body coupling loop), so a contact reaction naturally follows; for
+/// non-coupled bodies the fork integrator consumes `p.vel` directly. Pinned particles
+/// (`inv_mass == 0`, e.g. anchors) are unaffected. This is the primitive for
+/// grab/poke/kick interactions on a single vertex. Pure state mutation: no solver
+/// structural change.
+///
+/// Returns `Bool::TRUE` on success, `Bool::FALSE` if `world` is null, `id` is unknown,
+/// `index` is out of bounds, or any component of the impulse is non-finite.
+///
+/// # Safety
+/// `world` must be a valid world pointer.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_apply_particle_impulse(
+    world: *mut WorldHandle,
+    id: u32,
+    index: u32,
+    fx: f64,
+    fy: f64,
+    fz: f64,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(
+                ERR_NULL_POINTER,
+                "soft_body_apply_particle_impulse: world is null",
+            );
+            return Bool::FALSE;
+        };
+        if !fx.is_finite() || !fy.is_finite() || !fz.is_finite() {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_apply_particle_impulse: impulse must be finite",
+            );
+            return Bool::FALSE;
+        }
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(
+                ERR_NOT_FOUND,
+                "soft_body_apply_particle_impulse: unknown id",
+            );
+            return Bool::FALSE;
+        };
+        let i = index as usize;
+        if i >= body.particles.len() {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_apply_particle_impulse: index out of bounds",
+            );
+            return Bool::FALSE;
+        }
+        let p = &mut body.particles[i];
+        let inv = p.inv_mass;
+        // inv_mass == 0 (pinned) → no velocity change, but still a valid op.
+        p.vel += Vector::new(fx * inv, fy * inv, fz * inv);
+        clear_error();
+        Bool::TRUE
+    })
+}
+
 /// Destroy a soft body, freeing its storage. Other live `SoftBodyId`s remain
 /// valid (the id slot becomes a tombstone). Returns `Bool::TRUE` on success.
 ///
