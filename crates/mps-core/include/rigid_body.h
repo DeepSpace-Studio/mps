@@ -4956,6 +4956,30 @@ Bool soft_body_apply_particle_impulse(struct WorldHandle *world,
                                       double fz);
 
 /**
+ * Read the axis-aligned bounding box (min/max corners) and centroid of a soft body.
+ *
+ * Computes the AABB and the per-particle average position (`centroid`) from the
+ * body's current particle positions. Useful for frustum culling, broad-phase
+ * spatial queries, LOD, and nearest-neighbour tests against other bodies. Pure
+ * read-out: does not affect the solver. Bodies with zero particles return
+ * `Bool::FALSE` (the box is undefined).
+ *
+ * Any of `out_min`/`out_max`/`out_centroid` may be null to skip that output.
+ *
+ * Returns `Bool::TRUE` on success, `Bool::FALSE` if `world` is null, `id` is
+ * unknown, or the body has no particles.
+ *
+ * # Safety
+ * `world` must be a valid world pointer; non-null output pointers must each target
+ * a writable `Vec3`.
+ */
+Bool soft_body_read_aabb(const struct WorldHandle *world,
+                         uint32_t id,
+                         Vec3 *out_min,
+                         Vec3 *out_max,
+                         Vec3 *out_centroid);
+
+/**
  * Destroy a soft body, freeing its storage. Other live `SoftBodyId`s remain
  * valid (the id slot becomes a tombstone). Returns `Bool::TRUE` on success.
  *

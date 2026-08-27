@@ -2172,6 +2172,71 @@ pub extern "C" fn soft_body_apply_particle_impulse(
     })
 }
 
+/// Read the axis-aligned bounding box (min/max corners) and centroid of a soft body.
+///
+/// Computes the AABB and the per-particle average position (`centroid`) from the
+/// body's current particle positions. Useful for frustum culling, broad-phase
+/// spatial queries, LOD, and nearest-neighbour tests against other bodies. Pure
+/// read-out: does not affect the solver. Bodies with zero particles return
+/// `Bool::FALSE` (the box is undefined).
+///
+/// Any of `out_min`/`out_max`/`out_centroid` may be null to skip that output.
+///
+/// Returns `Bool::TRUE` on success, `Bool::FALSE` if `world` is null, `id` is
+/// unknown, or the body has no particles.
+///
+/// # Safety
+/// `world` must be a valid world pointer; non-null output pointers must each target
+/// a writable `Vec3`.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_read_aabb(
+    world: *const WorldHandle,
+    id: u32,
+    out_min: *mut Vec3,
+    out_max: *mut Vec3,
+    out_centroid: *mut Vec3,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_read_aabb: world is null");
+            return Bool::FALSE;
+        };
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_read_aabb: unknown id");
+            return Bool::FALSE;
+        };
+        if body.particles.is_empty() {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_read_aabb: body has no particles",
+            );
+            return Bool::FALSE;
+        }
+        let mut min = body.particles[0].pos;
+        let mut max = body.particles[0].pos;
+        let mut sum = Vector::ZERO;
+        for p in body.particles.iter() {
+            min = min.min(p.pos);
+            max = max.max(p.pos);
+            sum += p.pos;
+        }
+        let n = body.particles.len() as f64;
+        let centroid = sum / n;
+        if !out_min.is_null() {
+            unsafe { *out_min = vec3_from_rapier(min) };
+        }
+        if !out_max.is_null() {
+            unsafe { *out_max = vec3_from_rapier(max) };
+        }
+        if !out_centroid.is_null() {
+            unsafe { *out_centroid = vec3_from_rapier(centroid) };
+        }
+        clear_error();
+        Bool::TRUE
+    })
+}
+
 /// Destroy a soft body, freeing its storage. Other live `SoftBodyId`s remain
 /// valid (the id slot becomes a tombstone). Returns `Bool::TRUE` on success.
 ///

@@ -19,12 +19,13 @@ mod tests {
         soft_body_build_tetra_mesh, soft_body_clear_wind, soft_body_configure_solver,
         soft_body_count, soft_body_create, soft_body_destroy, soft_body_detach_particle,
         soft_body_enable_collision, soft_body_get_particle, soft_body_is_sleeping,
-        soft_body_kinetic_energy, soft_body_particle_count, soft_body_read_contact_force,
-        soft_body_read_edges, soft_body_read_normals, soft_body_read_particles,
-        soft_body_read_stress, soft_body_read_tetrahedra, soft_body_read_triangles,
-        soft_body_remove_particle, soft_body_scale_rest_length, soft_body_set_cohesion,
-        soft_body_set_cross_collision, soft_body_set_cross_collision_friction,
-        soft_body_set_damping, soft_body_set_distance_constraint_compliance,
+        soft_body_kinetic_energy, soft_body_particle_count, soft_body_read_aabb,
+        soft_body_read_contact_force, soft_body_read_edges, soft_body_read_normals,
+        soft_body_read_particles, soft_body_read_stress, soft_body_read_tetrahedra,
+        soft_body_read_triangles, soft_body_remove_particle, soft_body_scale_rest_length,
+        soft_body_set_cohesion, soft_body_set_cross_collision,
+        soft_body_set_cross_collision_friction, soft_body_set_damping,
+        soft_body_set_distance_constraint_compliance,
         soft_body_set_distance_constraint_compression, soft_body_set_gravity,
         soft_body_set_plasticity, soft_body_set_pressure, soft_body_set_self_collision,
         soft_body_set_self_collision_friction, soft_body_set_spring_stiffness,
@@ -4003,6 +4004,181 @@ mod tests {
         assert!((lvel.x - 4.0).abs() < 1e-9, "light vx=4, got {}", lvel.x);
         assert!((hvel.x - 1.0).abs() < 1e-9, "heavy vx=1, got {}", hvel.x);
         assert!(hvel.x < lvel.x, "heavy should move less than light");
+        world_destroy(world);
+    } // ── Phase 25 #3: AABB / 质心回读（纯 mps-core，零 fork 改动）──────────────────
+    // 四个质点摆成盒子角，read_aabb 应回 min/max 角 + 质心=均值；质心也可缺省输出。
+    #[test]
+    fn soft_body_read_aabb_matches_particles() {
+        let world = make_world();
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        // 盒子四角：(-1,-2,-3) / (1,-2,3) / (1,2,-3) / (-1,2,3) → min=(-1,-2,-3) max=(1,2,3)
+        soft_body_add_particle(world, id, -1.0, -2.0, -3.0, 1.0, Bool::FALSE);
+        soft_body_add_particle(world, id, 1.0, -2.0, 3.0, 1.0, Bool::FALSE);
+        soft_body_add_particle(world, id, 1.0, 2.0, -3.0, 1.0, Bool::FALSE);
+        soft_body_add_particle(world, id, -1.0, 2.0, 3.0, 1.0, Bool::FALSE);
+
+        let mut mn = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        let mut mx = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        let mut ce = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        assert_eq!(
+            soft_body_read_aabb(world, id, &mut mn, &mut mx, &mut ce),
+            Bool::TRUE
+        );
+        assert!(
+            (mn.x + 1.0).abs() < 1e-9 && (mn.y + 2.0).abs() < 1e-9 && (mn.z + 3.0).abs() < 1e-9,
+            "min should be (-1,-2,-3), got {:?}",
+            mn
+        );
+        assert!(
+            (mx.x - 1.0).abs() < 1e-9 && (mx.y - 2.0).abs() < 1e-9 && (mx.z - 3.0).abs() < 1e-9,
+            "max should be (1,2,3), got {:?}",
+            mx
+        );
+        // 质心 = 均值 = (0,0,0)
+        assert!(
+            (ce.x).abs() < 1e-9 && (ce.y).abs() < 1e-9 && (ce.z).abs() < 1e-9,
+            "centroid should be (0,0,0), got {:?}",
+            ce
+        );
+
+        // 质心输出可缺省（传 null）。
+        let mut only_min = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        assert_eq!(
+            soft_body_read_aabb(
+                world,
+                id,
+                &mut only_min,
+                std::ptr::null_mut(),
+                std::ptr::null_mut()
+            ),
+            Bool::TRUE
+        );
+        assert!(
+            (only_min.x + 1.0).abs() < 1e-9,
+            "min x still -1, got {}",
+            only_min.x
+        );
+
+        world_destroy(world);
+    }
+
+    #[test]
+    fn soft_body_read_aabb_updates_after_move() {
+        // 移动一个质点后 AABB 边界应跟着变。
+        let world = make_world();
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        let _a = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        // 最右质点 b 在 x=1：往右推它，max.x 才会超过 1。
+        let b = soft_body_add_particle(world, id, 1.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        let mut mx = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        let mut mn = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        let mut ce = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        assert_eq!(
+            soft_body_read_aabb(world, id, &mut mn, &mut mx, &mut ce),
+            Bool::TRUE
+        );
+        assert!((mx.x - 1.0).abs() < 1e-9, "initial max x = 1, got {}", mx.x);
+
+        // 把 b 沿 +x 推一下（冲量改速度），步进后位置右移 → max.x 应超过初始的 1。
+        soft_body_apply_particle_impulse(world, id, b, 5.0, 0.0, 0.0);
+        world_step(world, 1.0 / 60.0);
+        assert_eq!(
+            soft_body_read_aabb(world, id, &mut mn, &mut mx, &mut ce),
+            Bool::TRUE
+        );
+        assert!(
+            mx.x > 1.0,
+            "max x should grow past 1 after moving rightmost particle right, got {}",
+            mx.x
+        );
+
+        world_destroy(world);
+    }
+
+    #[test]
+    fn soft_body_read_aabb_guards() {
+        // 未知 id / 空 world → Bool::FALSE；无粒子体返回 Bool::FALSE。
+        let world = make_world();
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        let mut mn = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        let mut mx = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        let mut ce = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        // 还没加粒子 → 无粒子体。
+        assert_eq!(
+            soft_body_read_aabb(world, id, &mut mn, &mut mx, &mut ce),
+            Bool::FALSE
+        );
+        // 未知 id。
+        assert_eq!(
+            soft_body_read_aabb(world, u32::MAX, &mut mn, &mut mx, &mut ce),
+            Bool::FALSE
+        );
+        // 空 world。
+        assert_eq!(
+            soft_body_read_aabb(std::ptr::null_mut(), id, &mut mn, &mut mx, &mut ce),
+            Bool::FALSE
+        );
         world_destroy(world);
     }
 }
