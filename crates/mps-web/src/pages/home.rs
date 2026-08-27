@@ -13,6 +13,12 @@ use crate::pages::architecture::Architecture;
 use crate::pages::arena::Arena;
 use crate::pages::batch::Batch;
 use crate::pages::cosmos::Cosmos;
+use crate::pages::cosmos_arena::CosmosArena;
+use crate::pages::cosmos_flight::CosmosFlight;
+use crate::pages::cosmos_gravity::CosmosGravity;
+use crate::pages::cosmos_integrator::CosmosIntegrator;
+use crate::pages::cosmos_orbit::CosmosOrbit;
+use crate::pages::cosmos_world::CosmosWorld;
 use crate::pages::events::Events;
 use crate::pages::ffm::Ffm;
 use crate::pages::formula::Formula;
@@ -80,6 +86,12 @@ pub fn Home() -> Element {
             Arena {}
             Batch {}
             Cosmos {}
+            CosmosWorld {}
+            CosmosGravity {}
+            CosmosIntegrator {}
+            CosmosOrbit {}
+            CosmosFlight {}
+            CosmosArena {}
             Jni {}
             Ffm {}
             Api {}

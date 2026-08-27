@@ -46,7 +46,12 @@ pub fn Sidebar() -> Element {
                 details { class: "nav-group", open: true,
                     summary { class: "nav-group-title", { t!("nav-group-cosmos") } }
                     a { class: "nav-link", href: "#sec-cosmos", { t!("nav-cosmos") } }
-                    a { class: "nav-link", href: "#sec-cosmos-class", { t!("nav-cosmos-class") } }
+                    a { class: "nav-link", href: "#sec-cosmos-world", { t!("nav-cosmos-world") } }
+                    a { class: "nav-link", href: "#sec-cosmos-gravity", { t!("nav-cosmos-gravity") } }
+                    a { class: "nav-link", href: "#sec-cosmos-integrator", { t!("nav-cosmos-integrator") } }
+                    a { class: "nav-link", href: "#sec-cosmos-orbit", { t!("nav-cosmos-orbit") } }
+                    a { class: "nav-link", href: "#sec-cosmos-flight", { t!("nav-cosmos-flight") } }
+                    a { class: "nav-link", href: "#sec-cosmos-arena", { t!("nav-cosmos-arena") } }
                 }
                 details { class: "nav-group", open: true,
                     summary { class: "nav-group-title", { t!("nav-group-formula") } }
