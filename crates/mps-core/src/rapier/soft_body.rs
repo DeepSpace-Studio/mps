@@ -35,7 +35,9 @@ use crate::rapier::ffi::{
 };
 use rapier3d::dynamics::soft_body::TearCriterion;
 use rapier3d::math::Vector;
-use rapier3d::prelude::soft_body::{CohesionParams, PlasticityParams, SelfCollisionParams, Wind};
+use rapier3d::prelude::soft_body::{
+    CohesionParams, PlasticityParams, SelfCollisionParams, ThermalParams, ViscoelasticParams, Wind,
+};
 use rapier3d::prelude::soft_body::{SoftBody, SoftBodyId, SoftSolver};
 use rapier3d::prelude::{
     ColliderBuilder, ColliderHandle, RigidBodyBuilder, RigidBodyHandle, RigidBodyType,
@@ -1025,6 +1027,118 @@ pub extern "C" fn soft_body_set_anisotropy(
             None
         };
         sb.set_anisotropy(axes);
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// # Phase 27 — 设置黏弹性（率相关）本构
+///
+/// `enabled != 0` 且 `rate_coefficient >= 0`：开启 Kelvin-Voigt 式应变率硬化——
+/// 有效刚度 `k_eff = k·(1 + rate_coefficient·|d(strain)/dt|)`，快速拉伸的边比缓慢
+/// 拉伸更硬（聚合物/黏弹性行为）。`enabled == 0` 或非法参数关闭（纯弹性）。
+///
+/// # Returns
+/// `Bool::TRUE` 成功（含关闭）；非法参数返回 `Bool::FALSE`。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_set_viscoelastic(
+    world: *mut WorldHandle,
+    id: u32,
+    rate_coefficient: f64,
+    enabled: u8,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !rate_coefficient.is_finite() {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_viscoelastic: non-finite coefficient",
+            );
+            return Bool::FALSE;
+        }
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_set_viscoelastic: unknown id");
+            return Bool::FALSE;
+        };
+        let ok = if enabled != 0 && rate_coefficient >= 0.0 {
+            sb.set_viscoelastic(Some(rapier3d::prelude::soft_body::ViscoelasticParams {
+                rate_coefficient,
+            }))
+        } else {
+            sb.set_viscoelastic(None)
+        };
+        if !ok {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_viscoelastic: invalid coefficient",
+            );
+            return Bool::FALSE;
+        }
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// # Phase 27 — 设置均匀温度场（热膨胀 + 温度相关模量）
+///
+/// `enabled != 0` 且参数有限、`stiffness_temp_coeff·|temp−ambient| < 1`：开启温度场——
+/// 每条边静止长度按 `rest·(1 + expansion·ΔT)` 膨胀，刚度按 `k·(1 − stiffness_temp_coeff·ΔT)`
+/// 软化。关闭（`enabled == 0` 或非法）回到等温。
+///
+/// # Returns
+/// `Bool::TRUE` 成功（含关闭）；非法参数返回 `Bool::FALSE`。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_set_thermal(
+    world: *mut WorldHandle,
+    id: u32,
+    temp: f64,
+    ambient: f64,
+    expansion: f64,
+    stiffness_temp_coeff: f64,
+    enabled: u8,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !temp.is_finite()
+            || !ambient.is_finite()
+            || !expansion.is_finite()
+            || !stiffness_temp_coeff.is_finite()
+        {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_thermal: non-finite parameter",
+            );
+            return Bool::FALSE;
+        }
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_set_thermal: unknown id");
+            return Bool::FALSE;
+        };
+        let ok = if enabled != 0 {
+            sb.set_thermal(Some(rapier3d::prelude::soft_body::ThermalParams {
+                temp,
+                ambient,
+                expansion,
+                stiffness_temp_coeff,
+            }))
+        } else {
+            sb.set_thermal(None)
+        };
+        if !ok {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_thermal: invalid thermal params",
+            );
+            return Bool::FALSE;
+        }
         clear_error();
         Bool::TRUE
     })
@@ -2710,6 +2824,25 @@ fn sb_serialize_body(buf: &mut Vec<u8>, b: &SoftBody) {
         }
         None => sb_push_u8(buf, 0),
     }
+    // viscoelastic (Phase 27: rate-dependent constitutive)
+    match &b.viscoelastic {
+        Some(v) => {
+            sb_push_u8(buf, 1);
+            sb_push_f64(buf, v.rate_coefficient);
+        }
+        None => sb_push_u8(buf, 0),
+    }
+    // temperature (Phase 27: uniform thermal field)
+    match &b.temperature {
+        Some(th) => {
+            sb_push_u8(buf, 1);
+            sb_push_f64(buf, th.temp);
+            sb_push_f64(buf, th.ambient);
+            sb_push_f64(buf, th.expansion);
+            sb_push_f64(buf, th.stiffness_temp_coeff);
+        }
+        None => sb_push_u8(buf, 0),
+    }
     // plasticity
     match &b.plasticity {
         Some(p) => {
@@ -2888,6 +3021,21 @@ fn sb_deserialize_body(c: &mut SbCursor) -> Option<SoftBody> {
         0 => None,
         _ => Some(c.take_vec()?),
     };
+    let viscoelastic = match c.take_u8()? {
+        0 => None,
+        _ => Some(ViscoelasticParams {
+            rate_coefficient: c.take_f64()?,
+        }),
+    };
+    let temperature = match c.take_u8()? {
+        0 => None,
+        _ => Some(ThermalParams {
+            temp: c.take_f64()?,
+            ambient: c.take_f64()?,
+            expansion: c.take_f64()?,
+            stiffness_temp_coeff: c.take_f64()?,
+        }),
+    };
     let plasticity = match c.take_u8()? {
         0 => None,
         _ => Some(sb_deserialize_plasticity(c)?),
@@ -2923,6 +3071,8 @@ fn sb_deserialize_body(c: &mut SbCursor) -> Option<SoftBody> {
         substeps,
         tear,
         anisotropy,
+        viscoelastic,
+        temperature,
         plasticity,
         self_collision,
         cross_collision,

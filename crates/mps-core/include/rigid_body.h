@@ -4536,6 +4536,39 @@ Bool soft_body_set_anisotropy(struct WorldHandle *world,
                               uint8_t enabled);
 
 /**
+ * # Phase 27 — 设置黏弹性（率相关）本构
+ *
+ * `enabled != 0` 且 `rate_coefficient >= 0`：开启 Kelvin-Voigt 式应变率硬化——
+ * 有效刚度 `k_eff = k·(1 + rate_coefficient·|d(strain)/dt|)`，快速拉伸的边比缓慢
+ * 拉伸更硬（聚合物/黏弹性行为）。`enabled == 0` 或非法参数关闭（纯弹性）。
+ *
+ * # Returns
+ * `Bool::TRUE` 成功（含关闭）；非法参数返回 `Bool::FALSE`。
+ */
+Bool soft_body_set_viscoelastic(struct WorldHandle *world,
+                                uint32_t id,
+                                double rate_coefficient,
+                                uint8_t enabled);
+
+/**
+ * # Phase 27 — 设置均匀温度场（热膨胀 + 温度相关模量）
+ *
+ * `enabled != 0` 且参数有限、`stiffness_temp_coeff·|temp−ambient| < 1`：开启温度场——
+ * 每条边静止长度按 `rest·(1 + expansion·ΔT)` 膨胀，刚度按 `k·(1 − stiffness_temp_coeff·ΔT)`
+ * 软化。关闭（`enabled == 0` 或非法）回到等温。
+ *
+ * # Returns
+ * `Bool::TRUE` 成功（含关闭）；非法参数返回 `Bool::FALSE`。
+ */
+Bool soft_body_set_thermal(struct WorldHandle *world,
+                           uint32_t id,
+                           double temp,
+                           double ambient,
+                           double expansion,
+                           double stiffness_temp_coeff,
+                           uint8_t enabled);
+
+/**
  * # Phase 10 — 设置塑性参数（永久变形 / 像橡皮泥 / 记忆棉）
  *
  * 把 `id` 软体的塑性设为 `PlasticityParams { yield_strain, creep }`：

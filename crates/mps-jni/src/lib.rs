@@ -1745,6 +1745,10 @@ jni!(boolean softBodySetTearStress(long world, int id, double stressToBreak, int
 jni!(boolean softBodySetTearEnergy(long world, int id, double energyToBreak, int enabled) { sb::soft_body_set_tear_energy(m::<WH>(world), id as u32, energyToBreak, enabled as u8).0 as jbyte });
 // Phase 27: 体级正交各向异性刚度轴
 jni!(boolean softBodySetAnisotropy(long world, int id, double x, double y, double z, int enabled) { sb::soft_body_set_anisotropy(m::<WH>(world), id as u32, x, y, z, enabled as u8).0 as jbyte });
+// Phase 27: 黏弹性（率相关）本构
+jni!(boolean softBodySetViscoelastic(long world, int id, double rateCoefficient, int enabled) { sb::soft_body_set_viscoelastic(m::<WH>(world), id as u32, rateCoefficient, enabled as u8).0 as jbyte });
+// Phase 27: 均匀温度场（热膨胀 + 温度相关模量）
+jni!(boolean softBodySetThermal(long world, int id, double temp, double ambient, double expansion, double stiffnessTempCoeff, int enabled) { sb::soft_body_set_thermal(m::<WH>(world), id as u32, temp, ambient, expansion, stiffnessTempCoeff, enabled as u8).0 as jbyte });
 // Phase 10: 塑性（永久变形，橡皮泥/记忆棉）
 jni!(boolean softBodySetPlasticity(long world, int id, double yieldStrain, double creep, int enabled) { sb::soft_body_set_plasticity(m::<WH>(world), id as u32, yieldStrain, creep, enabled as u8).0 as jbyte });
 // Phase 11: 充气/气压（闭合三角网格沿法向吹胀）

@@ -31,10 +31,11 @@ mod tests {
         soft_body_set_particle_velocity, soft_body_set_plasticity, soft_body_set_pressure,
         soft_body_set_self_collision, soft_body_set_self_collision_friction,
         soft_body_set_spring_stiffness, soft_body_set_substeps, soft_body_set_tear_energy,
-        soft_body_set_tear_strain, soft_body_set_tear_stress, soft_body_set_volume_conservation,
-        soft_body_sleep, soft_body_state_size, soft_body_subdivide_tetrahedra,
-        soft_body_total_volume, soft_body_voxel_build, soft_body_voxel_dig, soft_body_wake,
-        soft_chain_create, soft_chain_node_handles,
+        soft_body_set_tear_strain, soft_body_set_tear_stress, soft_body_set_thermal,
+        soft_body_set_viscoelastic, soft_body_set_volume_conservation, soft_body_sleep,
+        soft_body_state_size, soft_body_subdivide_tetrahedra, soft_body_total_volume,
+        soft_body_voxel_build, soft_body_voxel_dig, soft_body_wake, soft_chain_create,
+        soft_chain_node_handles,
     };
     use mps_core::rapier::voxel::{collider_builder_create_voxels, collider_voxel_edit};
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
@@ -1941,6 +1942,150 @@ mod tests {
         assert_eq!(
             soft_body_set_anisotropy(world, id, 0.0, 0.0, 0.0, 0),
             Bool::TRUE
+        );
+        world_destroy(world);
+    }
+
+    // ── Phase 27: 黏弹性（率相关）本构 — 快拉比慢拉更硬、下坠更少 ──────────────────
+    #[test]
+    fn soft_body_viscoelastic_rate_stiffening() {
+        let world = make_world();
+        assert!(!world.is_null());
+        let mk = |w: *mut WorldHandle, ve: f64| -> (u32, u32, u32) {
+            let id = soft_body_create(
+                w,
+                Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+            );
+            let top = soft_body_add_particle(w, id, 0.0, 1.0, 0.0, 1.0, Bool::TRUE);
+            let bot = soft_body_add_particle(w, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
+            assert_eq!(
+                soft_body_add_spring(w, id, top, bot, 100.0, 0.0),
+                Bool::TRUE
+            );
+            if ve >= 0.0 {
+                assert_eq!(soft_body_set_viscoelastic(w, id, ve, 1), Bool::TRUE);
+            }
+            (id, top, bot)
+        };
+        let (ctrl, _ct, cb) = mk(world, -1.0);
+        let (exp, _et, eb) = mk(world, 5.0);
+
+        let _ = soft_body_set_particle_velocity(world, ctrl, cb, 0.0, -30.0, 0.0);
+        let _ = soft_body_set_particle_velocity(world, exp, eb, 0.0, -30.0, 0.0);
+        soft_body_set_gravity(
+            world,
+            ctrl,
+            Vec3 {
+                x: 0.0,
+                y: -9.81,
+                z: 0.0,
+            },
+        );
+        soft_body_set_gravity(
+            world,
+            exp,
+            Vec3 {
+                x: 0.0,
+                y: -9.81,
+                z: 0.0,
+            },
+        );
+        for _ in 0..80 {
+            world_step(world, 1.0 / 60.0);
+        }
+
+        let dist = |id: u32, p: u32| -> f64 {
+            let mut pos = vec![Vec3::default(); soft_body_particle_count(world, id) as usize];
+            let _ = soft_body_read_particles(
+                world,
+                id,
+                pos.as_mut_ptr(),
+                std::ptr::null_mut(),
+                pos.len() as u32,
+            );
+            pos[p as usize].y
+        };
+        let y_ctrl = dist(ctrl, cb);
+        let y_exp = dist(exp, eb);
+        assert!(
+            y_exp > y_ctrl,
+            "viscoelastic (rate-stiffened) should sag less than elastic: y_exp={y_exp} <= y_ctrl={y_ctrl}"
+        );
+        world_destroy(world);
+    }
+
+    // ── Phase 27: 温度场 — 升温使静止长度膨胀 + 刚度软化 → 同载下拉伸更多 ────────
+    #[test]
+    fn soft_body_thermal_field_expands_and_softens() {
+        let world = make_world();
+        assert!(!world.is_null());
+        let mk = |w: *mut WorldHandle, hot: bool| -> (u32, u32, u32) {
+            let id = soft_body_create(
+                w,
+                Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+            );
+            let top = soft_body_add_particle(w, id, 0.0, 1.0, 0.0, 1.0, Bool::TRUE);
+            let bot = soft_body_add_particle(w, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
+            assert_eq!(
+                soft_body_add_spring(w, id, top, bot, 100.0, 0.0),
+                Bool::TRUE
+            );
+            if hot {
+                assert_eq!(
+                    soft_body_set_thermal(w, id, 373.15, 273.15, 0.001, 0.002, 1),
+                    Bool::TRUE
+                );
+            }
+            (id, top, bot)
+        };
+        let (cold, _c, cbot) = mk(world, false);
+        let (hot, _h, hbot) = mk(world, true);
+
+        soft_body_set_gravity(
+            world,
+            cold,
+            Vec3 {
+                x: 0.0,
+                y: -9.81,
+                z: 0.0,
+            },
+        );
+        soft_body_set_gravity(
+            world,
+            hot,
+            Vec3 {
+                x: 0.0,
+                y: -9.81,
+                z: 0.0,
+            },
+        );
+        for _ in 0..120 {
+            world_step(world, 1.0 / 60.0);
+        }
+        let stretch = |id: u32, p: u32| -> f64 {
+            let mut pos = vec![Vec3::default(); soft_body_particle_count(world, id) as usize];
+            let _ = soft_body_read_particles(
+                world,
+                id,
+                pos.as_mut_ptr(),
+                std::ptr::null_mut(),
+                pos.len() as u32,
+            );
+            (1.0 - pos[p as usize].y).abs()
+        };
+        let s_cold = stretch(cold, cbot);
+        let s_hot = stretch(hot, hbot);
+        assert!(
+            s_hot > s_cold,
+            "heated body should stretch more (thermal expansion + softer modulus): s_hot={s_hot} <= s_cold={s_cold}"
         );
         world_destroy(world);
     }
