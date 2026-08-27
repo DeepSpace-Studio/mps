@@ -228,9 +228,14 @@ impl AnvilKitAppState {
                 z: c.z,
             })
             .collect();
+        let g = world.inner.gravity;
         let id = soft_body_build_tetra_mesh(
             world,
-            world.inner.gravity,
+            Vec3 {
+                x: g.x,
+                y: g.y,
+                z: g.z,
+            },
             particles.as_ptr(),
             particles.len() as u32,
             tets.as_ptr(),
@@ -244,6 +249,7 @@ impl AnvilKitAppState {
         }
         let sid = SoftBodyId(id);
         // If the entity should be pinned, pin the center-most corner (corner 0).
+        #[allow(clippy::collapsible_if)]
         if pin {
             if let Some(body) = world.inner.soft_bodies.get_mut(sid) {
                 // Re-pin by zeroing the first particle's inverse mass.
