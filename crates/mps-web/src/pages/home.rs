@@ -26,8 +26,8 @@ use crate::pages::gravity::Gravity;
 use crate::pages::integrators::Integrators;
 use crate::pages::jni::Jni;
 use crate::pages::quickstart::Quickstart;
-use crate::pages::voxel::Voxel;
 use crate::pages::soft_body::SoftBody;
+use crate::pages::voxel::Voxel;
 
 /// The whole documentation, rendered as one inline page. A sticky TOC provides
 /// in-page navigation via native `#sec-...` anchor scrolling — no router, no
