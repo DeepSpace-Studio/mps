@@ -19,9 +19,10 @@ mod tests {
         soft_body_clear_wind, soft_body_configure_solver, soft_body_count, soft_body_create,
         soft_body_destroy, soft_body_detach_particle, soft_body_enable_collision,
         soft_body_get_particle, soft_body_is_sleeping, soft_body_kinetic_energy,
-        soft_body_particle_count, soft_body_read_edges, soft_body_read_particles,
-        soft_body_read_stress, soft_body_read_tetrahedra, soft_body_read_triangles,
-        soft_body_remove_particle, soft_body_set_cohesion, soft_body_set_cross_collision,
+        soft_body_particle_count, soft_body_read_edges, soft_body_read_normals,
+        soft_body_read_particles, soft_body_read_stress, soft_body_read_tetrahedra,
+        soft_body_read_triangles, soft_body_remove_particle, soft_body_scale_rest_length,
+        soft_body_set_cohesion, soft_body_set_cross_collision,
         soft_body_set_cross_collision_friction, soft_body_set_damping,
         soft_body_set_distance_constraint_compliance,
         soft_body_set_distance_constraint_compression, soft_body_set_gravity,
@@ -3517,6 +3518,104 @@ mod tests {
         // Null world → 0 (no panic).
         assert_eq!(
             soft_body_read_stress(std::ptr::null_mut(), 0, std::ptr::null_mut(), 0),
+            0
+        );
+    }
+    // ── Phase 23a: 静止长度缩放 ───────────────────────────────────────────────
+    #[test]
+    fn soft_body_scale_rest_length_scales_strain() {
+        let world = make_world();
+        assert!(!world.is_null());
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        // Two particles at distance 1.0 along x.
+        let a = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE) as usize;
+        let b = soft_body_add_particle(world, id, 1.0, 0.0, 0.0, 1.0, Bool::FALSE) as usize;
+        soft_body_add_spring(world, id, a as u32, b as u32, 100.0, 5.0);
+
+        // Before scaling, the spring is at rest → strain 0.
+        let mut s0 = vec![0.0f64; 1];
+        assert_eq!(soft_body_read_stress(world, id, s0.as_mut_ptr(), 1), 1);
+        assert!((s0[0]).abs() < 1e-9, "strain should be 0 at rest");
+
+        // Scale rest length x2 → current len 1.0, rest 2.0 → strain = (1-2)/2 = -0.5.
+        let scaled = soft_body_scale_rest_length(world, id, 2.0);
+        assert_eq!(scaled, 1);
+        let mut s1 = vec![0.0f64; 1];
+        assert_eq!(soft_body_read_stress(world, id, s1.as_mut_ptr(), 1), 1);
+        assert!(
+            (s1[0] + 0.5).abs() < 1e-9,
+            "strain should be -0.5 after 2x scale, got {}",
+            s1[0]
+        );
+
+        // Invalid factor (0) → 0, rest length unchanged (strain stays -0.5).
+        assert_eq!(soft_body_scale_rest_length(world, id, 0.0), 0);
+        let mut s2 = vec![0.0f64; 1];
+        assert_eq!(soft_body_read_stress(world, id, s2.as_mut_ptr(), 1), 1);
+        assert!(
+            (s2[0] + 0.5).abs() < 1e-9,
+            "rest length must be unchanged after invalid scale"
+        );
+
+        world_destroy(world);
+    }
+
+    // ── Phase 23b: 逐三角形法线回读 ─────────────────────────────────────────────
+    #[test]
+    fn soft_body_read_normals_computes_unit_normal() {
+        let world = make_world();
+        assert!(!world.is_null());
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        // Triangle in the XY plane: (0,0,0)-(1,0,0)-(0,1,0) → normal +Z.
+        let p0 = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        let p1 = soft_body_add_particle(world, id, 1.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        let p2 = soft_body_add_particle(world, id, 0.0, 1.0, 0.0, 1.0, Bool::FALSE);
+        assert_eq!(soft_body_add_triangle(world, id, p0, p1, p2), Bool::TRUE);
+
+        let count = soft_body_read_normals(world, id, std::ptr::null_mut(), 0);
+        assert_eq!(count, 1);
+
+        let mut nrm = vec![0.0f64; 3];
+        let read = soft_body_read_normals(world, id, nrm.as_mut_ptr(), nrm.len() as u32);
+        assert_eq!(read, 1);
+        assert!((nrm[0]).abs() < 1e-9, "nx should be 0");
+        assert!((nrm[1]).abs() < 1e-9, "ny should be 0");
+        assert!(
+            (nrm[2] - 1.0).abs() < 1e-9,
+            "nz should be +1, got {}",
+            nrm[2]
+        );
+
+        // Capacity clamp: 0 slots → still returns count, no panic.
+        assert_eq!(soft_body_read_normals(world, id, nrm.as_mut_ptr(), 0), 1);
+        // Unknown id → 0, no panic.
+        assert_eq!(
+            soft_body_read_normals(world, u32::MAX, std::ptr::null_mut(), 0),
+            0
+        );
+
+        world_destroy(world);
+    }
+
+    #[test]
+    fn soft_body_scale_rest_length_rejects_bad_world() {
+        assert_eq!(soft_body_scale_rest_length(std::ptr::null_mut(), 0, 2.0), 0);
+        assert_eq!(
+            soft_body_read_normals(std::ptr::null_mut(), 0, std::ptr::null_mut(), 0),
             0
         );
     }

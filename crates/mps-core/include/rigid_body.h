@@ -5004,6 +5004,43 @@ uint32_t soft_body_read_stress(const struct WorldHandle *world,
                                uint32_t capacity);
 
 /**
+ * Uniformly scale the rest length of every structural edge (springs + XPBD
+ * distance constraints) in a soft body by `factor`.
+ *
+ * This is a one-shot state mutation (not a per-step force): it multiplies each
+ * `Spring::rest_length` and `DistanceConstraint::rest` by `factor`. It is the
+ * cheap primitive behind "breathing" / "muscle contraction" / "squeeze-stretch"
+ * effects — previously users had to retune every edge by hand. `factor` must be
+ * strictly positive; a non-positive value returns `ERR_INVALID_ARGUMENT` and
+ * touches nothing.
+ *
+ * Returns the number of edges scaled (springs + distance constraints), or 0 on
+ * null world / unknown id / invalid factor.
+ */
+uint32_t soft_body_scale_rest_length(struct WorldHandle *world, uint32_t id, double factor);
+
+/**
+ * Read per-triangle unit normals for a soft body.
+ *
+ * Triangles are enumerated in the order returned by [`soft_body_read_triangles`].
+ * For each triangle `T = (i0, i1, i2)` the function writes the unit normal
+ * `(p1 - p0) × (p2 - p0)` normalized into `out_normals[3*k .. 3*k+3]`. Returns
+ * the triangle count (so the caller can size its buffer); when `out_normals` is
+ * null or `capacity` is 0 the count is returned without writing. Degenerate
+ * triangles yield a zero normal.
+ *
+ * Pure read-out for rendering / debug visualisation; does not affect the solver.
+ *
+ * # Safety
+ * `world` must be a valid world pointer. `out_normals` must point to an array of
+ * at least `capacity` `f64` elements when non-null.
+ */
+uint32_t soft_body_read_normals(const struct WorldHandle *world,
+                                uint32_t id,
+                                double *out_normals,
+                                uint32_t capacity);
+
+/**
  * Dig out a single voxel cell of a soft body built via `soft_body_voxel_build`,
  * removing the particle that occupies it (plus its incident springs/constraints)
  * and rebuilding the voxel→particle map so further digs stay consistent.

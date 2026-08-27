@@ -2366,6 +2366,128 @@ pub extern "C" fn soft_body_read_stress(
     })
 }
 
+// ── Phase 23a: 静止长度缩放（纯状态缩放，供呼吸 / 生长 / 挤压动画）──────────────
+//
+// 现有 FFI 能加弹簧 / 距离约束并设刚度，但**不能整体缩放静止长度**——做"呼吸"
+// "肌肉收缩""被挤压拉长"这类动画时只能逐条改，或改不动（XPBD 距离约束 rest 是
+// 加时捕获的）。补一个纯状态缩放：把所有弹簧 rest_length 与距离约束 rest 乘
+// factor。不改 fork、不动求解器，和 Phase 22 同属"纯 mps-core 追加"。
+
+/// Uniformly scale the rest length of every structural edge (springs + XPBD
+/// distance constraints) in a soft body by `factor`.
+///
+/// This is a one-shot state mutation (not a per-step force): it multiplies each
+/// `Spring::rest_length` and `DistanceConstraint::rest` by `factor`. It is the
+/// cheap primitive behind "breathing" / "muscle contraction" / "squeeze-stretch"
+/// effects — previously users had to retune every edge by hand. `factor` must be
+/// strictly positive; a non-positive value returns `ERR_INVALID_ARGUMENT` and
+/// touches nothing.
+///
+/// Returns the number of edges scaled (springs + distance constraints), or 0 on
+/// null world / unknown id / invalid factor.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_scale_rest_length(
+    world: *mut WorldHandle,
+    id: u32,
+    factor: f64,
+) -> u32 {
+    ffi_guard(0, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(
+                ERR_NULL_POINTER,
+                "soft_body_scale_rest_length: world is null",
+            );
+            return 0;
+        };
+        if !factor.is_finite() || factor <= 0.0 {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_scale_rest_length: factor must be > 0",
+            );
+            return 0;
+        }
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_scale_rest_length: unknown id");
+            return 0;
+        };
+        let n = body.springs.len() + body.distance_constraints.len();
+        for s in body.springs.iter_mut() {
+            s.rest_length *= factor;
+        }
+        for d in body.distance_constraints.iter_mut() {
+            d.rest *= factor;
+        }
+        clear_error();
+        n as u32
+    })
+}
+
+// ── Phase 23b: 逐三角形法线回读（纯只读，供渲染层打光 / 调试可视化）────────────
+//
+// 渲染层要正确地给软体 / 布料打光，需要逐三角形法线。现在能回读三角形拓扑
+// （read_triangles），但法线得上层自己按粒子位置算。这里补一个纯只读回读：
+// 对每个三角形现算法线（(p1-p0)×(p2-p0) 归一化）写出 3 个 f64。长度从现有粒子
+// 位置现算，不改 fork、不动求解器，与 Phase 22 应力回读同源。
+
+/// Read per-triangle unit normals for a soft body.
+///
+/// Triangles are enumerated in the order returned by [`soft_body_read_triangles`].
+/// For each triangle `T = (i0, i1, i2)` the function writes the unit normal
+/// `(p1 - p0) × (p2 - p0)` normalized into `out_normals[3*k .. 3*k+3]`. Returns
+/// the triangle count (so the caller can size its buffer); when `out_normals` is
+/// null or `capacity` is 0 the count is returned without writing. Degenerate
+/// triangles yield a zero normal.
+///
+/// Pure read-out for rendering / debug visualisation; does not affect the solver.
+///
+/// # Safety
+/// `world` must be a valid world pointer. `out_normals` must point to an array of
+/// at least `capacity` `f64` elements when non-null.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_read_normals(
+    world: *const WorldHandle,
+    id: u32,
+    out_normals: *mut f64,
+    capacity: u32,
+) -> u32 {
+    ffi_guard(0, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_read_normals: world is null");
+            return 0;
+        };
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_read_normals: unknown id");
+            return 0;
+        };
+        let n = body.triangles.len();
+        let cap = capacity as usize;
+        if !out_normals.is_null() && cap > 0 {
+            let slice = unsafe { std::slice::from_raw_parts_mut(out_normals, cap) };
+            for (k, t) in body.triangles.iter().enumerate().take(cap / 3) {
+                let base = k * 3;
+                let p0 = body.particles[t[0] as usize].pos;
+                let p1 = body.particles[t[1] as usize].pos;
+                let p2 = body.particles[t[2] as usize].pos;
+                let nrm = (p1 - p0).cross(p2 - p0);
+                let len = nrm.length();
+                let (nx, ny, nz) = if len > 1e-12 {
+                    let inv = 1.0 / len;
+                    (nrm.x * inv, nrm.y * inv, nrm.z * inv)
+                } else {
+                    (0.0, 0.0, 0.0)
+                };
+                slice[base] = nx;
+                slice[base + 1] = ny;
+                slice[base + 2] = nz;
+            }
+        }
+        clear_error();
+        n as u32
+    })
+}
+
 // ── Phase 5d: 区块破坏 → 软体重建联动（Minecraft 闭环）──────────────────────
 
 //

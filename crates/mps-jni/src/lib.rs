@@ -1714,6 +1714,8 @@ jni!(int softBodyReadEdges(long world, int id, long out_edges, int capacity) { s
 jni!(int softBodyReadTetrahedra(long world, int id, long out_tets, int capacity) { sb::soft_body_read_tetrahedra(cp::<WH>(world), id as u32, pm::<u32>(out_tets), capacity as u32) as jint });
 jni!(int softBodyReadTriangles(long world, int id, long out_tris, int capacity) { sb::soft_body_read_triangles(cp::<WH>(world), id as u32, pm::<u32>(out_tris), capacity as u32) as jint });
 jni!(int softBodyReadStress(long world, int id, long out_strain, int capacity) { sb::soft_body_read_stress(cp::<WH>(world), id as u32, pm::<f64>(out_strain), capacity as u32) as jint });
+jni!(int softBodyScaleRestLength(long world, int id, double factor) { sb::soft_body_scale_rest_length(m::<WH>(world), id as u32, factor) as jint });
+jni!(int softBodyReadNormals(long world, int id, long out_normals, int capacity) { sb::soft_body_read_normals(cp::<WH>(world), id as u32, pm::<f64>(out_normals), capacity as u32) as jint });
 
 // ── Phase 7: 风场/空气阻力 + 休眠 + 诊断 ──────────────────────────────────
 jni!(boolean softBodyApplyWind(long world, int id, double ax, double ay, double az, double drag) { sb::soft_body_apply_wind(m::<WH>(world), id as u32, Vec3 { x: ax, y: ay, z: az }, drag).0 as jbyte });
