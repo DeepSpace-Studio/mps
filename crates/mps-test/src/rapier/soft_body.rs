@@ -3905,7 +3905,7 @@ mod tests {
         assert!((vel.x - 2.0).abs() < 1e-9 && (vel.y - 3.0).abs() < 1e-9);
 
         // 施加一步：位置应沿 v 平移（无重力、无约束）。
-        let before = pos.clone();
+        let before = pos;
         world_step(world, 1.0 / 60.0);
         assert_eq!(
             soft_body_get_particle(world, id, free, &mut pos, &mut vel),
