@@ -1726,6 +1726,12 @@ jni!(int softBodyReadSurfaceMesh(long world, int id, long out_verts, int vert_ca
 jni!(int softBodyReadSurfaceTriangleCount(long world, int id) {
     sb::soft_body_read_surface_triangle_count(cp::<WH>(world), id as u32) as jint
 });
+jni!(int softBodyStepMassSpring(long world, int id, double dt) {
+    sb::soft_body_step_mass_spring(m::<WH>(world), id as u32, dt) as jint
+});
+jni!(int softBodyStepImplicit(long world, int id, double dt) {
+    sb::soft_body_step_implicit(m::<WH>(world), id as u32, dt) as jint
+});
 jni!(int softBodyReadStress(long world, int id, long out_strain, int capacity) { sb::soft_body_read_stress(cp::<WH>(world), id as u32, pm::<f64>(out_strain), capacity as u32) as jint });
 jni!(int softBodyScaleRestLength(long world, int id, double factor) { sb::soft_body_scale_rest_length(m::<WH>(world), id as u32, factor) as jint });
 jni!(int softBodyReadNormals(long world, int id, long out_normals, int capacity) { sb::soft_body_read_normals(cp::<WH>(world), id as u32, pm::<f64>(out_normals), capacity as u32) as jint });

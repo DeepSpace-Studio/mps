@@ -26,8 +26,8 @@
 //! point-mass + `SoftBody` structures; this module is the route-A entry point.
 
 use crate::rapier::error::{
-    ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, clear_error, ffi_guard,
-    set_error,
+    ERR_CAPACITY, ERR_INTERNAL, ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, ERR_OK,
+    clear_error, ffi_guard, set_error,
 };
 use crate::rapier::ffi::{
     Bool, RigidBodyHandleRaw, Sphere, Vec3, WorldHandle, pack_rigid_body_handle,
@@ -3457,6 +3457,50 @@ pub extern "C" fn soft_body_read_surface_triangle_count(world: *const WorldHandl
         };
         clear_error();
         body.triangles.len() as u32
+    })
+}
+
+/// Phase 27 (B8): advances one soft body with the **implicit (backward-Euler) reference
+/// integrator** instead of the world's default solver. This is a comparison path:
+/// for stiff springs where `step_mass_spring` (explicit) blows up, the implicit step
+/// stays bounded. See `SoftBody::step_implicit_euler` (fork) for the linear-system
+/// formulation. Returns 0 on success, or an error code if `world`/`id` is invalid.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_step_mass_spring(world: *mut WorldHandle, id: u32, dt: f64) -> u32 {
+    ffi_guard(ERR_INTERNAL, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(
+                ERR_NULL_POINTER,
+                "soft_body_step_mass_spring: world is null",
+            );
+            return ERR_NULL_POINTER;
+        };
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_step_mass_spring: unknown id");
+            return ERR_NOT_FOUND;
+        };
+        body.step_mass_spring(dt);
+        clear_error();
+        ERR_OK
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_step_implicit(world: *mut WorldHandle, id: u32, dt: f64) -> u32 {
+    ffi_guard(ERR_INTERNAL, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_step_implicit: world is null");
+            return ERR_NULL_POINTER;
+        };
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_step_implicit: unknown id");
+            return ERR_NOT_FOUND;
+        };
+        body.step_implicit_euler(dt);
+        clear_error();
+        ERR_OK
     })
 }
 

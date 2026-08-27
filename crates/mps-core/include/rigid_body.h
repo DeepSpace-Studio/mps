@@ -5200,6 +5200,17 @@ uint32_t soft_body_read_surface_mesh(const struct WorldHandle *world,
 uint32_t soft_body_read_surface_triangle_count(const struct WorldHandle *world, uint32_t id);
 
 /**
+ * Phase 27 (B8): advances one soft body with the **implicit (backward-Euler) reference
+ * integrator** instead of the world's default solver. This is a comparison path:
+ * for stiff springs where `step_mass_spring` (explicit) blows up, the implicit step
+ * stays bounded. See `SoftBody::step_implicit_euler` (fork) for the linear-system
+ * formulation. Returns 0 on success, or an error code if `world`/`id` is invalid.
+ */
+uint32_t soft_body_step_mass_spring(struct WorldHandle *world, uint32_t id, double dt);
+
+uint32_t soft_body_step_implicit(struct WorldHandle *world, uint32_t id, double dt);
+
+/**
  * Read per-edge normalized strain (stress proxy) for a soft body.
  *
  * Edges are enumerated in the same order as [`soft_body_read_edges`]: every
