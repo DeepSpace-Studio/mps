@@ -1710,6 +1710,9 @@ jni!(boolean softBodyRemoveParticle(long world, int id, int index) { sb::soft_bo
 jni!(boolean softBodyApplyParticleImpulse(long world, int id, int index, double fx, double fy, double fz) { sb::soft_body_apply_particle_impulse(m::<WH>(world), id as u32, index as u32, fx, fy, fz).0 as jbyte });
 jni!(boolean softBodyReadAabb(long world, int id, long out_min, long out_max, long out_centroid) { sb::soft_body_read_aabb(cp::<WH>(world), id as u32, pm::<Vec3>(out_min), pm::<Vec3>(out_max), pm::<Vec3>(out_centroid)).0 as jbyte });
 jni!(boolean softBodyDestroy(long world, int id) { sb::soft_body_destroy(m::<WH>(world), id as u32).0 as jbyte });
+jni!(int softBodyStateSize(long world, int id) { sb::soft_body_state_size(cp::<WH>(world), id as u32) as jint });
+jni!(boolean softBodySaveState(long world, int id, long out, int out_capacity) { sb::soft_body_save_state(cp::<WH>(world), id as u32, pm::<u8>(out), out_capacity as u32).0 as jbyte });
+jni!(boolean softBodyRestoreState(long world, int id, long data, int data_len) { sb::soft_body_restore_state(m::<WH>(world), id as u32, pm::<u8>(data), data_len as u32).0 as jbyte });
 
 // Phase 5i: 拓扑读回（渲染用）— 批量读回粒子位置/逆质量 + 边 + 四面体。
 jni!(int softBodyReadParticles(long world, int id, long out_pos, long out_inv_mass, int capacity) { sb::soft_body_read_particles(cp::<WH>(world), id as u32, pm::<Vec3>(out_pos), pm::<f64>(out_inv_mass), capacity as u32) as jint });

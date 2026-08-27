@@ -5002,12 +5002,38 @@ Bool soft_body_read_aabb(const struct WorldHandle *world,
                          Vec3 *out_centroid);
 
 /**
- * Destroy a soft body, freeing its storage. Other live `SoftBodyId`s remain
- * valid (the id slot becomes a tombstone). Returns `Bool::TRUE` on success.
- *
- * # Safety
- * `world` must be a valid world pointer.
+ * Return the exact serialized size (in bytes) of a soft body's state, or
+ * `u32::MAX` if `world` is null or `id` is unknown. Allocate a buffer of this
+ * size before calling [`soft_body_save_state`].
  */
+uint32_t soft_body_state_size(const struct WorldHandle *world, uint32_t id);
+
+/**
+ * Serialize a soft body's full state into `out` (capacity `out_capacity` bytes).
+ *
+ * Returns `Bool::TRUE` on success, or `Bool::FALSE` if `world`/`id` is invalid or
+ * the buffer is too small (`ERR_CAPACITY`). Call [`soft_body_state_size`] first to
+ * size the buffer. The blob is portable across bodies (feed it to
+ * [`soft_body_restore_state`] on the same or a new id).
+ */
+Bool soft_body_save_state(const struct WorldHandle *world,
+                          uint32_t id,
+                          uint8_t *out,
+                          uint32_t out_capacity);
+
+/**
+ * Restore a soft body's full state from `data` (length `data_len` bytes) into the
+ * body `id`. The body must already exist (created with [`soft_body_create`]); this
+ * replaces its entire state. Returns `Bool::FALSE` on a null world / unknown id /
+ * buffer underflow / magic-or-version mismatch (`ERR_INVALID_ARGUMENT`). A corrupt
+ * blob never leaves a half-built body — the whole state is built in a temporary
+ * first, then swapped in via `get_mut`.
+ */
+Bool soft_body_restore_state(struct WorldHandle *world,
+                             uint32_t id,
+                             const uint8_t *data,
+                             uint32_t data_len);
+
 Bool soft_body_destroy(struct WorldHandle *world, uint32_t id);
 
 /**

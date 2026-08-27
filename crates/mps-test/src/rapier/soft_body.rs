@@ -23,16 +23,17 @@ mod tests {
         soft_body_read_aabb, soft_body_read_contact_force, soft_body_read_edges,
         soft_body_read_normals, soft_body_read_particles, soft_body_read_stress,
         soft_body_read_tetrahedra, soft_body_read_triangles, soft_body_remove_particle,
-        soft_body_scale_rest_length, soft_body_set_cohesion, soft_body_set_cross_collision,
+        soft_body_restore_state, soft_body_save_state, soft_body_scale_rest_length,
+        soft_body_set_cohesion, soft_body_set_cross_collision,
         soft_body_set_cross_collision_friction, soft_body_set_damping,
         soft_body_set_distance_constraint_compliance,
         soft_body_set_distance_constraint_compression, soft_body_set_gravity,
         soft_body_set_plasticity, soft_body_set_pressure, soft_body_set_self_collision,
         soft_body_set_self_collision_friction, soft_body_set_spring_stiffness,
         soft_body_set_substeps, soft_body_set_tear_strain, soft_body_set_volume_conservation,
-        soft_body_sleep, soft_body_subdivide_tetrahedra, soft_body_total_volume,
-        soft_body_voxel_build, soft_body_voxel_dig, soft_body_wake, soft_chain_create,
-        soft_chain_node_handles,
+        soft_body_sleep, soft_body_state_size, soft_body_subdivide_tetrahedra,
+        soft_body_total_volume, soft_body_voxel_build, soft_body_voxel_dig, soft_body_wake,
+        soft_chain_create, soft_chain_node_handles,
     };
     use mps_core::rapier::voxel::{collider_builder_create_voxels, collider_voxel_edit};
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
@@ -4271,6 +4272,129 @@ mod tests {
         assert_eq!(soft_body_clone(world, u32::MAX), u32::MAX);
         // 空 world → u32::MAX。
         assert_eq!(soft_body_clone(std::ptr::null_mut(), id), u32::MAX);
+
+        world_destroy(world);
+    } // ── Phase 25 #5: 状态序列化 save/restore（纯 mps-core，零 fork 改动）───────
+    // SoftBody 不 derive Serialize，mps-core 手写 LE 二进制（de）序列化:
+    // soft_body_state_size + soft_body_save_state + soft_body_restore_state。
+    #[test]
+    fn soft_body_state_save_restore_roundtrip() {
+        let world = make_world();
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: -9.81,
+                z: 0.0,
+            },
+        );
+        let a = soft_body_add_particle(world, id, 0.0, 1.0, 0.0, 1.0, Bool::FALSE);
+        let b = soft_body_add_particle(world, id, 1.0, 1.0, 0.0, 1.0, Bool::FALSE);
+        soft_body_add_spring(world, id, a, b, 50.0, 0.1);
+        soft_body_add_distance_constraint(world, id, a, b, 0.01);
+
+        // 量出字节数并分配缓冲。
+        let size = soft_body_state_size(world, id);
+        assert!(
+            size > 0 && size != u32::MAX,
+            "state size should be positive"
+        );
+        let mut buf: Vec<u8> = vec![0u8; size as usize];
+
+        // 保存前记录 a 位置（含 y，受重力应为 1.0）。
+        let mut before = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        let mut bvel = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        assert_eq!(
+            soft_body_get_particle(world, id, a, &mut before, &mut bvel),
+            Bool::TRUE
+        );
+
+        // 保存。
+        assert_eq!(
+            soft_body_save_state(world, id, buf.as_mut_ptr(), buf.len() as u32),
+            Bool::TRUE
+        );
+        // 缓冲太小 → FALSE。
+        let mut tiny = [0u8; 4];
+        assert_eq!(
+            soft_body_save_state(world, id, tiny.as_mut_ptr(), 4),
+            Bool::FALSE
+        );
+
+        // 模拟状态变化：给 a 一个冲量（改速度；restore 也存速度）。
+        soft_body_apply_particle_impulse(world, id, a, 0.0, -3.0, 0.0);
+        let mut after = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        let mut avel = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        assert_eq!(
+            soft_body_get_particle(world, id, a, &mut after, &mut avel),
+            Bool::TRUE
+        );
+        assert!(
+            avel.y < -1e-9,
+            "state should have changed (vy<0) before restore, got {}",
+            avel.y
+        );
+        assert!(
+            (after.x - before.x).abs() < 1e-9,
+            "position unchanged within one frame (only velocity changed)"
+        );
+
+        // 从快照恢复 → 回到 before 状态。
+        assert_eq!(
+            soft_body_restore_state(world, id, buf.as_ptr(), buf.len() as u32),
+            Bool::TRUE
+        );
+        let mut restored = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        let mut rvel = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        assert_eq!(
+            soft_body_get_particle(world, id, a, &mut restored, &mut rvel),
+            Bool::TRUE
+        );
+        assert!(
+            (restored.x - before.x).abs() < 1e-9 && (restored.y - before.y).abs() < 1e-9,
+            "restored pos should match saved, before={:?} restored={:?}",
+            before,
+            restored
+        );
+        // 弹簧/约束数量应一致。
+        assert_eq!(soft_body_particle_count(world, id), 2);
+
+        // 损坏 blob → FALSE（改写 magic）。
+        let mut bad = buf.clone();
+        bad[0] = b'X';
+        assert_eq!(
+            soft_body_restore_state(world, id, bad.as_ptr(), bad.len() as u32),
+            Bool::FALSE
+        );
+        // 未知 id → FALSE。
+        assert_eq!(
+            soft_body_restore_state(world, u32::MAX, buf.as_ptr(), buf.len() as u32),
+            Bool::FALSE
+        );
 
         world_destroy(world);
     }

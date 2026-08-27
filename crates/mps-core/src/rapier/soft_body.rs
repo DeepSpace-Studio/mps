@@ -26,13 +26,15 @@
 //! point-mass + `SoftBody` structures; this module is the route-A entry point.
 
 use crate::rapier::error::{
-    ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, clear_error, ffi_guard, set_error,
+    ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, clear_error, ffi_guard,
+    set_error,
 };
 use crate::rapier::ffi::{
     Bool, RigidBodyHandleRaw, Sphere, Vec3, WorldHandle, pack_rigid_body_handle,
     unpack_rigid_body_handle, vec3_finite, vec3_from_rapier, vec3_to_rapier,
 };
 use rapier3d::math::Vector;
+use rapier3d::prelude::soft_body::{CohesionParams, PlasticityParams, SelfCollisionParams, Wind};
 use rapier3d::prelude::soft_body::{SoftBody, SoftBodyId, SoftSolver};
 use rapier3d::prelude::{
     ColliderBuilder, ColliderHandle, RigidBodyBuilder, RigidBodyHandle, RigidBodyType,
@@ -2282,6 +2284,545 @@ pub extern "C" fn soft_body_read_aabb(
 ///
 /// # Safety
 /// `world` must be a valid world pointer.
+/// Phase 25 #5: hand-rolled binary (de)serialization of a [`SoftBody`].
+///
+/// `SoftBody` does not derive `Serialize` (no `serde` feature on the fork), so we
+/// walk its public fields directly. The format is a fixed little-endian `u8` blob:
+///
+/// ```text
+/// MAGIC[2] = b"SB" | VERSION: u8 (1) | COUNT fields...
+/// ```
+///
+/// Every scalar is `f64` (rapier3d-f64 `Real`) written as 8 little-endian bytes;
+/// `u32` as 4 LE bytes; `bool` as 1 byte; `Vector` as 3×`f64`. `Option<T>` is a 1
+/// byte tag (0 = None, 1 = Some) followed by the payload. `SoftSolver` is 1 byte
+/// (0 = MassSpring, 1 = Xpbd) + the Xpbd payload when present. `RigidBodyHandle`
+/// (inside `SoftParticle::bound_body`) packs to `(u32 id, u32 generation)` via
+/// `into_raw_parts`.
+///
+/// The blob is written into a caller-supplied `*mut u8` buffer of `capacity`
+/// bytes; `soft_body_state_size` returns the exact size needed so the caller can
+/// allocate. `soft_body_restore_state` rebuilds a body at a (possibly new) id and
+/// returns `Bool::FALSE` on buffer underflow / magic mismatch so a corrupt blob
+/// cannot produce a half-built body.
+/// Pure mps-core: it only ever touches the `SoftBody`'s public fields via
+/// `SoftBodySet`'s `get`/`get_mut`. The fork is unchanged.
+const SB_MAGIC_0: u8 = b'S';
+const SB_MAGIC_1: u8 = b'B';
+const SB_VERSION: u8 = 1;
+
+// ── little-endian writers ───────────────────────────────────────────────────────
+fn sb_push_u8(buf: &mut Vec<u8>, v: u8) {
+    buf.push(v);
+}
+fn sb_push_u32(buf: &mut Vec<u8>, v: u32) {
+    buf.extend_from_slice(&v.to_le_bytes());
+}
+fn sb_push_f64(buf: &mut Vec<u8>, v: f64) {
+    buf.extend_from_slice(&v.to_le_bytes());
+}
+fn sb_push_bool(buf: &mut Vec<u8>, v: bool) {
+    buf.push(if v { 1 } else { 0 });
+}
+fn sb_push_vec(buf: &mut Vec<u8>, v: Vector) {
+    sb_push_f64(buf, v.x);
+    sb_push_f64(buf, v.y);
+    sb_push_f64(buf, v.z);
+}
+fn sb_push_option_f64(buf: &mut Vec<u8>, v: Option<f64>) {
+    match v {
+        Some(x) => {
+            sb_push_u8(buf, 1);
+            sb_push_f64(buf, x);
+        }
+        None => sb_push_u8(buf, 0),
+    }
+}
+
+// ── little-endian readers ────────────────────────────────────────────────────────
+struct SbCursor<'a> {
+    data: &'a [u8],
+    pos: usize,
+}
+impl<'a> SbCursor<'a> {
+    fn new(data: &'a [u8]) -> Self {
+        Self { data, pos: 0 }
+    }
+    fn take_u8(&mut self) -> Option<u8> {
+        let b = *self.data.get(self.pos)?;
+        self.pos += 1;
+        Some(b)
+    }
+    fn take_u32(&mut self) -> Option<u32> {
+        let s = self.data.get(self.pos..self.pos + 4)?;
+        self.pos += 4;
+        Some(u32::from_le_bytes([s[0], s[1], s[2], s[3]]))
+    }
+    fn take_f64(&mut self) -> Option<f64> {
+        let s = self.data.get(self.pos..self.pos + 8)?;
+        self.pos += 8;
+        Some(f64::from_le_bytes([
+            s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7],
+        ]))
+    }
+    fn take_bool(&mut self) -> Option<bool> {
+        Some(self.take_u8()? != 0)
+    }
+    fn take_vec(&mut self) -> Option<Vector> {
+        let x = self.take_f64()?;
+        let y = self.take_f64()?;
+        let z = self.take_f64()?;
+        Some(Vector { x, y, z })
+    }
+    fn take_option_f64(&mut self) -> Option<Option<f64>> {
+        match self.take_u8()? {
+            0 => Some(None),
+            _ => Some(Some(self.take_f64()?)),
+        }
+    }
+}
+
+fn sb_serialize_particle(buf: &mut Vec<u8>, p: &SoftParticle) {
+    sb_push_vec(buf, p.pos);
+    sb_push_vec(buf, p.vel);
+    sb_push_vec(buf, p.force);
+    sb_push_f64(buf, p.inv_mass);
+    match &p.bound_body {
+        Some(h) => {
+            sb_push_u8(buf, 1);
+            let (id, genid) = h.into_raw_parts();
+            sb_push_u32(buf, id);
+            sb_push_u32(buf, genid);
+        }
+        None => sb_push_u8(buf, 0),
+    }
+    sb_push_vec(buf, p.bound_local);
+}
+
+fn sb_serialize_wind(buf: &mut Vec<u8>, w: &Wind) {
+    sb_push_vec(buf, w.accel);
+    sb_push_f64(buf, w.drag);
+}
+
+fn sb_serialize_plasticity(buf: &mut Vec<u8>, p: &PlasticityParams) {
+    sb_push_f64(buf, p.yield_strain);
+    sb_push_f64(buf, p.creep);
+}
+
+fn sb_serialize_self_collision(buf: &mut Vec<u8>, s: &SelfCollisionParams) {
+    sb_push_f64(buf, s.radius);
+    sb_push_f64(buf, s.stiffness);
+    sb_push_option_f64(buf, s.friction);
+}
+
+fn sb_serialize_cohesion(buf: &mut Vec<u8>, c: &CohesionParams) {
+    sb_push_f64(buf, c.radius);
+    sb_push_f64(buf, c.stiffness);
+    sb_push_f64(buf, c.break_distance);
+}
+
+fn sb_serialize_body(buf: &mut Vec<u8>, b: &SoftBody) {
+    sb_push_u8(buf, SB_MAGIC_0);
+    sb_push_u8(buf, SB_MAGIC_1);
+    sb_push_u8(buf, SB_VERSION);
+    // particles
+    sb_push_u32(buf, b.particles.len() as u32);
+    for p in b.particles.iter() {
+        sb_serialize_particle(buf, p);
+    }
+    // springs
+    sb_push_u32(buf, b.springs.len() as u32);
+    for s in b.springs.iter() {
+        sb_push_u32(buf, s.a as u32);
+        sb_push_u32(buf, s.b as u32);
+        sb_push_f64(buf, s.rest_length);
+        sb_push_f64(buf, s.stiffness);
+        sb_push_f64(buf, s.damping);
+    }
+    // distance constraints
+    sb_push_u32(buf, b.distance_constraints.len() as u32);
+    for d in b.distance_constraints.iter() {
+        sb_push_u32(buf, d.a as u32);
+        sb_push_u32(buf, d.b as u32);
+        sb_push_f64(buf, d.rest);
+        sb_push_f64(buf, d.compliance);
+        sb_push_f64(buf, d.compression);
+    }
+    // tetrahedra (+ rest volumes)
+    sb_push_u32(buf, b.tetrahedra.len() as u32);
+    for t in b.tetrahedra.iter() {
+        sb_push_u32(buf, t[0]);
+        sb_push_u32(buf, t[1]);
+        sb_push_u32(buf, t[2]);
+        sb_push_u32(buf, t[3]);
+    }
+    sb_push_u32(buf, b.tetra_rest_volumes.len() as u32);
+    for v in b.tetra_rest_volumes.iter() {
+        sb_push_f64(buf, *v);
+    }
+    // triangles
+    sb_push_u32(buf, b.triangles.len() as u32);
+    for t in b.triangles.iter() {
+        sb_push_u32(buf, t[0]);
+        sb_push_u32(buf, t[1]);
+        sb_push_u32(buf, t[2]);
+    }
+    // solver
+    match b.solver {
+        SoftSolver::MassSpring => sb_push_u8(buf, 0),
+        SoftSolver::Xpbd {
+            iterations,
+            compliance,
+        } => {
+            sb_push_u8(buf, 1);
+            sb_push_u32(buf, iterations);
+            sb_push_f64(buf, compliance);
+        }
+    }
+    sb_push_vec(buf, b.gravity);
+    sb_push_bool(buf, b.sleeping);
+    sb_push_bool(buf, b.collide);
+    sb_push_f64(buf, b.particle_radius);
+    // wind
+    match &b.wind {
+        Some(w) => {
+            sb_push_u8(buf, 1);
+            sb_serialize_wind(buf, w);
+        }
+        None => sb_push_u8(buf, 0),
+    }
+    // pressure
+    sb_push_option_f64(buf, b.pressure);
+    sb_push_f64(buf, b.damping);
+    sb_push_u32(buf, b.substeps);
+    // tear_strain
+    sb_push_option_f64(buf, b.tear_strain);
+    // plasticity
+    match &b.plasticity {
+        Some(p) => {
+            sb_push_u8(buf, 1);
+            sb_serialize_plasticity(buf, p);
+        }
+        None => sb_push_u8(buf, 0),
+    }
+    // self_collision
+    match &b.self_collision {
+        Some(s) => {
+            sb_push_u8(buf, 1);
+            sb_serialize_self_collision(buf, s);
+        }
+        None => sb_push_u8(buf, 0),
+    }
+    // cross_collision
+    match &b.cross_collision {
+        Some(s) => {
+            sb_push_u8(buf, 1);
+            sb_serialize_self_collision(buf, s);
+        }
+        None => sb_push_u8(buf, 0),
+    }
+    // volume_conservation
+    sb_push_option_f64(buf, b.volume_conservation);
+    // cohesion
+    match &b.cohesion {
+        Some(c) => {
+            sb_push_u8(buf, 1);
+            sb_serialize_cohesion(buf, c);
+        }
+        None => sb_push_u8(buf, 0),
+    }
+}
+
+fn sb_deserialize_particle(c: &mut SbCursor) -> Option<SoftParticle> {
+    let pos = c.take_vec()?;
+    let vel = c.take_vec()?;
+    let force = c.take_vec()?;
+    let inv_mass = c.take_f64()?;
+    let bound_body = match c.take_u8()? {
+        0 => None,
+        _ => {
+            let id = c.take_u32()?;
+            let genid = c.take_u32()?;
+            Some(RigidBodyHandle::from_raw_parts(id, genid))
+        }
+    };
+    let bound_local = c.take_vec()?;
+    Some(SoftParticle {
+        pos,
+        vel,
+        force,
+        inv_mass,
+        bound_body,
+        bound_local,
+    })
+}
+
+fn sb_deserialize_wind(c: &mut SbCursor) -> Option<Wind> {
+    let accel = c.take_vec()?;
+    let drag = c.take_f64()?;
+    Some(Wind { accel, drag })
+}
+
+fn sb_deserialize_plasticity(c: &mut SbCursor) -> Option<PlasticityParams> {
+    let yield_strain = c.take_f64()?;
+    let creep = c.take_f64()?;
+    Some(PlasticityParams {
+        yield_strain,
+        creep,
+    })
+}
+
+fn sb_deserialize_self_collision(c: &mut SbCursor) -> Option<SelfCollisionParams> {
+    let radius = c.take_f64()?;
+    let stiffness = c.take_f64()?;
+    let friction = c.take_option_f64()?;
+    Some(SelfCollisionParams {
+        radius,
+        stiffness,
+        friction,
+    })
+}
+
+fn sb_deserialize_cohesion(c: &mut SbCursor) -> Option<CohesionParams> {
+    let radius = c.take_f64()?;
+    let stiffness = c.take_f64()?;
+    let break_distance = c.take_f64()?;
+    Some(CohesionParams {
+        radius,
+        stiffness,
+        break_distance,
+    })
+}
+
+fn sb_deserialize_body(c: &mut SbCursor) -> Option<SoftBody> {
+    if c.take_u8()? != SB_MAGIC_0 || c.take_u8()? != SB_MAGIC_1 {
+        return None;
+    }
+    if c.take_u8()? != SB_VERSION {
+        return None;
+    }
+    let np = c.take_u32()? as usize;
+    let mut particles = Vec::with_capacity(np);
+    for _ in 0..np {
+        particles.push(sb_deserialize_particle(c)?);
+    }
+    let ns = c.take_u32()? as usize;
+    let mut springs = Vec::with_capacity(ns);
+    for _ in 0..ns {
+        springs.push(SoftSpring {
+            a: c.take_u32()? as usize,
+            b: c.take_u32()? as usize,
+            rest_length: c.take_f64()?,
+            stiffness: c.take_f64()?,
+            damping: c.take_f64()?,
+        });
+    }
+    let nd = c.take_u32()? as usize;
+    let mut distance_constraints = Vec::with_capacity(nd);
+    for _ in 0..nd {
+        distance_constraints.push(SoftDistance {
+            a: c.take_u32()? as usize,
+            b: c.take_u32()? as usize,
+            rest: c.take_f64()?,
+            compliance: c.take_f64()?,
+            compression: c.take_f64()?,
+        });
+    }
+    let nt = c.take_u32()? as usize;
+    let mut tetrahedra = Vec::with_capacity(nt);
+    for _ in 0..nt {
+        tetrahedra.push([c.take_u32()?, c.take_u32()?, c.take_u32()?, c.take_u32()?]);
+    }
+    let ntrv = c.take_u32()? as usize;
+    let mut tetra_rest_volumes = Vec::with_capacity(ntrv);
+    for _ in 0..ntrv {
+        tetra_rest_volumes.push(c.take_f64()?);
+    }
+    let ntri = c.take_u32()? as usize;
+    let mut triangles = Vec::with_capacity(ntri);
+    for _ in 0..ntri {
+        triangles.push([c.take_u32()?, c.take_u32()?, c.take_u32()?]);
+    }
+    let solver = match c.take_u8()? {
+        0 => SoftSolver::MassSpring,
+        _ => {
+            let iterations = c.take_u32()?;
+            let compliance = c.take_f64()?;
+            SoftSolver::Xpbd {
+                iterations,
+                compliance,
+            }
+        }
+    };
+    let gravity = c.take_vec()?;
+    let sleeping = c.take_bool()?;
+    let collide = c.take_bool()?;
+    let particle_radius = c.take_f64()?;
+    let wind = match c.take_u8()? {
+        0 => None,
+        _ => Some(sb_deserialize_wind(c)?),
+    };
+    let pressure = c.take_option_f64()?;
+    let damping = c.take_f64()?;
+    let substeps = c.take_u32()?;
+    let tear_strain = c.take_option_f64()?;
+    let plasticity = match c.take_u8()? {
+        0 => None,
+        _ => Some(sb_deserialize_plasticity(c)?),
+    };
+    let self_collision = match c.take_u8()? {
+        0 => None,
+        _ => Some(sb_deserialize_self_collision(c)?),
+    };
+    let cross_collision = match c.take_u8()? {
+        0 => None,
+        _ => Some(sb_deserialize_self_collision(c)?),
+    };
+    let volume_conservation = c.take_option_f64()?;
+    let cohesion = match c.take_u8()? {
+        0 => None,
+        _ => Some(sb_deserialize_cohesion(c)?),
+    };
+    Some(SoftBody {
+        particles,
+        springs,
+        distance_constraints,
+        tetrahedra,
+        tetra_rest_volumes,
+        triangles,
+        solver,
+        gravity,
+        sleeping,
+        collide,
+        particle_radius,
+        wind,
+        pressure,
+        damping,
+        substeps,
+        tear_strain,
+        plasticity,
+        self_collision,
+        cross_collision,
+        volume_conservation,
+        cohesion,
+    })
+}
+
+/// Local aliases so the deserializer reads the exact field types without pulling
+/// the fork's private struct names into scope. `Spring`/`DistanceConstraint` are
+/// `Clone + Copy` with public fields, so we construct them field-by-field.
+use rapier3d::dynamics::soft_body::DistanceConstraint as SoftDistance;
+use rapier3d::dynamics::soft_body::SoftParticle;
+use rapier3d::dynamics::soft_body::Spring as SoftSpring;
+
+/// Return the exact serialized size (in bytes) of a soft body's state, or
+/// `u32::MAX` if `world` is null or `id` is unknown. Allocate a buffer of this
+/// size before calling [`soft_body_save_state`].
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_state_size(world: *const WorldHandle, id: u32) -> u32 {
+    ffi_guard(u32::MAX, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_state_size: world is null");
+            return u32::MAX;
+        };
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_state_size: unknown id");
+            return u32::MAX;
+        };
+        let mut buf = Vec::new();
+        sb_serialize_body(&mut buf, body);
+        // size is exact: serialize once to measure; this is O(state) but cheap.
+        buf.len() as u32
+    })
+}
+
+/// Serialize a soft body's full state into `out` (capacity `out_capacity` bytes).
+///
+/// Returns `Bool::TRUE` on success, or `Bool::FALSE` if `world`/`id` is invalid or
+/// the buffer is too small (`ERR_CAPACITY`). Call [`soft_body_state_size`] first to
+/// size the buffer. The blob is portable across bodies (feed it to
+/// [`soft_body_restore_state`] on the same or a new id).
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_save_state(
+    world: *const WorldHandle,
+    id: u32,
+    out: *mut u8,
+    out_capacity: u32,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_save_state: world is null");
+            return Bool::FALSE;
+        };
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_save_state: unknown id");
+            return Bool::FALSE;
+        };
+        let mut buf = Vec::new();
+        sb_serialize_body(&mut buf, body);
+        let needed = buf.len();
+        if needed > out_capacity as usize {
+            set_error(ERR_CAPACITY, "soft_body_save_state: buffer too small");
+            return Bool::FALSE;
+        }
+        let out_slice = unsafe { std::slice::from_raw_parts_mut(out, needed) };
+        out_slice.copy_from_slice(&buf);
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Restore a soft body's full state from `data` (length `data_len` bytes) into the
+/// body `id`. The body must already exist (created with [`soft_body_create`]); this
+/// replaces its entire state. Returns `Bool::FALSE` on a null world / unknown id /
+/// buffer underflow / magic-or-version mismatch (`ERR_INVALID_ARGUMENT`). A corrupt
+/// blob never leaves a half-built body — the whole state is built in a temporary
+/// first, then swapped in via `get_mut`.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_restore_state(
+    world: *mut WorldHandle,
+    id: u32,
+    data: *const u8,
+    data_len: u32,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_restore_state: world is null");
+            return Bool::FALSE;
+        };
+        let sid = SoftBodyId(id);
+        if world.inner.soft_bodies.get(sid).is_none() {
+            set_error(ERR_NOT_FOUND, "soft_body_restore_state: unknown id");
+            return Bool::FALSE;
+        }
+        if data.is_null() {
+            set_error(ERR_NULL_POINTER, "soft_body_restore_state: data is null");
+            return Bool::FALSE;
+        }
+        let src = unsafe { std::slice::from_raw_parts(data, data_len as usize) };
+        let mut cursor = SbCursor::new(src);
+        let restored = match sb_deserialize_body(&mut cursor) {
+            Some(b) => b,
+            None => {
+                set_error(
+                    ERR_INVALID_ARGUMENT,
+                    "soft_body_restore_state: corrupt blob (bad magic/version/truncated)",
+                );
+                return Bool::FALSE;
+            }
+        };
+        // Swap the whole rebuilt body in. `collide` is preserved from the blob; if
+        // the body was collision-coupled its proxy table is keyed by id and still
+        // valid, so this is consistent.
+        let target = world.inner.soft_bodies.get_mut(sid).unwrap();
+        *target = restored;
+        clear_error();
+        Bool::TRUE
+    })
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn soft_body_destroy(world: *mut WorldHandle, id: u32) -> Bool {
     ffi_guard(Bool::FALSE, || {
