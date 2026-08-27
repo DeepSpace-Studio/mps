@@ -1685,6 +1685,7 @@ pub extern "system" fn cosmosWorldGetArenaDirectByteBuffer(
 
 // Phase 5a: 通用软体构造（任意拓扑：质点 / 弹簧 / XPBD 距离约束 / 四面体）
 jni!(long softBodyCreate(long world, double gravity_x, double gravity_y, double gravity_z) { sb::soft_body_create(m::<WH>(world), v3(gravity_x, gravity_y, gravity_z)) as jlong });
+jni!(long softBodyClone(long world, int id) { sb::soft_body_clone(m::<WH>(world), id as u32) as jlong });
 jni!(long softBodyAddParticle(long world, int id, double x, double y, double z, double mass, int pinned) { sb::soft_body_add_particle(m::<WH>(world), id as u32, x, y, z, mass, jb(pinned)) as jlong });
 jni!(boolean softBodyAddSpring(long world, int id, int a, int b, double stiffness, double damping) { sb::soft_body_add_spring(m::<WH>(world), id as u32, a as u32, b as u32, stiffness, damping).0 as jbyte });
 jni!(boolean softBodyAddDistanceConstraint(long world, int id, int a, int b, double compliance) { sb::soft_body_add_distance_constraint(m::<WH>(world), id as u32, a as u32, b as u32, compliance).0 as jbyte });

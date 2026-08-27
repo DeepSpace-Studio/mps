@@ -16,14 +16,14 @@ mod tests {
         soft_body_add_bending, soft_body_add_distance_constraint, soft_body_add_particle,
         soft_body_add_spring, soft_body_add_tetrahedron, soft_body_add_triangle,
         soft_body_apply_particle_impulse, soft_body_apply_wind, soft_body_attach_particle,
-        soft_body_build_tetra_mesh, soft_body_clear_wind, soft_body_configure_solver,
-        soft_body_count, soft_body_create, soft_body_destroy, soft_body_detach_particle,
-        soft_body_enable_collision, soft_body_get_particle, soft_body_is_sleeping,
-        soft_body_kinetic_energy, soft_body_particle_count, soft_body_read_aabb,
-        soft_body_read_contact_force, soft_body_read_edges, soft_body_read_normals,
-        soft_body_read_particles, soft_body_read_stress, soft_body_read_tetrahedra,
-        soft_body_read_triangles, soft_body_remove_particle, soft_body_scale_rest_length,
-        soft_body_set_cohesion, soft_body_set_cross_collision,
+        soft_body_build_tetra_mesh, soft_body_clear_wind, soft_body_clone,
+        soft_body_configure_solver, soft_body_count, soft_body_create, soft_body_destroy,
+        soft_body_detach_particle, soft_body_enable_collision, soft_body_get_particle,
+        soft_body_is_sleeping, soft_body_kinetic_energy, soft_body_particle_count,
+        soft_body_read_aabb, soft_body_read_contact_force, soft_body_read_edges,
+        soft_body_read_normals, soft_body_read_particles, soft_body_read_stress,
+        soft_body_read_tetrahedra, soft_body_read_triangles, soft_body_remove_particle,
+        soft_body_scale_rest_length, soft_body_set_cohesion, soft_body_set_cross_collision,
         soft_body_set_cross_collision_friction, soft_body_set_damping,
         soft_body_set_distance_constraint_compliance,
         soft_body_set_distance_constraint_compression, soft_body_set_gravity,
@@ -4179,6 +4179,99 @@ mod tests {
             soft_body_read_aabb(std::ptr::null_mut(), id, &mut mn, &mut mx, &mut ce),
             Bool::FALSE
         );
+        world_destroy(world);
+    } // ── Phase 25 #4: 软体克隆（纯 mps-core，零 fork 改动）──────────────────────
+    // clone 深拷贝粒子 + 弹簧 + 约束到新 id；副本独立（改源不影响副本）；未知 id → u32::MAX。
+    #[test]
+    fn soft_body_clone_deep_copies_and_is_independent() {
+        let world = make_world();
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: -9.81,
+                z: 0.0,
+            },
+        );
+        // 一根两端弹簧 + 一个约束 + 一个三角形骨架。
+        let a = soft_body_add_particle(world, id, 0.0, 1.0, 0.0, 1.0, Bool::FALSE);
+        let b = soft_body_add_particle(world, id, 1.0, 1.0, 0.0, 1.0, Bool::FALSE);
+        soft_body_add_spring(world, id, a, b, 50.0, 0.1);
+        soft_body_add_distance_constraint(world, id, a, b, 0.01);
+
+        let clone = soft_body_clone(world, id);
+        assert!(clone != u32::MAX, "clone should return a valid new id");
+        assert_ne!(clone, id, "clone must be a different id from source");
+
+        // 副本粒子数一致。
+        assert_eq!(soft_body_particle_count(world, clone), 2);
+
+        // 副本两端位置与源相同。
+        let mut sp = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        let mut sv = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        let mut cp = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        let mut cv = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        assert_eq!(
+            soft_body_get_particle(world, id, a, &mut sp, &mut sv),
+            Bool::TRUE
+        );
+        assert_eq!(
+            soft_body_get_particle(world, clone, a, &mut cp, &mut cv),
+            Bool::TRUE
+        );
+        assert!(
+            (sp.x - cp.x).abs() < 1e-9 && (sp.y - cp.y).abs() < 1e-9,
+            "clone particle a should match source position, src={:?} clone={:?}",
+            sp,
+            cp
+        );
+
+        // 副本独立：给源质点冲量后，源动、副本不动。
+        soft_body_apply_particle_impulse(world, id, a, 7.0, 0.0, 0.0);
+        world_step(world, 1.0 / 60.0);
+        assert_eq!(
+            soft_body_get_particle(world, id, a, &mut sp, &mut sv),
+            Bool::TRUE
+        );
+        assert_eq!(
+            soft_body_get_particle(world, clone, a, &mut cp, &mut cv),
+            Bool::TRUE
+        );
+        assert!(
+            sv.x > 0.0,
+            "source a should have moved (vx>0), got {}",
+            sv.x
+        );
+        assert!(
+            (cv.x).abs() < 1e-9,
+            "clone a must NOT move, got vx={}",
+            cv.x
+        );
+
+        // 源仍受重力下落：两质点 y 应下降。
+        assert!(sp.y < 1.0, "source should fall under gravity, y={}", sp.y);
+
+        // 未知 id → u32::MAX。
+        assert_eq!(soft_body_clone(world, u32::MAX), u32::MAX);
+        // 空 world → u32::MAX。
+        assert_eq!(soft_body_clone(std::ptr::null_mut(), id), u32::MAX);
+
         world_destroy(world);
     }
 }

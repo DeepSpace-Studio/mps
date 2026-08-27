@@ -4722,6 +4722,28 @@ Bool soft_body_set_cohesion(struct WorldHandle *world,
 uint32_t soft_body_create(struct WorldHandle *world, Vec3 gravity);
 
 /**
+ * Clone a soft body into a new standalone body, returning the new body id.
+ *
+ * Deep-copies the source body verbatim — particles (position/velocity/inv_mass),
+ * springs, distance constraints, tetrahedra (+ rest volumes), triangles, solver
+ * selection, gravity, sleeping, damping, substeps, and every optional field
+ * (wind, pressure, tearing, plasticity, self/cross collision, volume
+ * conservation, cohesion). The original is untouched.
+ *
+ * The clone is intentionally **collision-decoupled** (`collide = false`): proxy
+ * colliders live in the world's proxy table keyed by `SoftBodyId`, not inside the
+ * body, so a copied `collide == true` would have no proxies to drive it and would
+ * freeze. Call `soft_body_enable_collision` on the new id to rebuild proxies if the
+ * clone needs collision response.
+ *
+ * Returns the new body id, or `u32::MAX` if `world` is null or `id` is unknown.
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+uint32_t soft_body_clone(struct WorldHandle *world, uint32_t id);
+
+/**
  * Add a particle to a soft body.
  *
  * * `mass` — particle mass (> 0, finite). Ignored when `pinned` is non-zero

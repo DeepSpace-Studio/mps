@@ -1474,6 +1474,46 @@ pub extern "C" fn soft_body_create(world: *mut WorldHandle, gravity: Vec3) -> u3
     })
 }
 
+/// Clone a soft body into a new standalone body, returning the new body id.
+///
+/// Deep-copies the source body verbatim — particles (position/velocity/inv_mass),
+/// springs, distance constraints, tetrahedra (+ rest volumes), triangles, solver
+/// selection, gravity, sleeping, damping, substeps, and every optional field
+/// (wind, pressure, tearing, plasticity, self/cross collision, volume
+/// conservation, cohesion). The original is untouched.
+///
+/// The clone is intentionally **collision-decoupled** (`collide = false`): proxy
+/// colliders live in the world's proxy table keyed by `SoftBodyId`, not inside the
+/// body, so a copied `collide == true` would have no proxies to drive it and would
+/// freeze. Call `soft_body_enable_collision` on the new id to rebuild proxies if the
+/// clone needs collision response.
+///
+/// Returns the new body id, or `u32::MAX` if `world` is null or `id` is unknown.
+///
+/// # Safety
+/// `world` must be a valid world pointer.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_clone(world: *mut WorldHandle, id: u32) -> u32 {
+    ffi_guard(u32::MAX, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_clone: world is null");
+            return u32::MAX;
+        };
+        let sid = SoftBodyId(id);
+        let Some(src) = world.inner.soft_bodies.get(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_clone: unknown id");
+            return u32::MAX;
+        };
+        let mut cloned = src.clone();
+        // Standalone clone: disable collision coupling so it self-integrates (its id
+        // has no proxy colliders in the world's proxy table yet).
+        cloned.collide = false;
+        let new_id = world.inner.soft_bodies.insert(cloned);
+        clear_error();
+        new_id.0
+    })
+}
+
 /// Add a particle to a soft body.
 ///
 /// * `mass` — particle mass (> 0, finite). Ignored when `pinned` is non-zero
