@@ -758,3 +758,285 @@ pub extern "C" fn celestial_get_sh_coeff_count(body_id: u32) -> u32 {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+/// Pluto gravitational parameter GM (m3/s2) - derived from mass 1.303e22 kg x G.
+pub const PLUTO_GM: f64 = 8.71e11;
+
+// ---------------------------------------------------------------------------
+// Natural satellites (regular moons of the major planets)
+// ---------------------------------------------------------------------------
+
+/// A natural satellite (moon) of a major planet.
+///
+/// Contains the precision data needed to treat the moon as a point-mass
+/// gravity source or as an integrated body in a `CosmosWorld`. Values are
+/// SI (m, m3/s2, s). `semi_major_axis` and `orbital_period` are measured
+/// from the parent planet's centre.
+#[derive(Clone, Copy, Debug)]
+pub struct Moon {
+    /// Moon name (e.g. "Titan").
+    pub name: &'static str,
+    /// Parent planet name (matches a `CelestialBody.name`, e.g. "Saturn").
+    pub parent_planet: &'static str,
+    /// Gravitational parameter GM (m3/s2).
+    pub gm: f64,
+    /// Mean radius (m).
+    pub radius: f64,
+    /// Semi-major axis of the orbit about the parent planet (m).
+    pub semi_major_axis: f64,
+    /// Orbital period (s); retrograde orbits use the absolute magnitude.
+    pub orbital_period: f64,
+}
+
+/// Regular moons of the major planets (NASA Planetary Fact Sheet / JPL).
+///
+/// Covers the Sun-Earth-Mars-Jupiter-Saturn-Uranus-Neptune-Pluto satellite
+/// systems: the Moon, the Martian pair, the four Galilean satellites, the
+/// principal Saturnian/Uranian/Neptunian satellites, Triton, Nereid, and
+/// Charon. Orbital elements are mean values; individual orbits carry
+/// eccentricity/inclination perturbations not modelled here.
+pub static MOONS: &[Moon] = &[
+    Moon {
+        name: "Moon",
+        parent_planet: "Earth",
+        gm: 4.902_8e12,
+        radius: 1.737_4e6,
+        semi_major_axis: 3.844_0e8,
+        orbital_period: 2.360_59e6,
+    },
+    Moon {
+        name: "Phobos",
+        parent_planet: "Mars",
+        gm: 7.11e5,
+        radius: 1.11e4,
+        semi_major_axis: 9.376e6,
+        orbital_period: 2.755_4e4,
+    },
+    Moon {
+        name: "Deimos",
+        parent_planet: "Mars",
+        gm: 9.8e4,
+        radius: 6.2e3,
+        semi_major_axis: 2.346_3e7,
+        orbital_period: 1.090_7e5,
+    },
+    Moon {
+        name: "Io",
+        parent_planet: "Jupiter",
+        gm: 5.959_9e12,
+        radius: 1.821_6e6,
+        semi_major_axis: 4.218e8,
+        orbital_period: 1.528_4e5,
+    },
+    Moon {
+        name: "Europa",
+        parent_planet: "Jupiter",
+        gm: 3.202_7e12,
+        radius: 1.560_9e6,
+        semi_major_axis: 6.711e8,
+        orbital_period: 3.068_2e5,
+    },
+    Moon {
+        name: "Ganymede",
+        parent_planet: "Jupiter",
+        gm: 9.887_8e12,
+        radius: 2.631_2e6,
+        semi_major_axis: 1.070_4e9,
+        orbital_period: 6.181_5e5,
+    },
+    Moon {
+        name: "Callisto",
+        parent_planet: "Jupiter",
+        gm: 7.179_2e12,
+        radius: 2.410_3e6,
+        semi_major_axis: 1.882_7e9,
+        orbital_period: 1.442_2e6,
+    },
+    Moon {
+        name: "Amalthea",
+        parent_planet: "Jupiter",
+        gm: 2.3e9,
+        radius: 8.35e4,
+        semi_major_axis: 1.812e8,
+        orbital_period: 4.317e4,
+    },
+    Moon {
+        name: "Titan",
+        parent_planet: "Saturn",
+        gm: 8.978_14e12,
+        radius: 2.574_7e6,
+        semi_major_axis: 1.221_87e9,
+        orbital_period: 1.377_66e6,
+    },
+    Moon {
+        name: "Enceladus",
+        parent_planet: "Saturn",
+        gm: 3.8e9,
+        radius: 2.52e5,
+        semi_major_axis: 2.379_48e8,
+        orbital_period: 1.182_9e5,
+    },
+    Moon {
+        name: "Tethys",
+        parent_planet: "Saturn",
+        gm: 4.12e10,
+        radius: 5.315e5,
+        semi_major_axis: 2.946_19e8,
+        orbital_period: 1.631_2e5,
+    },
+    Moon {
+        name: "Dione",
+        parent_planet: "Saturn",
+        gm: 7.29e10,
+        radius: 5.61e5,
+        semi_major_axis: 3.773_96e8,
+        orbital_period: 2.364_3e5,
+    },
+    Moon {
+        name: "Rhea",
+        parent_planet: "Saturn",
+        gm: 1.53e11,
+        radius: 7.636e5,
+        semi_major_axis: 5.271_08e8,
+        orbital_period: 3.903_4e5,
+    },
+    Moon {
+        name: "Iapetus",
+        parent_planet: "Saturn",
+        gm: 1.20e11,
+        radius: 7.34e5,
+        semi_major_axis: 3.560_82e9,
+        orbital_period: 6.854_1e6,
+    },
+    Moon {
+        name: "Mimas",
+        parent_planet: "Saturn",
+        gm: 2.5e9,
+        radius: 1.98e5,
+        semi_major_axis: 1.856e8,
+        orbital_period: 8.180_1e4,
+    },
+    Moon {
+        name: "Titania",
+        parent_planet: "Uranus",
+        gm: 3.43e10,
+        radius: 7.89e5,
+        semi_major_axis: 4.359_1e8,
+        orbital_period: 7.523_1e5,
+    },
+    Moon {
+        name: "Oberon",
+        parent_planet: "Uranus",
+        gm: 3.23e10,
+        radius: 7.61e5,
+        semi_major_axis: 5.835_2e8,
+        orbital_period: 1.163_3e6,
+    },
+    Moon {
+        name: "Umbriel",
+        parent_planet: "Uranus",
+        gm: 3.07e10,
+        radius: 5.85e5,
+        semi_major_axis: 2.663e8,
+        orbital_period: 3.579_2e5,
+    },
+    Moon {
+        name: "Ariel",
+        parent_planet: "Uranus",
+        gm: 1.42e10,
+        radius: 5.79e5,
+        semi_major_axis: 1.909e8,
+        orbital_period: 2.176_3e5,
+    },
+    Moon {
+        name: "Miranda",
+        parent_planet: "Uranus",
+        gm: 4.19e9,
+        radius: 2.36e5,
+        semi_major_axis: 1.293_9e8,
+        orbital_period: 1.220_5e5,
+    },
+    Moon {
+        name: "Triton",
+        parent_planet: "Neptune",
+        gm: 1.427_6e12,
+        radius: 1.353_4e6,
+        semi_major_axis: 3.547_59e8,
+        orbital_period: 5.076_9e5,
+    },
+    Moon {
+        name: "Nereid",
+        parent_planet: "Neptune",
+        gm: 2.0e10,
+        radius: 1.7e5,
+        semi_major_axis: 5.513_8e9,
+        orbital_period: 3.110_6e7,
+    },
+    Moon {
+        name: "Charon",
+        parent_planet: "Pluto",
+        gm: 1.04e11,
+        radius: 6.06e5,
+        semi_major_axis: 1.959_1e7,
+        orbital_period: 5.518_3e5,
+    },
+];
+
+#[cfg(test)]
+mod moon_tests {
+    use super::*;
+
+    /// Parent-planet GM lookup for the Kepler self-consistency check.
+    fn planet_gm(name: &str) -> f64 {
+        match name {
+            "Sun" => SUN_GM,
+            "Earth" => EARTH_GM,
+            "Mars" => MARS_GM,
+            "Jupiter" => JUPITER_GM,
+            "Saturn" => SATURN_GM,
+            "Uranus" => URANUS.gm,
+            "Neptune" => NEPTUNE.gm,
+            "Pluto" => PLUTO_GM,
+            other => panic!("unknown parent planet in MOONS: {other}"),
+        }
+    }
+
+    #[test]
+    fn moons_table_populated_and_unique() {
+        assert!(!MOONS.is_empty(), "MOONS must not be empty");
+        let mut seen = std::collections::HashSet::new();
+        for m in MOONS {
+            assert!(seen.insert(m.name), "duplicate moon name: {}", m.name);
+        }
+    }
+
+    #[test]
+    fn moons_physical_fields_positive_and_orbit_sane() {
+        for m in MOONS {
+            assert!(m.gm > 0.0, "{} gm must be positive", m.name);
+            assert!(m.radius > 0.0, "{} radius must be positive", m.name);
+            assert!(m.semi_major_axis > m.radius, "{} orbit inside body", m.name);
+            assert!(m.orbital_period > 0.0, "{} period must be positive", m.name);
+        }
+    }
+
+    #[test]
+    fn moons_satisfy_kepler_third_law() {
+        for m in MOONS {
+            let gm_total = planet_gm(m.parent_planet) + m.gm;
+            let t_calc =
+                (4.0 * std::f64::consts::PI * std::f64::consts::PI * m.semi_major_axis.powi(3)
+                    / gm_total)
+                    .sqrt();
+            let rel = (t_calc - m.orbital_period).abs() / m.orbital_period;
+            assert!(
+                rel < 0.08,
+                "{} violates Kepler: calc T={:.3e}s obs T={:.3e}s (rel {:.3})",
+                m.name,
+                t_calc,
+                m.orbital_period,
+                rel
+            );
+        }
+    }
+}
