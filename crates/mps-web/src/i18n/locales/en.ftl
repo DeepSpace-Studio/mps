@@ -875,3 +875,20 @@ ca-map-body = FFI                                              JNI              
   cosmos_world_get_shared_arena_size     cosmosWorldGetSharedArenaSize     arena.rs
   cosmos_world_dynamic_body_snapshot        cosmosWorldDynamicBodySnapshot       ffi.rs + arena.rs
   cosmos_world_dynamic_body_snapshot_count  cosmosWorldDynamicBodySnapshotCount  ffi.rs + arena.rs
+
+moons-title = Natural Satellites (Moons)
+moons-desc = Precision data for { $count } regular moons of the major planets, preloaded in `mps_formula::celestial_data::MOONS` (NASA Planetary Fact Sheet / JPL).
+moons-catalog-title = Satellite catalogue
+moons-catalog-lead = Each moon is a point-mass gravity source. GM is in 10^9 m3/s2, radius and semi-major axis in km, orbital period in days (retrograde orbits use the absolute magnitude).
+moons-source-note = Sources: NASA Planetary Fact Sheet, JPL. Irregular inner satellites carry small eccentricities; values are mean elements.
+moons-col-planet = Parent planet
+moons-col-name = Moon
+moons-col-gm = GM (10^9 m3/s2)
+moons-col-radius = Radius (km)
+moons-col-sma = Semi-major axis (km)
+moons-col-period = Period (days)
+moons-ffi-title = Inject a moon into a CosmosWorld
+moons-ffi-lead = Moons reuse the celestial gravity infrastructure via `add_moon`, which converts a `Moon` to a `CelestialBody` (max_degree=0, no spherical harmonics) and registers it as a gravity source.
+moons-ffi-body = cosmos_world_add_moon(world: *mut CosmosWorld, moon_index: i32) -> i32
+    // moon_index = index into MOONS; returns source index or -1 (out of range / null world)
+    let idx = cosmos_world_add_moon(world, 0); // Earth's Moon

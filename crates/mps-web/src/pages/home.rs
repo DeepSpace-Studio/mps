@@ -25,6 +25,7 @@ use crate::pages::formula::Formula;
 use crate::pages::gravity::Gravity;
 use crate::pages::integrators::Integrators;
 use crate::pages::jni::Jni;
+use crate::pages::moons::Moons;
 use crate::pages::quickstart::Quickstart;
 use crate::pages::soft_body::SoftBody;
 use crate::pages::voxel::Voxel;
@@ -82,6 +83,7 @@ pub fn Home() -> Element {
             Formula {}
             Voxel {}
             SoftBody {}
+            Moons {}
             Events {}
             Arena {}
             Batch {}

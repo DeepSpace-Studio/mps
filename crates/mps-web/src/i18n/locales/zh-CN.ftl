@@ -872,3 +872,20 @@ ca-map-body = FFI                                              JNI              
   cosmos_world_get_shared_arena_size     cosmosWorldGetSharedArenaSize     arena.rs
   cosmos_world_dynamic_body_snapshot        cosmosWorldDynamicBodySnapshot       ffi.rs + arena.rs
   cosmos_world_dynamic_body_snapshot_count  cosmosWorldDynamicBodySnapshotCount  ffi.rs + arena.rs
+
+moons-title = 天然卫星(月球)
+moons-desc = 主行星 { $count } 颗规则卫星的精度数据,预埋于 `mps_formula::celestial_data::MOONS`(NASA Planetary Fact Sheet / JPL)。
+moons-catalog-title = 卫星目录
+moons-catalog-lead = 每颗卫星作为点质量重力源。GM 单位 10^9 m3/s2,半径与半长轴单位 km,轨道周期单位天(逆行轨道取绝对值)。
+moons-source-note = 数据来源:NASA Planetary Fact Sheet、JPL。不规则内卫星偏心率较小,数值为平均轨道根数。
+moons-col-planet = 母行星
+moons-col-name = 卫星
+moons-col-gm = GM (10^9 m3/s2)
+moons-col-radius = 半径 (km)
+moons-col-sma = 半长轴 (km)
+moons-col-period = 周期 (天)
+moons-ffi-title = 将卫星注入 CosmosWorld
+moons-ffi-lead = 卫星经 `add_moon` 复用天体重力设施:把 `Moon` 转为 `CelestialBody`(max_degree=0、无球谐)并注册为重力源。
+moons-ffi-body = cosmos_world_add_moon(world: *mut CosmosWorld, moon_index: i32) -> i32
+    // moon_index = MOONS 下标;返回源索引或 -1(越界 / 空世界)
+    let idx = cosmos_world_add_moon(world, 0); // 地球的月球

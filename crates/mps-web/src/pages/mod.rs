@@ -16,6 +16,7 @@ pub mod gravity;
 pub mod home;
 pub mod integrators;
 pub mod jni;
+pub mod moons;
 pub mod not_found;
 pub mod quickstart;
 pub mod soft_body;

@@ -8,6 +8,7 @@ dioxus = { version = "0.7", features = ["fullstack", "router", "server"] }
 dioxus-i18n = { version = "0.5", default-features = false }
 fluent = "0.16"
 unic-langid = "0.9"
+mps-formula = { path = "../mps-formula" }
 
 [features]
 default = []

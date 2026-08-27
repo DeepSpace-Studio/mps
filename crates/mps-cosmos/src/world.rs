@@ -18,7 +18,7 @@ use crate::perturbation::{
     solar_wind_pressure_force,
 };
 use mps_formula::astrophysics::{hill_sphere_radius, roche_limit_report};
-use mps_formula::celestial_data::{AU, G};
+use mps_formula::celestial_data::{AU, CelestialBody, G, MOONS, Moon};
 use mps_formula::ffi::RocheLimitReport;
 use rapier3d::math::Pose;
 use rapier3d::prelude::{
@@ -746,6 +746,39 @@ impl CosmosWorld {
     pub fn add_celestial(&mut self, source: CelestialSource) -> usize {
         self.celestials.push(source);
         self.celestials.len() - 1
+    }
+
+    /// 注册一个自然卫星（月球）引力源，复用 [`Self::add_celestial`] 的球谐
+    /// 基础设施。卫星以 `Moon` 点质量载入：`max_degree=0`、球谐系数为空、
+    /// `j2..j6=0`、无大气/太阳光压（月球级小天体无需高阶场）。返回索引。
+    pub fn add_moon(&mut self, moon: &'static Moon) -> usize {
+        let body = CelestialBody {
+            name: moon.name,
+            gm: moon.gm,
+            equatorial_radius: moon.radius,
+            flattening: 0.0,
+            rotation_rate: 0.0,
+            j2: 0.0,
+            j3: 0.0,
+            j4: 0.0,
+            j5: 0.0,
+            j6: 0.0,
+            max_degree: 0,
+            c_coeffs: &[],
+            s_coeffs: &[],
+            ref_radius: moon.radius,
+            surface_density: 0.0,
+            scale_height: 0.0,
+            solar_pressure_constant: 0.0,
+        };
+        self.add_celestial(CelestialSource::new(Box::leak(Box::new(body)), 0))
+    }
+
+    /// 按 `MOONS` 数组下标注册卫星。越界返回 `None`（供 FFI 转 -1 守卫）。
+    pub fn add_moon_by_index(&mut self, index: i32) -> Option<usize> {
+        let i = usize::try_from(index).ok()?;
+        let moon = MOONS.get(i)?;
+        Some(self.add_moon(moon))
     }
 
     /// 注册一个 n-body 互引力质点源（给定质量 kg），作为**纯点质量**（monopole）。

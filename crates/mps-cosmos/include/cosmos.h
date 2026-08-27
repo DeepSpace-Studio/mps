@@ -164,6 +164,13 @@ int32_t cosmos_world_add_celestial(struct CosmosWorld *world,
                                    uint32_t max_sh_degree);
 
 /**
+ * 注册一个自然卫星（月球）引力源，按 `mps_formula::celestial_data::MOONS`
+ * 数组下标查找。越界或空世界返回 -1，成功返回内部索引（与 `add_celestial` 同语义）。
+ */
+int32_t cosmos_world_add_moon(struct CosmosWorld *world,
+                              int32_t moon_index);
+
+/**
  * 把已插入的刚体登记为 n-body 互引力质点源（给定质量 kg）。
  * `body` 是 `cosmos_world_insert_body` 返回的 packed handle。返回 1 / 0。
  */

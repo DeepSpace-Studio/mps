@@ -19,7 +19,7 @@
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
-use mps_formula::celestial_data::{celestial_body_id_from_u32, get_celestial_body};
+use mps_formula::celestial_data::{MOONS, celestial_body_id_from_u32, get_celestial_body};
 use mps_formula::error::{
     ERR_CAPACITY, ERR_INTERNAL, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, set_error,
 };
@@ -257,6 +257,23 @@ pub extern "C" fn cosmos_world_add_celestial(
         };
         let src = CelestialSource::new(body, max_sh_degree);
         w.add_celestial(src) as i32
+    })
+}
+
+/// 注册一个自然卫星（月球）引力源，按 `mps_formula::celestial_data::MOONS`
+/// 数组下标查找。越界或空世界返回 -1，成功返回内部索引（与 `add_celestial` 同语义）。
+#[unsafe(no_mangle)]
+pub extern "C" fn cosmos_world_add_moon(world: *mut CosmosWorld, moon_index: i32) -> i32 {
+    ffi_guard(-1, || {
+        let w = match unsafe { world.as_mut() } {
+            Some(t) => t,
+            None => return -1,
+        };
+        let moon = match MOONS.get(moon_index as usize) {
+            Some(m) => m,
+            None => return -1,
+        };
+        w.add_moon(moon) as i32
     })
 }
 

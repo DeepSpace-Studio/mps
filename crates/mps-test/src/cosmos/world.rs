@@ -1638,3 +1638,53 @@ fn tidal_torque_synchronizes_spin_when_enabled() {
         spin_on
     );
 }
+
+// ---------------------------------------------------------------------------
+// add_moon / MOONS 数据预埋集成测试
+// ---------------------------------------------------------------------------
+
+#[test]
+fn cosmos_world_add_moon_registers_source() {
+    let mut world = CosmosWorld::new(CosmosWorldConfig::default());
+    let before = world.celestials().len();
+    // MOONS[0] = Earth's Moon.
+    let idx = world.add_moon_by_index(0);
+    assert!(idx.is_some(), "add_moon_by_index(0) must succeed");
+    assert_eq!(
+        world.celestials().len(),
+        before + 1,
+        "moon source registered"
+    );
+    let src = &world.celestials()[idx.unwrap()];
+    assert_eq!(src.body.name, "Moon", "moon name preserved");
+    // 月球 GM 应非零且等于 MOONS[0] 预埋值。
+    assert!((src.body.gm - mps_formula::celestial_data::MOONS[0].gm).abs() < 1.0);
+}
+
+#[test]
+fn cosmos_world_add_moon_out_of_range_guards() {
+    let mut world = CosmosWorld::new(CosmosWorldConfig::default());
+    let n = mps_formula::celestial_data::MOONS.len() as i32;
+    assert!(
+        world.add_moon_by_index(n).is_none(),
+        "index == len must be rejected"
+    );
+    assert!(
+        world.add_moon_by_index(n + 5).is_none(),
+        "out-of-range must be rejected"
+    );
+    assert!(
+        world.add_moon_by_index(-1).is_none(),
+        "negative index must be rejected"
+    );
+}
+
+#[test]
+fn cosmos_ffi_add_moon_roundtrip() {
+    let mut world = CosmosWorld::new(CosmosWorldConfig::default());
+    let raw = &mut world as *mut CosmosWorld;
+    let idx = mps_cosmos::ffi::cosmos_world_add_moon(raw, 0);
+    assert!(idx >= 0, "FFI add_moon must return valid index");
+    let bad = mps_cosmos::ffi::cosmos_world_add_moon(raw, 999_999);
+    assert_eq!(bad, -1, "FFI out-of-range must return -1");
+}

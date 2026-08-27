@@ -3800,6 +3800,7 @@ dependencies = [
  "dioxus",
  "dioxus-i18n",
  "fluent 0.16.1",
+ "mps-formula",
  "unic-langid",
 ]
 
