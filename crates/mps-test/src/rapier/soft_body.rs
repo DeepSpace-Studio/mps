@@ -28,12 +28,12 @@ mod tests {
         soft_body_set_cross_collision_friction, soft_body_set_damping,
         soft_body_set_distance_constraint_compliance,
         soft_body_set_distance_constraint_compression, soft_body_set_gravity,
-        soft_body_set_plasticity, soft_body_set_pressure, soft_body_set_self_collision,
-        soft_body_set_self_collision_friction, soft_body_set_spring_stiffness,
-        soft_body_set_substeps, soft_body_set_tear_strain, soft_body_set_volume_conservation,
-        soft_body_sleep, soft_body_state_size, soft_body_subdivide_tetrahedra,
-        soft_body_total_volume, soft_body_voxel_build, soft_body_voxel_dig, soft_body_wake,
-        soft_chain_create, soft_chain_node_handles,
+        soft_body_set_particle_velocity, soft_body_set_plasticity, soft_body_set_pressure,
+        soft_body_set_self_collision, soft_body_set_self_collision_friction,
+        soft_body_set_spring_stiffness, soft_body_set_substeps, soft_body_set_tear_strain,
+        soft_body_set_volume_conservation, soft_body_sleep, soft_body_state_size,
+        soft_body_subdivide_tetrahedra, soft_body_total_volume, soft_body_voxel_build,
+        soft_body_voxel_dig, soft_body_wake, soft_chain_create, soft_chain_node_handles,
     };
     use mps_core::rapier::voxel::{collider_builder_create_voxels, collider_voxel_edit};
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
@@ -4393,6 +4393,69 @@ mod tests {
         // 未知 id → FALSE。
         assert_eq!(
             soft_body_restore_state(world, u32::MAX, buf.as_ptr(), buf.len() as u32),
+            Bool::FALSE
+        );
+
+        world_destroy(world);
+    } // ── Phase 25 #6: 逐粒子速度写入 setParticleVelocity（纯 mps-core，零 fork 改动）──
+    // 已有 read，本项补写: 直接覆盖 particle.vel。pinned(inv_mass==0) 与越界/未知 id 守卫。
+    #[test]
+    fn soft_body_set_particle_velocity_writes_and_guards() {
+        let world = make_world();
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: -9.81,
+                z: 0.0,
+            },
+        );
+        let a = soft_body_add_particle(world, id, 0.0, 1.0, 0.0, 1.0, Bool::FALSE);
+        let b = soft_body_add_particle(world, id, 1.0, 1.0, 0.0, 1.0, Bool::TRUE); // pinned
+
+        // 写入 a 的速度。
+        assert_eq!(
+            soft_body_set_particle_velocity(world, id, a, 2.0, 3.0, 4.0),
+            Bool::TRUE
+        );
+        let mut pos = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        let mut vel = Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        assert_eq!(
+            soft_body_get_particle(world, id, a, &mut pos, &mut vel),
+            Bool::TRUE
+        );
+        assert!(
+            (vel.x - 2.0).abs() < 1e-9 && (vel.y - 3.0).abs() < 1e-9 && (vel.z - 4.0).abs() < 1e-9,
+            "written velocity should read back, got {:?}",
+            vel
+        );
+
+        // pinned 粒子 → FALSE。
+        assert_eq!(
+            soft_body_set_particle_velocity(world, id, b, 1.0, 1.0, 1.0),
+            Bool::FALSE
+        );
+        // 越界 index → FALSE。
+        assert_eq!(
+            soft_body_set_particle_velocity(world, id, 99, 0.0, 0.0, 0.0),
+            Bool::FALSE
+        );
+        // 未知 id → FALSE。
+        assert_eq!(
+            soft_body_set_particle_velocity(world, u32::MAX, a, 0.0, 0.0, 0.0),
+            Bool::FALSE
+        );
+        // null world → FALSE。
+        assert_eq!(
+            soft_body_set_particle_velocity(std::ptr::null_mut(), id, a, 0.0, 0.0, 0.0),
             Bool::FALSE
         );
 

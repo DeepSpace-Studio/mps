@@ -4943,6 +4943,25 @@ Bool soft_body_get_particle(const struct WorldHandle *world,
                             Vec3 *out_vel);
 
 /**
+ * Set a single particle's linear velocity to `(vx, vy, vz)`, overwriting it.
+ *
+ * Pinned particles (`inv_mass == 0`) are skipped — their velocity is meaningless
+ * because the integrator reseeds it from the bound rigid body every step, so this
+ * returns `Bool::FALSE` for them. `Err::FALSE` is also returned for a null world,
+ * an unknown body id, or an out-of-range `index`. On success the particle's `vel`
+ * field is updated in place and `Bool::TRUE` is returned.
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+Bool soft_body_set_particle_velocity(struct WorldHandle *world,
+                                     uint32_t id,
+                                     uint32_t index,
+                                     double vx,
+                                     double vy,
+                                     double vz);
+
+/**
  * Remove a particle (and every spring / distance constraint / tetrahedron that
  * references it) from a soft body, keeping the remaining topology valid.
  * Returns `Bool::TRUE` on success.

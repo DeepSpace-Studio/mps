@@ -2118,6 +2118,63 @@ pub extern "C" fn soft_body_get_particle(
     })
 }
 
+/// Set a single particle's linear velocity to `(vx, vy, vz)`, overwriting it.
+///
+/// Pinned particles (`inv_mass == 0`) are skipped — their velocity is meaningless
+/// because the integrator reseeds it from the bound rigid body every step, so this
+/// returns `Bool::FALSE` for them. `Err::FALSE` is also returned for a null world,
+/// an unknown body id, or an out-of-range `index`. On success the particle's `vel`
+/// field is updated in place and `Bool::TRUE` is returned.
+///
+/// # Safety
+/// `world` must be a valid world pointer.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_set_particle_velocity(
+    world: *mut WorldHandle,
+    id: u32,
+    index: u32,
+    vx: f64,
+    vy: f64,
+    vz: f64,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(
+                ERR_NULL_POINTER,
+                "soft_body_set_particle_velocity: world is null",
+            );
+            return Bool::FALSE;
+        };
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_set_particle_velocity: unknown id");
+            return Bool::FALSE;
+        };
+        let idx = index as usize;
+        if idx >= body.particles.len() {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_particle_velocity: index out of range",
+            );
+            return Bool::FALSE;
+        }
+        if body.particles[idx].inv_mass == 0.0 {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_particle_velocity: particle is pinned",
+            );
+            return Bool::FALSE;
+        }
+        body.particles[idx].vel = Vector {
+            x: vx,
+            y: vy,
+            z: vz,
+        };
+        clear_error();
+        Bool::TRUE
+    })
+}
+
 /// Remove a particle (and every spring / distance constraint / tetrahedron that
 /// references it) from a soft body, keeping the remaining topology valid.
 /// Returns `Bool::TRUE` on success.
