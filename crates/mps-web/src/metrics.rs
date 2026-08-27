@@ -36,3 +36,9 @@ pub const FFI_RIGID_BODY: &str = "62";
 pub const FFI_COLLIDER: &str = "75";
 /// `pub extern "C" fn query_*` declarations in mps-core/rapier.
 pub const FFI_QUERY: &str = "58";
+/// `pub extern "C" fn soft_body_*` declarations in mps-core/rapier.
+pub const FFI_SOFT_BODY: &str = "57";
+/// `jni!` entries with a `softBody*` method name in mps-jni.
+pub const JNI_SOFT_BODY: &str = "57";
+/// `#[test]` functions whose name contains `soft_body` in mps-test.
+pub const TEST_SOFT_BODY: &str = "64";

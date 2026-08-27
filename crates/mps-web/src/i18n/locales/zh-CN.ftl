@@ -615,7 +615,7 @@ nav-group-ffm = mps-ffm
 # ---- 软体(Phase 0–21) ----
 soft-tag = 软体
 soft-title = 软体物理
-soft-desc = XPBD / MassSpring 可变形体 —— 布料、四面体体积网格、体素地形,以及 Phase 0–21 交付的 22 项能力升级。
+soft-desc = XPBD / MassSpring 可变形体 —— 布料、四面体体积网格、体素地形,Phase 0–21 的 22 项能力升级,外加一条零 fork 的 FFI 安全线(Phase 22–25):接触力回读、单粒子冲量、AABB 回读、深拷贝、二进制状态序列化、逐粒子速度写入。
 
 soft-overview-title = 概述
 soft-overview-lead = 软体是一组质点,由距离约束(XPBD)和/或弹簧(MassSpring)连接,可外裹三角壳或四面体体积网格。
@@ -635,7 +635,7 @@ soft-data-li-3 = 三角 —— soft_body_add_triangle(a,b,c) 构外壳;经 soft_
 soft-data-li-4 = 边 —— 弹簧与距离约束;经 soft_body_read_edges 读取。
 
 soft-cap-title = 能力矩阵(Phase 0–21)
-soft-cap-lead = 每张卡片对应工作区中一个真实的 soft_body_* FFI。
+soft-cap-lead = 每张卡片对应工作区中一个真实的 soft_body_* FFI。Phase 22–25 另加一条零 fork 的 FFI 安全线(见下)。
 
 soft-cap-01-title = 基础体与质点
 soft-cap-01-desc = soft_body_create + soft_body_add_particle;自由或钉住的质点带独立 inv_mass。后续所有功能的地基。
@@ -681,6 +681,21 @@ soft-cap-21-title = 自适应四面体细分
 soft-cap-21-desc = soft_body_subdivide_tetrahedra —— 最长边超阈值的四面体做重心 1→4 细分;子体积之和恰为父体积,体积守恒。
 soft-cap-22-title = 读写 API
 soft-cap-22-desc = soft_body_read_particles / _read_tetrahedra / _read_triangles / _read_edges + soft_body_get_particle —— 完整体状态经零拷贝 Arena 流动。
+
+soft-p25-title = FFI 安全线(Phase 22–25)
+soft-p25-lead = 六个纯 mps-core 增量 —— 每个都直接遍历 SoftBody 的 pub 字段,无一改动 rapier3d fork。暴露状态回读、克隆、二进制(反)序列化与直接速度写入,支撑存档/读档、回放、联网软体快照。
+soft-p25-1-title = 接触力回读
+soft-p25-1-desc = soft_body_read_contact_force —— 每个质点来自碰撞代理的合接触冲量,按击中哪个碰撞体拆分。只读诊断,用于抓握/挤压力。
+soft-p25-2-title = 单粒子冲量
+soft-p25-2-desc = soft_body_apply_particle_impulse —— p.vel += J·inv_mass;钉住(inv_mass==0)为空操作。踢单个节点而不重建体。
+soft-p25-3-title = AABB / 质心回读
+soft-p25-3-desc = soft_body_read_aabb —— 由质点位置算最小/最大角与质心;任一输出指针可传 null 跳过。
+soft-p25-4-title = 深拷贝
+soft-p25-4-desc = soft_body_clone —— SoftBody::clone 到新 id 且 collide=false,副本独立自积分、绝不共享源代理。
+soft-p25-5-title = 二进制状态存/取
+soft-p25-5-desc = soft_body_state_size + soft_body_save_state + soft_body_restore_state —— 手写小端字节块覆盖全部 pub 字段(Option/enum/RigidBodyHandle 经 into_raw_parts 打包)。坏 magic/版本/截断返回 FALSE 且不残留半体。
+soft-p25-6-title = 逐粒子速度写入
+soft-p25-6-desc = soft_body_set_particle_velocity —— 覆盖 particle.vel;钉住/越界/未知 id 返回 FALSE。是 soft_body_get_particle 的写入对偶。
 
 soft-api-title = FFI 接口面
 soft-api-desc = 软体子系统在 C FFI、Java JNI、集成测试三方对称暴露。

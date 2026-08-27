@@ -1,7 +1,9 @@
 use dioxus::prelude::*;
 use dioxus_i18n::t;
 
-/// Soft Body — XPBD / MassSpring deformable bodies (Phases 0–21).
+use crate::metrics::*;
+
+/// Soft Body — XPBD / MassSpring deformable bodies (Phases 0–25).
 pub fn SoftBody() -> Element {
     rsx! {
         section { id: "sec-soft-body", class: "doc-section",
@@ -141,21 +143,53 @@ pub fn SoftBody() -> Element {
                 }
             }
 
+            // ── FFI safety line (Phases 22–25, zero-fork) ───────────────────
+            div { class: "section-divider",
+                h2 { class: "section-heading", { t!("soft-p25-title") } }
+                p { class: "p-lead", { t!("soft-p25-lead") } }
+                div { class: "feature-grid",
+                    div { class: "feature-card",
+                        h3 { { t!("soft-p25-1-title") } }
+                        p { { t!("soft-p25-1-desc") } }
+                    }
+                    div { class: "feature-card",
+                        h3 { { t!("soft-p25-2-title") } }
+                        p { { t!("soft-p25-2-desc") } }
+                    }
+                    div { class: "feature-card",
+                        h3 { { t!("soft-p25-3-title") } }
+                        p { { t!("soft-p25-3-desc") } }
+                    }
+                    div { class: "feature-card",
+                        h3 { { t!("soft-p25-4-title") } }
+                        p { { t!("soft-p25-4-desc") } }
+                    }
+                    div { class: "feature-card",
+                        h3 { { t!("soft-p25-5-title") } }
+                        p { { t!("soft-p25-5-desc") } }
+                    }
+                    div { class: "feature-card feature-card-accent",
+                        h3 { { t!("soft-p25-6-title") } }
+                        p { { t!("soft-p25-6-desc") } }
+                    }
+                }
+            }
+
             // ── API surface ────────────────────────────────────────────────
             div { class: "section-divider",
                 h2 { class: "section-heading", { t!("soft-api-title") } }
                 p { class: "p-muted", { t!("soft-api-desc") } }
                 div { class: "stat-grid",
                     div { class: "stat-card",
-                        div { class: "stat-num", "45" }
+                        div { class: "stat-num", { FFI_SOFT_BODY } }
                         div { class: "stat-label", { t!("soft-api-stat-ffi") } }
                     }
                     div { class: "stat-card",
-                        div { class: "stat-num", "45" }
+                        div { class: "stat-num", { JNI_SOFT_BODY } }
                         div { class: "stat-label", { t!("soft-api-stat-jni") } }
                     }
                     div { class: "stat-card",
-                        div { class: "stat-num", "45" }
+                        div { class: "stat-num", { TEST_SOFT_BODY } }
                         div { class: "stat-label", { t!("soft-api-stat-tests") } }
                     }
                 }

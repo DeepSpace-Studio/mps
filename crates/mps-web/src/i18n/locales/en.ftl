@@ -615,7 +615,7 @@ nav-group-ffm = mps-ffm
 # ---- Soft Body (Phases 0–21) ----
 soft-tag = Soft Body
 soft-title = Soft Body Physics
-soft-desc = XPBD / MassSpring deformable bodies — cloth, tetrahedral volume meshes, voxel terrain, and 22 capability upgrades delivered across Phases 0–21.
+soft-desc = XPBD / MassSpring deformable bodies — cloth, tetrahedral volume meshes, voxel terrain, 22 capability upgrades (Phases 0–21), plus a zero-fork FFI safety line (Phases 22–25): contact-force readback, per-particle impulse, AABB readback, deep clone, binary state save/restore, and per-particle velocity write.
 
 soft-overview-title = Overview
 soft-overview-lead = A soft body is a collection of particles connected by distance constraints (XPBD) and/or springs (MassSpring), optionally wrapped in a triangle shell or a tetrahedral volume mesh.
@@ -635,7 +635,7 @@ soft-data-li-3 = Triangles — soft_body_add_triangle(a,b,c) build the shell; re
 soft-data-li-4 = Edges — springs and distance constraints; read via soft_body_read_edges.
 
 soft-cap-title = Capability Matrix (Phases 0–21)
-soft-cap-lead = Each card maps to a real soft_body_* FFI delivered in the workspace.
+soft-cap-lead = Each card maps to a real soft_body_* FFI delivered in the workspace. Phases 22–25 add a zero-fork FFI safety line (see below).
 
 soft-cap-01-title = Base Body & Particles
 soft-cap-01-desc = soft_body_create + soft_body_add_particle; free or pinned particles with independent inv_mass. The foundation every later feature builds on.
@@ -681,6 +681,21 @@ soft-cap-21-title = Adaptive Tetrahedral Subdivision
 soft-cap-21-desc = soft_body_subdivide_tetrahedra — barycentric 1→4 split of tets whose longest edge exceeds a threshold; sub-volumes sum to the parent so volume stays conserved.
 soft-cap-22-title = Read/Write API
 soft-cap-22-desc = soft_body_read_particles / _read_tetrahedra / _read_triangles / _read_edges + soft_body_get_particle — the full body state flows through the zero-copy Arena.
+
+soft-p25-title = FFI Safety Line (Phases 22–25)
+soft-p25-lead = Six pure mps-core additions — each walks the SoftBody public fields directly, none touches the rapier3d fork. They expose state read-back, clone, binary (de)serialization, and direct velocity write for save/restore, replay, and networked soft-body snapshots.
+soft-p25-1-title = Contact-Force Readback
+soft-p25-1-desc = soft_body_read_contact_force — per-particle total contact impulse from the collision proxy, split by which collider it hit. Read-only diagnostics for grasp/squish force.
+soft-p25-2-title = Per-Particle Impulse
+soft-p25-2-desc = soft_body_apply_particle_impulse — p.vel += J·inv_mass; pinned (inv_mass==0) is a no-op. Kick a single node without rebuilding the body.
+soft-p25-3-title = AABB / Centroid Readback
+soft-p25-3-desc = soft_body_read_aabb — min/max corner and centroid from particle positions; any out pointer may be null to skip it.
+soft-p25-4-title = Deep Clone
+soft-p25-4-desc = soft_body_clone — SoftBody::clone into a fresh id with collide=false, so the copy integrates independently and never shares the source proxy.
+soft-p25-5-title = Binary State Save / Restore
+soft-p25-5-desc = soft_body_state_size + soft_body_save_state + soft_body_restore_state — hand-rolled little-endian blob over every public field (Option/enum/RigidBodyHandle packed via into_raw_parts). Corrupt magic/version/truncation returns FALSE with no half-built body left behind.
+soft-p25-6-title = Per-Particle Velocity Write
+soft-p25-6-desc = soft_body_set_particle_velocity — overwrite particle.vel; pinned / out-of-range / unknown id return FALSE. The write counterpart to soft_body_get_particle.
 
 soft-api-title = FFI Surface
 soft-api-desc = The soft-body subsystem is exposed symmetrically across C FFI, Java JNI, and the integration tests.
