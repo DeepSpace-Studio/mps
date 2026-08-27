@@ -61,35 +61,35 @@ pub fn Cosmos() -> Element {
             div { class: "section-divider",
                 h2 { class: "section-heading", { t!("cosmos-mods-title") } }
                 div { class: "feature-grid",
-                    div { class: "feature-card",
+                    a { class: "feature-card", href: "#form-mod-kepler",
                         h3 { { t!("cosmos-mod-kepler-title") } }
                         p { { t!("cosmos-mod-kepler-desc") } }
                     }
-                    div { class: "feature-card",
+                    a { class: "feature-card", href: "#form-mod-dynamics",
                         h3 { { t!("cosmos-mod-dynamics-title") } }
                         p { { t!("cosmos-mod-dynamics-desc") } }
                     }
-                    div { class: "feature-card",
+                    a { class: "feature-card", href: "#form-mod-perturbation",
                         h3 { { t!("cosmos-mod-perturbation-title") } }
                         p { { t!("cosmos-mod-perturbation-desc") } }
                     }
-                    div { class: "feature-card",
+                    a { class: "feature-card", href: "#form-mod-propulsion",
                         h3 { { t!("cosmos-mod-propulsion-title") } }
                         p { { t!("cosmos-mod-propulsion-desc") } }
                     }
-                    div { class: "feature-card",
+                    a { class: "feature-card", href: "#form-mod-rotation",
                         h3 { { t!("cosmos-mod-rotation-title") } }
                         p { { t!("cosmos-mod-rotation-desc") } }
                     }
-                    div { class: "feature-card",
+                    a { class: "feature-card", href: "#form-mod-thermal",
                         h3 { { t!("cosmos-mod-thermal-title") } }
                         p { { t!("cosmos-mod-thermal-desc") } }
                     }
-                    div { class: "feature-card",
+                    a { class: "feature-card", href: "#form-mod-debris",
                         h3 { { t!("cosmos-mod-debris-title") } }
                         p { { t!("cosmos-mod-debris-desc") } }
                     }
-                    div { class: "feature-card",
+                    a { class: "feature-card", href: "#form-mod-gnss",
                         h3 { { t!("cosmos-mod-gnss-title") } }
                         p { { t!("cosmos-mod-gnss-desc") } }
                     }

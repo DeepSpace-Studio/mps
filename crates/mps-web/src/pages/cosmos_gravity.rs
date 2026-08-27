@@ -37,6 +37,15 @@ pub fn CosmosGravity() -> Element {
                 h2 { class: "section-heading", { t!("cg-ffi-title") } }
                 p { class: "p-muted", { t!("cg-ffi-desc") } }
             }
+
+            // ── FFI ↔ JNI ──────────────────────────────────────────────────
+            div { class: "section-divider",
+                h2 { class: "section-heading", { t!("cg-map-title") } }
+                p { class: "p-muted", { t!("cg-map-note") } }
+                div { class: "code-block",
+                    pre { code { { t!("cg-map-body") } } }
+                }
+            }
         }
     }
 }

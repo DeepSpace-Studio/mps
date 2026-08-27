@@ -43,6 +43,15 @@ pub fn CosmosWorld() -> Element {
                     li { { t!("cw-ffi-6") } }
                 }
             }
+
+            // ── FFI ↔ JNI ──────────────────────────────────────────────────
+            div { class: "section-divider",
+                h2 { class: "section-heading", { t!("cw-map-title") } }
+                p { class: "p-muted", { t!("cw-map-note") } }
+                div { class: "code-block",
+                    pre { code { { t!("cw-map-body") } } }
+                }
+            }
         }
     }
 }

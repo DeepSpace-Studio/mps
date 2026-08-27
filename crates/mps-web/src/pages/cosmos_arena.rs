@@ -35,6 +35,15 @@ pub fn CosmosArena() -> Element {
                 h2 { class: "section-heading", { t!("ca-jni-title") } }
                 p { class: "p-muted", { t!("ca-jni-desc") } }
             }
+
+            // ── FFI ↔ JNI ──────────────────────────────────────────────────
+            div { class: "section-divider",
+                h2 { class: "section-heading", { t!("ca-map-title") } }
+                p { class: "p-muted", { t!("ca-map-note") } }
+                div { class: "code-block",
+                    pre { code { { t!("ca-map-body") } } }
+                }
+            }
         }
     }
 }

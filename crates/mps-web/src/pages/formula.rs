@@ -23,14 +23,14 @@ pub fn Formula() -> Element {
         div { class: "section-card",
             h2 { { t!("formula-cat-spaceflight") } }
             ul { class: "ul-plain",
-                li { { t!("form-mod-kepler") } }
-                li { { t!("form-mod-dynamics") } }
-                li { { t!("form-mod-perturbation") } }
-                li { { t!("form-mod-propulsion") } }
-                li { { t!("form-mod-rotation") } }
-                li { { t!("form-mod-thermal") } }
-                li { { t!("form-mod-debris") } }
-                li { { t!("form-mod-gnss") } }
+                li { id: "form-mod-kepler", { t!("form-mod-kepler") } }
+                li { id: "form-mod-dynamics", { t!("form-mod-dynamics") } }
+                li { id: "form-mod-perturbation", { t!("form-mod-perturbation") } }
+                li { id: "form-mod-propulsion", { t!("form-mod-propulsion") } }
+                li { id: "form-mod-rotation", { t!("form-mod-rotation") } }
+                li { id: "form-mod-thermal", { t!("form-mod-thermal") } }
+                li { id: "form-mod-debris", { t!("form-mod-debris") } }
+                li { id: "form-mod-gnss", { t!("form-mod-gnss") } }
                 li { { t!("form-mod-trajectory") } }
             }
         }

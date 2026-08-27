@@ -37,6 +37,15 @@ pub fn CosmosOrbit() -> Element {
                 h2 { class: "section-heading", { t!("co-snap-title") } }
                 p { class: "p-muted", { t!("co-snap-desc") } }
             }
+
+            // ── FFI ↔ JNI ──────────────────────────────────────────────────
+            div { class: "section-divider",
+                h2 { class: "section-heading", { t!("co-map-title") } }
+                p { class: "p-muted", { t!("co-map-note") } }
+                div { class: "code-block",
+                    pre { code { { t!("co-map-body") } } }
+                }
+            }
         }
     }
 }

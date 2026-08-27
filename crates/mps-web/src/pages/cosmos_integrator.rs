@@ -37,6 +37,15 @@ pub fn CosmosIntegrator() -> Element {
                 h2 { class: "section-heading", { t!("ci-toggle-title") } }
                 p { class: "p-muted", { t!("ci-toggle-desc") } }
             }
+
+            // ── FFI ↔ JNI ──────────────────────────────────────────────────
+            div { class: "section-divider",
+                h2 { class: "section-heading", { t!("ci-map-title") } }
+                p { class: "p-muted", { t!("ci-map-note") } }
+                div { class: "code-block",
+                    pre { code { { t!("ci-map-body") } } }
+                }
+            }
         }
     }
 }

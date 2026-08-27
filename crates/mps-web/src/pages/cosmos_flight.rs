@@ -35,6 +35,15 @@ pub fn CosmosFlight() -> Element {
                 h2 { class: "section-heading", { t!("cf-pert-title") } }
                 p { class: "p-muted", { t!("cf-pert-desc") } }
             }
+
+            // ── FFI ↔ JNI ──────────────────────────────────────────────────
+            div { class: "section-divider",
+                h2 { class: "section-heading", { t!("cf-map-title") } }
+                p { class: "p-muted", { t!("cf-map-note") } }
+                div { class: "code-block",
+                    pre { code { { t!("cf-map-body") } } }
+                }
+            }
         }
     }
 }

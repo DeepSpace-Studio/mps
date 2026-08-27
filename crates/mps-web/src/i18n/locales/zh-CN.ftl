@@ -379,7 +379,7 @@ cosmos-nbody-note = N≤20 时直接两两法比 BH 树更快；这正是太阳�
 cosmos-bodies-title = 天体目录 ({ $count })
 cosmos-bodies-desc = JPL DE441 提供 10 个主要天体的 GM、轨道根数、相位，初始化时灌入 CosmosWorld。
 cosmos-jni-title = JNI 集成
-cosmos-jni-desc = mps-jni 暴露 cosmos_batch_* 方法：一次性提交多个飞船状态而非逐体调用，对 tracking 队列友好。
+cosmos-jni-desc = mps-jni 暴露 cosmosWorld* 方法;批量状态读回经 cosmosWorldDynamicBodySnapshot / cosmosWorldDynamicBodySnapshotCount 走 Arena(无逐体 JNI)。
 cosmos-arena-title = 共享内存 Arena（与 core 一致）
 cosmos-arena-desc = Cosmos 自带 SharedArena（magic COSMAREN）—— 即 mps-core shared_arena 的轨道尺度孪生版。Java 通过 DirectByteBuffer 读写刚体状态，无需逐体 JNI；cosmosWorldGetArenaDirectByteBuffer 与 core 的 worldGetArenaDirectByteBuffer 平行。
 cosmos-class-title = 功能分类
@@ -706,7 +706,7 @@ cw-overview-body = 与 mps-core 不同,这里没有刚体接触求解器 —— 
 cw-bodies-title = 天体编目
 cw-bodies-desc = cosmos_world_add_celestial 从 JPL DE441 数据集注入天体(GM、根数、相位)。10 个主天体在初始化时登记,用户天体再叠加其上。
 cw-batch-title = 批量插入
-cw-batch-desc = cosmos_world_add_n_body 一次提交多个航天器状态,而非逐体;对应 cosmos_batch_* JNI 模式,适合追踪队列负载。
+cw-batch-desc = cosmos_world_add_n_body 一次提交多个航天器状态,而非逐体;对应 cosmosWorldDynamicBodySnapshot 批量读回模式,适合追踪队列负载。
 cw-ffi-title = C FFI 接口面
 cw-ffi-desc = 世界层暴露 create / build / insert / step 生命周期。
 cw-ffi-1 = cosmos_world_create / cosmos_world_destroy —— 拥有轨道世界。
@@ -784,4 +784,58 @@ ca-ffi-1 = cosmos_world_create_shared_arena / cosmos_world_destroy_shared_arena 
 ca-ffi-2 = cosmos_world_get_shared_arena_address / cosmos_world_get_shared_arena_size —— 映射到 Java。
 ca-ffi-3 = cosmos_world_dynamic_body_snapshot(_count) —— 经 Arena 批量天体状态。
 ca-jni-title = JNI 批量 API
-ca-jni-desc = mps-jni 暴露 cosmos_batch_* 方法:一次提交多个航天器状态,适合追踪队列,而非每个体一次 JNI 调用。
+ca-jni-desc = mps-jni 暴露 cosmosWorld* 方法;批量状态读回经 cosmosWorldDynamicBodySnapshot / cosmosWorldDynamicBodySnapshotCount 走 Arena(无逐体 JNI)。
+
+# ---- Cosmos sub-page FFI<->JNI maps ----
+cw-map-title = FFI ↔ JNI
+cw-map-note = C FFI(snake_case)与 Java JNI(camelCase)一一对应;builder 插入后所有权转移给世界。
+cw-map-body = cosmos_world_create                  ->  cosmosWorldCreate
+  cosmos_world_destroy                 ->  cosmosWorldDestroy
+  cosmos_satellite_builder            ->  cosmosSatelliteBuilder
+  cosmos_fixed_body_builder           ->  cosmosFixedBodyBuilder
+  cosmos_builder_set_gravity_scale     ->  cosmosBuilderSetGravityScale
+  cosmos_builder_set_linear_damping    ->  cosmosBuilderSetLinearDamping
+  cosmos_builder_set_angular_damping   ->  cosmosBuilderSetAngularDamping
+  cosmos_builder_lock_translations     ->  cosmosBuilderLockTranslations
+  cosmos_world_insert_body             ->  cosmosWorldInsertBody
+  cosmos_world_insert_body_as_gravity_source -> cosmosWorldInsertBodyAsGravitySource
+  cosmos_world_set_central_body        ->  cosmosWorldSetCentralBody
+  cosmos_world_set_sun_position        ->  cosmosWorldSetSunPosition
+  cosmos_world_set_perturbation        ->  cosmosWorldSetPerturbation (+Ext)
+  cosmos_world_step                    ->  cosmosWorldStep
+  cosmos_world_step_n                  ->  cosmosWorldStepN
+  cosmos_world_add_celestial          ->  cosmosWorldAddCelestial
+  cosmos_world_add_n_body              ->  cosmosWorldAddNBody
+cg-map-title = FFI ↔ JNI
+cg-map-note = 本层唯一 FFI 是引力源注册;加速度函数在 cosmosWorldStep 内部调用。
+cg-map-body = cosmos_world_insert_body_as_gravity_source -> cosmosWorldInsertBodyAsGravitySource
+  # point_mass_acceleration / n_body_acceleration_reduce /
+  # far_field_monopole_simd 在 cosmosWorldStep 内部调用 - 无独立 FFI/JNI。
+ci-map-title = FFI ↔ JNI
+ci-map-note = 本层唯一 FFI 是步进;步进器族由 orbit_integration / verlet_substeps 内部选择。
+ci-map-body = cosmos_world_step    ->  cosmosWorldStep
+  cosmos_world_step_n  ->  cosmosWorldStepN
+  # verlet_step / explicit_highorder_step / advance_highorder_kahan 在 step 内部
+  # 按 orbit_integration + verlet_substeps 选择 - 无独立 JNI。
+co-map-title = FFI ↔ JNI
+co-map-note = Hill 半径仅 FFI(内部诊断,无 JNI);快照是 JNI 批量路径。
+co-map-body = cosmos_hill_radius_for              (仅 FFI - 内部诊断,无 JNI)
+  cosmos_world_dynamic_body_snapshot        ->  cosmosWorldDynamicBodySnapshot
+  cosmos_world_dynamic_body_snapshot_count  ->  cosmosWorldDynamicBodySnapshotCount
+  # mean_motion / eccentricity_vector / kozai_period 为内部纯函数,
+  # 经快照 / Arena 读回。
+cf-map-title = FFI ↔ JNI
+cf-map-note = flight/* 与 perturbation/* 仅计算;在 cosmosWorldStep 前注入,无独立 FFI/JNI。
+cf-map-body = # flight/dynamics : total_forces_and_moments / simulate_one_step
+  # flight/trim     : trim(hover_target / level_flight_target)
+  # flight/stability: linearize / longitudinal_modes / power_iteration
+  # perturbation     : atmospheric_drag_force / 光压
+  # 均在 cosmosWorldStep 前注入;结果经 cosmosWorldDynamicBodySnapshot 经 Arena 读回。
+ca-map-title = FFI ↔ JNI
+ca-map-note = Arena 把地址/大小作为 DirectByteBuffer 暴露给 Java;快照是批量读回路径。
+ca-map-body = cosmos_world_create_shared_arena     ->  cosmosWorldCreateSharedArena
+  cosmos_world_destroy_shared_arena    ->  cosmosWorldDestroySharedArena
+  cosmos_world_get_shared_arena_address ->  cosmosWorldGetSharedArenaAddress
+  cosmos_world_get_shared_arena_size     ->  cosmosWorldGetSharedArenaSize
+  cosmos_world_dynamic_body_snapshot        ->  cosmosWorldDynamicBodySnapshot
+  cosmos_world_dynamic_body_snapshot_count  ->  cosmosWorldDynamicBodySnapshotCount
