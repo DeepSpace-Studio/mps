@@ -2488,6 +2488,47 @@ pub extern "C" fn soft_body_read_normals(
     })
 }
 
+// ── Phase 24: XPBD/MassSpring substeps 暴露（动 fork：SoftBody.substeps 字段）──
+//
+// 求解器现在 step_xpbd / step_mass_spring 只有 1 substep（frame dt 一次性投影）。
+// 暴露 substeps 后，每帧 dt 被切成 n 等份、每个子步独立投影，硬材质 / 高 compliance
+// 收敛更快、更稳。改动在 fork 的 SoftBody::step 循环 + set_substeps，mps-core 只
+// 镜像一个 FFI。n==0 拒绝（保持前值），与 fork 侧守卫一致。
+
+/// Set the number of solver substeps per `soft_body_step` call for a soft body.
+///
+/// `n >= 1` splits the frame `dt` into `n` equal slices; the active solver
+/// (XPBD or MassSpring) is run once per slice, projecting constraints at a finer
+/// time resolution. Stiff materials and high-compliance edges converge faster
+/// and stay stable with more substeps (at `n×` the per-step CPU cost). `n == 0`
+/// is rejected and leaves the previous value unchanged.
+///
+/// Returns the new substep count, or 0 on null world / unknown id / invalid `n`.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_set_substeps(world: *mut WorldHandle, id: u32, n: u32) -> u32 {
+    ffi_guard(0, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_set_substeps: world is null");
+            return 0;
+        };
+        if n == 0 {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_substeps: n must be >= 1",
+            );
+            return 0;
+        }
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_set_substeps: unknown id");
+            return 0;
+        };
+        body.set_substeps(n);
+        clear_error();
+        body.substeps
+    })
+}
+
 // ── Phase 5d: 区块破坏 → 软体重建联动（Minecraft 闭环）──────────────────────
 
 //

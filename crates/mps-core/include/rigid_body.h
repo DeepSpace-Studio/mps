@@ -5041,6 +5041,19 @@ uint32_t soft_body_read_normals(const struct WorldHandle *world,
                                 uint32_t capacity);
 
 /**
+ * Set the number of solver substeps per `soft_body_step` call for a soft body.
+ *
+ * `n >= 1` splits the frame `dt` into `n` equal slices; the active solver
+ * (XPBD or MassSpring) is run once per slice, projecting constraints at a finer
+ * time resolution. Stiff materials and high-compliance edges converge faster
+ * and stay stable with more substeps (at `n×` the per-step CPU cost). `n == 0`
+ * is rejected and leaves the previous value unchanged.
+ *
+ * Returns the new substep count, or 0 on null world / unknown id / invalid `n`.
+ */
+uint32_t soft_body_set_substeps(struct WorldHandle *world, uint32_t id, uint32_t n);
+
+/**
  * Dig out a single voxel cell of a soft body built via `soft_body_voxel_build`,
  * removing the particle that occupies it (plus its incident springs/constraints)
  * and rebuilding the voxel→particle map so further digs stay consistent.

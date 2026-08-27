@@ -28,9 +28,10 @@ mod tests {
         soft_body_set_distance_constraint_compression, soft_body_set_gravity,
         soft_body_set_plasticity, soft_body_set_pressure, soft_body_set_self_collision,
         soft_body_set_self_collision_friction, soft_body_set_spring_stiffness,
-        soft_body_set_tear_strain, soft_body_set_volume_conservation, soft_body_sleep,
-        soft_body_subdivide_tetrahedra, soft_body_total_volume, soft_body_voxel_build,
-        soft_body_voxel_dig, soft_body_wake, soft_chain_create, soft_chain_node_handles,
+        soft_body_set_substeps, soft_body_set_tear_strain, soft_body_set_volume_conservation,
+        soft_body_sleep, soft_body_subdivide_tetrahedra, soft_body_total_volume,
+        soft_body_voxel_build, soft_body_voxel_dig, soft_body_wake, soft_chain_create,
+        soft_chain_node_handles,
     };
     use mps_core::rapier::voxel::{collider_builder_create_voxels, collider_voxel_edit};
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
@@ -3618,5 +3619,83 @@ mod tests {
             soft_body_read_normals(std::ptr::null_mut(), 0, std::ptr::null_mut(), 0),
             0
         );
+    }
+    // ── Phase 24: XPBD substeps 暴露 ─────────────────────────────────────────────
+    #[test]
+    fn soft_body_set_substeps_changes_convergence() {
+        use std::ptr::null_mut;
+        // Two identical XPBD rod bodies: A pinned at origin, B free 1.0 below.
+        // High compliance (soft) + 1 iteration so substep count visibly changes
+        // how well the distance constraint is satisfied after one frame.
+        fn build() -> (*mut WorldHandle, u32, u32) {
+            let world = make_world();
+            let id = soft_body_create(
+                world,
+                Vec3 {
+                    x: 0.0,
+                    y: -9.81,
+                    z: 0.0,
+                },
+            );
+            soft_body_configure_solver(world, id, 1, 1, 0.01); // mode 1 = Xpbd, 1 iteration, compliance 0.01
+            let a = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::TRUE);
+            let b = soft_body_add_particle(world, id, 0.0, -1.0, 0.0, 1.0, Bool::FALSE);
+            soft_body_add_distance_constraint(world, id, a, b, 0.01);
+            (world, id, b)
+        }
+        fn len_after(world: *mut WorldHandle, id: u32, b: u32, subs: u32) -> f64 {
+            soft_body_set_substeps(world, id, subs);
+            world_step(world, 1.0 / 60.0);
+            let mut pos = Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            };
+            assert_eq!(
+                soft_body_get_particle(world, id, b, &mut pos as *mut Vec3, null_mut()),
+                Bool::TRUE
+            );
+            // rest length was 1.0 (captured from initial spacing); measure current length.
+            (pos.x * pos.x + pos.y * pos.y + pos.z * pos.z).sqrt()
+        }
+
+        let (w1, id1, b1) = build();
+        let (w8, id8, b8) = build();
+        let len1 = len_after(w1, id1, b1, 1);
+        let len8 = len_after(w8, id8, b8, 8);
+        // 1 substep projects the soft constraint once → stretches more than 8 substeps
+        // (8× projection per frame converges closer to rest length).
+        assert!(
+            len1 > len8 + 1e-4,
+            "substeps should reduce stretch: len1={} len8={}",
+            len1,
+            len8
+        );
+        world_destroy(w1);
+        world_destroy(w8);
+    }
+
+    #[test]
+    fn soft_body_set_substeps_rejects_zero_and_returns_value() {
+        let world = make_world();
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        // Default substeps == 1.
+        assert_eq!(soft_body_set_substeps(world, id, 1), 1);
+        // Set 4, read back.
+        assert_eq!(soft_body_set_substeps(world, id, 4), 4);
+        // Zero rejected (keeps previous), returns 0 to signal error.
+        assert_eq!(soft_body_set_substeps(world, id, 0), 0);
+        // Previous value (4) still in effect.
+        assert_eq!(soft_body_set_substeps(world, id, 4), 4);
+        // Unknown id → 0.
+        assert_eq!(soft_body_set_substeps(world, u32::MAX, 4), 0);
+        world_destroy(world);
     }
 }
