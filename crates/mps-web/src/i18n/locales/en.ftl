@@ -787,56 +787,64 @@ ca-jni-title = JNI batch API
 ca-jni-desc = mps-jni exposes cosmosWorld* methods; bulk state read-back goes through cosmosWorldDynamicBodySnapshot / cosmosWorldDynamicBodySnapshotCount over the Arena (no per-body JNI).
 
 # ---- Cosmos sub-page FFI<->JNI maps ----
-cw-map-title = FFI ↔ JNI
-cw-map-note = C FFI (snake_case) maps 1:1 to Java JNI (camelCase). After a builder is inserted, ownership transfers to the world.
-cw-map-body = cosmos_world_create                  ->  cosmosWorldCreate
-  cosmos_world_destroy                 ->  cosmosWorldDestroy
-  cosmos_satellite_builder            ->  cosmosSatelliteBuilder
-  cosmos_fixed_body_builder           ->  cosmosFixedBodyBuilder
-  cosmos_builder_set_gravity_scale     ->  cosmosBuilderSetGravityScale
-  cosmos_builder_set_linear_damping    ->  cosmosBuilderSetLinearDamping
-  cosmos_builder_set_angular_damping   ->  cosmosBuilderSetAngularDamping
-  cosmos_builder_lock_translations     ->  cosmosBuilderLockTranslations
-  cosmos_world_insert_body             ->  cosmosWorldInsertBody
-  cosmos_world_insert_body_as_gravity_source -> cosmosWorldInsertBodyAsGravitySource
-  cosmos_world_set_central_body        ->  cosmosWorldSetCentralBody
-  cosmos_world_set_sun_position        ->  cosmosWorldSetSunPosition
-  cosmos_world_set_perturbation        ->  cosmosWorldSetPerturbation (+Ext)
-  cosmos_world_step                    ->  cosmosWorldStep
-  cosmos_world_step_n                  ->  cosmosWorldStepN
-  cosmos_world_add_celestial          ->  cosmosWorldAddCelestial
-  cosmos_world_add_n_body              ->  cosmosWorldAddNBody
-cg-map-title = FFI ↔ JNI
-cg-map-note = Gravity source registration is the only FFI in this layer; the acceleration functions run inside cosmosWorldStep.
-cg-map-body = cosmos_world_insert_body_as_gravity_source -> cosmosWorldInsertBodyAsGravitySource
-  # point_mass_acceleration / n_body_acceleration_reduce /
-  # far_field_monopole_simd are called inside cosmosWorldStep - no standalone FFI/JNI.
-ci-map-title = FFI ↔ JNI
-ci-map-note = Stepping is the only FFI in this layer; the stepper family is selected internally by orbit_integration / verlet_substeps.
-ci-map-body = cosmos_world_step    ->  cosmosWorldStep
-  cosmos_world_step_n  ->  cosmosWorldStepN
-  # verlet_step / explicit_highorder_step / advance_highorder_kahan run inside
-  # step, chosen by orbit_integration + verlet_substeps - no standalone JNI.
-co-map-title = FFI ↔ JNI
-co-map-note = Hill radius is FFI-only (internal diagnostics); snapshots are the JNI bulk path.
-co-map-body = cosmos_hill_radius_for              (FFI only - internal diagnostic, no JNI)
-  cosmos_world_dynamic_body_snapshot        ->  cosmosWorldDynamicBodySnapshot
-  cosmos_world_dynamic_body_snapshot_count  ->  cosmosWorldDynamicBodySnapshotCount
-  # mean_motion / eccentricity_vector / kozai_period are internal pure fns,
-  # read back via the snapshot / Arena.
-cf-map-title = FFI ↔ JNI
-cf-map-note = flight/* and perturbation/* are compute-only; they run before cosmosWorldStep and have no standalone FFI/JNI.
-cf-map-body = # flight/dynamics : total_forces_and_moments / simulate_one_step
-  # flight/trim     : trim (hover_target / level_flight_target)
-  # flight/stability: linearize / longitudinal_modes / power_iteration
-  # perturbation     : atmospheric_drag_force / solar pressure
+cw-map-title = FFI <-> JNI  (src: implementation module)
+cw-map-note = C FFI (snake_case) maps 1:1 to Java JNI (camelCase). After a builder is inserted, ownership transfers to the world. The src column names the real implementation module in mps-cosmos.
+cw-map-body = FFI                                   JNI                          src
+  cosmos_world_create                  cosmosWorldCreate            world.rs
+  cosmos_world_destroy                 cosmosWorldDestroy           world.rs
+  cosmos_satellite_builder            cosmosSatelliteBuilder       bodies.rs
+  cosmos_fixed_body_builder           cosmosFixedBodyBuilder       bodies.rs
+  cosmos_builder_set_gravity_scale     cosmosBuilderSetGravityScale bodies.rs
+  cosmos_builder_set_linear_damping    cosmosBuilderSetLinearDamping bodies.rs
+  cosmos_builder_set_angular_damping   cosmosBuilderSetAngularDamping bodies.rs
+  cosmos_builder_lock_translations     cosmosBuilderLockTranslations bodies.rs
+  cosmos_world_insert_body             cosmosWorldInsertBody        world.rs
+  cosmos_world_insert_body_as_gravity_source cosmosWorldInsertBodyAsGravitySource world.rs + gravity.rs
+  cosmos_world_set_central_body        cosmosWorldSetCentralBody    world.rs
+  cosmos_world_set_sun_position        cosmosWorldSetSunPosition    world.rs
+  cosmos_world_set_perturbation        cosmosWorldSetPerturbation   world.rs + perturbation/
+  cosmos_world_step                    cosmosWorldStep              world.rs -> integrator.rs
+  cosmos_world_step_n                  cosmosWorldStepN             world.rs -> integrator.rs
+  cosmos_world_add_celestial          cosmosWorldAddCelestial       world.rs + gravity.rs
+  cosmos_world_add_n_body              cosmosWorldAddNBody          world.rs + gravity.rs
+cg-map-title = FFI <-> JNI  (src: implementation module)
+cg-map-note = Gravity source registration is the only FFI in this layer; the acceleration functions run inside cosmosWorldStep. The src column names where they live.
+cg-map-body = FFI                                                       JNI  src
+  cosmos_world_insert_body_as_gravity_source  cosmosWorldInsertBodyAsGravitySource  world.rs -> gravity.rs
+  # point_mass_acceleration / n_body_acceleration_reduce / far_field_monopole_simd
+  #   are called inside cosmosWorldStep - implemented in gravity.rs + integrator.rs
+  # no standalone FFI/JNI.
+ci-map-title = FFI <-> JNI  (src: implementation module)
+ci-map-note = Stepping is the only FFI in this layer; the stepper family is selected internally by orbit_integration / verlet_substeps. The src column names where they live.
+ci-map-body = FFI                          JNI                 src
+  cosmos_world_step    cosmosWorldStep    world.rs -> integrator.rs
+  cosmos_world_step_n  cosmosWorldStepN  world.rs -> integrator.rs
+  # verlet_step / explicit_highorder_step / advance_highorder_kahan
+  #   live in integrator.rs, chosen by orbit_integration + verlet_substeps
+  # no standalone JNI.
+co-map-title = FFI <-> JNI  (src: implementation module)
+co-map-note = Hill radius is FFI-only (internal diagnostics, in world.rs -> orbit_diagnostics.rs); snapshots are the JNI bulk path (ffi.rs + arena.rs layout).
+co-map-body = FFI                                                   JNI  src
+  cosmos_hill_radius_for  (FFI only)  world.rs -> orbit_diagnostics.rs
+  cosmos_world_dynamic_body_snapshot        cosmosWorldDynamicBodySnapshot       ffi.rs + arena.rs
+  cosmos_world_dynamic_body_snapshot_count  cosmosWorldDynamicBodySnapshotCount  ffi.rs + arena.rs
+  # mean_motion / eccentricity_vector / kozai_period are pure fns in
+  # orbit.rs / orbit_diagnostics.rs, read back via the snapshot / Arena.
+cf-map-title = FFI <-> JNI  (src: implementation module)
+cf-map-note = flight/* and perturbation/* are compute-only; they run before cosmosWorldStep and have no standalone FFI/JNI. The src column names where they live.
+cf-map-body = module                         functions                              src
+  flight/dynamics   total_forces_and_moments / simulate_one_step  flight/dynamics.rs
+  flight/trim      trim (hover_target / level_flight_target)      flight/trim.rs
+  flight/stability linearize / longitudinal_modes / power_iteration flight/stability.rs
+  perturbation     atmospheric_drag_force / solar pressure        perturbation/
   # all injected before cosmosWorldStep; results read back via
-  # cosmosWorldDynamicBodySnapshot through the Arena.
-ca-map-title = FFI ↔ JNI
-ca-map-note = The arena exposes its address/size to Java as a DirectByteBuffer; snapshots are the bulk read-back path.
-ca-map-body = cosmos_world_create_shared_arena     ->  cosmosWorldCreateSharedArena
-  cosmos_world_destroy_shared_arena    ->  cosmosWorldDestroySharedArena
-  cosmos_world_get_shared_arena_address ->  cosmosWorldGetSharedArenaAddress
-  cosmos_world_get_shared_arena_size     ->  cosmosWorldGetSharedArenaSize
-  cosmos_world_dynamic_body_snapshot        ->  cosmosWorldDynamicBodySnapshot
-  cosmos_world_dynamic_body_snapshot_count  ->  cosmosWorldDynamicBodySnapshotCount
+  # cosmosWorldDynamicBodySnapshot through the Arena (arena.rs).
+ca-map-title = FFI <-> JNI  (src: implementation module)
+ca-map-note = The arena exposes its address/size to Java as a DirectByteBuffer; snapshots are the bulk read-back path (arena.rs).
+ca-map-body = FFI                                              JNI                              src
+  cosmos_world_create_shared_arena     cosmosWorldCreateSharedArena     world.rs -> arena.rs
+  cosmos_world_destroy_shared_arena    cosmosWorldDestroySharedArena    world.rs -> arena.rs
+  cosmos_world_get_shared_arena_address cosmosWorldGetSharedArenaAddress arena.rs
+  cosmos_world_get_shared_arena_size     cosmosWorldGetSharedArenaSize     arena.rs
+  cosmos_world_dynamic_body_snapshot        cosmosWorldDynamicBodySnapshot       ffi.rs + arena.rs
+  cosmos_world_dynamic_body_snapshot_count  cosmosWorldDynamicBodySnapshotCount  ffi.rs + arena.rs

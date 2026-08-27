@@ -787,55 +787,61 @@ ca-jni-title = JNI 批量 API
 ca-jni-desc = mps-jni 暴露 cosmosWorld* 方法;批量状态读回经 cosmosWorldDynamicBodySnapshot / cosmosWorldDynamicBodySnapshotCount 走 Arena(无逐体 JNI)。
 
 # ---- Cosmos sub-page FFI<->JNI maps ----
-cw-map-title = FFI ↔ JNI
-cw-map-note = C FFI(snake_case)与 Java JNI(camelCase)一一对应;builder 插入后所有权转移给世界。
-cw-map-body = cosmos_world_create                  ->  cosmosWorldCreate
-  cosmos_world_destroy                 ->  cosmosWorldDestroy
-  cosmos_satellite_builder            ->  cosmosSatelliteBuilder
-  cosmos_fixed_body_builder           ->  cosmosFixedBodyBuilder
-  cosmos_builder_set_gravity_scale     ->  cosmosBuilderSetGravityScale
-  cosmos_builder_set_linear_damping    ->  cosmosBuilderSetLinearDamping
-  cosmos_builder_set_angular_damping   ->  cosmosBuilderSetAngularDamping
-  cosmos_builder_lock_translations     ->  cosmosBuilderLockTranslations
-  cosmos_world_insert_body             ->  cosmosWorldInsertBody
-  cosmos_world_insert_body_as_gravity_source -> cosmosWorldInsertBodyAsGravitySource
-  cosmos_world_set_central_body        ->  cosmosWorldSetCentralBody
-  cosmos_world_set_sun_position        ->  cosmosWorldSetSunPosition
-  cosmos_world_set_perturbation        ->  cosmosWorldSetPerturbation (+Ext)
-  cosmos_world_step                    ->  cosmosWorldStep
-  cosmos_world_step_n                  ->  cosmosWorldStepN
-  cosmos_world_add_celestial          ->  cosmosWorldAddCelestial
-  cosmos_world_add_n_body              ->  cosmosWorldAddNBody
-cg-map-title = FFI ↔ JNI
-cg-map-note = 本层唯一 FFI 是引力源注册;加速度函数在 cosmosWorldStep 内部调用。
-cg-map-body = cosmos_world_insert_body_as_gravity_source -> cosmosWorldInsertBodyAsGravitySource
-  # point_mass_acceleration / n_body_acceleration_reduce /
-  # far_field_monopole_simd 在 cosmosWorldStep 内部调用 - 无独立 FFI/JNI。
-ci-map-title = FFI ↔ JNI
-ci-map-note = 本层唯一 FFI 是步进;步进器族由 orbit_integration / verlet_substeps 内部选择。
-ci-map-body = cosmos_world_step    ->  cosmosWorldStep
-  cosmos_world_step_n  ->  cosmosWorldStepN
-  # verlet_step / explicit_highorder_step / advance_highorder_kahan 在 step 内部
-  # 按 orbit_integration + verlet_substeps 选择 - 无独立 JNI。
-co-map-title = FFI ↔ JNI
-co-map-note = Hill 半径仅 FFI(内部诊断,无 JNI);快照是 JNI 批量路径。
-co-map-body = cosmos_hill_radius_for              (仅 FFI - 内部诊断,无 JNI)
-  cosmos_world_dynamic_body_snapshot        ->  cosmosWorldDynamicBodySnapshot
-  cosmos_world_dynamic_body_snapshot_count  ->  cosmosWorldDynamicBodySnapshotCount
-  # mean_motion / eccentricity_vector / kozai_period 为内部纯函数,
+cw-map-title = FFI <-> JNI  (src: 实现模块)
+cw-map-note = C FFI(snake_case)与 Java JNI(camelCase)一一对应;builder 插入后所有权转移给世界。src 列标注 mps-cosmos 中的真实实现模块。
+cw-map-body = FFI                                   JNI                          src
+  cosmos_world_create                  cosmosWorldCreate            world.rs
+  cosmos_world_destroy                 cosmosWorldDestroy           world.rs
+  cosmos_satellite_builder            cosmosSatelliteBuilder       bodies.rs
+  cosmos_fixed_body_builder           cosmosFixedBodyBuilder       bodies.rs
+  cosmos_builder_set_gravity_scale     cosmosBuilderSetGravityScale bodies.rs
+  cosmos_builder_set_linear_damping    cosmosBuilderSetLinearDamping bodies.rs
+  cosmos_builder_set_angular_damping   cosmosBuilderSetAngularDamping bodies.rs
+  cosmos_builder_lock_translations     cosmosBuilderLockTranslations bodies.rs
+  cosmos_world_insert_body             cosmosWorldInsertBody        world.rs
+  cosmos_world_insert_body_as_gravity_source cosmosWorldInsertBodyAsGravitySource world.rs + gravity.rs
+  cosmos_world_set_central_body        cosmosWorldSetCentralBody    world.rs
+  cosmos_world_set_sun_position        cosmosWorldSetSunPosition    world.rs
+  cosmos_world_set_perturbation        cosmosWorldSetPerturbation   world.rs + perturbation/
+  cosmos_world_step                    cosmosWorldStep              world.rs -> integrator.rs
+  cosmos_world_step_n                  cosmosWorldStepN             world.rs -> integrator.rs
+  cosmos_world_add_celestial          cosmosWorldAddCelestial       world.rs + gravity.rs
+  cosmos_world_add_n_body              cosmosWorldAddNBody          world.rs + gravity.rs
+cg-map-title = FFI <-> JNI  (src: 实现模块)
+cg-map-note = 本层唯一 FFI 是引力源注册;加速度函数在 cosmosWorldStep 内部调用。src 列标注其所在模块。
+cg-map-body = FFI                                                       JNI  src
+  cosmos_world_insert_body_as_gravity_source  cosmosWorldInsertBodyAsGravitySource  world.rs -> gravity.rs
+  # point_mass_acceleration / n_body_acceleration_reduce / far_field_monopole_simd
+  #   在 cosmosWorldStep 内部调用 —— 实现于 gravity.rs + integrator.rs,无独立 FFI/JNI。
+ci-map-title = FFI <-> JNI  (src: 实现模块)
+ci-map-note = 本层唯一 FFI 是步进;步进器族由 orbit_integration / verlet_substeps 内部选择。src 列标注其所在模块。
+ci-map-body = FFI                          JNI                 src
+  cosmos_world_step    cosmosWorldStep    world.rs -> integrator.rs
+  cosmos_world_step_n  cosmosWorldStepN  world.rs -> integrator.rs
+  # verlet_step / explicit_highorder_step / advance_highorder_kahan
+  #   位于 integrator.rs,按 orbit_integration + verlet_substeps 选择,无独立 JNI。
+co-map-title = FFI <-> JNI  (src: 实现模块)
+co-map-note = Hill 半径仅 FFI(内部诊断,world.rs -> orbit_diagnostics.rs);快照是 JNI 批量路径(ffi.rs + arena.rs 布局)。
+co-map-body = FFI                                                   JNI  src
+  cosmos_hill_radius_for  (仅 FFI)  world.rs -> orbit_diagnostics.rs
+  cosmos_world_dynamic_body_snapshot        cosmosWorldDynamicBodySnapshot       ffi.rs + arena.rs
+  cosmos_world_dynamic_body_snapshot_count  cosmosWorldDynamicBodySnapshotCount  ffi.rs + arena.rs
+  # mean_motion / eccentricity_vector / kozai_period 为 orbit.rs / orbit_diagnostics.rs 纯函数,
   # 经快照 / Arena 读回。
-cf-map-title = FFI ↔ JNI
-cf-map-note = flight/* 与 perturbation/* 仅计算;在 cosmosWorldStep 前注入,无独立 FFI/JNI。
-cf-map-body = # flight/dynamics : total_forces_and_moments / simulate_one_step
-  # flight/trim     : trim(hover_target / level_flight_target)
-  # flight/stability: linearize / longitudinal_modes / power_iteration
-  # perturbation     : atmospheric_drag_force / 光压
-  # 均在 cosmosWorldStep 前注入;结果经 cosmosWorldDynamicBodySnapshot 经 Arena 读回。
-ca-map-title = FFI ↔ JNI
-ca-map-note = Arena 把地址/大小作为 DirectByteBuffer 暴露给 Java;快照是批量读回路径。
-ca-map-body = cosmos_world_create_shared_arena     ->  cosmosWorldCreateSharedArena
-  cosmos_world_destroy_shared_arena    ->  cosmosWorldDestroySharedArena
-  cosmos_world_get_shared_arena_address ->  cosmosWorldGetSharedArenaAddress
-  cosmos_world_get_shared_arena_size     ->  cosmosWorldGetSharedArenaSize
-  cosmos_world_dynamic_body_snapshot        ->  cosmosWorldDynamicBodySnapshot
-  cosmos_world_dynamic_body_snapshot_count  ->  cosmosWorldDynamicBodySnapshotCount
+cf-map-title = FFI <-> JNI  (src: 实现模块)
+cf-map-note = flight/* 与 perturbation/* 仅计算;在 cosmosWorldStep 前注入,无独立 FFI/JNI。src 列标注其所在模块。
+cf-map-body = 模块                         函数                                   src
+  flight/dynamics   总力与力矩 total_forces_and_moments / simulate_one_step  flight/dynamics.rs
+  flight/trim      trim(hover_target / level_flight_target)          flight/trim.rs
+  flight/stability linearize / longitudinal_modes / power_iteration  flight/stability.rs
+  perturbation     大气阻力 atmospheric_drag_force / 光压              perturbation/
+  # 均在 cosmosWorldStep 前注入;结果经 cosmosWorldDynamicBodySnapshot 经 Arena(arena.rs)读回。
+ca-map-title = FFI <-> JNI  (src: 实现模块)
+ca-map-note = Arena 把地址/大小作为 DirectByteBuffer 暴露给 Java;快照是批量读回路径(arena.rs)。
+ca-map-body = FFI                                              JNI                              src
+  cosmos_world_create_shared_arena     cosmosWorldCreateSharedArena     world.rs -> arena.rs
+  cosmos_world_destroy_shared_arena    cosmosWorldDestroySharedArena    world.rs -> arena.rs
+  cosmos_world_get_shared_arena_address cosmosWorldGetSharedArenaAddress arena.rs
+  cosmos_world_get_shared_arena_size     cosmosWorldGetSharedArenaSize     arena.rs
+  cosmos_world_dynamic_body_snapshot        cosmosWorldDynamicBodySnapshot       ffi.rs + arena.rs
+  cosmos_world_dynamic_body_snapshot_count  cosmosWorldDynamicBodySnapshotCount  ffi.rs + arena.rs
