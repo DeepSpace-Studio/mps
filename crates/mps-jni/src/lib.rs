@@ -1739,6 +1739,12 @@ jni!(boolean softBodyAttachParticle(long world, int id, int particle, long body,
 jni!(boolean softBodyDetachParticle(long world, int id, int particle) { sb::soft_body_detach_particle(m::<WH>(world), id as u32, particle as u32).0 as jbyte });
 // Phase 9: 撕裂阈值（应变阈值，>0 开启，<=0/disabled 关闭）
 jni!(boolean softBodySetTearStrain(long world, int id, double strainToBreak, int enabled) { sb::soft_body_set_tear_strain(m::<WH>(world), id as u32, strainToBreak, enabled as u8).0 as jbyte });
+// Phase 27: 断裂力学撕裂准则 - 轴向应力阈值
+jni!(boolean softBodySetTearStress(long world, int id, double stressToBreak, int enabled) { sb::soft_body_set_tear_stress(m::<WH>(world), id as u32, stressToBreak, enabled as u8).0 as jbyte });
+// Phase 27: 断裂力学撕裂准则 - 应变能/断裂韧性阈值
+jni!(boolean softBodySetTearEnergy(long world, int id, double energyToBreak, int enabled) { sb::soft_body_set_tear_energy(m::<WH>(world), id as u32, energyToBreak, enabled as u8).0 as jbyte });
+// Phase 27: 体级正交各向异性刚度轴
+jni!(boolean softBodySetAnisotropy(long world, int id, double x, double y, double z, int enabled) { sb::soft_body_set_anisotropy(m::<WH>(world), id as u32, x, y, z, enabled as u8).0 as jbyte });
 // Phase 10: 塑性（永久变形，橡皮泥/记忆棉）
 jni!(boolean softBodySetPlasticity(long world, int id, double yieldStrain, double creep, int enabled) { sb::soft_body_set_plasticity(m::<WH>(world), id as u32, yieldStrain, creep, enabled as u8).0 as jbyte });
 // Phase 11: 充气/气压（闭合三角网格沿法向吹胀）

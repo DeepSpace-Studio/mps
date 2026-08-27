@@ -4487,6 +4487,55 @@ Bool soft_body_set_tear_strain(struct WorldHandle *world,
                                uint8_t enabled);
 
 /**
+ * # Phase 27 — 设置断裂力学撕裂准则（轴向应力阈值）
+ *
+ * 把 `id` 软体的撕裂准则设为 `Stress(threshold)`：任何结构边（XPBD distance
+ * constraint 或 MassSpring spring）的轴向力 `|k·(len − rest)|` 超过 `threshold`
+ * 时断裂。`k` = 弹簧刚度，或 `1/(compliance + ε)`（XPBD 距离约束）。
+ * `enabled == 0` 或 `threshold <= 0` 关闭撕裂（等同于 `tear = None`）。
+ *
+ * # Returns
+ * `Bool::TRUE` 成功（含关闭）；`id` 未知 / world 为 null 返回 `Bool::FALSE`。
+ */
+Bool soft_body_set_tear_stress(struct WorldHandle *world,
+                               uint32_t id,
+                               double stress_to_break,
+                               uint8_t enabled);
+
+/**
+ * # Phase 27 — 设置断裂力学撕裂准则（应变能 / 断裂韧性阈值）
+ *
+ * 把 `id` 软体的撕裂准则设为 `Energy(threshold)`：任何结构边的弹性应变能
+ * `½·k·(len − rest)²` 超过 `threshold` 时断裂（断裂韧性临界释放率代理）。
+ * `enabled == 0` 或 `threshold <= 0` 关闭撕裂（等同于 `tear = None`）。
+ *
+ * # Returns
+ * `Bool::TRUE` 成功（含关闭）；`id` 未知 / world 为 null 返回 `Bool::FALSE`。
+ */
+Bool soft_body_set_tear_energy(struct WorldHandle *world,
+                               uint32_t id,
+                               double energy_to_break,
+                               uint8_t enabled);
+
+/**
+ * # Phase 27 — 设置体级正交各向异性刚度轴
+ *
+ * `anisotropy != 0` 且 `x,y,z 有限且 >= 0` 时，开启方向相关刚度：每条边有效
+ * XPBD 柔度 = `base / (nᵀ·diag(x,y,z)·n)`（n 为边单位方向），使沿 x 轴对齐的
+ * 边在 `x > 1` 时更硬。传 `enabled == 0` 或 `x=y=z=0` 关闭（各边保持各向同性）。
+ *
+ * # Returns
+ * `Bool::TRUE` 成功（含关闭）；`world` 为 null / 向量含非有限值 / 含负分量
+ * 返回 `Bool::FALSE`。
+ */
+Bool soft_body_set_anisotropy(struct WorldHandle *world,
+                              uint32_t id,
+                              double x,
+                              double y,
+                              double z,
+                              uint8_t enabled);
+
+/**
  * # Phase 10 — 设置塑性参数（永久变形 / 像橡皮泥 / 记忆棉）
  *
  * 把 `id` 软体的塑性设为 `PlasticityParams { yield_strain, creep }`：

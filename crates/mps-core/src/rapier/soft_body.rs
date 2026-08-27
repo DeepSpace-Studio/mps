@@ -33,6 +33,7 @@ use crate::rapier::ffi::{
     Bool, RigidBodyHandleRaw, Sphere, Vec3, WorldHandle, pack_rigid_body_handle,
     unpack_rigid_body_handle, vec3_finite, vec3_from_rapier, vec3_to_rapier,
 };
+use rapier3d::dynamics::soft_body::TearCriterion;
 use rapier3d::math::Vector;
 use rapier3d::prelude::soft_body::{CohesionParams, PlasticityParams, SelfCollisionParams, Wind};
 use rapier3d::prelude::soft_body::{SoftBody, SoftBodyId, SoftSolver};
@@ -891,6 +892,139 @@ pub extern "C" fn soft_body_set_tear_strain(
             None
         };
         sb.set_tear_strain(strain);
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// # Phase 27 — 设置断裂力学撕裂准则（轴向应力阈值）
+///
+/// 把 `id` 软体的撕裂准则设为 `Stress(threshold)`：任何结构边（XPBD distance
+/// constraint 或 MassSpring spring）的轴向力 `|k·(len − rest)|` 超过 `threshold`
+/// 时断裂。`k` = 弹簧刚度，或 `1/(compliance + ε)`（XPBD 距离约束）。
+/// `enabled == 0` 或 `threshold <= 0` 关闭撕裂（等同于 `tear = None`）。
+///
+/// # Returns
+/// `Bool::TRUE` 成功（含关闭）；`id` 未知 / world 为 null 返回 `Bool::FALSE`。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_set_tear_stress(
+    world: *mut WorldHandle,
+    id: u32,
+    stress_to_break: f64,
+    enabled: u8,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !stress_to_break.is_finite() {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_tear_stress: non-finite threshold",
+            );
+            return Bool::FALSE;
+        }
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_set_tear_stress: unknown id");
+            return Bool::FALSE;
+        };
+        let stress = if enabled != 0 && stress_to_break > 0.0 {
+            Some(stress_to_break)
+        } else {
+            None
+        };
+        sb.set_tear_stress(stress);
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// # Phase 27 — 设置断裂力学撕裂准则（应变能 / 断裂韧性阈值）
+///
+/// 把 `id` 软体的撕裂准则设为 `Energy(threshold)`：任何结构边的弹性应变能
+/// `½·k·(len − rest)²` 超过 `threshold` 时断裂（断裂韧性临界释放率代理）。
+/// `enabled == 0` 或 `threshold <= 0` 关闭撕裂（等同于 `tear = None`）。
+///
+/// # Returns
+/// `Bool::TRUE` 成功（含关闭）；`id` 未知 / world 为 null 返回 `Bool::FALSE`。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_set_tear_energy(
+    world: *mut WorldHandle,
+    id: u32,
+    energy_to_break: f64,
+    enabled: u8,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !energy_to_break.is_finite() {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_tear_energy: non-finite threshold",
+            );
+            return Bool::FALSE;
+        }
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_set_tear_energy: unknown id");
+            return Bool::FALSE;
+        };
+        let energy = if enabled != 0 && energy_to_break > 0.0 {
+            Some(energy_to_break)
+        } else {
+            None
+        };
+        sb.set_tear_energy(energy);
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// # Phase 27 — 设置体级正交各向异性刚度轴
+///
+/// `anisotropy != 0` 且 `x,y,z 有限且 >= 0` 时，开启方向相关刚度：每条边有效
+/// XPBD 柔度 = `base / (nᵀ·diag(x,y,z)·n)`（n 为边单位方向），使沿 x 轴对齐的
+/// 边在 `x > 1` 时更硬。传 `enabled == 0` 或 `x=y=z=0` 关闭（各边保持各向同性）。
+///
+/// # Returns
+/// `Bool::TRUE` 成功（含关闭）；`world` 为 null / 向量含非有限值 / 含负分量
+/// 返回 `Bool::FALSE`。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_set_anisotropy(
+    world: *mut WorldHandle,
+    id: u32,
+    x: f64,
+    y: f64,
+    z: f64,
+    enabled: u8,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !x.is_finite() || !y.is_finite() || !z.is_finite() {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_anisotropy: non-finite component",
+            );
+            return Bool::FALSE;
+        }
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_set_anisotropy: unknown id");
+            return Bool::FALSE;
+        };
+        let axes = if enabled != 0 && x >= 0.0 && y >= 0.0 && z >= 0.0 && (x + y + z) > 0.0 {
+            Some(rapier3d::math::Vector::new(x, y, z))
+        } else {
+            None
+        };
+        sb.set_anisotropy(axes);
         clear_error();
         Bool::TRUE
     })
@@ -2366,7 +2500,7 @@ pub extern "C" fn soft_body_read_aabb(
 /// `SoftBodySet`'s `get`/`get_mut`. The fork is unchanged.
 const SB_MAGIC_0: u8 = b'S';
 const SB_MAGIC_1: u8 = b'B';
-const SB_VERSION: u8 = 1;
+const SB_VERSION: u8 = 2;
 
 // ── little-endian writers ───────────────────────────────────────────────────────
 fn sb_push_u8(buf: &mut Vec<u8>, v: u8) {
@@ -2552,8 +2686,30 @@ fn sb_serialize_body(buf: &mut Vec<u8>, b: &SoftBody) {
     sb_push_option_f64(buf, b.pressure);
     sb_push_f64(buf, b.damping);
     sb_push_u32(buf, b.substeps);
-    // tear_strain
-    sb_push_option_f64(buf, b.tear_strain);
+    // tear criterion (Phase 27: enum Strain/Stress/Energy)
+    match &b.tear {
+        Some(TearCriterion::Strain(t)) => {
+            sb_push_u8(buf, 0);
+            sb_push_f64(buf, *t);
+        }
+        Some(TearCriterion::Stress(t)) => {
+            sb_push_u8(buf, 1);
+            sb_push_f64(buf, *t);
+        }
+        Some(TearCriterion::Energy(t)) => {
+            sb_push_u8(buf, 2);
+            sb_push_f64(buf, *t);
+        }
+        None => sb_push_u8(buf, 0xff),
+    }
+    // anisotropy (Phase 27: optional orthotropic axes)
+    match &b.anisotropy {
+        Some(v) => {
+            sb_push_u8(buf, 1);
+            sb_push_vec(buf, *v);
+        }
+        None => sb_push_u8(buf, 0),
+    }
     // plasticity
     match &b.plasticity {
         Some(p) => {
@@ -2722,7 +2878,16 @@ fn sb_deserialize_body(c: &mut SbCursor) -> Option<SoftBody> {
     let pressure = c.take_option_f64()?;
     let damping = c.take_f64()?;
     let substeps = c.take_u32()?;
-    let tear_strain = c.take_option_f64()?;
+    let tear = match c.take_u8()? {
+        0 => Some(TearCriterion::Strain(c.take_f64()?)),
+        1 => Some(TearCriterion::Stress(c.take_f64()?)),
+        2 => Some(TearCriterion::Energy(c.take_f64()?)),
+        _ => None,
+    };
+    let anisotropy = match c.take_u8()? {
+        0 => None,
+        _ => Some(c.take_vec()?),
+    };
     let plasticity = match c.take_u8()? {
         0 => None,
         _ => Some(sb_deserialize_plasticity(c)?),
@@ -2756,7 +2921,8 @@ fn sb_deserialize_body(c: &mut SbCursor) -> Option<SoftBody> {
         pressure,
         damping,
         substeps,
-        tear_strain,
+        tear,
+        anisotropy,
         plasticity,
         self_collision,
         cross_collision,

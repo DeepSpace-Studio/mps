@@ -24,16 +24,17 @@ mod tests {
         soft_body_read_normals, soft_body_read_particles, soft_body_read_stress,
         soft_body_read_tetrahedra, soft_body_read_triangles, soft_body_remove_particle,
         soft_body_restore_state, soft_body_save_state, soft_body_scale_rest_length,
-        soft_body_set_cohesion, soft_body_set_cross_collision,
+        soft_body_set_anisotropy, soft_body_set_cohesion, soft_body_set_cross_collision,
         soft_body_set_cross_collision_friction, soft_body_set_damping,
         soft_body_set_distance_constraint_compliance,
         soft_body_set_distance_constraint_compression, soft_body_set_gravity,
         soft_body_set_particle_velocity, soft_body_set_plasticity, soft_body_set_pressure,
         soft_body_set_self_collision, soft_body_set_self_collision_friction,
-        soft_body_set_spring_stiffness, soft_body_set_substeps, soft_body_set_tear_strain,
-        soft_body_set_volume_conservation, soft_body_sleep, soft_body_state_size,
-        soft_body_subdivide_tetrahedra, soft_body_total_volume, soft_body_voxel_build,
-        soft_body_voxel_dig, soft_body_wake, soft_chain_create, soft_chain_node_handles,
+        soft_body_set_spring_stiffness, soft_body_set_substeps, soft_body_set_tear_energy,
+        soft_body_set_tear_strain, soft_body_set_tear_stress, soft_body_set_volume_conservation,
+        soft_body_sleep, soft_body_state_size, soft_body_subdivide_tetrahedra,
+        soft_body_total_volume, soft_body_voxel_build, soft_body_voxel_dig, soft_body_wake,
+        soft_chain_create, soft_chain_node_handles,
     };
     use mps_core::rapier::voxel::{collider_builder_create_voxels, collider_voxel_edit};
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
@@ -1799,6 +1800,148 @@ mod tests {
         // 合法调用 → True，且未 panic。
         assert_eq!(soft_body_set_tear_strain(world, id, 0.3, 1), Bool::TRUE);
 
+        world_destroy(world);
+    }
+
+    // ── Phase 27: 应力/能量撕裂准则（断裂力学）─────────────────────────────────
+    #[test]
+    fn soft_body_tears_by_stress_and_energy_criteria() {
+        let world = make_world();
+        assert!(!world.is_null());
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+
+        let a = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::TRUE);
+        let b = soft_body_add_particle(world, id, 1.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        assert_eq!(soft_body_add_spring(world, id, a, b, 10.0, 0.0), Bool::TRUE);
+
+        let _ = soft_body_set_particle_velocity(world, id, b, 0.0, -50.0, 0.0);
+        assert_eq!(soft_body_set_tear_stress(world, id, 5.0, 1), Bool::TRUE);
+        for _ in 0..30 {
+            world_step(world, 1.0 / 60.0);
+        }
+        let edges_after_stress = soft_body_read_edges(world, id, std::ptr::null_mut(), 1024);
+        assert_eq!(
+            edges_after_stress, 0,
+            "stress criterion should snap the spring"
+        );
+
+        let id2 = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id2, u32::MAX);
+        let c = soft_body_add_particle(world, id2, 0.0, 0.0, 0.0, 1.0, Bool::TRUE);
+        let d = soft_body_add_particle(world, id2, 1.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        assert_eq!(
+            soft_body_add_spring(world, id2, c, d, 10.0, 0.0),
+            Bool::TRUE
+        );
+        let _ = soft_body_set_particle_velocity(world, id2, d, 0.0, -50.0, 0.0);
+        assert_eq!(soft_body_set_tear_energy(world, id2, 2.0, 1), Bool::TRUE);
+        for _ in 0..30 {
+            world_step(world, 1.0 / 60.0);
+        }
+        let edges_after_energy = soft_body_read_edges(world, id2, std::ptr::null_mut(), 1024);
+        assert_eq!(
+            edges_after_energy, 0,
+            "energy criterion should snap the spring"
+        );
+
+        assert_eq!(soft_body_set_tear_stress(world, id, 0.0, 0), Bool::TRUE);
+        world_destroy(world);
+    }
+
+    // ── Phase 27: 体级正交各向异性刚度（沿主轴更硬）────────────────────────────
+    #[test]
+    fn soft_body_anisotropy_stiffens_along_principal_axis() {
+        let world = make_world();
+        assert!(!world.is_null());
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+        let left = soft_body_add_particle(world, id, -1.0, 0.5, 0.0, 1.0, Bool::FALSE);
+        let right = soft_body_add_particle(world, id, 1.0, 0.5, 0.0, 1.0, Bool::FALSE);
+        assert_eq!(
+            soft_body_add_spring(world, id, left, right, 50.0, 0.0),
+            Bool::TRUE
+        );
+        assert_eq!(
+            soft_body_configure_solver(world, id, 1, 20, 0.0),
+            Bool::TRUE
+        );
+
+        soft_body_set_gravity(
+            world,
+            id,
+            Vec3 {
+                x: 0.0,
+                y: -5.0,
+                z: 0.0,
+            },
+        );
+        for _ in 0..40 {
+            world_step(world, 1.0 / 60.0);
+        }
+        let dist_iso = {
+            let mut pos = vec![Vec3::default(); soft_body_particle_count(world, id) as usize];
+            let _ = soft_body_read_particles(
+                world,
+                id,
+                pos.as_mut_ptr(),
+                std::ptr::null_mut(),
+                pos.len() as u32,
+            );
+            let l = &pos[left as usize];
+            let r = &pos[right as usize];
+            ((r.x - l.x).powi(2) + (r.y - l.y).powi(2) + (r.z - l.z).powi(2)).sqrt()
+        };
+
+        assert_eq!(
+            soft_body_set_anisotropy(world, id, 10.0, 1.0, 1.0, 1),
+            Bool::TRUE
+        );
+        for _ in 0..40 {
+            world_step(world, 1.0 / 60.0);
+        }
+        let dist_aniso = {
+            let mut pos = vec![Vec3::default(); soft_body_particle_count(world, id) as usize];
+            let _ = soft_body_read_particles(
+                world,
+                id,
+                pos.as_mut_ptr(),
+                std::ptr::null_mut(),
+                pos.len() as u32,
+            );
+            let l = &pos[left as usize];
+            let r = &pos[right as usize];
+            ((r.x - l.x).powi(2) + (r.y - l.y).powi(2) + (r.z - l.z).powi(2)).sqrt()
+        };
+        assert!(
+            dist_aniso < dist_iso + 1e-6,
+            "anisotropy along x should stiffen the x-aligned edge: {dist_aniso} >= {dist_iso}"
+        );
+        assert_eq!(
+            soft_body_set_anisotropy(world, id, 0.0, 0.0, 0.0, 0),
+            Bool::TRUE
+        );
         world_destroy(world);
     }
 
