@@ -1720,6 +1720,12 @@ jni!(int softBodyReadParticles(long world, int id, long out_pos, long out_inv_ma
 jni!(int softBodyReadEdges(long world, int id, long out_edges, int capacity) { sb::soft_body_read_edges(cp::<WH>(world), id as u32, pm::<u32>(out_edges), capacity as u32) as jint });
 jni!(int softBodyReadTetrahedra(long world, int id, long out_tets, int capacity) { sb::soft_body_read_tetrahedra(cp::<WH>(world), id as u32, pm::<u32>(out_tets), capacity as u32) as jint });
 jni!(int softBodyReadTriangles(long world, int id, long out_tris, int capacity) { sb::soft_body_read_triangles(cp::<WH>(world), id as u32, pm::<u32>(out_tris), capacity as u32) as jint });
+jni!(int softBodyReadSurfaceMesh(long world, int id, long out_verts, int vert_cap, long out_tris, int tri_cap) {
+    sb::soft_body_read_surface_mesh(cp::<WH>(world), id as u32, pm::<f64>(out_verts), vert_cap as u32, pm::<u32>(out_tris), tri_cap as u32) as jint
+});
+jni!(int softBodyReadSurfaceTriangleCount(long world, int id) {
+    sb::soft_body_read_surface_triangle_count(cp::<WH>(world), id as u32) as jint
+});
 jni!(int softBodyReadStress(long world, int id, long out_strain, int capacity) { sb::soft_body_read_stress(cp::<WH>(world), id as u32, pm::<f64>(out_strain), capacity as u32) as jint });
 jni!(int softBodyScaleRestLength(long world, int id, double factor) { sb::soft_body_scale_rest_length(m::<WH>(world), id as u32, factor) as jint });
 jni!(int softBodyReadNormals(long world, int id, long out_normals, int capacity) { sb::soft_body_read_normals(cp::<WH>(world), id as u32, pm::<f64>(out_normals), capacity as u32) as jint });

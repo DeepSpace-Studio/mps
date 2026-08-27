@@ -3382,6 +3382,84 @@ pub extern "C" fn soft_body_read_triangles(
     })
 }
 
+#[unsafe(no_mangle)]
+/// Phase 27 (B7): exports the soft body's true triangle surface mesh (not the
+/// per-particle Ball proxy approximation). Writes up to `vert_cap` vertices (3 f64
+/// each) into `out_verts` and up to `tri_cap` triangle indices (3 u32 each) into
+/// `out_tris`. Returns the vertex count (so the caller can size its buffers); either
+/// buffer may be null to query sizes only. Triangle count comes from
+/// `soft_body_read_surface_triangle_count`. This enables mesh-level collision queries
+/// (ray-cast, closest-point projection vs static terrain) against the actual surface.
+pub extern "C" fn soft_body_read_surface_mesh(
+    world: *const WorldHandle,
+    id: u32,
+    out_verts: *mut f64,
+    vert_cap: u32,
+    out_tris: *mut u32,
+    tri_cap: u32,
+) -> u32 {
+    ffi_guard(0, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(
+                ERR_NULL_POINTER,
+                "soft_body_read_surface_mesh: world is null",
+            );
+            return 0;
+        };
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_read_surface_mesh: unknown id");
+            return 0;
+        };
+        let vcap = vert_cap as usize;
+        if !out_verts.is_null() && vcap > 0 {
+            let slice = unsafe { std::slice::from_raw_parts_mut(out_verts, vcap) };
+            for (i, part) in body.particles.iter().enumerate().take(vcap / 3) {
+                let base = i * 3;
+                slice[base] = part.pos.x;
+                slice[base + 1] = part.pos.y;
+                slice[base + 2] = part.pos.z;
+            }
+        }
+        let tcap = tri_cap as usize;
+        if !out_tris.is_null() && tcap > 0 {
+            let slice = unsafe { std::slice::from_raw_parts_mut(out_tris, tcap) };
+            for (i, tri) in body.triangles.iter().enumerate().take(tcap / 3) {
+                let base = i * 3;
+                slice[base] = tri[0];
+                slice[base + 1] = tri[1];
+                slice[base + 2] = tri[2];
+            }
+        }
+        clear_error();
+        body.particles.len() as u32
+    })
+}
+
+#[unsafe(no_mangle)]
+/// Phase 27 (B7): returns the triangle count of a soft body's surface mesh.
+pub extern "C" fn soft_body_read_surface_triangle_count(world: *const WorldHandle, id: u32) -> u32 {
+    ffi_guard(0, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(
+                ERR_NULL_POINTER,
+                "soft_body_read_surface_triangle_count: world is null",
+            );
+            return 0;
+        };
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get(sid) else {
+            set_error(
+                ERR_NOT_FOUND,
+                "soft_body_read_surface_triangle_count: unknown id",
+            );
+            return 0;
+        };
+        clear_error();
+        body.triangles.len() as u32
+    })
+}
+
 // ── Phase 22: 逐边应力 / 张力读数（仅供渲染层 / 上层逻辑使用，不改求解器）──────
 //
 // 软体现在能回读位置 / 拓扑（read_particles / read_edges / read_tetrahedra /

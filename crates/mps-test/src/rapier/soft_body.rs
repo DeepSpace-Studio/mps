@@ -22,6 +22,7 @@ mod tests {
         soft_body_is_sleeping, soft_body_kinetic_energy, soft_body_particle_count,
         soft_body_read_aabb, soft_body_read_contact_force, soft_body_read_edges,
         soft_body_read_normals, soft_body_read_particles, soft_body_read_stress,
+        soft_body_read_surface_mesh, soft_body_read_surface_triangle_count,
         soft_body_read_tetrahedra, soft_body_read_triangles, soft_body_remove_particle,
         soft_body_restore_state, soft_body_save_state, soft_body_scale_rest_length,
         soft_body_set_anisotropy, soft_body_set_cohesion, soft_body_set_cross_collision,
@@ -2087,6 +2088,82 @@ mod tests {
             s_hot > s_cold,
             "heated body should stretch more (thermal expansion + softer modulus): s_hot={s_hot} <= s_cold={s_cold}"
         );
+        world_destroy(world);
+    }
+
+    // ── Phase 27 (B7): 真表面网格读数 — 顶点数=粒子数、面数=三角面数（替代逐质点球近似）
+    #[test]
+    fn soft_body_read_surface_mesh_matches_particles_and_triangles() {
+        let world = make_world();
+        assert!(!world.is_null());
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        // 4 粒子 + 2 三角面，构成一个软布片。
+        let _p0 = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        let _p1 = soft_body_add_particle(world, id, 1.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        let _p2 = soft_body_add_particle(world, id, 0.0, 1.0, 0.0, 1.0, Bool::FALSE);
+        let _p3 = soft_body_add_particle(world, id, 1.0, 1.0, 0.0, 1.0, Bool::FALSE);
+        assert_eq!(soft_body_add_triangle(world, id, 0, 1, 2), Bool::TRUE);
+        assert_eq!(soft_body_add_triangle(world, id, 1, 3, 2), Bool::TRUE);
+
+        let npart = soft_body_particle_count(world, id);
+        let ntri = soft_body_read_triangles(world, id, std::ptr::null_mut(), 1024);
+        assert_eq!(npart, 4);
+        assert_eq!(ntri, 2);
+
+        // 查询尺寸：返回顶点数；面数由独立函数给出。
+        let vret = soft_body_read_surface_mesh(
+            world,
+            id,
+            std::ptr::null_mut(),
+            0,
+            std::ptr::null_mut(),
+            0,
+        );
+        assert_eq!(vret, npart, "surface vertices must equal particle count");
+        let tri_count = soft_body_read_surface_triangle_count(world, id);
+        assert_eq!(
+            tri_count, ntri,
+            "surface triangles must equal triangle count"
+        );
+
+        // 读回实际顶点 + 面索引，核对数量与内容一致。
+        let mut verts: Vec<f64> = vec![0.0; (npart as usize) * 3];
+        let mut tris: Vec<u32> = vec![0; (ntri as usize) * 3];
+        let vret2 = soft_body_read_surface_mesh(
+            world,
+            id,
+            verts.as_mut_ptr(),
+            verts.len() as u32,
+            tris.as_mut_ptr(),
+            tris.len() as u32,
+        );
+        assert_eq!(vret2, npart);
+        assert_eq!(soft_body_read_surface_triangle_count(world, id), ntri);
+        // 顶点 p0=(0,0,0)：前 3 个 f64 应为 0,0,0。
+        assert!((verts[0].abs() < 1e-9) && (verts[1].abs() < 1e-9) && (verts[2].abs() < 1e-9));
+        // 面索引与 add_triangle 写入一致。
+        assert_eq!((tris[0], tris[1], tris[2]), (0, 1, 2));
+
+        // 坏参守卫：未知 id → 0 顶点，且面数函数返回 0。
+        assert_eq!(
+            soft_body_read_surface_mesh(
+                world,
+                u32::MAX,
+                std::ptr::null_mut(),
+                0,
+                std::ptr::null_mut(),
+                0,
+            ),
+            0
+        );
+        assert_eq!(soft_body_read_surface_triangle_count(world, u32::MAX), 0);
         world_destroy(world);
     }
 

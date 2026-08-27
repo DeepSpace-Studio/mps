@@ -5179,6 +5179,27 @@ uint32_t soft_body_read_triangles(const struct WorldHandle *world,
                                   uint32_t capacity);
 
 /**
+ * Phase 27 (B7): exports the soft body's true triangle surface mesh (not the
+ * per-particle Ball proxy approximation). Writes up to `vert_cap` vertices (3 f64
+ * each) into `out_verts` and up to `tri_cap` triangle indices (3 u32 each) into
+ * `out_tris`. Returns the vertex count (so the caller can size its buffers); either
+ * buffer may be null to query sizes only. Triangle count comes from
+ * `soft_body_read_surface_triangle_count`. This enables mesh-level collision queries
+ * (ray-cast, closest-point projection vs static terrain) against the actual surface.
+ */
+uint32_t soft_body_read_surface_mesh(const struct WorldHandle *world,
+                                     uint32_t id,
+                                     double *out_verts,
+                                     uint32_t vert_cap,
+                                     uint32_t *out_tris,
+                                     uint32_t tri_cap);
+
+/**
+ * Phase 27 (B7): returns the triangle count of a soft body's surface mesh.
+ */
+uint32_t soft_body_read_surface_triangle_count(const struct WorldHandle *world, uint32_t id);
+
+/**
  * Read per-edge normalized strain (stress proxy) for a soft body.
  *
  * Edges are enumerated in the same order as [`soft_body_read_edges`]: every
