@@ -619,6 +619,141 @@ pub extern "C" fn soft_body_clear_wind(world: *mut WorldHandle, id: u32) -> Bool
     })
 }
 
+// ── Phase 28: clear/disabling variants for the *set_* material toggles ──────
+//
+// fork 的 `SoftBody` 给每个可开/关材料行为都配了一个 `clear_*` 方法（`clear_pressure`
+// / `clear_self_collision` / `clear_cross_collision` / `clear_volume_conservation` /
+// `clear_cohesion`），但此前只导出了 `clear_wind`。本组补齐其余 5 个关闭变体：
+// 调用方不必把参数设成「0/负」去碰运气关掉，直接显式 disable，测试与联动逻辑更清楚。
+
+/// Phase 28 — 关闭内部气压（等同 `pressure = None`，气球瘪掉）。
+///
+/// # Returns
+/// `Bool::TRUE` 成功；`id` 未知 / world 为 null 返回 `Bool::FALSE`。
+///
+/// # Safety
+/// `world` 必须有效。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_clear_pressure(world: *mut WorldHandle, id: u32) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_clear_pressure: unknown id");
+            return Bool::FALSE;
+        };
+        sb.clear_pressure();
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Phase 28 — 关闭自碰撞（等同 `self_collision = None`，无摩擦）。
+///
+/// # Returns
+/// `Bool::TRUE` 成功；`id` 未知 / world 为 null 返回 `Bool::FALSE`。
+///
+/// # Safety
+/// `world` 必须有效。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_clear_self_collision(world: *mut WorldHandle, id: u32) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_clear_self_collision: unknown id");
+            return Bool::FALSE;
+        };
+        sb.clear_self_collision();
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Phase 28 — 关闭跨体（软软）碰撞（等同 `cross_collision = None`，无摩擦）。
+///
+/// # Returns
+/// `Bool::TRUE` 成功；`id` 未知 / world 为 null 返回 `Bool::FALSE`。
+///
+/// # Safety
+/// `world` 必须有效。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_clear_cross_collision(world: *mut WorldHandle, id: u32) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_clear_cross_collision: unknown id");
+            return Bool::FALSE;
+        };
+        sb.clear_cross_collision();
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Phase 28 — 关闭体积守恒约束（等同 `volume_conservation = None`，blob 可随意压缩）。
+///
+/// # Returns
+/// `Bool::TRUE` 成功；`id` 未知 / world 为 null 返回 `Bool::FALSE`。
+///
+/// # Safety
+/// `world` 必须有效。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_clear_volume_conservation(world: *mut WorldHandle, id: u32) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(
+                ERR_NOT_FOUND,
+                "soft_body_clear_volume_conservation: unknown id",
+            );
+            return Bool::FALSE;
+        };
+        sb.clear_volume_conservation();
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Phase 28 — 关闭黏连/可撕 glue（等同 `cohesion = None`，不再互相吸附）。
+///
+/// # Returns
+/// `Bool::TRUE` 成功；`id` 未知 / world 为 null 返回 `Bool::FALSE`。
+///
+/// # Safety
+/// `world` 必须有效。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_clear_cohesion(world: *mut WorldHandle, id: u32) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_clear_cohesion: unknown id");
+            return Bool::FALSE;
+        };
+        sb.clear_cohesion();
+        clear_error();
+        Bool::TRUE
+    })
+}
+
 /// Phase 7: mark a soft body as sleeping (no further integration until woken).
 ///
 /// # Returns
@@ -1195,6 +1330,106 @@ pub extern "C" fn soft_body_set_plasticity(
         sb.set_plasticity(params);
         clear_error();
         Bool::TRUE
+    })
+}
+
+// ── Phase 28: manual-trigger behavior FFI (no new fork mechanics) ───────────
+//
+// fork 的 `SoftBody` 把塑性投影 `apply_plasticity` 与撕裂 `tear` 都放在 step 内部按
+// 配置自动跑；但外部（尤其测试 / 联动闭环）有时需要「现在就跑一次」而不推进时间步。
+// 本组暴露两个手动触发入口 + 一个弹簧力读回入口，全部纯包裹既有方法，零 fork 改动。
+
+/// Phase 28 — 手动触发一次塑性投影（把超 `yield_strain` 的结构边 rest_length 朝当前长度
+/// 冻结 `creep`）。通常塑性在 `step` 内自动应用；此 FFI 让调用方在不推进时间步的情况下
+/// 即时「定型」（例如绑定到 Minecraft 方块编辑一次后立刻烤出永久变形）。需先经
+/// `soft_body_set_plasticity` 配置过 `PlasticityParams`，否则为 no-op。
+///
+/// # Returns
+/// `Bool::TRUE` 成功触发；`id` 未知 / world 为 null 返回 `Bool::FALSE`。
+///
+/// # Safety
+/// `world` 必须有效。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_apply_plasticity(world: *mut WorldHandle, id: u32) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_apply_plasticity: unknown id");
+            return Bool::FALSE;
+        };
+        sb.apply_plasticity();
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Phase 28 — 手动触发一次撕裂：立刻丢弃所有超过 `tear` 阈值（应变 / 轴向应力 /
+/// 应变能，由 `soft_body_set_tear_*` 配置）的结构边，并连带删掉失去边支撑的三角面。
+/// 通常撕裂在 `step` 顶部自动发生；此 FFI 让调用方在「不推进时间步」时也能立即撕开
+/// （例如一次性加载预撕裂状态、或在联动闭环里随时展示断裂）。未配置 `tear` 阈值时
+/// 为 no-op（返回 `Bool::TRUE`）。
+///
+/// # Returns
+/// `Bool::TRUE` 成功触发（含 no-op）；`id` 未知 / world 为 null 返回 `Bool::FALSE`。
+///
+/// # Safety
+/// `world` 必须有效。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_tear_now(world: *mut WorldHandle, id: u32) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_tear_now: unknown id");
+            return Bool::FALSE;
+        };
+        sb.tear();
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Phase 28 — 读回每个质点累积的弹簧/阻尼合力（调试 / 可视化用）。`out_forces` 指向
+/// `capacity` 个 `Vec3` 的写缓冲区；第 `i` 项为质点 `i` 的合力（按 `spring_damping_forces`
+/// 计算）。缓冲区过小则截断（永不越界）；返回真实的质点数量（不受 capacity 限制）。
+/// `out_forces` 为 null 或 `capacity == 0` 仅返回数量不写。
+///
+/// # Safety
+/// `world` 必须有效；`out_forces`（若非 null）须指向至少 `capacity` 个 `Vec3`。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_read_spring_forces(
+    world: *const WorldHandle,
+    id: u32,
+    out_forces: *mut Vec3,
+    capacity: u32,
+) -> u32 {
+    ffi_guard(0, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return 0;
+        };
+        let sid = SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_read_spring_forces: unknown id");
+            return 0;
+        };
+        let forces = sb.spring_damping_forces();
+        if !out_forces.is_null() && capacity > 0 {
+            let out = unsafe { std::slice::from_raw_parts_mut(out_forces, capacity as usize) };
+            let n = forces.len().min(out.len());
+            for (i, f) in forces.iter().take(n).enumerate() {
+                out[i] = vec3_from_rapier(*f);
+            }
+        }
+        clear_error();
+        forces.len() as u32
     })
 }
 

@@ -15,14 +15,16 @@ mod tests {
     use mps_core::rapier::soft_body::{
         soft_body_add_bending, soft_body_add_distance_constraint, soft_body_add_particle,
         soft_body_add_spring, soft_body_add_tetrahedron, soft_body_add_triangle,
-        soft_body_apply_particle_impulse, soft_body_apply_wind, soft_body_attach_particle,
-        soft_body_build_tetra_mesh, soft_body_clear_wind, soft_body_clone,
+        soft_body_apply_particle_impulse, soft_body_apply_plasticity, soft_body_apply_wind,
+        soft_body_attach_particle, soft_body_build_tetra_mesh, soft_body_clear_cohesion,
+        soft_body_clear_cross_collision, soft_body_clear_pressure, soft_body_clear_self_collision,
+        soft_body_clear_volume_conservation, soft_body_clear_wind, soft_body_clone,
         soft_body_configure_solver, soft_body_count, soft_body_create, soft_body_destroy,
         soft_body_detach_particle, soft_body_enable_collision, soft_body_get_particle,
         soft_body_is_sleeping, soft_body_kinetic_energy, soft_body_particle_count,
         soft_body_read_aabb, soft_body_read_contact_force, soft_body_read_edges,
-        soft_body_read_normals, soft_body_read_particles, soft_body_read_stress,
-        soft_body_read_surface_mesh, soft_body_read_surface_triangle_count,
+        soft_body_read_normals, soft_body_read_particles, soft_body_read_spring_forces,
+        soft_body_read_stress, soft_body_read_surface_mesh, soft_body_read_surface_triangle_count,
         soft_body_read_tetrahedra, soft_body_read_triangles, soft_body_remove_particle,
         soft_body_restore_state, soft_body_save_state, soft_body_scale_rest_length,
         soft_body_set_anisotropy, soft_body_set_cohesion, soft_body_set_cross_collision,
@@ -35,8 +37,9 @@ mod tests {
         soft_body_set_tear_strain, soft_body_set_tear_stress, soft_body_set_thermal,
         soft_body_set_viscoelastic, soft_body_set_volume_conservation, soft_body_sleep,
         soft_body_state_size, soft_body_step_implicit, soft_body_step_mass_spring,
-        soft_body_subdivide_tetrahedra, soft_body_total_volume, soft_body_voxel_build,
-        soft_body_voxel_dig, soft_body_wake, soft_chain_create, soft_chain_node_handles,
+        soft_body_subdivide_tetrahedra, soft_body_tear_now, soft_body_total_volume,
+        soft_body_voxel_build, soft_body_voxel_dig, soft_body_wake, soft_chain_create,
+        soft_chain_node_handles,
     };
     use mps_core::rapier::voxel::{collider_builder_create_voxels, collider_voxel_edit};
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
@@ -4899,6 +4902,221 @@ mod tests {
         assert_eq!(
             soft_body_set_particle_velocity(std::ptr::null_mut(), id, a, 0.0, 0.0, 0.0),
             Bool::FALSE
+        );
+
+        world_destroy(world);
+    }
+    // ── Phase 28: clear / manual-trigger / readback FFI ─────────────────────────
+
+    /// 5 个 `clear_*` 关闭变体对 null world / 未知 id 必须返回 `Bool::FALSE`，
+    /// 且不 panic；对有效 id 返回 `Bool::TRUE`（纯关闭，set 之后再 clear 不报错）。
+    #[test]
+    fn soft_body_clear_variants_disable_material() {
+        let world = world_create(Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        });
+        assert!(!world.is_null());
+
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: -9.81,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+
+        // 先 set 几种材料（带合法参数），再 clear —— round-trip 不应报错。
+        assert_eq!(soft_body_set_pressure(world, id, 1.5), Bool::TRUE);
+        assert_eq!(soft_body_clear_pressure(world, id), Bool::TRUE);
+
+        assert_eq!(
+            soft_body_set_self_collision(world, id, 0.2, 0.0),
+            Bool::TRUE
+        );
+        assert_eq!(soft_body_clear_self_collision(world, id), Bool::TRUE);
+
+        assert_eq!(
+            soft_body_set_cross_collision(world, id, 0.2, 0.0),
+            Bool::TRUE
+        );
+        assert_eq!(soft_body_clear_cross_collision(world, id), Bool::TRUE);
+
+        assert_eq!(
+            soft_body_set_volume_conservation(world, id, 0.1),
+            Bool::TRUE
+        );
+        assert_eq!(soft_body_clear_volume_conservation(world, id), Bool::TRUE);
+
+        assert_eq!(soft_body_set_cohesion(world, id, 0.2, 0.5, 0.3), Bool::TRUE);
+        assert_eq!(soft_body_clear_cohesion(world, id), Bool::TRUE);
+
+        // 非法参数守住边界：null world / 未知 id 一律 FALSE。
+        assert_eq!(
+            soft_body_clear_pressure(std::ptr::null_mut(), id),
+            Bool::FALSE
+        );
+        assert_eq!(soft_body_clear_pressure(world, u32::MAX), Bool::FALSE);
+        assert_eq!(soft_body_clear_self_collision(world, u32::MAX), Bool::FALSE);
+        assert_eq!(
+            soft_body_clear_cross_collision(world, u32::MAX),
+            Bool::FALSE
+        );
+        assert_eq!(
+            soft_body_clear_volume_conservation(world, u32::MAX),
+            Bool::FALSE
+        );
+        assert_eq!(soft_body_clear_cohesion(world, u32::MAX), Bool::FALSE);
+
+        world_destroy(world);
+    }
+
+    /// `soft_body_apply_plasticity` 在塑性未配置（默认纯弹性）时是安全的 no-op，
+    /// 对有效 id 返回 `Bool::TRUE`；null world / 未知 id 返回 `Bool::FALSE`。
+    #[test]
+    fn soft_body_apply_plasticity_noop_when_unconfigured() {
+        let world = world_create(Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        });
+        assert!(!world.is_null());
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+
+        // 配置塑性 → 触发一次投影（不应 panic，返回 TRUE）。
+        assert_eq!(soft_body_set_plasticity(world, id, 0.1, 0.5, 1), Bool::TRUE);
+        assert_eq!(soft_body_apply_plasticity(world, id), Bool::TRUE);
+        // 关闭塑性后再触发 → 仍是安全 no-op。
+        assert_eq!(soft_body_set_plasticity(world, id, 0.0, 0.0, 0), Bool::TRUE);
+        assert_eq!(soft_body_apply_plasticity(world, id), Bool::TRUE);
+
+        assert_eq!(
+            soft_body_apply_plasticity(std::ptr::null_mut(), id),
+            Bool::FALSE
+        );
+        assert_eq!(soft_body_apply_plasticity(world, u32::MAX), Bool::FALSE);
+
+        world_destroy(world);
+    }
+
+    /// `soft_body_tear_now` 手动触发撕裂：配置应变阈值后，先拉伸一条弹簧边，
+    /// 不推进时间步直接 `tear_now`，边被丢弃、质点数不变、edge 数归零。
+    #[test]
+    fn soft_body_tear_now_manual_trigger() {
+        let world = world_create(Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        });
+        assert!(!world.is_null());
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+
+        // 两个自由质点，间距 1，连一条弹簧。
+        let a = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        let b = soft_body_add_particle(world, id, 1.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        assert_eq!(soft_body_add_spring(world, id, a, b, 10.0, 1.0), Bool::TRUE);
+        assert_eq!(soft_body_particle_count(world, id), 2);
+        assert_eq!(soft_body_read_edges(world, id, std::ptr::null_mut(), 0), 1);
+
+        // 配置应变阈值 0.5（拉伸 >50% 才断）。
+        assert_eq!(soft_body_set_tear_strain(world, id, 0.5, 1), Bool::TRUE);
+        // 不推进时间步：直接把弹簧 rest_length 缩放为 0.3（几何距离仍为 1），
+        // 制造应变 (1-0.3)/0.3 ≈ 2.33 > 0.5，触发撕裂。
+        assert!(soft_body_scale_rest_length(world, id, 0.3) > 0);
+        // 手动撕裂（不推进时间步）。
+        assert_eq!(soft_body_tear_now(world, id), Bool::TRUE);
+        // 边被丢弃；质点保留（拓扑修整只删边，不删质点）。
+        assert_eq!(soft_body_read_edges(world, id, std::ptr::null_mut(), 0), 0);
+        assert_eq!(soft_body_particle_count(world, id), 2);
+
+        // 边界：null world / 未知 id。
+        assert_eq!(soft_body_tear_now(std::ptr::null_mut(), id), Bool::FALSE);
+        assert_eq!(soft_body_tear_now(world, u32::MAX), Bool::FALSE);
+
+        world_destroy(world);
+    }
+
+    /// `soft_body_read_spring_forces`：返回合力数量 == 质点数；缓冲区过小则截断不越界；
+    /// 空缓冲仅返回数量。
+    #[test]
+    fn soft_body_read_spring_forces_roundtrip() {
+        let world = world_create(Vec3 {
+            x: 0.0,
+            y: -9.81,
+            z: 0.0,
+        });
+        assert!(!world.is_null());
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: -9.81,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+
+        // 两个被弹簧相连的质点。
+        let a = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        let b = soft_body_add_particle(world, id, 1.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        assert_eq!(soft_body_add_spring(world, id, a, b, 10.0, 0.0), Bool::TRUE);
+        assert_eq!(soft_body_particle_count(world, id), 2);
+
+        // 空缓冲：仅返回数量。
+        assert_eq!(
+            soft_body_read_spring_forces(world, id, std::ptr::null_mut(), 0),
+            2
+        );
+
+        // 全量缓冲。
+        let mut buf: [Vec3; 4] = [Vec3::default(); 4];
+        let n = soft_body_read_spring_forces(world, id, buf.as_mut_ptr(), buf.len() as u32);
+        assert_eq!(n, 2);
+
+        // 截断缓冲：capacity=1，仍返回真实数量 2，不越界（buf[1] 保持哨兵不变）。
+        // `Vec3`(FFI 结构体)未实现 `PartialEq`，逐字段比对哨兵。
+        let sentinel = Vec3 {
+            x: 7.0,
+            y: 7.0,
+            z: 7.0,
+        };
+        let mut buf2: [Vec3; 4] = [sentinel; 4];
+        let n2 = soft_body_read_spring_forces(world, id, buf2.as_mut_ptr(), 1);
+        assert_eq!(n2, 2);
+        // buf[0] 被写入（合力有限，非 NaN/inf，证明写回了真实弹簧力）。
+        assert!(buf2[0].x.is_finite() && buf2[0].y.is_finite() && buf2[0].z.is_finite());
+        // buf[1] 未被触碰（截断保护）。
+        assert_eq!(buf2[1].x, 7.0);
+        assert_eq!(buf2[1].y, 7.0);
+        assert_eq!(buf2[1].z, 7.0);
+
+        // 边界：null world / 未知 id 返回 0。
+        assert_eq!(
+            soft_body_read_spring_forces(std::ptr::null_mut(), id, buf.as_mut_ptr(), 4),
+            0
+        );
+        assert_eq!(
+            soft_body_read_spring_forces(world, u32::MAX, buf.as_mut_ptr(), 4),
+            0
         );
 
         world_destroy(world);

@@ -340,4 +340,12 @@ include = [
   "soft_body_set_volume_conservation",
   "soft_body_set_cohesion",
   "soft_body_set_damping",
+  "soft_body_apply_plasticity",
+  "soft_body_clear_cohesion",
+  "soft_body_clear_cross_collision",
+  "soft_body_clear_pressure",
+  "soft_body_clear_self_collision",
+  "soft_body_clear_volume_conservation",
+  "soft_body_read_spring_forces",
+  "soft_body_tear_now",
 ]

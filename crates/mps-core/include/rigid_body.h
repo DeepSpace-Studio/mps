@@ -4366,6 +4366,62 @@ Bool soft_body_apply_wind(struct WorldHandle *world, uint32_t id, Vec3 accel, do
 Bool soft_body_clear_wind(struct WorldHandle *world, uint32_t id);
 
 /**
+ * Phase 28 — 关闭内部气压（等同 `pressure = None`，气球瘪掉）。
+ *
+ * # Returns
+ * `Bool::TRUE` 成功；`id` 未知 / world 为 null 返回 `Bool::FALSE`。
+ *
+ * # Safety
+ * `world` 必须有效。
+ */
+Bool soft_body_clear_pressure(struct WorldHandle *world, uint32_t id);
+
+/**
+ * Phase 28 — 关闭自碰撞（等同 `self_collision = None`，无摩擦）。
+ *
+ * # Returns
+ * `Bool::TRUE` 成功；`id` 未知 / world 为 null 返回 `Bool::FALSE`。
+ *
+ * # Safety
+ * `world` 必须有效。
+ */
+Bool soft_body_clear_self_collision(struct WorldHandle *world, uint32_t id);
+
+/**
+ * Phase 28 — 关闭跨体（软软）碰撞（等同 `cross_collision = None`，无摩擦）。
+ *
+ * # Returns
+ * `Bool::TRUE` 成功；`id` 未知 / world 为 null 返回 `Bool::FALSE`。
+ *
+ * # Safety
+ * `world` 必须有效。
+ */
+Bool soft_body_clear_cross_collision(struct WorldHandle *world, uint32_t id);
+
+/**
+ * Phase 28 — 关闭体积守恒约束（等同 `volume_conservation = None`，blob 可随意压缩）。
+ *
+ * # Returns
+ * `Bool::TRUE` 成功；`id` 未知 / world 为 null 返回 `Bool::FALSE`。
+ *
+ * # Safety
+ * `world` 必须有效。
+ */
+Bool soft_body_clear_volume_conservation(struct WorldHandle *world,
+                                         uint32_t id);
+
+/**
+ * Phase 28 — 关闭黏连/可撕 glue（等同 `cohesion = None`，不再互相吸附）。
+ *
+ * # Returns
+ * `Bool::TRUE` 成功；`id` 未知 / world 为 null 返回 `Bool::FALSE`。
+ *
+ * # Safety
+ * `world` 必须有效。
+ */
+Bool soft_body_clear_cohesion(struct WorldHandle *world, uint32_t id);
+
+/**
  * Phase 7: mark a soft body as sleeping (no further integration until woken).
  *
  * # Returns
@@ -4590,6 +4646,51 @@ Bool soft_body_set_plasticity(struct WorldHandle *world,
                               double yield_strain,
                               double creep,
                               uint8_t enabled);
+
+/**
+ * Phase 28 — 手动触发一次塑性投影（把超 `yield_strain` 的结构边 rest_length 朝当前长度
+ * 冻结 `creep`）。通常塑性在 `step` 内自动应用；此 FFI 让调用方在不推进时间步的情况下
+ * 即时「定型」（例如绑定到 Minecraft 方块编辑一次后立刻烤出永久变形）。需先经
+ * `soft_body_set_plasticity` 配置过 `PlasticityParams`，否则为 no-op。
+ *
+ * # Returns
+ * `Bool::TRUE` 成功触发；`id` 未知 / world 为 null 返回 `Bool::FALSE`。
+ *
+ * # Safety
+ * `world` 必须有效。
+ */
+Bool soft_body_apply_plasticity(struct WorldHandle *world,
+                                uint32_t id);
+
+/**
+ * Phase 28 — 手动触发一次撕裂：立刻丢弃所有超过 `tear` 阈值（应变 / 轴向应力 /
+ * 应变能，由 `soft_body_set_tear_*` 配置）的结构边，并连带删掉失去边支撑的三角面。
+ * 通常撕裂在 `step` 顶部自动发生；此 FFI 让调用方在「不推进时间步」时也能立即撕开
+ * （例如一次性加载预撕裂状态、或在联动闭环里随时展示断裂）。未配置 `tear` 阈值时
+ * 为 no-op（返回 `Bool::TRUE`）。
+ *
+ * # Returns
+ * `Bool::TRUE` 成功触发（含 no-op）；`id` 未知 / world 为 null 返回 `Bool::FALSE`。
+ *
+ * # Safety
+ * `world` 必须有效。
+ */
+Bool soft_body_tear_now(struct WorldHandle *world,
+                        uint32_t id);
+
+/**
+ * Phase 28 — 读回每个质点累积的弹簧/阻尼合力（调试 / 可视化用）。`out_forces` 指向
+ * `capacity` 个 `Vec3` 的写缓冲区；第 `i` 项为质点 `i` 的合力（按 `spring_damping_forces`
+ * 计算）。缓冲区过小则截断（永不越界）；返回真实的质点数量（不受 capacity 限制）。
+ * `out_forces` 为 null 或 `capacity == 0` 仅返回数量不写。
+ *
+ * # Safety
+ * `world` 必须有效；`out_forces`（若非 null）须指向至少 `capacity` 个 `Vec3`。
+ */
+uint32_t soft_body_read_spring_forces(const struct WorldHandle *world,
+                                      uint32_t id,
+                                      Vec3 *out_forces,
+                                      uint32_t capacity);
 
 /**
  * # Phase 11 — 设置内部气压（充气 / 气球模型）

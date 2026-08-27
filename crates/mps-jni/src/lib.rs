@@ -1741,6 +1741,12 @@ jni!(int softBodySetSubsteps(long world, int id, int n) { sb::soft_body_set_subs
 // ── Phase 7: 风场/空气阻力 + 休眠 + 诊断 ──────────────────────────────────
 jni!(boolean softBodyApplyWind(long world, int id, double ax, double ay, double az, double drag) { sb::soft_body_apply_wind(m::<WH>(world), id as u32, Vec3 { x: ax, y: ay, z: az }, drag).0 as jbyte });
 jni!(boolean softBodyClearWind(long world, int id) { sb::soft_body_clear_wind(m::<WH>(world), id as u32).0 as jbyte });
+// Phase 28: clear/disabling variants for the *set_* material toggles
+jni!(boolean softBodyClearPressure(long world, int id) { sb::soft_body_clear_pressure(m::<WH>(world), id as u32).0 as jbyte });
+jni!(boolean softBodyClearSelfCollision(long world, int id) { sb::soft_body_clear_self_collision(m::<WH>(world), id as u32).0 as jbyte });
+jni!(boolean softBodyClearCrossCollision(long world, int id) { sb::soft_body_clear_cross_collision(m::<WH>(world), id as u32).0 as jbyte });
+jni!(boolean softBodyClearVolumeConservation(long world, int id) { sb::soft_body_clear_volume_conservation(m::<WH>(world), id as u32).0 as jbyte });
+jni!(boolean softBodyClearCohesion(long world, int id) { sb::soft_body_clear_cohesion(m::<WH>(world), id as u32).0 as jbyte });
 jni!(boolean softBodySleep(long world, int id) { sb::soft_body_sleep(m::<WH>(world), id as u32).0 as jbyte });
 jni!(boolean softBodyWake(long world, int id) { sb::soft_body_wake(m::<WH>(world), id as u32).0 as jbyte });
 jni!(boolean softBodyIsSleeping(long world, int id) { sb::soft_body_is_sleeping(cp::<WH>(world), id as u32).0 as jbyte });
@@ -1763,6 +1769,10 @@ jni!(boolean softBodySetViscoelastic(long world, int id, double rateCoefficient,
 jni!(boolean softBodySetThermal(long world, int id, double temp, double ambient, double expansion, double stiffnessTempCoeff, int enabled) { sb::soft_body_set_thermal(m::<WH>(world), id as u32, temp, ambient, expansion, stiffnessTempCoeff, enabled as u8).0 as jbyte });
 // Phase 10: 塑性（永久变形，橡皮泥/记忆棉）
 jni!(boolean softBodySetPlasticity(long world, int id, double yieldStrain, double creep, int enabled) { sb::soft_body_set_plasticity(m::<WH>(world), id as u32, yieldStrain, creep, enabled as u8).0 as jbyte });
+// Phase 28: manual-trigger behavior FFI + spring-force readback
+jni!(boolean softBodyApplyPlasticity(long world, int id) { sb::soft_body_apply_plasticity(m::<WH>(world), id as u32).0 as jbyte });
+jni!(boolean softBodyTearNow(long world, int id) { sb::soft_body_tear_now(m::<WH>(world), id as u32).0 as jbyte });
+jni!(int softBodyReadSpringForces(long world, int id, long out_forces, int capacity) { sb::soft_body_read_spring_forces(cp::<WH>(world), id as u32, pm::<Vec3>(out_forces), capacity as u32) as jint });
 // Phase 11: 充气/气压（闭合三角网格沿法向吹胀）
 jni!(boolean softBodySetPressure(long world, int id, double pressure) { sb::soft_body_set_pressure(m::<WH>(world), id as u32, pressure).0 as jbyte });
 // Phase 12: 软体自碰撞(self-collision)：空间哈希 broad-phase + 逐迭代位置投影
