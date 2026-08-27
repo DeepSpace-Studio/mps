@@ -5041,6 +5041,31 @@ uint32_t soft_body_read_normals(const struct WorldHandle *world,
                                 uint32_t capacity);
 
 /**
+ * Read the per-particle net contact force for a collision-coupled soft body.
+ *
+ * For each free particle that has a proxy collider, the function sums the
+ * `ContactPair::total_impulse` over every active contact pair touching that
+ * collider, writing the net force vector into `out_fx/out_fy/out_fz[k]`. This is
+ * the contact reaction the soft body exerts/feels through its proxy colliders —
+ * the primitive behind "step on a soft cushion and get pushed back up" logic.
+ *
+ * Returns the particle count (so the caller can size its buffer); when `out_fx`
+ * is null or `capacity` is 0 the count is returned without writing. Bodies with
+ * `collide == false` (no proxies) yield zero force for every particle. Pure
+ * read-out: does not affect the solver.
+ *
+ * # Safety
+ * `world` must be a valid world pointer. `out_fx/out_fy/out_fz` must each point
+ * to an array of at least `capacity` `f64` elements when non-null.
+ */
+uint32_t soft_body_read_contact_force(const struct WorldHandle *world,
+                                      uint32_t id,
+                                      double *out_fx,
+                                      double *out_fy,
+                                      double *out_fz,
+                                      uint32_t capacity);
+
+/**
  * Set the number of solver substeps per `soft_body_step` call for a soft body.
  *
  * `n >= 1` splits the frame `dt` into `n` equal slices; the active solver

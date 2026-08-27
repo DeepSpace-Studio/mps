@@ -34,7 +34,9 @@ use crate::rapier::ffi::{
 };
 use rapier3d::math::Vector;
 use rapier3d::prelude::soft_body::{SoftBody, SoftBodyId, SoftSolver};
-use rapier3d::prelude::{ColliderBuilder, RigidBodyBuilder, RigidBodyHandle, RigidBodyType};
+use rapier3d::prelude::{
+    ColliderBuilder, ColliderHandle, RigidBodyBuilder, RigidBodyHandle, RigidBodyType,
+};
 use std::collections::HashSet;
 
 /// Phase 5d bookkeeping: which voxel cell maps to which soft-body particle.
@@ -2482,6 +2484,107 @@ pub extern "C" fn soft_body_read_normals(
                 slice[base + 1] = ny;
                 slice[base + 2] = nz;
             }
+        }
+        clear_error();
+        n as u32
+    })
+}
+
+// ── Phase 25 #1: 接触力回读（纯 mps-core，零 fork 改动）────────────────────────────
+//
+// soft_body_collision 让每个自由质点有一枚 proxy 动态刚体 + Ball collider；接触力由
+// Rapier narrow-phase 在 proxy 上算。这里在每个 proxy collider 上累加
+// ContactPair::total_impulse()，写回每个质点的净接触力向量。纯只读，不改求解器，
+// 与 Phase 22 应力 / Phase 23 法线回读同源。collide==false 或没有 proxy 时全 0，
+// 返回质点数（与 read_normals 同约定：capacity 不足只写满 cap 个）。
+
+/// Read the per-particle net contact force for a collision-coupled soft body.
+///
+/// For each free particle that has a proxy collider, the function sums the
+/// `ContactPair::total_impulse` over every active contact pair touching that
+/// collider, writing the net force vector into `out_fx/out_fy/out_fz[k]`. This is
+/// the contact reaction the soft body exerts/feels through its proxy colliders —
+/// the primitive behind "step on a soft cushion and get pushed back up" logic.
+///
+/// Returns the particle count (so the caller can size its buffer); when `out_fx`
+/// is null or `capacity` is 0 the count is returned without writing. Bodies with
+/// `collide == false` (no proxies) yield zero force for every particle. Pure
+/// read-out: does not affect the solver.
+///
+/// # Safety
+/// `world` must be a valid world pointer. `out_fx/out_fy/out_fz` must each point
+/// to an array of at least `capacity` `f64` elements when non-null.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_read_contact_force(
+    world: *const WorldHandle,
+    id: u32,
+    out_fx: *mut f64,
+    out_fy: *mut f64,
+    out_fz: *mut f64,
+    capacity: u32,
+) -> u32 {
+    ffi_guard(0, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(
+                ERR_NULL_POINTER,
+                "soft_body_read_contact_force: world is null",
+            );
+            return 0;
+        };
+        let sid = SoftBodyId(id);
+        let Some(body) = world.inner.soft_bodies.get(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_read_contact_force: unknown id");
+            return 0;
+        };
+        let n = body.particles.len();
+        let cap = capacity as usize;
+
+        // Accumulator per particle, reused whether or not we write it out.
+        let mut fx = vec![0.0f64; n];
+        let mut fy = vec![0.0f64; n];
+        let mut fz = vec![0.0f64; n];
+
+        // Only collision-coupled bodies have proxies; everything else is zero.
+        if let Some(proxies) = world.inner.soft_body_proxies.get(&id) {
+            // Map collider handle -> owning particle index (proxy colliders only).
+            let mut col_to_particle: std::collections::HashMap<ColliderHandle, usize> =
+                std::collections::HashMap::new();
+            for (i, ph) in proxies.iter().enumerate() {
+                let Some(rb_h) = ph else {
+                    continue;
+                };
+                let Some(rb) = world.inner.bodies.get(*rb_h) else {
+                    continue;
+                };
+                for c in rb.colliders() {
+                    col_to_particle.insert(*c, i);
+                }
+            }
+            for pair in world.inner.narrow_phase.contact_pairs() {
+                let imp = pair.total_impulse();
+                // Force on collider2 = +imp, on collider1 = -imp (Newton's 3rd law;
+                // `total_impulse` is the force on collider2, pointing from c1 to c2).
+                if let Some(&i1) = col_to_particle.get(&pair.collider1) {
+                    fx[i1] -= imp.x;
+                    fy[i1] -= imp.y;
+                    fz[i1] -= imp.z;
+                }
+                if let Some(&i2) = col_to_particle.get(&pair.collider2) {
+                    fx[i2] += imp.x;
+                    fy[i2] += imp.y;
+                    fz[i2] += imp.z;
+                }
+            }
+        }
+
+        if !out_fx.is_null() && !out_fy.is_null() && !out_fz.is_null() && cap > 0 {
+            let m = cap.min(n);
+            let sx = unsafe { std::slice::from_raw_parts_mut(out_fx, cap) };
+            let sy = unsafe { std::slice::from_raw_parts_mut(out_fy, cap) };
+            let sz = unsafe { std::slice::from_raw_parts_mut(out_fz, cap) };
+            sx[..m].copy_from_slice(&fx[..m]);
+            sy[..m].copy_from_slice(&fy[..m]);
+            sz[..m].copy_from_slice(&fz[..m]);
         }
         clear_error();
         n as u32

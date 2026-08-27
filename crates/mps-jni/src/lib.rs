@@ -1716,6 +1716,7 @@ jni!(int softBodyReadTriangles(long world, int id, long out_tris, int capacity) 
 jni!(int softBodyReadStress(long world, int id, long out_strain, int capacity) { sb::soft_body_read_stress(cp::<WH>(world), id as u32, pm::<f64>(out_strain), capacity as u32) as jint });
 jni!(int softBodyScaleRestLength(long world, int id, double factor) { sb::soft_body_scale_rest_length(m::<WH>(world), id as u32, factor) as jint });
 jni!(int softBodyReadNormals(long world, int id, long out_normals, int capacity) { sb::soft_body_read_normals(cp::<WH>(world), id as u32, pm::<f64>(out_normals), capacity as u32) as jint });
+jni!(int softBodyReadContactForce(long world, int id, long out_fx, long out_fy, long out_fz, int capacity) { sb::soft_body_read_contact_force(cp::<WH>(world), id as u32, pm::<f64>(out_fx), pm::<f64>(out_fy), pm::<f64>(out_fz), capacity as u32) as jint });
 jni!(int softBodySetSubsteps(long world, int id, int n) { sb::soft_body_set_substeps(m::<WH>(world), id as u32, n as u32) as jint });
 
 // ── Phase 7: 风场/空气阻力 + 休眠 + 诊断 ──────────────────────────────────

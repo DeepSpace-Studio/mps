@@ -19,10 +19,10 @@ mod tests {
         soft_body_clear_wind, soft_body_configure_solver, soft_body_count, soft_body_create,
         soft_body_destroy, soft_body_detach_particle, soft_body_enable_collision,
         soft_body_get_particle, soft_body_is_sleeping, soft_body_kinetic_energy,
-        soft_body_particle_count, soft_body_read_edges, soft_body_read_normals,
-        soft_body_read_particles, soft_body_read_stress, soft_body_read_tetrahedra,
-        soft_body_read_triangles, soft_body_remove_particle, soft_body_scale_rest_length,
-        soft_body_set_cohesion, soft_body_set_cross_collision,
+        soft_body_particle_count, soft_body_read_contact_force, soft_body_read_edges,
+        soft_body_read_normals, soft_body_read_particles, soft_body_read_stress,
+        soft_body_read_tetrahedra, soft_body_read_triangles, soft_body_remove_particle,
+        soft_body_scale_rest_length, soft_body_set_cohesion, soft_body_set_cross_collision,
         soft_body_set_cross_collision_friction, soft_body_set_damping,
         soft_body_set_distance_constraint_compliance,
         soft_body_set_distance_constraint_compression, soft_body_set_gravity,
@@ -3696,6 +3696,156 @@ mod tests {
         assert_eq!(soft_body_set_substeps(world, id, 4), 4);
         // Unknown id → 0.
         assert_eq!(soft_body_set_substeps(world, u32::MAX, 4), 0);
+        world_destroy(world);
+    } // ── Phase 25 #1: 接触力回读（纯 mps-core，零 fork 改动）──────────────────────
+    // 单个自由软体质点从地面上方下落，启用碰撞耦合后停在地面之上；其 proxy 球体
+    // 与地面半空间接触产生向上的接触力。read_contact_force 在落地稳定后应回读到底
+    // 部质点沿 +y 的净接触力（地面把它顶起），禁用碰撞（无 proxy）时全 0。
+    #[test]
+    fn soft_body_read_contact_force_pushes_up_from_ground() {
+        let world = make_world();
+
+        // 静态地面：Fixed 刚体 + 法线朝上的半空间（实体在 y<0，上方为空）。
+        let ground_builder =
+            mps_core::rapier::rigid_body::rigid_body_builder_create(BodyStatus::Fixed as u32);
+        let ground = mps_core::rapier::rigid_body::rigid_body_builder_build(ground_builder);
+        let ground_handle = mps_core::rapier::rigid_body::world_insert_rigid_body(world, ground);
+        let ground_collider = mps_core::rapier::collider::collider_builder_build(
+            mps_core::rapier::collider::collider_builder_create_halfspace(Vec3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            }),
+        );
+        mps_core::rapier::collider::world_insert_collider_with_parent(
+            world,
+            ground_collider,
+            ground_handle,
+        );
+
+        // 单个自由质点，初始在地面上方 y=2.0，无弹簧（仅受重力）。
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: -9.81,
+                z: 0.0,
+            },
+        );
+        let _p = soft_body_add_particle(world, id, 0.0, 2.0, 0.0, 1.0, Bool::FALSE);
+        assert_eq!(
+            soft_body_enable_collision(world, id, 0.5, Bool::TRUE),
+            Bool::TRUE
+        );
+
+        // 未落地前：接触力应为 0（尚无接触）。
+        let mut fx = vec![0.0f64; 1];
+        let mut fy = vec![0.0f64; 1];
+        let mut fz = vec![0.0f64; 1];
+        world_step(world, 1.0 / 60.0);
+        let n0 = soft_body_read_contact_force(
+            world,
+            id,
+            fx.as_mut_ptr(),
+            fy.as_mut_ptr(),
+            fz.as_mut_ptr(),
+            1,
+        );
+        assert_eq!(n0, 1);
+        assert!(
+            fy[0].abs() < 1e-6,
+            "no contact force before touching ground, got fy={}",
+            fy[0]
+        );
+
+        // 落地稳定：多步后停在 y≈0.5（粒子半径）之上，接触力沿 +y 把它顶起。
+        let dt = 1.0 / 60.0;
+        for _ in 0..180 {
+            world_step(world, dt);
+        }
+        let n = soft_body_read_contact_force(
+            world,
+            id,
+            fx.as_mut_ptr(),
+            fy.as_mut_ptr(),
+            fz.as_mut_ptr(),
+            1,
+        );
+        assert_eq!(n, 1);
+        // 重力向下 ≈ -9.81·m（m=1/inv_mass=1），稳态接触力必须向上抵住重力 → fy>0。
+        assert!(
+            fy[0] > 0.0,
+            "contact force on particle resting on ground must point up, got fy={}",
+            fy[0]
+        );
+        // 水平分量应接近 0（竖直落地）。
+        assert!(
+            fx[0].abs() < fy[0] * 0.2,
+            "horizontal contact force should be small, fx={} fy={}",
+            fx[0],
+            fy[0]
+        );
+
+        // 未知 id → 0。
+        assert_eq!(
+            soft_body_read_contact_force(
+                world,
+                u32::MAX,
+                fx.as_mut_ptr(),
+                fy.as_mut_ptr(),
+                fz.as_mut_ptr(),
+                1
+            ),
+            0
+        );
+        // 空 world → 0。
+        assert_eq!(
+            soft_body_read_contact_force(
+                std::ptr::null_mut(),
+                0,
+                fx.as_mut_ptr(),
+                fy.as_mut_ptr(),
+                fz.as_mut_ptr(),
+                1
+            ),
+            0
+        );
+
+        world_destroy(world);
+    }
+
+    #[test]
+    fn soft_body_read_contact_force_zero_without_collision() {
+        // 没有启用碰撞（无 proxy）的软体，read_contact_force 必须全 0，但返回质点数。
+        let world = make_world();
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: -9.81,
+                z: 0.0,
+            },
+        );
+        let _a = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::TRUE);
+        let _b = soft_body_add_particle(world, id, 1.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        let mut fx = vec![0.0f64; 2];
+        let mut fy = vec![0.0f64; 2];
+        let mut fz = vec![0.0f64; 2];
+        for _ in 0..30 {
+            world_step(world, 1.0 / 60.0);
+        }
+        let n = soft_body_read_contact_force(
+            world,
+            id,
+            fx.as_mut_ptr(),
+            fy.as_mut_ptr(),
+            fz.as_mut_ptr(),
+            2,
+        );
+        assert_eq!(n, 2);
+        assert_eq!(fx, vec![0.0, 0.0]);
+        assert_eq!(fy, vec![0.0, 0.0]);
+        assert_eq!(fz, vec![0.0, 0.0]);
         world_destroy(world);
     }
 }
