@@ -17,17 +17,18 @@ mod tests {
         soft_body_add_spring, soft_body_add_tetrahedron, soft_body_add_triangle,
         soft_body_apply_particle_impulse, soft_body_apply_plasticity, soft_body_apply_wind,
         soft_body_attach_particle, soft_body_build_tetra_mesh, soft_body_clear_cohesion,
-        soft_body_clear_cross_collision, soft_body_clear_pressure, soft_body_clear_self_collision,
-        soft_body_clear_volume_conservation, soft_body_clear_wind, soft_body_clone,
-        soft_body_configure_solver, soft_body_count, soft_body_create, soft_body_destroy,
-        soft_body_detach_particle, soft_body_enable_collision, soft_body_get_particle,
-        soft_body_is_sleeping, soft_body_kinetic_energy, soft_body_particle_count,
-        soft_body_read_aabb, soft_body_read_contact_force, soft_body_read_edges,
-        soft_body_read_normals, soft_body_read_particles, soft_body_read_spring_forces,
-        soft_body_read_stress, soft_body_read_surface_mesh, soft_body_read_surface_triangle_count,
-        soft_body_read_tetrahedra, soft_body_read_triangles, soft_body_remove_particle,
-        soft_body_restore_state, soft_body_save_state, soft_body_scale_rest_length,
-        soft_body_set_anisotropy, soft_body_set_cohesion, soft_body_set_cross_collision,
+        soft_body_clear_corotated, soft_body_clear_cross_collision, soft_body_clear_pressure,
+        soft_body_clear_self_collision, soft_body_clear_volume_conservation, soft_body_clear_wind,
+        soft_body_clone, soft_body_configure_solver, soft_body_count, soft_body_create,
+        soft_body_destroy, soft_body_detach_particle, soft_body_enable_collision,
+        soft_body_get_particle, soft_body_is_sleeping, soft_body_kinetic_energy,
+        soft_body_particle_count, soft_body_read_aabb, soft_body_read_contact_force,
+        soft_body_read_edges, soft_body_read_normals, soft_body_read_particles,
+        soft_body_read_spring_forces, soft_body_read_stress, soft_body_read_surface_mesh,
+        soft_body_read_surface_triangle_count, soft_body_read_tetrahedra, soft_body_read_triangles,
+        soft_body_remove_particle, soft_body_restore_state, soft_body_save_state,
+        soft_body_scale_rest_length, soft_body_set_anisotropy, soft_body_set_cohesion,
+        soft_body_set_corotated, soft_body_set_cross_collision,
         soft_body_set_cross_collision_friction, soft_body_set_damping,
         soft_body_set_distance_constraint_compliance,
         soft_body_set_distance_constraint_compression, soft_body_set_gravity,
@@ -5120,5 +5121,183 @@ mod tests {
         );
 
         world_destroy(world);
+    }
+
+    #[test]
+    fn soft_body_corotated_recovers_shear() {
+        // Two soft bodies, each a single tetra with 3 pinned verts + 1 free vertex.
+        // Same gravity, same hard volume conservation. Body A (baseline) relies on
+        // the volume constraint only; body B additionally enables corotated
+        // elasticity. After shear loading, B's free vertex must sit closer to its
+        // rest position than A's (deviatoric recovery), both staying finite.
+        let world = world_create(Vec3 {
+            x: 0.0,
+            y: -9.81,
+            z: 0.0,
+        });
+        assert!(!world.is_null());
+        let build = |world: *mut WorldHandle| -> u32 {
+            let id = soft_body_create(
+                world,
+                Vec3 {
+                    x: 0.0,
+                    y: -9.81,
+                    z: 0.0,
+                },
+            );
+            // rest tet: right-angle unit tet; vertices 0..2 pinned, 3 free.
+            let a = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::TRUE);
+            let b = soft_body_add_particle(world, id, 1.0, 0.0, 0.0, 1.0, Bool::TRUE);
+            let c = soft_body_add_particle(world, id, 0.0, 1.0, 0.0, 1.0, Bool::TRUE);
+            let d = soft_body_add_particle(world, id, 0.0, 0.0, 1.0, 1.0, Bool::FALSE);
+            assert_eq!((a, b, c, d), (0, 1, 2, 3));
+            assert_eq!(soft_body_add_tetrahedron(world, id, 0, 1, 2, 3), Bool::TRUE);
+            assert_eq!(
+                soft_body_configure_solver(world, id, 1, 20, 0.0),
+                Bool::TRUE
+            );
+            assert_eq!(
+                soft_body_set_volume_conservation(world, id, 0.0),
+                Bool::TRUE
+            );
+            assert_eq!(
+                soft_body_set_gravity(
+                    world,
+                    id,
+                    Vec3 {
+                        x: 0.0,
+                        y: -9.81,
+                        z: 0.0,
+                    }
+                ),
+                Bool::TRUE
+            );
+            id
+        };
+        let id_base = build(world);
+        let id_coro = build(world);
+        // enable corotated on the second body (rest shapes snapshot = undeformed)
+        assert_eq!(soft_body_set_corotated(world, id_coro, 0.5), Bool::TRUE);
+        for _ in 0..120 {
+            world_step(world, 1.0 / 60.0);
+        }
+        let mut pb = Vec3::default();
+        let mut pc = Vec3::default();
+        soft_body_get_particle(world, id_base, 3, &mut pb, std::ptr::null_mut());
+        soft_body_get_particle(world, id_coro, 3, &mut pc, std::ptr::null_mut());
+        let dist = |p: Vec3, q: Vec3| -> f64 {
+            ((p.x - q.x).powi(2) + (p.y - q.y).powi(2) + (p.z - q.z).powi(2)).sqrt()
+        };
+        let err_base = dist(
+            pb,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 1.0,
+            },
+        );
+        let err_coro = dist(
+            pc,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 1.0,
+            },
+        );
+        assert!(err_base.is_finite() && err_coro.is_finite());
+        assert!(
+            err_coro < err_base,
+            "corotated must recover the free vertex better: coro={} base={}",
+            err_coro,
+            err_base
+        );
+        // clear + invalid args
+        assert_eq!(soft_body_clear_corotated(world, id_coro), Bool::TRUE);
+        assert_eq!(soft_body_set_corotated(world, id_base, 0.0), Bool::FALSE);
+        assert_eq!(soft_body_set_corotated(world, id_base, 1.5), Bool::FALSE);
+        assert_eq!(
+            soft_body_set_corotated(world, id_base, f64::NAN),
+            Bool::FALSE
+        );
+        assert_eq!(soft_body_set_corotated(world, 999, 0.5), Bool::FALSE);
+        assert_eq!(soft_body_clear_corotated(world, 999), Bool::FALSE);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn soft_body_corotated_rotation_invariant() {
+        // The same body rotated 90 degrees about Y must deform identically
+        // (rotation invariance of the corotated model).
+        let dist = |p: Vec3, q: Vec3| -> f64 {
+            ((p.x - q.x).powi(2) + (p.y - q.y).powi(2) + (p.z - q.z).powi(2)).sqrt()
+        };
+        let run = |rotated: bool| -> f64 {
+            let world = world_create(Vec3 {
+                x: 0.0,
+                y: -9.81,
+                z: 0.0,
+            });
+            let id = soft_body_create(
+                world,
+                Vec3 {
+                    x: 0.0,
+                    y: -9.81,
+                    z: 0.0,
+                },
+            );
+            let r = |x: f64, y: f64, z: f64| -> (f64, f64, f64) {
+                if rotated {
+                    (z, y, -x) // 90 deg about Y
+                } else {
+                    (x, y, z)
+                }
+            };
+            let v0 = r(0.0, 0.0, 0.0);
+            let v1 = r(1.0, 0.0, 0.0);
+            let v2 = r(0.0, 1.0, 0.0);
+            let v3 = r(0.0, 0.0, 1.0);
+            soft_body_add_particle(world, id, v0.0, v0.1, v0.2, 1.0, Bool::TRUE);
+            soft_body_add_particle(world, id, v1.0, v1.1, v1.2, 1.0, Bool::TRUE);
+            soft_body_add_particle(world, id, v2.0, v2.1, v2.2, 1.0, Bool::TRUE);
+            soft_body_add_particle(world, id, v3.0, v3.1, v3.2, 1.0, Bool::FALSE);
+            soft_body_add_tetrahedron(world, id, 0, 1, 2, 3);
+            soft_body_configure_solver(world, id, 1, 20, 0.0);
+            soft_body_set_volume_conservation(world, id, 0.0);
+            soft_body_set_gravity(
+                world,
+                id,
+                Vec3 {
+                    x: 0.0,
+                    y: -9.81,
+                    z: 0.0,
+                },
+            );
+            assert_eq!(soft_body_set_corotated(world, id, 0.5), Bool::TRUE);
+            for _ in 0..120 {
+                world_step(world, 1.0 / 60.0);
+            }
+            let mut p = Vec3::default();
+            soft_body_get_particle(world, id, 3, &mut p, std::ptr::null_mut());
+            let rest = r(0.0, 0.0, 1.0);
+            let dev = dist(
+                p,
+                Vec3 {
+                    x: rest.0,
+                    y: rest.1,
+                    z: rest.2,
+                },
+            );
+            world_destroy(world);
+            dev
+        };
+        let d0 = run(false);
+        let d1 = run(true);
+        assert!(d0.is_finite() && d1.is_finite());
+        assert!(
+            (d0 - d1).abs() < 1e-9,
+            "rotation invariance violated: d0={} d1={}",
+            d0,
+            d1
+        );
     }
 }

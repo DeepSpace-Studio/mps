@@ -729,6 +729,81 @@ pub extern "C" fn soft_body_clear_volume_conservation(world: *mut WorldHandle, i
     })
 }
 
+/// # Phase 29 — 开启四面体 corotated 线性弹性(旋转不变形状匹配)
+///
+/// 每个 XPBD 迭代里,在体积约束之后,把每个四面体向其 rest 形状的最优旋转
+/// 匹配(polar 分解 shape matching)投影,提供旋转不变的线弹性偏应变回复。
+/// rest 形状在调用时刻从当前质点位置快照(在未形变网格上开启)。
+/// `stiffness` 为逐迭代松弛系数,取值 `(0, 1]`。
+///
+/// # Returns
+/// `Bool::TRUE` 成功开启;`id` 未知 / world 为 null / `stiffness` 非法(非有限、<=0、>1) → `Bool::FALSE`。
+///
+/// # Safety
+/// `world` 必须有效;`stiffness` 需为有限且 `0 < stiffness <= 1`。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_set_corotated(
+    world: *mut WorldHandle,
+    id: u32,
+    stiffness: f64,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !stiffness.is_finite() || stiffness <= 0.0 || stiffness > 1.0 {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_corotated: stiffness must be in (0, 1]",
+            );
+            return Bool::FALSE;
+        }
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_set_corotated: unknown id");
+            return Bool::FALSE;
+        };
+        if sb.set_corotated(stiffness) {
+            clear_error();
+            Bool::TRUE
+        } else {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_corotated: rejected by validator",
+            );
+            Bool::FALSE
+        }
+    })
+}
+
+/// # Phase 29 — 关闭 corotated 线性弹性
+///
+/// 等同 `corotated = None`;体积约束等其他特性不受影响。
+///
+/// # Returns
+/// `Bool::TRUE` 成功关闭;`id` 未知 / world 为 null → `Bool::FALSE`。
+///
+/// # Safety
+/// `world` 必须有效。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_clear_corotated(world: *mut WorldHandle, id: u32) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_clear_corotated: unknown id");
+            return Bool::FALSE;
+        };
+        sb.clear_corotated();
+        clear_error();
+        Bool::TRUE
+    })
+}
+
 /// Phase 28 — 关闭黏连/可撕 glue（等同 `cohesion = None`，不再互相吸附）。
 ///
 /// # Returns
@@ -3112,6 +3187,22 @@ fn sb_serialize_body(buf: &mut Vec<u8>, b: &SoftBody) {
         }
         None => sb_push_u8(buf, 0),
     }
+    // corotated (Phase 29): Option<f64> stiffness + rest-shape matrices.
+    match b.corotated {
+        Some(k) => {
+            sb_push_u8(buf, 1);
+            sb_push_f64(buf, k);
+            sb_push_u32(buf, b.tetra_rest_shapes.len() as u32);
+            for m in &b.tetra_rest_shapes {
+                for row in m.iter() {
+                    for v in row.iter() {
+                        sb_push_f64(buf, *v);
+                    }
+                }
+            }
+        }
+        None => sb_push_u8(buf, 0),
+    }
 }
 
 fn sb_deserialize_particle(c: &mut SbCursor) -> Option<SoftParticle> {
@@ -3288,6 +3379,24 @@ fn sb_deserialize_body(c: &mut SbCursor) -> Option<SoftBody> {
         0 => None,
         _ => Some(sb_deserialize_cohesion(c)?),
     };
+    let (corotated, tetra_rest_shapes) = match c.take_u8()? {
+        0 => (None, Vec::new()),
+        _ => {
+            let k = c.take_f64()?;
+            let n = c.take_u32()? as usize;
+            let mut shapes = Vec::with_capacity(n);
+            for _ in 0..n {
+                let mut m = [[0.0f64; 3]; 3];
+                for row in &mut m[..] {
+                    for v in &mut row[..] {
+                        *v = c.take_f64()?;
+                    }
+                }
+                shapes.push(m);
+            }
+            (Some(k), shapes)
+        }
+    };
     Some(SoftBody {
         particles,
         springs,
@@ -3313,6 +3422,8 @@ fn sb_deserialize_body(c: &mut SbCursor) -> Option<SoftBody> {
         cross_collision,
         volume_conservation,
         cohesion,
+        corotated,
+        tetra_rest_shapes,
     })
 }
 

@@ -4411,6 +4411,37 @@ Bool soft_body_clear_volume_conservation(struct WorldHandle *world,
                                          uint32_t id);
 
 /**
+ * # Phase 29 — 开启四面体 corotated 线性弹性(旋转不变形状匹配)
+ *
+ * 每个 XPBD 迭代里,在体积约束之后,把每个四面体向其 rest 形状的最优旋转
+ * 匹配(polar 分解 shape matching)投影,提供旋转不变的线弹性偏应变回复。
+ * rest 形状在调用时刻从当前质点位置快照(在未形变网格上开启)。
+ * `stiffness` 为逐迭代松弛系数,取值 `(0, 1]`。
+ *
+ * # Returns
+ * `Bool::TRUE` 成功开启;`id` 未知 / world 为 null / `stiffness` 非法(非有限、<=0、>1) → `Bool::FALSE`。
+ *
+ * # Safety
+ * `world` 必须有效;`stiffness` 需为有限且 `0 < stiffness <= 1`。
+ */
+Bool soft_body_set_corotated(struct WorldHandle *world,
+                             uint32_t id,
+                             double stiffness);
+
+/**
+ * # Phase 29 — 关闭 corotated 线性弹性
+ *
+ * 等同 `corotated = None`;体积约束等其他特性不受影响。
+ *
+ * # Returns
+ * `Bool::TRUE` 成功关闭;`id` 未知 / world 为 null → `Bool::FALSE`。
+ *
+ * # Safety
+ * `world` 必须有效。
+ */
+Bool soft_body_clear_corotated(struct WorldHandle *world, uint32_t id);
+
+/**
  * Phase 28 — 关闭黏连/可撕 glue（等同 `cohesion = None`，不再互相吸附）。
  *
  * # Returns

@@ -14,11 +14,11 @@
 /// Workspace version (from root Cargo.toml), for the footer / brand.
 pub const VERSION: &str = "0.1.4";
 /// Total number of `#[test]` items in `mps-test`.
-pub const TEST_COUNT: &str = "942";
+pub const TEST_COUNT: &str = "944";
 /// Total number of `jni!(`/`jni_e_c!(` method entries in `mps-jni`.
-pub const JNI_METHOD_COUNT: &str = "441";
+pub const JNI_METHOD_COUNT: &str = "443";
 /// Total number of `pub extern "C" fn` declarations in `mps-core/rapier`.
-pub const CORE_FFI_COUNT: &str = "749";
+pub const CORE_FFI_COUNT: &str = "751";
 /// Number of `pub mod` formula submodules under mps-formula scientists+disciplines.
 pub const FORMULA_MODULE_COUNT: &str = "107";
 /// Number of `CelestialBodyId` variants (built-in celestial bodies).
@@ -36,10 +36,10 @@ pub const FFI_COLLIDER: &str = "75";
 /// `pub extern "C" fn query_*` declarations in mps-core/rapier.
 pub const FFI_QUERY: &str = "58";
 /// `pub extern "C" fn soft_body_*` declarations in mps-core/rapier.
-pub const FFI_SOFT_BODY: &str = "74";
+pub const FFI_SOFT_BODY: &str = "76";
 /// `jni!` entries with a `softBody*` method name in mps-jni.
-pub const JNI_SOFT_BODY: &str = "74";
+pub const JNI_SOFT_BODY: &str = "76";
 /// `#[test]` functions whose name contains `soft_body` in mps-test.
-pub const TEST_SOFT_BODY: &str = "73";
+pub const TEST_SOFT_BODY: &str = "75";
 /// Number of natural satellites (moons) in `mps-formula::celestial_data::MOONS`.
 pub const MOON_COUNT: &str = "30";
