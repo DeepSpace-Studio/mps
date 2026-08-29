@@ -804,6 +804,74 @@ pub extern "C" fn soft_body_clear_corotated(world: *mut WorldHandle, id: u32) ->
     })
 }
 
+/// # Phase 30 — 开启 Neo-Hookean 对数体积能量
+///
+/// 每个 XPBD 迭代里，四面体体积约束改用非线性残差 `C = ln(V/V₀)`
+/// (J 下限 1e-6 保持有限)，compliance = `stiffness/dt²`。对数形式使体积抵抗
+/// 随压缩无界增长(物理正确的不可压缩性)，取代线性 `V − V₀` 的有限推回。
+/// 开启时覆盖 `volume_conservation` 的 compliance;关闭后回退线性体积约束。
+///
+/// # Returns
+/// `Bool::TRUE` 成功开启;`id` 未知 / world 为 null / `stiffness` 非法(非有限、负数) → `Bool::FALSE`。
+///
+/// # Safety
+/// `world` 必须有效;`stiffness` 需为有限非负值。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_set_neo_hookean(
+    world: *mut WorldHandle,
+    id: u32,
+    stiffness: f64,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_set_neo_hookean: unknown id");
+            return Bool::FALSE;
+        };
+        if sb.set_neo_hookean(stiffness) {
+            clear_error();
+            Bool::TRUE
+        } else {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_neo_hookean: non-finite/negative stiffness",
+            );
+            Bool::FALSE
+        }
+    })
+}
+
+/// # Phase 30 — 关闭 Neo-Hookean 体积能量
+///
+/// 等同 `neo_hookean = None`;体积约束回退线性残差 + `volume_conservation` compliance。
+///
+/// # Returns
+/// `Bool::TRUE` 成功关闭;`id` 未知 / world 为 null → `Bool::FALSE`。
+///
+/// # Safety
+/// `world` 必须有效。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_clear_neo_hookean(world: *mut WorldHandle, id: u32) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_clear_neo_hookean: unknown id");
+            return Bool::FALSE;
+        };
+        sb.clear_neo_hookean();
+        clear_error();
+        Bool::TRUE
+    })
+}
+
 /// Phase 28 — 关闭黏连/可撕 glue（等同 `cohesion = None`，不再互相吸附）。
 ///
 /// # Returns
@@ -3202,7 +3270,8 @@ fn sb_serialize_body(buf: &mut Vec<u8>, b: &SoftBody) {
             }
         }
         None => sb_push_u8(buf, 0),
-    }
+    } // neo_hookean (Phase 30)
+    sb_push_option_f64(buf, b.neo_hookean);
 }
 
 fn sb_deserialize_particle(c: &mut SbCursor) -> Option<SoftParticle> {
@@ -3397,6 +3466,7 @@ fn sb_deserialize_body(c: &mut SbCursor) -> Option<SoftBody> {
             (Some(k), shapes)
         }
     };
+    let neo_hookean = c.take_option_f64()?;
     Some(SoftBody {
         particles,
         springs,
@@ -3424,6 +3494,7 @@ fn sb_deserialize_body(c: &mut SbCursor) -> Option<SoftBody> {
         cohesion,
         corotated,
         tetra_rest_shapes,
+        neo_hookean,
     })
 }
 

@@ -1791,6 +1791,8 @@ jni!(boolean softBodySetCrossCollisionFriction(long world, int id, double mu) { 
 // Phase 16: 体积守恒约束(独立柔度)
 jni!(boolean softBodySetVolumeConservation(long world, int id, double compliance) { sb::soft_body_set_volume_conservation(m::<WH>(world), id as u32, compliance).0 as jbyte });
 jni!(boolean softBodySetCorotated(long world, int id, double stiffness) { sb::soft_body_set_corotated(m::<WH>(world), id as u32, stiffness).0 as jbyte });
+jni!(boolean softBodySetNeoHookean(long world, int id, double stiffness) { sb::soft_body_set_neo_hookean(m::<WH>(world), id as u32, stiffness).0 as jbyte });
+jni!(boolean softBodyClearNeoHookean(long world, int id) { sb::soft_body_clear_neo_hookean(m::<WH>(world), id as u32).0 as jbyte });
 jni!(boolean softBodyClearCorotated(long world, int id) { sb::soft_body_clear_corotated(m::<WH>(world), id as u32).0 as jbyte });
 // Phase 17: 软体间黏连(可撕黏附)
 jni!(boolean softBodySetCohesion(long world, int id, double radius, double stiffness, double breakDistance) { sb::soft_body_set_cohesion(m::<WH>(world), id as u32, radius, stiffness, breakDistance).0 as jbyte });

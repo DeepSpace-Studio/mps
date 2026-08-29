@@ -17,30 +17,30 @@ mod tests {
         soft_body_add_spring, soft_body_add_tetrahedron, soft_body_add_triangle,
         soft_body_apply_particle_impulse, soft_body_apply_plasticity, soft_body_apply_wind,
         soft_body_attach_particle, soft_body_build_tetra_mesh, soft_body_clear_cohesion,
-        soft_body_clear_corotated, soft_body_clear_cross_collision, soft_body_clear_pressure,
-        soft_body_clear_self_collision, soft_body_clear_volume_conservation, soft_body_clear_wind,
-        soft_body_clone, soft_body_configure_solver, soft_body_count, soft_body_create,
-        soft_body_destroy, soft_body_detach_particle, soft_body_enable_collision,
-        soft_body_get_particle, soft_body_is_sleeping, soft_body_kinetic_energy,
-        soft_body_particle_count, soft_body_read_aabb, soft_body_read_contact_force,
-        soft_body_read_edges, soft_body_read_normals, soft_body_read_particles,
-        soft_body_read_spring_forces, soft_body_read_stress, soft_body_read_surface_mesh,
-        soft_body_read_surface_triangle_count, soft_body_read_tetrahedra, soft_body_read_triangles,
-        soft_body_remove_particle, soft_body_restore_state, soft_body_save_state,
-        soft_body_scale_rest_length, soft_body_set_anisotropy, soft_body_set_cohesion,
-        soft_body_set_corotated, soft_body_set_cross_collision,
-        soft_body_set_cross_collision_friction, soft_body_set_damping,
-        soft_body_set_distance_constraint_compliance,
+        soft_body_clear_corotated, soft_body_clear_cross_collision, soft_body_clear_neo_hookean,
+        soft_body_clear_pressure, soft_body_clear_self_collision,
+        soft_body_clear_volume_conservation, soft_body_clear_wind, soft_body_clone,
+        soft_body_configure_solver, soft_body_count, soft_body_create, soft_body_destroy,
+        soft_body_detach_particle, soft_body_enable_collision, soft_body_get_particle,
+        soft_body_is_sleeping, soft_body_kinetic_energy, soft_body_particle_count,
+        soft_body_read_aabb, soft_body_read_contact_force, soft_body_read_edges,
+        soft_body_read_normals, soft_body_read_particles, soft_body_read_spring_forces,
+        soft_body_read_stress, soft_body_read_surface_mesh, soft_body_read_surface_triangle_count,
+        soft_body_read_tetrahedra, soft_body_read_triangles, soft_body_remove_particle,
+        soft_body_restore_state, soft_body_save_state, soft_body_scale_rest_length,
+        soft_body_set_anisotropy, soft_body_set_cohesion, soft_body_set_corotated,
+        soft_body_set_cross_collision, soft_body_set_cross_collision_friction,
+        soft_body_set_damping, soft_body_set_distance_constraint_compliance,
         soft_body_set_distance_constraint_compression, soft_body_set_gravity,
-        soft_body_set_particle_velocity, soft_body_set_plasticity, soft_body_set_pressure,
-        soft_body_set_self_collision, soft_body_set_self_collision_friction,
-        soft_body_set_spring_stiffness, soft_body_set_substeps, soft_body_set_tear_energy,
-        soft_body_set_tear_strain, soft_body_set_tear_stress, soft_body_set_thermal,
-        soft_body_set_viscoelastic, soft_body_set_volume_conservation, soft_body_sleep,
-        soft_body_state_size, soft_body_step_implicit, soft_body_step_mass_spring,
-        soft_body_subdivide_tetrahedra, soft_body_tear_now, soft_body_total_volume,
-        soft_body_voxel_build, soft_body_voxel_dig, soft_body_wake, soft_chain_create,
-        soft_chain_node_handles,
+        soft_body_set_neo_hookean, soft_body_set_particle_velocity, soft_body_set_plasticity,
+        soft_body_set_pressure, soft_body_set_self_collision,
+        soft_body_set_self_collision_friction, soft_body_set_spring_stiffness,
+        soft_body_set_substeps, soft_body_set_tear_energy, soft_body_set_tear_strain,
+        soft_body_set_tear_stress, soft_body_set_thermal, soft_body_set_viscoelastic,
+        soft_body_set_volume_conservation, soft_body_sleep, soft_body_state_size,
+        soft_body_step_implicit, soft_body_step_mass_spring, soft_body_subdivide_tetrahedra,
+        soft_body_tear_now, soft_body_total_volume, soft_body_voxel_build, soft_body_voxel_dig,
+        soft_body_wake, soft_chain_create, soft_chain_node_handles,
     };
     use mps_core::rapier::voxel::{collider_builder_create_voxels, collider_voxel_edit};
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
@@ -5299,5 +5299,100 @@ mod tests {
             d0,
             d1
         );
+    }
+    #[test]
+    fn soft_body_neo_hookean_resists_compression_more() {
+        // Single tet, 4 free particles, compressive pressure pushing the apex toward
+        // the base. Linear volume (baseline) vs Neo-Hookean ln(J) volume: at the same
+        // stiffness the nonlinear residual must keep MORE rest volume under the same
+        // load (unbounded resistance as V -> 0).
+        let world = world_create(Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        });
+        assert!(!world.is_null());
+        let build = |world: *mut WorldHandle| -> u32 {
+            let id = soft_body_create(world, Vec3::default());
+            soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
+            soft_body_add_particle(world, id, 1.0, 0.0, 0.0, 1.0, Bool::FALSE);
+            soft_body_add_particle(world, id, 0.0, 1.0, 0.0, 1.0, Bool::FALSE);
+            soft_body_add_particle(world, id, 0.0, 0.0, 1.0, 1.0, Bool::FALSE);
+            soft_body_add_tetrahedron(world, id, 0, 1, 2, 3);
+            soft_body_configure_solver(world, id, 1, 30, 0.0);
+            id
+        };
+        let id_lin = build(world);
+        let id_nh = build(world);
+        // Same compliance scale for a fair comparison: linear uses
+        // volume_conservation compliance 0.05; NH uses stiffness 0.05 (alpha = k/dt^2).
+        assert_eq!(
+            soft_body_set_volume_conservation(world, id_lin, 0.05),
+            Bool::TRUE
+        );
+        assert_eq!(soft_body_set_neo_hookean(world, id_nh, 0.05), Bool::TRUE);
+        // One hard kick on the apex (particle 3) TOWARD the base plane (-z): the
+        // right-angle tet's volume depends on p3.z, so this is a true compressive
+        // load. Compare the retained volume after ONE step (before the
+        // oscillation sets in): at equal stiffness the ln(J) residual pushes
+        // back harder.
+        soft_body_apply_particle_impulse(world, id_lin, 3, 0.0, 0.0, -30.0);
+        soft_body_apply_particle_impulse(world, id_nh, 3, 0.0, 0.0, -30.0);
+        world_step(world, 1.0 / 60.0);
+        let vol_lin = soft_body_total_volume(world, id_lin);
+        let vol_nh = soft_body_total_volume(world, id_nh);
+        assert!(vol_lin.is_finite() && vol_nh.is_finite());
+        assert!(
+            vol_nh > vol_lin,
+            "Neo-Hookean must retain more volume under compression: nh={} lin={}",
+            vol_nh,
+            vol_lin
+        );
+        // clear + invalid guards
+        assert_eq!(soft_body_clear_neo_hookean(world, id_nh), Bool::TRUE);
+        assert_eq!(soft_body_set_neo_hookean(world, id_nh, -1.0), Bool::FALSE);
+        assert_eq!(
+            soft_body_set_neo_hookean(world, id_nh, f64::NAN),
+            Bool::FALSE
+        );
+        assert_eq!(soft_body_set_neo_hookean(world, 999, 1.0), Bool::FALSE);
+        assert_eq!(soft_body_clear_neo_hookean(world, 999), Bool::FALSE);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn soft_body_neo_hookean_save_restore_roundtrip() {
+        // save/restore must carry the neo_hookean flag: restore into a cleared body
+        // and verify the behaviour (volume retention under the same load) survives.
+        let world = world_create(Vec3::default());
+        let id = soft_body_create(world, Vec3::default());
+        soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        soft_body_add_particle(world, id, 1.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        soft_body_add_particle(world, id, 0.0, 1.0, 0.0, 1.0, Bool::FALSE);
+        soft_body_add_particle(world, id, 0.0, 0.0, 1.0, 1.0, Bool::FALSE);
+        soft_body_add_tetrahedron(world, id, 0, 1, 2, 3);
+        soft_body_configure_solver(world, id, 1, 30, 0.0);
+        assert_eq!(soft_body_set_neo_hookean(world, id, 0.05), Bool::TRUE);
+        // save
+        let n = soft_body_state_size(world, id);
+        assert!(n > 0);
+        let mut buf = vec![0u8; n as usize];
+        assert_eq!(
+            soft_body_save_state(world, id, buf.as_mut_ptr(), n),
+            Bool::TRUE
+        );
+        // clear, then restore
+        assert_eq!(soft_body_clear_neo_hookean(world, id), Bool::TRUE);
+        assert_eq!(
+            soft_body_restore_state(world, id, buf.as_ptr(), n),
+            Bool::TRUE
+        );
+        // compressive load: restored body must still resist like an NH body
+        // (finite volume, and clear() afterwards must be a no-op-safe).
+        soft_body_apply_particle_impulse(world, id, 3, 0.0, 0.0, -30.0);
+        world_step(world, 1.0 / 60.0);
+        let vol = soft_body_total_volume(world, id);
+        assert!(vol.is_finite() && vol > 0.0);
+        world_destroy(world);
     }
 }

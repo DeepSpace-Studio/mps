@@ -4442,6 +4442,37 @@ Bool soft_body_set_corotated(struct WorldHandle *world,
 Bool soft_body_clear_corotated(struct WorldHandle *world, uint32_t id);
 
 /**
+ * # Phase 30 — 开启 Neo-Hookean 对数体积能量
+ *
+ * 每个 XPBD 迭代里，四面体体积约束改用非线性残差 `C = ln(V/V₀)`
+ * (J 下限 1e-6 保持有限)，compliance = `stiffness/dt²`。对数形式使体积抵抗
+ * 随压缩无界增长(物理正确的不可压缩性)，取代线性 `V − V₀` 的有限推回。
+ * 开启时覆盖 `volume_conservation` 的 compliance;关闭后回退线性体积约束。
+ *
+ * # Returns
+ * `Bool::TRUE` 成功开启;`id` 未知 / world 为 null / `stiffness` 非法(非有限、负数) → `Bool::FALSE`。
+ *
+ * # Safety
+ * `world` 必须有效;`stiffness` 需为有限非负值。
+ */
+Bool soft_body_set_neo_hookean(struct WorldHandle *world,
+                               uint32_t id,
+                               double stiffness);
+
+/**
+ * # Phase 30 — 关闭 Neo-Hookean 体积能量
+ *
+ * 等同 `neo_hookean = None`;体积约束回退线性残差 + `volume_conservation` compliance。
+ *
+ * # Returns
+ * `Bool::TRUE` 成功关闭;`id` 未知 / world 为 null → `Bool::FALSE`。
+ *
+ * # Safety
+ * `world` 必须有效。
+ */
+Bool soft_body_clear_neo_hookean(struct WorldHandle *world, uint32_t id);
+
+/**
  * Phase 28 — 关闭黏连/可撕 glue（等同 `cohesion = None`，不再互相吸附）。
  *
  * # Returns
