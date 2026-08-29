@@ -54,6 +54,32 @@ pub fn finite_non_negative(value: f64) -> bool {
     value.is_finite() && value >= 0.0
 }
 
+/// Returns true when every scalar in `values` is finite.
+///
+/// Replaces the per-module `finite_3` / `finite_4` / `finite_5` / `finite_6`
+/// copies — callers pass `&[a, b, c, d, e]` (or a `&[f64; N]` array directly,
+/// which coerces to a slice).  Allocates nothing.
+#[inline]
+pub fn finite_many(values: &[f64]) -> bool {
+    values.iter().all(|v| v.is_finite())
+}
+
+/// Returns true when all three components of `v` are finite.
+#[inline]
+pub fn finite_vec3(v: Vec3) -> bool {
+    v.x.is_finite() && v.y.is_finite() && v.z.is_finite()
+}
+
+/// Clamp `value` to the closed interval [0.0, 1.0].
+///
+/// Common saturation helper for throttle / mixture / weight coefficients that
+/// previously had per-module `clamp01` copies in `fluid.rs` and
+/// `ffi/convert.rs`.
+#[inline]
+pub fn clamp01(value: f64) -> f64 {
+    value.clamp(0.0, 1.0)
+}
+
 /// Clamp `value` to the closed interval [lo, hi].
 #[inline]
 pub fn clamp(value: f64, lo: f64, hi: f64) -> f64 {

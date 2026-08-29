@@ -6,9 +6,9 @@ use crate::error::{
 use crate::ffi::{
     AcousticContactDesc, AcousticExcitationReport, AcousticMaterial, AcousticResonanceReport,
     AcousticWaveReport, Bool, ModalAnalysisReport, ModalSynthesisReport, SpatializedSample,
-    StructuralModeReport, Vec3, clamp01,
+    StructuralModeReport, Vec3,
 };
-use crate::math::{KahanSum, finite_non_negative, finite_positive};
+use crate::math::{KahanSum, clamp01, finite_non_negative, finite_positive};
 
 const EPSILON: f64 = 1.0e-12;
 const MAX_MODAL_DOF: u32 = 128;
@@ -593,7 +593,7 @@ pub extern "C" fn acoustic_contact_material_excitation(
         hardness_scale * (1.0 - 0.5 * damping)
             + roughness * tangential_speed / (normal_speed + tangential_speed + EPSILON),
     );
-    let amplitude = (normal_component + scrape_component) * (1.0 - 0.75 * damping).max(0.0);
+    let amplitude = (normal_component + scrape_component) * (1.0 - 0.75 * damping).max(0.0_f64);
 
     *out_report = AcousticExcitationReport {
         impulse,

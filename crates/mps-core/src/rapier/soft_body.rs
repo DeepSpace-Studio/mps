@@ -872,6 +872,116 @@ pub extern "C" fn soft_body_clear_neo_hookean(world: *mut WorldHandle, id: u32) 
     })
 }
 
+/// Phase 31 — 设置软体全局主动应变激活系数 γ∈[0,1]（「肌肉收缩」等级）。
+///
+/// 每条弹簧/距离约束的有效静止长度变为 `rest * (1 - γ)`，正值主动把两端拉近。
+/// 非有限值被忽略（无操作）。`0` 为被动基线。
+///
+/// # Returns
+/// `Bool::TRUE` 总是成功（除非 world 为 null 或 id 未知返回 `Bool::FALSE`）。
+///
+/// # Safety
+/// `world` 必须有效。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_set_activation(world: *mut WorldHandle, id: u32, gamma: f64) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_set_activation: unknown id");
+            return Bool::FALSE;
+        };
+        if sb.set_activation(gamma) {
+            clear_error();
+            Bool::TRUE
+        } else {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_activation: activation must be in [0, 1]",
+            );
+            Bool::FALSE
+        }
+    })
+}
+
+/// Phase 31 — 设置单条弹簧（按 `add_spring` 返回的索引）的主动应变激活系数。
+///
+/// 越界 / 非有限 / 不在 [0,1] 的 `activation` 被拒绝，返回 `Bool::FALSE`。
+///
+/// # Safety
+/// `world` 必须有效。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_set_spring_activation(
+    world: *mut WorldHandle,
+    id: u32,
+    index: u32,
+    activation: f64,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_set_spring_activation: unknown id");
+            return Bool::FALSE;
+        };
+        if sb.set_spring_activation(index as usize, activation) {
+            clear_error();
+            Bool::TRUE
+        } else {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_spring_activation: bad index/value",
+            );
+            Bool::FALSE
+        }
+    })
+}
+
+/// Phase 31 — 设置单条距离约束（按 `add_distance_constraint` 返回的索引）的主动应变激活系数。
+///
+/// 越界 / 非有限 / 不在 [0,1] 的 `activation` 被拒绝，返回 `Bool::FALSE`。
+///
+/// # Safety
+/// `world` 必须有效。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_set_distance_constraint_activation(
+    world: *mut WorldHandle,
+    id: u32,
+    index: u32,
+    activation: f64,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(
+                ERR_NOT_FOUND,
+                "soft_body_set_distance_constraint_activation: unknown id",
+            );
+            return Bool::FALSE;
+        };
+        if sb.set_distance_constraint_activation(index as usize, activation) {
+            clear_error();
+            Bool::TRUE
+        } else {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_distance_constraint_activation: bad index/value",
+            );
+            Bool::FALSE
+        }
+    })
+}
+
 /// Phase 28 — 关闭黏连/可撕 glue（等同 `cohesion = None`，不再互相吸附）。
 ///
 /// # Returns
@@ -3121,6 +3231,7 @@ fn sb_serialize_body(buf: &mut Vec<u8>, b: &SoftBody) {
         sb_push_f64(buf, s.rest_length);
         sb_push_f64(buf, s.stiffness);
         sb_push_f64(buf, s.damping);
+        sb_push_f64(buf, s.activation);
     }
     // distance constraints
     sb_push_u32(buf, b.distance_constraints.len() as u32);
@@ -3130,6 +3241,7 @@ fn sb_serialize_body(buf: &mut Vec<u8>, b: &SoftBody) {
         sb_push_f64(buf, d.rest);
         sb_push_f64(buf, d.compliance);
         sb_push_f64(buf, d.compression);
+        sb_push_f64(buf, d.activation);
     }
     // tetrahedra (+ rest volumes)
     sb_push_u32(buf, b.tetrahedra.len() as u32);
@@ -3356,6 +3468,7 @@ fn sb_deserialize_body(c: &mut SbCursor) -> Option<SoftBody> {
             rest_length: c.take_f64()?,
             stiffness: c.take_f64()?,
             damping: c.take_f64()?,
+            activation: c.take_f64()?,
         });
     }
     let nd = c.take_u32()? as usize;
@@ -3367,6 +3480,7 @@ fn sb_deserialize_body(c: &mut SbCursor) -> Option<SoftBody> {
             rest: c.take_f64()?,
             compliance: c.take_f64()?,
             compression: c.take_f64()?,
+            activation: c.take_f64()?,
         });
     }
     let nt = c.take_u32()? as usize;

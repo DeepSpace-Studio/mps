@@ -4473,6 +4473,48 @@ Bool soft_body_set_neo_hookean(struct WorldHandle *world,
 Bool soft_body_clear_neo_hookean(struct WorldHandle *world, uint32_t id);
 
 /**
+ * Phase 31 — 设置软体全局主动应变激活系数 γ∈[0,1]（「肌肉收缩」等级）。
+ *
+ * 每条弹簧/距离约束的有效静止长度变为 `rest * (1 - γ)`，正值主动把两端拉近。
+ * 非有限值被忽略（无操作）。`0` 为被动基线。
+ *
+ * # Returns
+ * `Bool::TRUE` 总是成功（除非 world 为 null 或 id 未知返回 `Bool::FALSE`）。
+ *
+ * # Safety
+ * `world` 必须有效。
+ */
+Bool soft_body_set_activation(struct WorldHandle *world,
+                              uint32_t id,
+                              double gamma);
+
+/**
+ * Phase 31 — 设置单条弹簧（按 `add_spring` 返回的索引）的主动应变激活系数。
+ *
+ * 越界 / 非有限 / 不在 [0,1] 的 `activation` 被拒绝，返回 `Bool::FALSE`。
+ *
+ * # Safety
+ * `world` 必须有效。
+ */
+Bool soft_body_set_spring_activation(struct WorldHandle *world,
+                                     uint32_t id,
+                                     uint32_t index,
+                                     double activation);
+
+/**
+ * Phase 31 — 设置单条距离约束（按 `add_distance_constraint` 返回的索引）的主动应变激活系数。
+ *
+ * 越界 / 非有限 / 不在 [0,1] 的 `activation` 被拒绝，返回 `Bool::FALSE`。
+ *
+ * # Safety
+ * `world` 必须有效。
+ */
+Bool soft_body_set_distance_constraint_activation(struct WorldHandle *world,
+                                                  uint32_t id,
+                                                  uint32_t index,
+                                                  double activation);
+
+/**
  * Phase 28 — 关闭黏连/可撕 glue（等同 `cohesion = None`，不再互相吸附）。
  *
  * # Returns

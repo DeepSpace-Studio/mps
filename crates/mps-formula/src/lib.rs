@@ -31,6 +31,7 @@ pub mod planetary_science;
 pub mod plasma;
 pub mod quantum;
 pub mod relativity;
+pub mod rotor;
 pub mod scientists;
 pub mod softbody;
 pub mod spaceflight;

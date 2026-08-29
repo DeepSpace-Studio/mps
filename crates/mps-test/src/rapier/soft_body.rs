@@ -28,19 +28,21 @@ mod tests {
         soft_body_read_stress, soft_body_read_surface_mesh, soft_body_read_surface_triangle_count,
         soft_body_read_tetrahedra, soft_body_read_triangles, soft_body_remove_particle,
         soft_body_restore_state, soft_body_save_state, soft_body_scale_rest_length,
-        soft_body_set_anisotropy, soft_body_set_cohesion, soft_body_set_corotated,
-        soft_body_set_cross_collision, soft_body_set_cross_collision_friction,
-        soft_body_set_damping, soft_body_set_distance_constraint_compliance,
+        soft_body_set_activation, soft_body_set_anisotropy, soft_body_set_cohesion,
+        soft_body_set_corotated, soft_body_set_cross_collision,
+        soft_body_set_cross_collision_friction, soft_body_set_damping,
+        soft_body_set_distance_constraint_activation, soft_body_set_distance_constraint_compliance,
         soft_body_set_distance_constraint_compression, soft_body_set_gravity,
         soft_body_set_neo_hookean, soft_body_set_particle_velocity, soft_body_set_plasticity,
         soft_body_set_pressure, soft_body_set_self_collision,
-        soft_body_set_self_collision_friction, soft_body_set_spring_stiffness,
-        soft_body_set_substeps, soft_body_set_tear_energy, soft_body_set_tear_strain,
-        soft_body_set_tear_stress, soft_body_set_thermal, soft_body_set_viscoelastic,
-        soft_body_set_volume_conservation, soft_body_sleep, soft_body_state_size,
-        soft_body_step_implicit, soft_body_step_mass_spring, soft_body_subdivide_tetrahedra,
-        soft_body_tear_now, soft_body_total_volume, soft_body_voxel_build, soft_body_voxel_dig,
-        soft_body_wake, soft_chain_create, soft_chain_node_handles,
+        soft_body_set_self_collision_friction, soft_body_set_spring_activation,
+        soft_body_set_spring_stiffness, soft_body_set_substeps, soft_body_set_tear_energy,
+        soft_body_set_tear_strain, soft_body_set_tear_stress, soft_body_set_thermal,
+        soft_body_set_viscoelastic, soft_body_set_volume_conservation, soft_body_sleep,
+        soft_body_state_size, soft_body_step_implicit, soft_body_step_mass_spring,
+        soft_body_subdivide_tetrahedra, soft_body_tear_now, soft_body_total_volume,
+        soft_body_voxel_build, soft_body_voxel_dig, soft_body_wake, soft_chain_create,
+        soft_chain_node_handles,
     };
     use mps_core::rapier::voxel::{collider_builder_create_voxels, collider_voxel_edit};
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
@@ -5393,6 +5395,115 @@ mod tests {
         world_step(world, 1.0 / 60.0);
         let vol = soft_body_total_volume(world, id);
         assert!(vol.is_finite() && vol > 0.0);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn soft_body_activation_pulls_endpoints_together() {
+        // Two free particles linked by an XPBD distance constraint at rest length 1.0,
+        // zero gravity. A positive activation shrinks the *effective* rest length
+        // (rest*(1-gamma)), so the constraint actively pulls the endpoints together.
+        // After one step the activated pair must be closer than the un-activated pair.
+        let world = world_create(Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        });
+        assert!(!world.is_null());
+        let build = |world: *mut WorldHandle| -> u32 {
+            let id = soft_body_create(world, Vec3::default());
+            let a = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
+            let b = soft_body_add_particle(world, id, 1.0, 0.0, 0.0, 1.0, Bool::FALSE);
+            soft_body_add_distance_constraint(world, id, a, b, 0.0); // rest auto = 1.0
+            soft_body_configure_solver(world, id, 1, 30, 0.0);
+            id
+        };
+        let id_off = build(world);
+        let id_on = build(world);
+        assert_eq!(soft_body_set_activation(world, id_on, 0.5), Bool::TRUE);
+        world_step(world, 1.0 / 60.0);
+        let mut p_off = Vec3::default();
+        let mut p_on = Vec3::default();
+        soft_body_get_particle(
+            world,
+            id_off,
+            1,
+            &mut p_off as *mut Vec3,
+            std::ptr::null_mut(),
+        );
+        soft_body_get_particle(
+            world,
+            id_on,
+            1,
+            &mut p_on as *mut Vec3,
+            std::ptr::null_mut(),
+        );
+        // un-activated: stays at rest length 1.0; activated: pulled toward 0.5.
+        let d_off = (p_off.x - 0.0).abs();
+        let d_on = (p_on.x - 0.0).abs();
+        assert!(d_off.is_finite() && d_on.is_finite());
+        assert!(
+            d_on < d_off - 1e-3,
+            "activation must contract the edge: on={} off={}",
+            d_on,
+            d_off
+        );
+        // invalid inputs are rejected
+        assert_eq!(soft_body_set_activation(world, id_on, 2.0), Bool::FALSE);
+        assert_eq!(
+            soft_body_set_activation(world, id_on, f64::NAN),
+            Bool::FALSE
+        );
+        assert_eq!(soft_body_set_activation(world, 999, 0.5), Bool::FALSE);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn soft_body_activation_save_restore_roundtrip() {
+        // set_activation must survive save -> restore. Encode gamma on a body, snapshot,
+        // restore into a cleared clone, then confirm the contraction behaviour returns.
+        let world = world_create(Vec3::default());
+        let id = soft_body_create(world, Vec3::default());
+        let a = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        let b = soft_body_add_particle(world, id, 1.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        soft_body_add_distance_constraint(world, id, a, b, 0.0);
+        soft_body_configure_solver(world, id, 1, 30, 0.0);
+        // per-edge activation via the dedicated setter also works
+        assert_eq!(
+            soft_body_set_distance_constraint_activation(world, id, 0, 0.7),
+            Bool::TRUE
+        );
+        assert_eq!(
+            soft_body_set_spring_activation(world, id, 0, 0.7),
+            Bool::FALSE
+        ); // no springs
+        // save
+        let n = soft_body_state_size(world, id);
+        assert!(n > 0);
+        let mut buf = vec![0u8; n as usize];
+        assert_eq!(
+            soft_body_save_state(world, id, buf.as_mut_ptr(), n),
+            Bool::TRUE
+        );
+        // restore into a fresh body
+        let id2 = soft_body_create(world, Vec3::default());
+        let a2 = soft_body_add_particle(world, id2, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        let b2 = soft_body_add_particle(world, id2, 1.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        soft_body_add_distance_constraint(world, id2, a2, b2, 0.0);
+        soft_body_configure_solver(world, id2, 1, 30, 0.0);
+        assert_eq!(
+            soft_body_restore_state(world, id2, buf.as_ptr(), n),
+            Bool::TRUE
+        );
+        // the restored body must now contract under the same step
+        world_step(world, 1.0 / 60.0);
+        let mut p = Vec3::default();
+        soft_body_get_particle(world, id2, 1, &mut p as *mut Vec3, std::ptr::null_mut());
+        assert!(
+            p.x.is_finite() && p.x < 1.0 - 1e-3,
+            "restored activation must contract: {}",
+            p.x
+        );
         world_destroy(world);
     }
 }

@@ -104,7 +104,6 @@ impl RotorParams {
 /// Pitfall: `RotorParams` is intentionally NOT `#[repr(C)]`.  It lives in the
 /// pure-formula crate and must never cross the C ABI; the C boundary is
 /// owned by `mps-core`/`mps-cosmos` wrappers that read these fields by name.
-
 /// Validate the scalar pre-conditions common to every momentum-theory entry
 /// point: density positive, radius positive, finite non-negative thrust.
 /// Returns `false` on any bad input; the *caller* is responsible for
