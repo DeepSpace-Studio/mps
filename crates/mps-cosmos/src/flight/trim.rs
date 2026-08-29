@@ -181,41 +181,40 @@ impl Trimmer {
             Some((state, *controls))
         };
 
-        let residual =
-            |controls: &FlightControls| -> Option<(Vector, Vector, FlightControls)> {
-                let (state, _) = state_fn(controls)?;
-                let airfoil = default_airfoil(rotor);
-                let report = total_forces_and_moments(
-                    &state,
-                    rotor,
-                    tail_rotor,
-                    atmosphere,
-                    gravity,
-                    controls,
-                    rotor_omega,
-                    flat_plate_area,
-                    &airfoil,
-                    stations,
-                )?;
-                let a_lin = report.force_world / state.mass;
-                // Angular residual: for the trim Jacobian we use only the
-                // linear residual for the Hover target (the 4-channel trim
-                // is governed by steady-force balance; the anti-torque
-                // residual would otherwise dominate the cost and the
-                // single collective channel cannot fix it — tail collective
-                // is the channel that fixes yaw torque, and it is not part
-                // of the hover unknown set here).  This keeps Newton on the
-                // well-conditioned linear path that dominates an isolated
-                // lift / weight / forward-force trim.
-                let a_ang = match *target {
-                    FlightTarget::Hover { .. } => Vector::ZERO,
-                    FlightTarget::LevelFlight { .. } => {
-                        let i_t = 0.5_f64; // placeholder principal inertia
-                        report.moment_body / Vector::new(i_t, i_t, i_t)
-                    }
-                };
-                Some((a_lin, a_ang, *controls))
+        let residual = |controls: &FlightControls| -> Option<(Vector, Vector, FlightControls)> {
+            let (state, _) = state_fn(controls)?;
+            let airfoil = default_airfoil(rotor);
+            let report = total_forces_and_moments(
+                &state,
+                rotor,
+                tail_rotor,
+                atmosphere,
+                gravity,
+                controls,
+                rotor_omega,
+                flat_plate_area,
+                &airfoil,
+                stations,
+            )?;
+            let a_lin = report.force_world / state.mass;
+            // Angular residual: for the trim Jacobian we use only the
+            // linear residual for the Hover target (the 4-channel trim
+            // is governed by steady-force balance; the anti-torque
+            // residual would otherwise dominate the cost and the
+            // single collective channel cannot fix it — tail collective
+            // is the channel that fixes yaw torque, and it is not part
+            // of the hover unknown set here).  This keeps Newton on the
+            // well-conditioned linear path that dominates an isolated
+            // lift / weight / forward-force trim.
+            let a_ang = match *target {
+                FlightTarget::Hover { .. } => Vector::ZERO,
+                FlightTarget::LevelFlight { .. } => {
+                    let i_t = 0.5_f64; // placeholder principal inertia
+                    report.moment_body / Vector::new(i_t, i_t, i_t)
+                }
             };
+            Some((a_lin, a_ang, *controls))
+        };
 
         // Newton–Raphson with central-difference Jacobian over the channels
         // active for this target.  We carry a flat 4-channel control vector
@@ -311,7 +310,9 @@ impl Trimmer {
             last_ang = n_ang;
             iter += 1;
         }
-        let _ = last_lin; let _ = last_ang; let _ = n_unknowns;
+        let _ = last_lin;
+        let _ = last_ang;
+        let _ = n_unknowns;
         let ctrls = unpack_controls(&packed);
         let r0 = residual(&ctrls).ok_or(TrimError::NonConverged)?;
         Ok(TrimControls {
@@ -391,9 +392,7 @@ fn solve_small(a: &[f64], b: &[f64], k: usize) -> Option<Vec<f64>> {
         }
         if max_row != piv {
             for j in 0..=k {
-                let tmp = m[piv * (k + 1) + j];
-                m[piv * (k + 1) + j] = m[max_row * (k + 1) + j];
-                m[max_row * (k + 1) + j] = tmp;
+                m.swap(piv * (k + 1) + j, max_row * (k + 1) + j);
             }
         }
         let pivot = m[piv * (k + 1) + piv];

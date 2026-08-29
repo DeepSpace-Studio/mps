@@ -86,8 +86,16 @@ pub fn linearize(
     let airfoil = default_airfoil(rotor);
     let accel = |st: &RigidBodyState| -> Option<Vector> {
         let report = total_forces_and_moments(
-            st, rotor, tail_rotor, atmosphere, gravity, controls, rotor_omega,
-            flat_plate_area, &airfoil, stations,
+            st,
+            rotor,
+            tail_rotor,
+            atmosphere,
+            gravity,
+            controls,
+            rotor_omega,
+            flat_plate_area,
+            &airfoil,
+            stations,
         )?;
         Some(report.force_world / st.mass)
     };
@@ -126,8 +134,8 @@ pub fn linearize(
         let acc_minus = accel(&st_minus)?;
         // Central-difference: ∂a_i / ∂x_j ≈ (a+ − a−) / (2h).
         let delta = (acc_plus - acc_minus) / (2.0 * h);
-        a[0 * 6 + j] = delta.x;
-        a[1 * 6 + j] = delta.y;
+        a[j] = delta.x;
+        a[6 + j] = delta.y;
         a[2 * 6 + j] = delta.z;
         nonlin += (delta - baseline).length_squared();
     }
@@ -167,21 +175,37 @@ pub fn linearize(
         let ctrls_m = ctrl_apply(&pm);
         let acc_p = {
             let r = total_forces_and_moments(
-                state, rotor, tail_rotor, atmosphere, gravity, &ctrls_p, rotor_omega,
-                flat_plate_area, &airfoil, stations,
+                state,
+                rotor,
+                tail_rotor,
+                atmosphere,
+                gravity,
+                &ctrls_p,
+                rotor_omega,
+                flat_plate_area,
+                &airfoil,
+                stations,
             )?;
             r.force_world / state.mass
         };
         let acc_m = {
             let r = total_forces_and_moments(
-                state, rotor, tail_rotor, atmosphere, gravity, &ctrls_m, rotor_omega,
-                flat_plate_area, &airfoil, stations,
+                state,
+                rotor,
+                tail_rotor,
+                atmosphere,
+                gravity,
+                &ctrls_m,
+                rotor_omega,
+                flat_plate_area,
+                &airfoil,
+                stations,
             )?;
             r.force_world / state.mass
         };
         let db = (acc_p - acc_m) / (2.0 * dh);
-        b[0 * 5 + chidx] = db.x;
-        b[1 * 5 + chidx] = db.y;
+        b[chidx] = db.x;
+        b[5 + chidx] = db.y;
         b[2 * 5 + chidx] = db.z;
     }
 

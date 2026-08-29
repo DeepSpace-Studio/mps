@@ -24,11 +24,10 @@
 
 use super::{Atmosphere, Gravity, body_to_world, world_to_body};
 use mps_formula::rotor::{
-    BladeElementResult, LinearAirfoil, PitchDistribution, RotorParams,
-    blade_element::Airfoil, compute_rotor_forces, rotor_climb_power,
-    rotor_figure_of_merit, rotor_flat_plate_area, rotor_forward_induced_velocity,
-    rotor_hover_induced_velocity, rotor_parasite_power, rotor_profile_power,
-    rotor_total_power,
+    BladeElementResult, LinearAirfoil, PitchDistribution, RotorParams, blade_element::Airfoil,
+    compute_rotor_forces, rotor_climb_power, rotor_figure_of_merit, rotor_flat_plate_area,
+    rotor_forward_induced_velocity, rotor_hover_induced_velocity, rotor_parasite_power,
+    rotor_profile_power, rotor_total_power,
 };
 use rapier3d::prelude::{RigidBody, Rotation, Vector};
 
@@ -138,15 +137,19 @@ pub fn total_forces_and_moments(
     airfoil: &dyn Airfoil,
     stations: u32,
 ) -> Option<FlightDynamics> {
-    if !state.mass.is_finite() || state.mass <= 0.0
-        || !rotor.valid() || !tail_rotor.valid() || !controls.valid()
-        || !rotor_omega.is_finite() || rotor_omega <= 0.0
+    if !state.mass.is_finite()
+        || state.mass <= 0.0
+        || !rotor.valid()
+        || !tail_rotor.valid()
+        || !controls.valid()
+        || !rotor_omega.is_finite()
+        || rotor_omega <= 0.0
     {
         return None;
     }
     let rho = atmosphere.density(state.position.z)?;
     let g_vec = gravity.gravity_vector(state.position.z);
-    let omega = rotor_omega * controls.throttle.max(0.0).min(1.0);
+    let omega = rotor_omega * controls.throttle.clamp(0.0, 1.0);
 
     // Body-frame wind (assume steady air, no wind vector yet): body-frame
     // forward speed along +x, vertical along +z; the rotor inflow is
@@ -162,10 +165,11 @@ pub fn total_forces_and_moments(
     // BET integration for the main rotor (uniform collective pitch; cyclic
     // is modelled as a tilt of the thrust vector in body frame handled
     // below — the BEM sweep itself is rotationally symmetric here).
-    let main_pitch = PitchDistribution::Uniform { theta: controls.collective };
-    let bem: BladeElementResult = compute_rotor_forces(
-        rotor, v_i, omega, rho, &main_pitch, airfoil, stations,
-    )?;
+    let main_pitch = PitchDistribution::Uniform {
+        theta: controls.collective,
+    };
+    let bem: BladeElementResult =
+        compute_rotor_forces(rotor, v_i, omega, rho, &main_pitch, airfoil, stations)?;
     // Body-frame main rotor force: thrust along +z, tilt by cyclic.
     // Cyclic longitudinal (pitch nose-up) tilts the thrust forward → +x body
     // negative cyclic_lon tilts it back.  Lateral cyclic rolls the disk.
@@ -245,6 +249,19 @@ pub fn total_forces_and_moments(
 /// flight envelope where it matters is small for a small UAV/rotorcraft;
 /// callers wanting gyroscopic forces should hook the Rapier force pipeline).
 ///
+/// Per-step configuration for [`simulate_one_step`]: the scalar/setup
+/// parameters that don't change across the integration step.
+pub struct StepConfig {
+    /// Main-rotor angular speed (rad/s).
+    pub rotor_omega: f64,
+    /// Reference flat-plate area (m²) for the airframe.
+    pub flat_plate_area: f64,
+    /// Integration timestep (s).
+    pub dt: f64,
+    /// Number of blade-element stations used by the rotor model.
+    pub stations: u32,
+}
+
 /// Returns the `FlightDynamics` report so tests and the trim solver can
 /// inspect the per-step force totals.
 pub fn simulate_one_step(
@@ -254,12 +271,10 @@ pub fn simulate_one_step(
     atmosphere: &dyn Atmosphere,
     gravity: &dyn Gravity,
     controls: &FlightControls,
-    rotor_omega: f64,
-    flat_plate_area: f64,
-    dt: f64,
+    cfg: &StepConfig,
     airfoil: &dyn Airfoil,
-    stations: u32,
 ) -> Option<FlightDynamics> {
+    let dt = cfg.dt;
     if !dt.is_finite() || dt <= 0.0 {
         return None;
     }
@@ -271,10 +286,10 @@ pub fn simulate_one_step(
         atmosphere,
         gravity,
         controls,
-        rotor_omega,
-        flat_plate_area,
+        cfg.rotor_omega,
+        cfg.flat_plate_area,
         airfoil,
-        stations,
+        cfg.stations,
     )?;
 
     // Linear: semi-implicit Euler.
@@ -307,11 +322,7 @@ pub fn simulate_one_step(
     // half is ½·dt to land on the half-angle convention used by a unit
     // quaternion `dq = [ê·sin(θ/2), cos(θ/2)]`).
     let half = 0.5 * dt;
-    let half_dtheta = Vector::new(
-        w_new.x * half,
-        w_new.y * half,
-        w_new.z * half,
-    );
+    let half_dtheta = Vector::new(w_new.x * half, w_new.y * half, w_new.z * half);
     let dq = rapier3d::prelude::Rotation::from_scaled_axis(half_dtheta);
     let current = *body.rotation();
     let new_rot = current * dq;
