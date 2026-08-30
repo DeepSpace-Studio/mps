@@ -5883,4 +5883,129 @@ mod tests {
         );
         world_destroy(world);
     }
+
+    #[test]
+    fn soft_body_soft_soft_collision_blocks_penetration() {
+        // Two 3x3x3 grids placed overlapping, driven toward each other. With
+        // proxy-collider coupling on, the rapier narrow-phase must keep them from
+        // passing through one another (soft-body ↔ soft-body collision).
+        let world: *mut WorldHandle = world_create(Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        });
+        assert!(!world.is_null());
+        let n = 3u32;
+        let r = 0.2f64; // proxy ball radius (< half spacing 0.5 → no self-collision)
+        // Grid A: x ∈ [-1.0, 0.0] (spacing 0.5). Grid B: x ∈ [0.15, 1.15].
+        // A's right edge (x=0.0) and B's left edge (x=0.15) are 0.15 apart,
+        // closer than 2r = 0.4 → the proxy balls start overlapping.
+        let id_a = soft_body_build_grid(
+            world, -1.0, 0.0, 0.0, 0.0, 1.0, 1.0, n, n, n, 1.0, 0.0, 10, 0,
+        );
+        let id_b = soft_body_build_grid(
+            world, 0.15, 0.0, 0.0, 1.15, 1.0, 1.0, n, n, n, 1.0, 0.0, 10, 0,
+        );
+        assert!(id_a != u32::MAX && id_b != u32::MAX);
+        // Ram them together: A → +X, B → −X.
+        for i in 0..27u32 {
+            soft_body_set_particle_velocity(world, id_a, i, 2.0, 0.0, 0.0);
+            soft_body_set_particle_velocity(world, id_b, i, -2.0, 0.0, 0.0);
+        }
+        assert_eq!(
+            soft_body_enable_collision(world, id_a, r, Bool::TRUE),
+            Bool::TRUE
+        );
+        assert_eq!(
+            soft_body_enable_collision(world, id_b, r, Bool::TRUE),
+            Bool::TRUE
+        );
+        for _ in 0..120 {
+            world_step(world, 1.0 / 60.0);
+        }
+        let (a_max_x, b_min_x) = unsafe {
+            let sa = (*world)
+                .inner
+                .soft_bodies
+                .get(SoftBodyId(id_a))
+                .expect("A present");
+            let sb = (*world)
+                .inner
+                .soft_bodies
+                .get(SoftBodyId(id_b))
+                .expect("B present");
+            let amax = sa
+                .particles
+                .iter()
+                .map(|p| p.pos.x)
+                .fold(f64::MIN, f64::max);
+            let bmin = sb
+                .particles
+                .iter()
+                .map(|p| p.pos.x)
+                .fold(f64::MAX, f64::min);
+            (amax, bmin)
+        };
+        // If the bodies passed through each other, A's right edge would end up
+        // right of B's left edge by more than the contact tolerance.
+        assert!(
+            b_min_x - a_max_x >= -0.1,
+            "soft bodies penetrated: A_max_x={a_max_x} B_min_x={b_min_x}"
+        );
+        world_destroy(world);
+    }
+
+    #[test]
+    fn soft_body_same_body_particles_do_not_self_collide() {
+        // A single dense grid whose particles are closer than 2r means their proxy
+        // balls overlap. With collision coupling on, the proxy balls must NOT
+        // collide with each other (otherwise the body would explode). This pins
+        // the soft-body ↔ soft-body design: within one body, proxies are
+        // self-decoupled; only across bodies do they collide.
+        let world: *mut WorldHandle = world_create(Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        });
+        assert!(!world.is_null());
+        let n = 3u32;
+        let r = 0.25f64; // 2r = 0.5 > spacing 0.3 → proxy balls overlap within body
+        let id = soft_body_build_grid(
+            world, -0.3, -0.3, -0.3, 0.3, 0.3, 0.3, n, n, n, 1.0, 0.0, 10, 0,
+        );
+        assert!(id != u32::MAX);
+        assert_eq!(
+            soft_body_enable_collision(world, id, r, Bool::TRUE),
+            Bool::TRUE
+        );
+        for _ in 0..120 {
+            world_step(world, 1.0 / 60.0);
+        }
+        let (min_x, max_x) = unsafe {
+            let sb = (*world)
+                .inner
+                .soft_bodies
+                .get(SoftBodyId(id))
+                .expect("body present");
+            let min = sb
+                .particles
+                .iter()
+                .map(|p| p.pos.x)
+                .fold(f64::MAX, f64::min);
+            let max = sb
+                .particles
+                .iter()
+                .map(|p| p.pos.x)
+                .fold(f64::MIN, f64::max);
+            (min, max)
+        };
+        // No self-explosion: the body stays near its rest extent (±0.3) plus a
+        // small relaxation tolerance. A self-colliding body would blow past this.
+        assert!(
+            (max_x - min_x) < 1.5,
+            "body self-exploded: extent={}",
+            max_x - min_x
+        );
+        world_destroy(world);
+    }
 }

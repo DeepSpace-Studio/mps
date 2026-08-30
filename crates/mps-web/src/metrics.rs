@@ -14,7 +14,7 @@
 /// Workspace version (from root Cargo.toml), for the footer / brand.
 pub const VERSION: &str = "0.1.4";
 /// Total number of `#[test]` items in `mps-test`.
-pub const TEST_COUNT: &str = "958";
+pub const TEST_COUNT: &str = "960";
 /// Total number of `jni!(`/`jni_e_c!(` method entries in `mps-jni`.
 pub const JNI_METHOD_COUNT: &str = "452";
 /// Total number of `pub extern "C" fn` declarations in `mps-core/rapier`.
@@ -40,6 +40,6 @@ pub const FFI_SOFT_BODY: &str = "85";
 /// `jni!` entries with a `softBody*` method name in mps-jni.
 pub const JNI_SOFT_BODY: &str = "85";
 /// `#[test]` functions whose name contains `soft_body` in mps-test.
-pub const TEST_SOFT_BODY: &str = "86";
+pub const TEST_SOFT_BODY: &str = "88";
 /// Number of natural satellites (moons) in `mps-formula::celestial_data::MOONS`.
 pub const MOON_COUNT: &str = "30";

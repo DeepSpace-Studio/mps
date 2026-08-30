@@ -40,7 +40,8 @@ use rapier3d::prelude::soft_body::{
 };
 use rapier3d::prelude::soft_body::{SoftBody, SoftBodyId, SoftSolver};
 use rapier3d::prelude::{
-    ColliderBuilder, ColliderHandle, RigidBodyBuilder, RigidBodyHandle, RigidBodyType,
+    ColliderBuilder, ColliderHandle, Group, InteractionGroups, RigidBodyBuilder, RigidBodyHandle,
+    RigidBodyType,
 };
 use std::collections::HashSet;
 
@@ -4998,7 +4999,22 @@ pub extern "C" fn soft_body_enable_collision(
             // A non-zero collider mass unbalances two-way momentum transfer (a light soft
             // particle would drive an over-heavy proxy that cannot cleanly push dynamic
             // rigid bodies). Density 0 keeps the reaction physically symmetric.
-            let col = ColliderBuilder::ball(particle_radius).density(0.0).build();
+            // Phase 5f (extended): per-body collision group so that particles of the
+            // SAME soft body do not collide with each other (their proxy balls overlap
+            // when the particle spacing is below 2·radius, which would otherwise make
+            // the body self-explode), while particles of DIFFERENT soft bodies — and
+            // rigid-body terrain — still collide through the rapier narrow-phase.
+            // We assign each body a distinct bit (bit 1..=31, cycling on id overflow);
+            // membership = that bit only, filter = everything except that bit (so it
+            // collides with other bodies and with group-0 rigid colliders).
+            let group_bit = 1u32 << ((id % 31) + 1);
+            let groups = InteractionGroups::all()
+                .with_memberships(Group::from_bits_truncate(group_bit))
+                .with_filter(Group::from_bits_truncate(!group_bit));
+            let col = ColliderBuilder::ball(particle_radius)
+                .density(0.0)
+                .collision_groups(groups)
+                .build();
             world
                 .inner
                 .colliders
