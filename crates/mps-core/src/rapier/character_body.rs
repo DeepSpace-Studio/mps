@@ -395,6 +395,73 @@ pub extern "C" fn character_body_set_slope_angles(
     })
 }
 
+/// Enable / disable sliding along walls/floors when the character is blocked.
+/// `slide = true` gives the smooth Minecraft-style "glide along a wall" feel;
+/// `slide = false` makes the character stop dead on contact.
+#[unsafe(no_mangle)]
+pub extern "C" fn character_body_set_slide(world: *mut WorldHandle, id: u32, slide: Bool) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !world.inner.character_bodies.contains_key(&id) {
+            set_error(ERR_NOT_FOUND, "character_body_set_slide: unknown id");
+            return Bool::FALSE;
+        }
+        world
+            .inner
+            .character_bodies
+            .get_mut(&id)
+            .unwrap()
+            .controller
+            .slide = slide.0 != 0;
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Whether the character was on the ground during the last `character_body_move`.
+/// Essential for Minecraft-style jump logic (only jump when grounded).
+#[unsafe(no_mangle)]
+pub extern "C" fn character_body_is_grounded(world: *const WorldHandle, id: u32) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        match world.inner.character_bodies.get(&id) {
+            Some(cb) => cb.last_movement.grounded,
+            None => {
+                set_error(ERR_NOT_FOUND, "character_body_is_grounded: unknown id");
+                Bool::FALSE
+            }
+        }
+    })
+}
+
+/// Whether the character was sliding down a slope during the last
+/// `character_body_move`. Useful for Minecraft-style ice/slide behaviour.
+#[unsafe(no_mangle)]
+pub extern "C" fn character_body_is_sliding_down_slope(world: *const WorldHandle, id: u32) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        match world.inner.character_bodies.get(&id) {
+            Some(cb) => cb.last_movement.is_sliding_down_slope,
+            None => {
+                set_error(
+                    ERR_NOT_FOUND,
+                    "character_body_is_sliding_down_slope: unknown id",
+                );
+                Bool::FALSE
+            }
+        }
+    })
+}
+
 /// Destroy a character body, removing its rigid body, collider and controller
 /// state. Returns `Bool::TRUE` on success.
 ///

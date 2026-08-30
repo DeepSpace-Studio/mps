@@ -782,6 +782,15 @@ jni!(boolean characterBodySetSnapToGround(long world, int id, int enabled, doubl
 jni!(boolean characterBodySetSlopeAngles(long world, int id, double max_climb_angle, double min_slide_angle) {
     cb_::character_body_set_slope_angles(m::<WH>(world), u32_from_jint(id), max_climb_angle, min_slide_angle).0 as jbyte
 });
+jni!(boolean characterBodySetSlide(long world, int id, int enabled) {
+    cb_::character_body_set_slide(m::<WH>(world), u32_from_jint(id), jb(enabled)).0 as jbyte
+});
+jni!(boolean characterBodyIsGrounded(long world, int id) {
+    cb_::character_body_is_grounded(cp::<WH>(world), u32_from_jint(id)).0 as jbyte
+});
+jni!(boolean characterBodyIsSlidingDownSlope(long world, int id) {
+    cb_::character_body_is_sliding_down_slope(cp::<WH>(world), u32_from_jint(id)).0 as jbyte
+});
 
 // ---- Sensor trigger zone (fourth body type) ----
 jni!(long sensorZoneCreate(long world, int shape_type, double a, double b, double c, double d, double tx, double ty, double tz) {

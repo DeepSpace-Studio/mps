@@ -1762,6 +1762,25 @@ Bool character_body_set_slope_angles(struct WorldHandle *world,
                                      double min_slide_angle);
 
 /**
+ * Enable / disable sliding along walls/floors when the character is blocked.
+ * `slide = true` gives the smooth Minecraft-style "glide along a wall" feel;
+ * `slide = false` makes the character stop dead on contact.
+ */
+Bool character_body_set_slide(struct WorldHandle *world, uint32_t id, Bool slide);
+
+/**
+ * Whether the character was on the ground during the last `character_body_move`.
+ * Essential for Minecraft-style jump logic (only jump when grounded).
+ */
+Bool character_body_is_grounded(const struct WorldHandle *world, uint32_t id);
+
+/**
+ * Whether the character was sliding down a slope during the last
+ * `character_body_move`. Useful for Minecraft-style ice/slide behaviour.
+ */
+Bool character_body_is_sliding_down_slope(const struct WorldHandle *world, uint32_t id);
+
+/**
  * Destroy a character body, removing its rigid body, collider and controller
  * state. Returns `Bool::TRUE` on success.
  *
