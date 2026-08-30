@@ -23,6 +23,7 @@ pub mod error;
 pub mod events;
 pub mod ffi;
 pub mod fluid;
+pub mod fluid_sph;
 pub mod forces;
 pub mod fracture;
 pub use mps_formula::galactic_dynamics;

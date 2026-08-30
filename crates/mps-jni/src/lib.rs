@@ -1697,6 +1697,12 @@ jni!(boolean softBodyAddBending(long world, int id, int p, int q) { sb::soft_bod
 jni!(boolean softBodyConfigureSolver(long world, int id, int solver_mode, int iterations, double compliance) { sb::soft_body_configure_solver(m::<WH>(world), id as u32, solver_mode as u32, iterations as u32, compliance).0 as jbyte });
 jni!(long softBodyBuildTetraMesh(long world, double gravity_x, double gravity_y, double gravity_z, long particles, int particles_len, long tets, int tets_len, double particle_mass, double compliance, int iterations) { sb::soft_body_build_tetra_mesh(m::<WH>(world), v3(gravity_x, gravity_y, gravity_z), p::<Vec3>(particles), particles_len as u32, p::<u32>(tets), tets_len as u32, particle_mass, compliance, iterations as u32) as jlong });
 
+// Phase 33: 绳索 / 发丝软体构造器
+jni!(long softBodyBuildRope(long world, double start_x, double start_y, double start_z, double end_x, double end_y, double end_z, int n, double particle_mass, double compliance, int iterations, int pin_start, int pin_end, int closed, int bending) { sb::soft_body_build_rope(m::<WH>(world), start_x, start_y, start_z, end_x, end_y, end_z, n as u32, particle_mass, compliance, iterations as u32, pin_start as u8, pin_end as u8, closed as u8, bending as u8) as jlong });
+
+// Phase 34: 网格 / 方块软体构造器
+jni!(long softBodyBuildGrid(long world, double min_x, double min_y, double min_z, double max_x, double max_y, double max_z, int nx, int ny, int nz, double particle_mass, double compliance, int iterations, int pin_boundary) { sb::soft_body_build_grid(m::<WH>(world), min_x, min_y, min_z, max_x, max_y, max_z, nx as u32, ny as u32, nz as u32, particle_mass, compliance, iterations as u32, pin_boundary as u8) as jlong });
+
 // Phase 4 + 5d: voxel 网格软体构造 + 破坏联动
 jni!(long softBodyVoxelBuild(long world, long voxels, int voxels_len, int size_x, int size_y, int size_z, double voxel_size, double origin_x, double origin_y, double origin_z, double particle_mass, double stiffness, double damping, int pin_boundary) { sb::soft_body_voxel_build(m::<WH>(world), p::<u8>(voxels), voxels_len as u32, size_x as u32, size_y as u32, size_z as u32, voxel_size, v3(origin_x, origin_y, origin_z), particle_mass, stiffness, damping, jb(pin_boundary)) as jlong });
 jni!(boolean softBodyVoxelDig(long world, int id, int cell_x, int cell_y, int cell_z) { sb::soft_body_voxel_dig(m::<WH>(world), id as u32, cell_x as u32, cell_y as u32, cell_z as u32).0 as jbyte });

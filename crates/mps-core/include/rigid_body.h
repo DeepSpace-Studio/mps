@@ -2911,6 +2911,78 @@ Bool fluid_bernoulli_report(double pressure,
                             BernoulliReport *out_report);
 
 /**
+ * Create an SPH fluid world and return its id (the `Vec` index in
+ * `PhysicsWorld.fluids`). Returns `u32::MAX` on error.
+ *
+ * * `gravity_x/y/z` — constant body acceleration (finite).
+ * * `smoothing_radius` — SPH kernel cutoff `h` (`> 0`).
+ * * `gas_constant` — equation-of-state stiffness `k` (`>= 0`, finite).
+ * * `rest_density` — target density `ρ₀` (`> 0`).
+ * * `viscosity` — dynamic viscosity `μ` (`>= 0`).
+ * * `surface_tension` — cohesion coefficient `σ` (`>= 0`).
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+uint32_t fluid_create(struct WorldHandle *world,
+                      double gravity_x,
+                      double gravity_y,
+                      double gravity_z,
+                      double smoothing_radius,
+                      double gas_constant,
+                      double rest_density,
+                      double viscosity,
+                      double surface_tension);
+
+/**
+ * Append a particle to a fluid and return its particle index (`u32::MAX` on
+ * error). `mass` must be `> 0`.
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+uint32_t fluid_add_particle(struct WorldHandle *world,
+                            uint32_t id,
+                            double x,
+                            double y,
+                            double z,
+                            double vx,
+                            double vy,
+                            double vz,
+                            double mass);
+
+/**
+ * Number of particles in a fluid (`u32::MAX` for an unknown id).
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+uint32_t fluid_particle_count(const struct WorldHandle *world, uint32_t id);
+
+/**
+ * Read a particle's position/velocity/density into the out pointers (any of
+ * which may be null to skip). Returns `Bool::TRUE` on success.
+ *
+ * # Safety
+ * `world` must be a valid world pointer; `out_*` must be null or point to
+ * writable `Vec3` / `f64` space.
+ */
+Bool fluid_get_particle(const struct WorldHandle *world,
+                        uint32_t id,
+                        uint32_t index,
+                        Vec3 *out_pos,
+                        Vec3 *out_vel,
+                        double *out_density);
+
+/**
+ * Advance a fluid by `dt` seconds (`> 0`). Returns `Bool::TRUE` on success.
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+Bool fluid_step(struct WorldHandle *world, uint32_t id, double dt);
+
+/**
  * # Safety
  *
  * `out_report` must point to writable space for one `StressIntensityReport`.
@@ -5227,6 +5299,84 @@ uint32_t soft_body_build_tetra_mesh(struct WorldHandle *world,
                                     double particle_mass,
                                     double compliance,
                                     uint32_t iterations);
+
+/**
+ * Build a rope / hair strand soft body from a start point to an end point.
+ *
+ * * `start_x/y/z` / `end_x/y/z` — the two endpoints of the strand (finite).
+ *   The `n` particles are placed at uniform `t = i/(n-1)` interpolation
+ *   (`i ∈ [0, n)`), so the strand is straight at rest.
+ * * `n` — particle count; must be `>= 2`.
+ * * `particle_mass` — mass of each (dynamic) particle (`> 0`, finite).
+ * * `compliance` / `iterations` — XPBD stretch parameters for the segment
+ *   edges (and the bending edges when `bending != 0`).
+ * * `pin_start` / `pin_end` — when non-zero, clamp that endpoint's particle to
+ *   infinite mass (anchor). A hanging rope uses `pin_start = 1, pin_end = 0`;
+ *   a free strand uses both `0`.
+ * * `closed` — when non-zero, the strand is a closed loop: an extra edge links
+ *   the last particle back to the first (and, with `bending`, the wrap-around
+ *   bending edge too). Useful for necklaces / rings.
+ * * `bending` — when non-zero, every adjacent triple gets a bending distance
+ *   constraint across its outer particles (rest length from the straight rest
+ *   spacing), giving the strand resistance to sharp folding (hair-like).
+ *
+ * The body is switched to the XPBD solver automatically. Returns the new
+ * `SoftBodyId` (as `u32`) or `u32::MAX` on error (`ERR_*`).
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+uint32_t soft_body_build_rope(struct WorldHandle *world,
+                              double start_x,
+                              double start_y,
+                              double start_z,
+                              double end_x,
+                              double end_y,
+                              double end_z,
+                              uint32_t n,
+                              double particle_mass,
+                              double compliance,
+                              uint32_t iterations,
+                              uint8_t pin_start,
+                              uint8_t pin_end,
+                              uint8_t closed,
+                              uint8_t bending);
+
+/**
+ * Build a regular grid / block soft body filling the axis-aligned box
+ * `[min_*, max_*]` with `nx × ny × nz` particles spaced uniformly.
+ *
+ * * `min_*` / `max_*` — box extents (all finite, `max_* > min_*` per axis).
+ * * `nx` / `ny` / `nz` — particle counts per axis; each must be `>= 1`.
+ *   Total particle count = `nx * ny * nz` (capped to avoid runaway allocation:
+ *   rejects if `> 1_000_000`).
+ * * `particle_mass` — mass of each (dynamic) particle (`> 0`, finite).
+ * * `compliance` / `iterations` — XPBD stretch parameters for the grid edges.
+ * * `pin_boundary` — when non-zero, every particle on the outer surface of the
+ *   grid (any index at `0` or `n-1` on any axis) is pinned to infinite mass,
+ *   so the block hangs/sits from its boundary like a fixed jelly mould.
+ *
+ * Face-adjacent neighbours (6-connectivity) are linked by XPBD distance
+ * constraints (de-duplicated). The body is switched to the XPBD solver
+ * automatically. Returns the new `SoftBodyId` (as `u32`) or `u32::MAX` on error.
+ *
+ * # Safety
+ * `world` must be a valid world pointer.
+ */
+uint32_t soft_body_build_grid(struct WorldHandle *world,
+                              double min_x,
+                              double min_y,
+                              double min_z,
+                              double max_x,
+                              double max_y,
+                              double max_z,
+                              uint32_t nx,
+                              uint32_t ny,
+                              uint32_t nz,
+                              double particle_mass,
+                              double compliance,
+                              uint32_t iterations,
+                              uint8_t pin_boundary);
 
 /**
  * Number of live soft bodies in the world.

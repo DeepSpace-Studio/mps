@@ -1,3 +1,4 @@
+use rapier3d::prelude::fluid::FluidWorld;
 use rapier3d::prelude::soft_body::{SoftBodyId, SoftBodySet};
 use rapier3d::prelude::{
     ActiveHooks, BroadPhaseBvh, CCDSolver, ColliderHandle, ColliderSet, ImpulseJointSet,
@@ -98,6 +99,10 @@ pub struct PhysicsWorld {
     /// is applied inside `SoftBody::step`; bound particles route their spring
     /// forces into the rigid-body `force_containers` via `write_spring_forces`.
     pub soft_bodies: SoftBodySet,
+    /// All SPH fluid bodies (particle clouds). Stepped independently after the
+    /// rigid-body pipeline, mirroring `soft_bodies`. See
+    /// `.hermes/plans/2026-08-30_fluid-sph-roadmap.md`.
+    pub fluids: Vec<FluidWorld>,
     /// Phase 5d: per-soft-body voxel→particle mapping so a dug-out voxel cell can
     /// be mapped back to the exact particle index to remove via `soft_body_voxel_dig`.
     /// Keyed by `SoftBodyId.0`; populated only by `soft_body_voxel_build`.
@@ -161,6 +166,7 @@ impl PhysicsWorld {
             multibody_joints: MultibodyJointSet::new(),
             ccd_solver: CCDSolver::new(),
             soft_bodies: SoftBodySet::new(),
+            fluids: Vec::new(),
             voxel_soft_meta: std::collections::HashMap::new(),
             soft_body_proxies: std::collections::HashMap::new(),
             hooks: crate::rapier::events::CallbackPhysicsHooks::new(events.clone()),
@@ -554,6 +560,13 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
             .inner
             .soft_bodies
             .follow_rigid_bodies(&world.inner.bodies);
+
+        // Phase 0 (fluid SPH): advance every fluid particle cloud independently,
+        // after the rigid-body pipeline. No rigid coupling yet.
+        let dt = world.inner.integration_parameters.dt;
+        for fluid in &mut world.inner.fluids {
+            fluid.step(dt);
+        }
 
         // 4b. Clear the persistent user force/torque on every dynamic body.
         // Rapier's `add_force` is a *persistent* force that the step does NOT

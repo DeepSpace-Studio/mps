@@ -2851,6 +2851,302 @@ pub extern "C" fn soft_body_build_tetra_mesh(
     })
 }
 
+// ── Phase 33: 绳索 / 发丝软体构造器（纯组合层，零 fork 改动）─────────────────
+//
+// 复用 Phase 5a 原语（`soft_body_create` + `add_particle` + `add_distance_constraint`
+// + `configure_solver`），沿给定首尾方向线性布 N 个质点，相邻连 XPBD 距离约束，
+// 得到一个可悬垂 / 可摆动 / 可闭合环的绳索或发丝。弯曲约束（相邻三点的跨边
+// 距离约束）让发丝抗折、更像一束头发而非一串珠子。无任何新物理。
+
+/// Build a rope / hair strand soft body from a start point to an end point.
+///
+/// * `start_x/y/z` / `end_x/y/z` — the two endpoints of the strand (finite).
+///   The `n` particles are placed at uniform `t = i/(n-1)` interpolation
+///   (`i ∈ [0, n)`), so the strand is straight at rest.
+/// * `n` — particle count; must be `>= 2`.
+/// * `particle_mass` — mass of each (dynamic) particle (`> 0`, finite).
+/// * `compliance` / `iterations` — XPBD stretch parameters for the segment
+///   edges (and the bending edges when `bending != 0`).
+/// * `pin_start` / `pin_end` — when non-zero, clamp that endpoint's particle to
+///   infinite mass (anchor). A hanging rope uses `pin_start = 1, pin_end = 0`;
+///   a free strand uses both `0`.
+/// * `closed` — when non-zero, the strand is a closed loop: an extra edge links
+///   the last particle back to the first (and, with `bending`, the wrap-around
+///   bending edge too). Useful for necklaces / rings.
+/// * `bending` — when non-zero, every adjacent triple gets a bending distance
+///   constraint across its outer particles (rest length from the straight rest
+///   spacing), giving the strand resistance to sharp folding (hair-like).
+///
+/// The body is switched to the XPBD solver automatically. Returns the new
+/// `SoftBodyId` (as `u32`) or `u32::MAX` on error (`ERR_*`).
+///
+/// # Safety
+/// `world` must be a valid world pointer.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_build_rope(
+    world: *mut WorldHandle,
+    start_x: f64,
+    start_y: f64,
+    start_z: f64,
+    end_x: f64,
+    end_y: f64,
+    end_z: f64,
+    n: u32,
+    particle_mass: f64,
+    compliance: f64,
+    iterations: u32,
+    pin_start: u8,
+    pin_end: u8,
+    closed: u8,
+    bending: u8,
+) -> u32 {
+    ffi_guard(u32::MAX, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_build_rope: world is null");
+            return u32::MAX;
+        };
+        if !start_x.is_finite()
+            || !start_y.is_finite()
+            || !start_z.is_finite()
+            || !end_x.is_finite()
+            || !end_y.is_finite()
+            || !end_z.is_finite()
+        {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_build_rope: non-finite endpoint",
+            );
+            return u32::MAX;
+        }
+        if n < 2
+            || !particle_mass.is_finite()
+            || particle_mass <= 0.0
+            || !compliance.is_finite()
+            || compliance < 0.0
+            || iterations == 0
+        {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_build_rope: bad n/mass/compliance/iterations",
+            );
+            return u32::MAX;
+        }
+        let n = n as usize;
+        let s = Vector::new(start_x, start_y, start_z);
+        let e = Vector::new(end_x, end_y, end_z);
+        // Uniform straight rest layout.
+        let mut body = SoftBody::new(Vector::ZERO);
+        for i in 0..n {
+            let t = if n == 1 {
+                0.0
+            } else {
+                i as f64 / (n - 1) as f64
+            };
+            let pos = s + (e - s) * t;
+            // Pin endpoints only when clamping is requested for that end.
+            let pin_this = (i == 0 && pin_start != 0) || (i == n - 1 && pin_end != 0);
+            let idx = if pin_this {
+                body.add_pinned(pos)
+            } else {
+                let j = body.add_particle(pos);
+                body.particles[j].inv_mass = 1.0 / particle_mass;
+                j
+            };
+            debug_assert_eq!(idx, i);
+        }
+        // Stretch edges (adjacent pairs; wrap for closed loop).
+        let seg_pairs: Vec<(usize, usize)> = {
+            let mut pairs = Vec::with_capacity(n);
+            for i in 0..(n - 1) {
+                pairs.push((i, i + 1));
+            }
+            if closed != 0 {
+                pairs.push((n - 1, 0));
+            }
+            pairs
+        };
+        // Bending edges: outer particles of each adjacent triple (i, i+1, i+2);
+        // wrap the last for a closed loop so hair folds resist uniformly.
+        let bend_pairs: Vec<(usize, usize)> = {
+            let mut pairs = Vec::with_capacity(n.max(1));
+            for i in 0..(n.saturating_sub(2)) {
+                pairs.push((i, i + 2));
+            }
+            if closed != 0 && n >= 3 {
+                pairs.push((n - 2, 0));
+                pairs.push((n - 1, 1));
+            }
+            pairs
+        };
+        for (a, b) in &seg_pairs {
+            body.add_distance_constraint(*a, *b, compliance);
+        }
+        if bending != 0 {
+            for (a, b) in &bend_pairs {
+                body.add_distance_constraint(*a, *b, compliance);
+            }
+        }
+        body.configure_xpbd(iterations, compliance);
+        let id = world.inner.soft_bodies.insert(body);
+        clear_error();
+        id.0
+    })
+}
+
+// ── Phase 34: 网格 / 方块软体构造器（纯组合层，零 fork 改动）─────────────────
+//
+// 在长方体 `[min, max]` 范围内按 `nx × ny × nz` 分辨率布质点网格，相邻质点（6
+// 邻接：面相邻）连 XPBD 距离约束。可选 pin 整个外边界（pin_boundary != 0），
+// 得到一个可整体形变 / 可破坏 / 可下垂的果冻、橡胶块、地形体。与 rope 同构，
+// 完全复用 Phase 5a 原语，无任何新物理。
+
+/// Build a regular grid / block soft body filling the axis-aligned box
+/// `[min_*, max_*]` with `nx × ny × nz` particles spaced uniformly.
+///
+/// * `min_*` / `max_*` — box extents (all finite, `max_* > min_*` per axis).
+/// * `nx` / `ny` / `nz` — particle counts per axis; each must be `>= 1`.
+///   Total particle count = `nx * ny * nz` (capped to avoid runaway allocation:
+///   rejects if `> 1_000_000`).
+/// * `particle_mass` — mass of each (dynamic) particle (`> 0`, finite).
+/// * `compliance` / `iterations` — XPBD stretch parameters for the grid edges.
+/// * `pin_boundary` — when non-zero, every particle on the outer surface of the
+///   grid (any index at `0` or `n-1` on any axis) is pinned to infinite mass,
+///   so the block hangs/sits from its boundary like a fixed jelly mould.
+///
+/// Face-adjacent neighbours (6-connectivity) are linked by XPBD distance
+/// constraints (de-duplicated). The body is switched to the XPBD solver
+/// automatically. Returns the new `SoftBodyId` (as `u32`) or `u32::MAX` on error.
+///
+/// # Safety
+/// `world` must be a valid world pointer.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_build_grid(
+    world: *mut WorldHandle,
+    min_x: f64,
+    min_y: f64,
+    min_z: f64,
+    max_x: f64,
+    max_y: f64,
+    max_z: f64,
+    nx: u32,
+    ny: u32,
+    nz: u32,
+    particle_mass: f64,
+    compliance: f64,
+    iterations: u32,
+    pin_boundary: u8,
+) -> u32 {
+    ffi_guard(u32::MAX, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_build_grid: world is null");
+            return u32::MAX;
+        };
+        if !min_x.is_finite()
+            || !min_y.is_finite()
+            || !min_z.is_finite()
+            || !max_x.is_finite()
+            || !max_y.is_finite()
+            || !max_z.is_finite()
+        {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_build_grid: non-finite extents",
+            );
+            return u32::MAX;
+        }
+        if max_x <= min_x || max_y <= min_y || max_z <= min_z {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_build_grid: empty/inverted box",
+            );
+            return u32::MAX;
+        }
+        if nx == 0 || ny == 0 || nz == 0 || !particle_mass.is_finite() || particle_mass <= 0.0 {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_build_grid: bad resolution/mass",
+            );
+            return u32::MAX;
+        }
+        if !compliance.is_finite() || compliance < 0.0 || iterations == 0 {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_build_grid: bad compliance/iterations",
+            );
+            return u32::MAX;
+        }
+        let (nx, ny, nz) = (nx as usize, ny as usize, nz as usize);
+        let total = nx as u64 * ny as u64 * nz as u64;
+        if total > 1_000_000 {
+            set_error(
+                ERR_CAPACITY,
+                "soft_body_build_grid: too many particles (>1M)",
+            );
+            return u32::MAX;
+        }
+
+        let sx = (max_x - min_x) / (nx as f64 - 1.0).max(1.0);
+        let sy = (max_y - min_y) / (ny as f64 - 1.0).max(1.0);
+        let sz = (max_z - min_z) / (nz as f64 - 1.0).max(1.0);
+
+        let mut body = SoftBody::new(Vector::ZERO);
+        // Linear index: i + j*nx + k*nx*ny.
+        let idx = |i: usize, j: usize, k: usize| i + j * nx + k * nx * ny;
+        for k in 0..nz {
+            for j in 0..ny {
+                for i in 0..nx {
+                    let pos = Vector::new(
+                        min_x + sx * i as f64,
+                        min_y + sy * j as f64,
+                        min_z + sz * k as f64,
+                    );
+                    let on_boundary =
+                        i == 0 || i == nx - 1 || j == 0 || j == ny - 1 || k == 0 || k == nz - 1;
+                    let pin_this = pin_boundary != 0 && on_boundary && (nx > 1 || ny > 1 || nz > 1);
+                    let p = if pin_this {
+                        body.add_pinned(pos)
+                    } else {
+                        let p = body.add_particle(pos);
+                        body.particles[p].inv_mass = 1.0 / particle_mass;
+                        p
+                    };
+                    debug_assert_eq!(p, idx(i, j, k));
+                }
+            }
+        }
+
+        // 6-connectivity face edges, de-duplicated.
+        let mut edges: HashSet<(u32, u32)> = HashSet::new();
+        for k in 0..nz {
+            for j in 0..ny {
+                for i in 0..nx {
+                    let a = idx(i, j, k) as u32;
+                    if i + 1 < nx {
+                        let b = idx(i + 1, j, k) as u32;
+                        edges.insert((a.min(b), a.max(b)));
+                    }
+                    if j + 1 < ny {
+                        let b = idx(i, j + 1, k) as u32;
+                        edges.insert((a.min(b), a.max(b)));
+                    }
+                    if k + 1 < nz {
+                        let b = idx(i, j, k + 1) as u32;
+                        edges.insert((a.min(b), a.max(b)));
+                    }
+                }
+            }
+        }
+        for (lo, hi) in edges {
+            body.add_distance_constraint(lo as usize, hi as usize, compliance);
+        }
+
+        body.configure_xpbd(iterations, compliance);
+        let id = world.inner.soft_bodies.insert(body);
+        clear_error();
+        id.0
+    })
+}
+
 // ── Phase 5b: query / readback / lifecycle FFI (close the loop) ──────────────
 //
 // Phase 5a 让外部能「搭」软体；本组让外部能「查 / 读 / 删 / 毁」——

@@ -16,20 +16,20 @@ mod tests {
         soft_body_add_bending, soft_body_add_distance_constraint, soft_body_add_particle,
         soft_body_add_spring, soft_body_add_tetrahedron, soft_body_add_triangle,
         soft_body_apply_particle_impulse, soft_body_apply_plasticity, soft_body_apply_wind,
-        soft_body_attach_particle, soft_body_build_tetra_mesh, soft_body_clear_cohesion,
-        soft_body_clear_corotated, soft_body_clear_cross_collision, soft_body_clear_neo_hookean,
-        soft_body_clear_pressure, soft_body_clear_self_collision,
-        soft_body_clear_volume_conservation, soft_body_clear_wind, soft_body_clone,
-        soft_body_configure_solver, soft_body_count, soft_body_create, soft_body_destroy,
-        soft_body_detach_particle, soft_body_enable_collision, soft_body_get_particle,
-        soft_body_is_sleeping, soft_body_kinetic_energy, soft_body_particle_count,
-        soft_body_read_aabb, soft_body_read_contact_force, soft_body_read_edges,
-        soft_body_read_normals, soft_body_read_particles, soft_body_read_spring_forces,
-        soft_body_read_stress, soft_body_read_surface_mesh, soft_body_read_surface_triangle_count,
-        soft_body_read_tetrahedra, soft_body_read_triangles, soft_body_remove_particle,
-        soft_body_restore_state, soft_body_save_state, soft_body_scale_rest_length,
-        soft_body_set_activation, soft_body_set_anisotropy, soft_body_set_cohesion,
-        soft_body_set_corotated, soft_body_set_cross_collision,
+        soft_body_attach_particle, soft_body_build_grid, soft_body_build_rope,
+        soft_body_build_tetra_mesh, soft_body_clear_cohesion, soft_body_clear_corotated,
+        soft_body_clear_cross_collision, soft_body_clear_neo_hookean, soft_body_clear_pressure,
+        soft_body_clear_self_collision, soft_body_clear_volume_conservation, soft_body_clear_wind,
+        soft_body_clone, soft_body_configure_solver, soft_body_count, soft_body_create,
+        soft_body_destroy, soft_body_detach_particle, soft_body_enable_collision,
+        soft_body_get_particle, soft_body_is_sleeping, soft_body_kinetic_energy,
+        soft_body_particle_count, soft_body_read_aabb, soft_body_read_contact_force,
+        soft_body_read_edges, soft_body_read_normals, soft_body_read_particles,
+        soft_body_read_spring_forces, soft_body_read_stress, soft_body_read_surface_mesh,
+        soft_body_read_surface_triangle_count, soft_body_read_tetrahedra, soft_body_read_triangles,
+        soft_body_remove_particle, soft_body_restore_state, soft_body_save_state,
+        soft_body_scale_rest_length, soft_body_set_activation, soft_body_set_anisotropy,
+        soft_body_set_cohesion, soft_body_set_corotated, soft_body_set_cross_collision,
         soft_body_set_cross_collision_friction, soft_body_set_damping,
         soft_body_set_distance_constraint_activation, soft_body_set_distance_constraint_compliance,
         soft_body_set_distance_constraint_compression, soft_body_set_gravity,
@@ -5545,6 +5545,341 @@ mod tests {
         assert_eq!(
             soft_body_set_spring_fibre_direction(world, 999, 0, 0.0, 1.0, 0.0),
             Bool::FALSE
+        );
+        world_destroy(world);
+    }
+
+    // ── Phase 33: 绳索 / 发丝构造器 ──────────────────────────────────────────
+    // 沿首尾方向布 N 质点 + 相邻 XPBD 距离约束；悬垂（pin_start）+ 步进而保持
+    // 有界；闭合环；弯曲约束抗折。纯组合层，对照 build_tetra_mesh 的验证风格。
+
+    #[test]
+    fn soft_body_build_rope_hangs_and_stays_bounded() {
+        let world = make_world();
+        assert!(!world.is_null());
+
+        // 8 质点绳索，起点 (0,5,0) 固定（pin_start），终点 (0,0,0) 自由，
+        // 在重力下应下垂但仍受 XPBD 距离约束限制、整体有界（不飞出 / 不穿越无穷）。
+        let id = soft_body_build_rope(
+            world, 0.0, 5.0, 0.0, // start
+            0.0, 0.0, 0.0, // end
+            8,   // n particles
+            0.5, // particle mass
+            0.0, // compliance 0 → inextensible strand
+            20,  // xpbd iterations
+            1,   // pin_start
+            0,   // pin_end free
+            0,   // not closed
+            0,   // no bending
+        );
+        assert!(id != u32::MAX, "rope should build");
+
+        unsafe {
+            let sb = (*world)
+                .inner
+                .soft_bodies
+                .get(SoftBodyId(id))
+                .expect("soft body present");
+            assert_eq!(sb.particles.len(), 8, "rope has n particles");
+            assert_eq!(sb.distance_constraints.len(), 7, "7 segment edges");
+            assert_eq!(sb.particles[0].inv_mass, 0.0, "start endpoint pinned");
+        }
+
+        for _ in 0..200 {
+            world_step(world, 1.0 / 60.0);
+        }
+
+        unsafe {
+            let sb = (*world)
+                .inner
+                .soft_bodies
+                .get(SoftBodyId(id))
+                .expect("soft body present");
+            // Pinned anchor stays put at its rest position (0, 5, 0).
+            assert!(
+                sb.particles[0].pos.y.abs() > 4.9 && sb.particles[0].pos.y.abs() < 5.1,
+                "anchor stayed near (0,5,0), got y={}",
+                sb.particles[0].pos.y
+            );
+            assert!(
+                sb.particles[0].pos.x.abs() < 1e-6 && sb.particles[0].pos.z.abs() < 1e-6,
+                "anchor did not move laterally"
+            );
+            // Every particle settled at a finite, bounded position.
+            let mut max_r = 0.0_f64;
+            for p in &sb.particles {
+                assert!(p.pos.x.is_finite() && p.pos.y.is_finite() && p.pos.z.is_finite());
+                max_r = max_r.max(p.pos.y.abs().max(p.pos.x.abs()).max(p.pos.z.abs()));
+            }
+            assert!(max_r < 50.0, "rope stayed bounded (max_r={max_r})");
+            // The free end hangs below the anchor, not above it (gravity pulled it down).
+            assert!(
+                sb.particles[7].pos.y < sb.particles[0].pos.y,
+                "free end hangs below the pinned anchor"
+            );
+        }
+        world_destroy(world);
+    }
+
+    #[test]
+    fn soft_body_build_rope_closed_loop_and_bending() {
+        let world = make_world();
+        assert!(!world.is_null());
+
+        // 闭合环（necklace）带弯曲约束：n=6 应有 6 段边 + 6 条弯曲边 = 12 约束。
+        let id = soft_body_build_rope(
+            world, 1.0, 0.0, 0.0, // start
+            -1.0, 0.0, 0.0, // end (opposite side; closed loop wraps back)
+            6, 0.3, 0.01, // soft compliance so bending is observable
+            10, 0, // no pins
+            0, 1, // closed loop
+            1, // bending
+        );
+        assert!(id != u32::MAX, "closed rope should build");
+
+        unsafe {
+            let sb = (*world)
+                .inner
+                .soft_bodies
+                .get(SoftBodyId(id))
+                .expect("soft body present");
+            assert_eq!(sb.particles.len(), 6);
+            // 6 segment edges + 6 bending edges (wrap-around for closed).
+            assert_eq!(sb.distance_constraints.len(), 12, "6 seg + 6 bend edges");
+        }
+
+        // No NaN / non-finite blow-up across many steps with bending active.
+        for _ in 0..150 {
+            world_step(world, 1.0 / 60.0);
+        }
+        unsafe {
+            let sb = (*world)
+                .inner
+                .soft_bodies
+                .get(SoftBodyId(id))
+                .expect("soft body present");
+            for p in &sb.particles {
+                assert!(p.pos.x.is_finite() && p.pos.y.is_finite() && p.pos.z.is_finite());
+            }
+        }
+        world_destroy(world);
+    }
+
+    #[test]
+    fn soft_body_build_rope_rejects_bad_params() {
+        let world = make_world();
+        assert!(!world.is_null());
+
+        // n < 2 rejected.
+        assert_eq!(
+            soft_body_build_rope(
+                world, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1, 1.0, 0.0, 10, 0, 0, 0, 0
+            ),
+            u32::MAX
+        );
+        // non-finite endpoint rejected.
+        assert_eq!(
+            soft_body_build_rope(
+                world,
+                f64::NAN,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                5,
+                1.0,
+                0.0,
+                10,
+                0,
+                0,
+                0,
+                0
+            ),
+            u32::MAX
+        );
+        // non-positive mass rejected.
+        assert_eq!(
+            soft_body_build_rope(
+                world, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 5, 0.0, 0.0, 10, 0, 0, 0, 0
+            ),
+            u32::MAX
+        );
+        // zero iterations rejected.
+        assert_eq!(
+            soft_body_build_rope(
+                world, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 5, 1.0, 0.0, 0, 0, 0, 0, 0
+            ),
+            u32::MAX
+        );
+        world_destroy(world);
+    }
+
+    // ── Phase 34: 网格 / 方块软体构造器 ──────────────────────────────────────
+    // 长方体范围内 nx×ny×nz 质点网格 + 6 邻接 XPBD 距离约束；pin 边界后整体
+    // 悬挂；纯组合层，对照 rope 验证风格。
+
+    #[test]
+    fn soft_body_build_grid_makes_block_and_stays_bounded() {
+        let world = make_world();
+        assert!(!world.is_null());
+
+        // 3×3×3 网格填满 [0,2]³，质量 0.5，compliance 0（刚性网格），20 迭代。
+        let id = soft_body_build_grid(
+            world, 0.0, 0.0, 0.0, // min
+            2.0, 2.0, 2.0, // max
+            3, 3, 3,   // nx, ny, nz
+            0.5, // particle mass
+            0.0, // compliance
+            20,  // iterations
+            0,   // no pin
+        );
+        assert!(id != u32::MAX, "grid should build");
+
+        unsafe {
+            let sb = (*world)
+                .inner
+                .soft_bodies
+                .get(SoftBodyId(id))
+                .expect("soft body present");
+            assert_eq!(sb.particles.len(), 27, "3*3*3 = 27 particles");
+            // 6-connectivity: 3*3*2 faces per axis * 3 axes = 54 edges.
+            assert_eq!(sb.distance_constraints.len(), 54, "54 face edges");
+            // Switched to XPBD solver (cross-crate enum: use matches!, not ==).
+            assert!(
+                matches!(
+                    sb.solver,
+                    rapier3d::prelude::soft_body::SoftSolver::Xpbd { .. }
+                ),
+                "grid uses XPBD solver"
+            );
+        }
+
+        for _ in 0..150 {
+            world_step(world, 1.0 / 60.0);
+        }
+        unsafe {
+            let sb = (*world)
+                .inner
+                .soft_bodies
+                .get(SoftBodyId(id))
+                .expect("soft body present");
+            // Unpinned block sags under gravity but stays bounded (no blow-up).
+            let mut max_r = 0.0_f64;
+            let mut min_y = f64::INFINITY;
+            for p in &sb.particles {
+                assert!(p.pos.x.is_finite() && p.pos.y.is_finite() && p.pos.z.is_finite());
+                max_r = max_r.max(p.pos.y.abs().max(p.pos.x.abs()).max(p.pos.z.abs()));
+                min_y = min_y.min(p.pos.y);
+            }
+            assert!(max_r < 50.0, "grid stayed bounded (max_r={max_r})");
+            // Gravity pulled the free block downward.
+            assert!(min_y < 2.0, "block sagged below its top (min_y={min_y})");
+        }
+        world_destroy(world);
+    }
+
+    #[test]
+    fn soft_body_build_grid_pinned_boundary_holds() {
+        let world = make_world();
+        assert!(!world.is_null());
+
+        // 4×4×4 网格，pin 边界 → 外表面质点 inv_mass=0，内部质点自由下垂。
+        let id = soft_body_build_grid(
+            world, -1.0, 0.0, -1.0, 1.0, 2.0, 1.0, 4, 4, 4, 0.3, 0.0, 15, 1, // pin_boundary
+        );
+        assert!(id != u32::MAX, "pinned grid should build");
+
+        unsafe {
+            let sb = (*world)
+                .inner
+                .soft_bodies
+                .get(SoftBodyId(id))
+                .expect("soft body present");
+            // Boundary count: outer shell of 4×4×4 = 64 - 8 interior = 56 pinned.
+            let pinned = sb.particles.iter().filter(|p| p.inv_mass == 0.0).count();
+            assert_eq!(pinned, 56, "56 boundary particles pinned");
+            let free = sb.particles.iter().filter(|p| p.inv_mass > 0.0).count();
+            assert_eq!(free, 8, "8 interior particles free");
+        }
+
+        for _ in 0..150 {
+            world_step(world, 1.0 / 60.0);
+        }
+        unsafe {
+            let sb = (*world)
+                .inner
+                .soft_bodies
+                .get(SoftBodyId(id))
+                .expect("soft body present");
+            // Pinned boundary particles must not move from their rest positions.
+            // Check the 8 corners explicitly.
+            let corners = [
+                (0, 0, 0),
+                (3, 0, 0),
+                (0, 3, 0),
+                (3, 3, 0),
+                (0, 0, 3),
+                (3, 0, 3),
+                (0, 3, 3),
+                (3, 3, 3),
+            ];
+            let idx = |i: usize, j: usize, k: usize| i + j * 4 + k * 16;
+            for (i, j, k) in corners {
+                let p = &sb.particles[idx(i, j, k)];
+                assert_eq!(p.inv_mass, 0.0, "corner pinned");
+                let (ex, ey, ez) = (
+                    -1.0 + 2.0 * i as f64 / 3.0,
+                    0.0 + 2.0 * j as f64 / 3.0,
+                    -1.0 + 2.0 * k as f64 / 3.0,
+                );
+                assert!(
+                    (p.pos.x - ex).abs() < 1e-6
+                        && (p.pos.y - ey).abs() < 1e-6
+                        && (p.pos.z - ez).abs() < 1e-6,
+                    "pinned corner stayed at rest"
+                );
+            }
+            // Interior free particles settled at finite positions.
+            for p in &sb.particles {
+                assert!(p.pos.x.is_finite() && p.pos.y.is_finite() && p.pos.z.is_finite());
+            }
+        }
+        world_destroy(world);
+    }
+
+    #[test]
+    fn soft_body_build_grid_rejects_bad_params() {
+        let world = make_world();
+        assert!(!world.is_null());
+
+        // inverted box rejected.
+        assert_eq!(
+            soft_body_build_grid(
+                world, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 2, 2, 2, 1.0, 0.0, 10, 0
+            ),
+            u32::MAX
+        );
+        // zero resolution rejected.
+        assert_eq!(
+            soft_body_build_grid(
+                world, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0, 2, 2, 1.0, 0.0, 10, 0
+            ),
+            u32::MAX
+        );
+        // non-positive mass rejected.
+        assert_eq!(
+            soft_body_build_grid(
+                world, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 2, 2, 2, 0.0, 0.0, 10, 0
+            ),
+            u32::MAX
+        );
+        // too many particles (>1M) rejected.
+        assert_eq!(
+            soft_body_build_grid(
+                world, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 200, 200, 200, 1.0, 0.0, 10, 0
+            ),
+            u32::MAX
         );
         world_destroy(world);
     }
