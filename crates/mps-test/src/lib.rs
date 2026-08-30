@@ -26,6 +26,7 @@ pub mod rapier {
     pub mod bridge;
     pub mod celestial_data;
     pub mod chaos;
+    pub mod character_body;
     pub mod collider;
     pub mod continuum;
     pub mod control_theory;

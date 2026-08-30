@@ -1687,6 +1687,49 @@ uint32_t query_intersect_aabb_rigid_bodies(const struct WorldHandle *world,
                                            uint32_t capacity);
 
 /**
+ * Create a character body in `world` from a collider shape and an initial
+ * translation. Returns a stable id, or `u32::MAX` on bad arguments. The character
+ * is a `KinematicPositionBased` rigid body so its position is driven externally
+ * by [`character_body_move`].
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+uint32_t character_body_create(struct WorldHandle *world, ShapeDesc shape, Vec3 translation);
+
+/**
+ * Advance the character by `desired` (a desired translation for this step). The
+ * controller resolves collisions/slopes/steps and the result is written back to
+ * the kinematic body. Returns the effective movement (resolved translation,
+ * `grounded`, `is_sliding_down_slope`).
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+EffectiveCharacterMovement character_body_move(struct WorldHandle *world,
+                                               uint32_t id,
+                                               Vec3 desired,
+                                               double dt);
+
+/**
+ * Destroy a character body, removing its rigid body, collider and controller
+ * state. Returns `Bool::TRUE` on success.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+Bool character_body_destroy(struct WorldHandle *world, uint32_t id);
+
+/**
+ * Read the character body's current world-space translation (the kinematic body
+ * pose driven by [`character_body_move`]). Writes into `out` when non-null.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`; `out` may be null.
+ */
+Bool character_body_get_translation(const struct WorldHandle *world, uint32_t id, Vec3 *out);
+
+/**
  * Creates a new character controller and returns an opaque handle to it.
  *
  * # Safety

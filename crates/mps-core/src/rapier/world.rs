@@ -122,6 +122,11 @@ pub struct PhysicsWorld {
     /// integration step.
     pub(crate) skin_bindings:
         std::collections::HashMap<u32, crate::rapier::soft_body::SkeletonBinding>,
+    /// Character bodies (kinematic rigid body + `KinematicCharacterController`).
+    /// Keyed by a stable id assigned at creation (`character_body_next_id`).
+    pub(crate) character_bodies:
+        std::collections::HashMap<u32, crate::rapier::character_body::CharacterBody>,
+    pub(crate) character_body_next_id: u32,
     /// Phase 5d: per-soft-body voxel→particle mapping so a dug-out voxel cell can
     /// be mapped back to the exact particle index to remove via `soft_body_voxel_dig`.
     /// Keyed by `SoftBodyId.0`; populated only by `soft_body_voxel_build`.
@@ -188,6 +193,8 @@ impl PhysicsWorld {
             fluids: Vec::new(),
             fluid_proxies: std::collections::HashMap::new(),
             skin_bindings: std::collections::HashMap::new(),
+            character_bodies: std::collections::HashMap::new(),
+            character_body_next_id: 0,
             voxel_soft_meta: std::collections::HashMap::new(),
             soft_body_proxies: std::collections::HashMap::new(),
             hooks: crate::rapier::events::CallbackPhysicsHooks::new(events.clone()),

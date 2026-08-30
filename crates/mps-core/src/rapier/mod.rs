@@ -14,6 +14,7 @@ pub mod compat;
 pub use mps_formula::continuum;
 pub use mps_formula::control_theory;
 pub use mps_formula::disciplines::relativity as cosmology;
+pub mod character_body;
 pub mod controller;
 pub mod crbtree;
 pub mod cross_validate;
