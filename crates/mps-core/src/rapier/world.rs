@@ -127,6 +127,15 @@ pub struct PhysicsWorld {
     pub(crate) character_bodies:
         std::collections::HashMap<u32, crate::rapier::character_body::CharacterBody>,
     pub(crate) character_body_next_id: u32,
+    /// Sensor trigger zones (sensor collider + overlap tracking). Keyed by a stable
+    /// id assigned at creation (`sensor_zone_next_id`).
+    pub(crate) sensor_zones: std::collections::HashMap<u32, crate::rapier::sensor::SensorZone>,
+    pub(crate) sensor_zone_next_id: u32,
+    /// Ray-cast vehicle controllers. Keyed by a stable id assigned at creation
+    /// (`vehicle_controller_next_id`).
+    pub(crate) vehicle_controllers:
+        std::collections::HashMap<u32, crate::rapier::vehicle::VehicleController>,
+    pub(crate) vehicle_controller_next_id: u32,
     /// Phase 5d: per-soft-body voxel→particle mapping so a dug-out voxel cell can
     /// be mapped back to the exact particle index to remove via `soft_body_voxel_dig`.
     /// Keyed by `SoftBodyId.0`; populated only by `soft_body_voxel_build`.
@@ -195,6 +204,10 @@ impl PhysicsWorld {
             skin_bindings: std::collections::HashMap::new(),
             character_bodies: std::collections::HashMap::new(),
             character_body_next_id: 0,
+            sensor_zones: std::collections::HashMap::new(),
+            sensor_zone_next_id: 0,
+            vehicle_controllers: std::collections::HashMap::new(),
+            vehicle_controller_next_id: 0,
             voxel_soft_meta: std::collections::HashMap::new(),
             soft_body_proxies: std::collections::HashMap::new(),
             hooks: crate::rapier::events::CallbackPhysicsHooks::new(events.clone()),

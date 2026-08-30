@@ -69,6 +69,7 @@ pub mod rapier {
     pub mod relativity;
     pub mod rigid_body;
     pub mod rtree;
+    pub mod sensor;
     pub mod shared_arena;
     pub mod soft_body;
     pub mod softbody;
@@ -81,6 +82,7 @@ pub mod rapier {
     pub mod topology;
     pub mod trajectory;
     pub mod transmission;
+    pub mod vehicle;
     pub mod voxel;
     pub mod wave_optics;
     pub mod world;

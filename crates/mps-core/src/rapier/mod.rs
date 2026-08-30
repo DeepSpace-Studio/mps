@@ -19,6 +19,8 @@ pub mod controller;
 pub mod crbtree;
 pub mod cross_validate;
 pub mod dop;
+pub mod sensor;
+pub mod vehicle;
 pub use mps_formula::electromagnetism;
 pub mod error;
 pub mod events;

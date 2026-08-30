@@ -2041,6 +2041,221 @@ struct ColliderBuilderHandle *collider_builder_create_fdh(const double *points_x
                                                           uint32_t direction_count);
 
 /**
+ * Create a sensor trigger zone from a shape descriptor. The sensor collider is
+ * built with `sensor(true)` and `ActiveEvents::COLLISION_EVENTS` so rapier tracks
+ * its intersections, then inserted into the world at `translation`.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`; `shape` must be a
+ * valid [`ShapeDesc`] (finite params).
+ */
+uint32_t sensor_zone_create(struct WorldHandle *world, ShapeDesc shape, Vec3 translation);
+
+/**
+ * Disable or (re-)enable a sensor zone. A disabled zone is skipped by `poll`.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+Bool sensor_zone_set_enabled(struct WorldHandle *world, uint32_t id, Bool enabled);
+
+/**
+ * Recompute the set of colliders currently overlapping this sensor zone.
+ *
+ * Returns `Bool::TRUE` on success. After a successful poll, use
+ * [`sensor_zone_contact_count`] / [`sensor_zone_get_contacts`] to read the
+ * overlaps, or [`sensor_zone_is_triggered`] for the sticky "ever triggered" flag.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+Bool sensor_zone_poll(struct WorldHandle *world, uint32_t id);
+
+/**
+ * Number of colliders currently overlapping the zone (last [`sensor_zone_poll`]).
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+uint32_t sensor_zone_contact_count(const struct WorldHandle *world, uint32_t id);
+
+/**
+ * Write up to `max_count` overlapping collider handles into `out` (packed
+ * [`ColliderHandleRaw`]). Returns the number actually written.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`; `out` may be null
+ * (then only the count is returned).
+ */
+uint32_t sensor_zone_get_contacts(const struct WorldHandle *world,
+                                  uint32_t id,
+                                  ColliderHandleRaw *out,
+                                  uint32_t max_count);
+
+/**
+ * `Bool::TRUE` if the zone has ever overlapped anything since creation (sticky).
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+Bool sensor_zone_is_triggered(const struct WorldHandle *world, uint32_t id);
+
+/**
+ * Read the zone's world-space translation (its sensor collider pose).
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`; `out` may be null.
+ */
+Bool sensor_zone_get_translation(const struct WorldHandle *world, uint32_t id, Vec3 *out);
+
+/**
+ * Move the sensor collider (call before [`sensor_zone_poll`] to re-evaluate at a
+ * new position without recreating the zone).
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+Bool sensor_zone_set_translation(struct WorldHandle *world, uint32_t id, Vec3 translation);
+
+/**
+ * Destroy a sensor zone and remove its collider from the world.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+Bool sensor_zone_destroy(struct WorldHandle *world, uint32_t id);
+
+/**
+ * Create a vehicle controller around a dynamic chassis built from `shape` at
+ * `translation`. Returns a stable id, or `u32::MAX` on error.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`; `shape` must be a
+ * valid [`ShapeDesc`] (finite params).
+ */
+uint32_t vehicle_controller_create(struct WorldHandle *world, ShapeDesc shape, Vec3 translation);
+
+/**
+ * Add a wheel to the vehicle. All vectors are in the chassis' local space.
+ *
+ * - `chassis_connection_cs`: point on the chassis where the suspension attaches.
+ * - `direction_cs`: suspension direction (e.g. `-Y` to point down).
+ * - `axle_cs`: wheel axle direction (e.g. `-Z` or `+X`).
+ * - `suspension_rest_length`: natural suspension length.
+ * - `radius`: wheel radius.
+ * - `suspension_stiffness`, `suspension_compression`, `suspension_damping`,
+ *   `friction_slip`, `max_suspension_travel`, `max_suspension_force`,
+ *   `side_friction_stiffness`: tuning (see rapier `WheelTuning`).
+ *
+ * Returns the wheel index, or `u32::MAX` on error.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`; vectors must be finite.
+ */
+uint32_t vehicle_controller_add_wheel(struct WorldHandle *world,
+                                      uint32_t id,
+                                      Vec3 chassis_connection_cs,
+                                      Vec3 direction_cs,
+                                      Vec3 axle_cs,
+                                      double suspension_rest_length,
+                                      double radius,
+                                      double suspension_stiffness,
+                                      double suspension_compression,
+                                      double suspension_damping,
+                                      double friction_slip,
+                                      double max_suspension_travel,
+                                      double max_suspension_force,
+                                      double side_friction_stiffness);
+
+/**
+ * Set the engine force (drive torque) on a wheel.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+Bool vehicle_controller_set_engine_force(struct WorldHandle *world,
+                                         uint32_t id,
+                                         uint32_t wheel_index,
+                                         double force);
+
+/**
+ * Set the brake force on a wheel.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+Bool vehicle_controller_set_brake(struct WorldHandle *world,
+                                  uint32_t id,
+                                  uint32_t wheel_index,
+                                  double brake);
+
+/**
+ * Set the steering angle (radians) on a wheel.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+Bool vehicle_controller_set_steering(struct WorldHandle *world,
+                                     uint32_t id,
+                                     uint32_t wheel_index,
+                                     double steering);
+
+/**
+ * Advance the vehicle physics by `dt`: build a `QueryPipelineMut` and let rapier
+ * apply suspension/engine/brake impulses to the chassis. Call **after**
+ * `world_step`.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+Bool vehicle_controller_update(struct WorldHandle *world, uint32_t id, double dt);
+
+/**
+ * Read the chassis world-space translation.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`; `out` may be null.
+ */
+Bool vehicle_controller_get_translation(const struct WorldHandle *world, uint32_t id, Vec3 *out);
+
+/**
+ * Read the chassis world-space linear velocity.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`; `out` may be null.
+ */
+Bool vehicle_controller_get_velocity(const struct WorldHandle *world, uint32_t id, Vec3 *out);
+
+/**
+ * Read a wheel's suspension contact state (is the wheel touching the ground?).
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+Bool vehicle_controller_wheel_on_ground(const struct WorldHandle *world,
+                                        uint32_t id,
+                                        uint32_t wheel_index);
+
+/**
+ * Read a wheel's contact normal (world space).
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`; `out` may be null.
+ */
+Bool vehicle_controller_wheel_contact_normal(const struct WorldHandle *world,
+                                             uint32_t id,
+                                             uint32_t wheel_index,
+                                             Vec3 *out);
+
+/**
+ * Destroy a vehicle controller and its chassis body + collider.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+Bool vehicle_controller_destroy(struct WorldHandle *world, uint32_t id);
+
+/**
  * Current thread's last error code (`ERR_OK` when no error).
  *
  * # Safety
