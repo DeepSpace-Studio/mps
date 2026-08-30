@@ -25,10 +25,10 @@ use mps_core::rapier::ffi::{
     VoxelBuildStats, VoxelColliderOptions, WorldHandle as WH, XrayIrradiationLaw,
 };
 use mps_core::rapier::{
-    bounds as bo, collider as col, compat as com, controller as cc, crbtree as crt, dop,
-    error as er, events as ev, fracture as fr, joints as jo, matmech as mm, molecular as mol,
-    neural as neu, query as qu, rigid_body as rb, rtree as rt, soft_body as sb, spaceflight as sf,
-    thermo as th, voxel as vx, world as wo,
+    bounds as bo, character_body as cb_, collider as col, compat as com, controller as cc,
+    crbtree as crt, dop, error as er, events as ev, fracture as fr, joints as jo, matmech as mm,
+    molecular as mol, neural as neu, query as qu, rigid_body as rb, rtree as rt, sensor as sz,
+    soft_body as sb, spaceflight as sf, thermo as th, vehicle as vc, voxel as vx, world as wo,
 };
 use mps_core::rapier3d::prelude::{Collider as CB, RigidBody as RB};
 use mps_ffm as abi;
@@ -747,6 +747,86 @@ jni!(long characterControllerGetCollision(long controller, int index, long out_c
 });
 jni!(boolean characterControllerSolveImpulses(long world, long controller, double dt, int shape_type, double a, double b, double c, double d, double character_mass) {
     cc::character_controller_solve_impulses(m::<WH>(world), m::<CCH>(controller), dt, sd(shape_type,a,b,c,d), character_mass).0 as jbyte
+});
+
+// ---- Character body (third body type) ----
+jni!(long characterBodyCreate(long world, int shape_type, double a, double b, double c, double d, double tx, double ty, double tz) {
+    cb_::character_body_create(m::<WH>(world), sd(shape_type,a,b,c,d), v3(tx,ty,tz)) as jlong
+});
+jni!(boolean characterBodyMove(long world, int id, double dx, double dy, double dz, double dt, long out_movement) {
+    let mv = cb_::character_body_move(m::<WH>(world), u32_from_jint(id), v3(dx,dy,dz), dt);
+    if let Some(out) = unsafe { pm::<EffectiveCharacterMovement>(out_movement).as_mut() } { *out = mv; }
+    mv.grounded.0 as jbyte
+});
+jni!(boolean characterBodyGetTranslation(long world, int id, long out) {
+    cb_::character_body_get_translation(cp::<WH>(world), u32_from_jint(id), pm::<Vec3>(out)).0 as jbyte
+});
+jni!(boolean characterBodyDestroy(long world, int id) {
+    cb_::character_body_destroy(m::<WH>(world), u32_from_jint(id)).0 as jbyte
+});
+
+// ---- Sensor trigger zone (fourth body type) ----
+jni!(long sensorZoneCreate(long world, int shape_type, double a, double b, double c, double d, double tx, double ty, double tz) {
+    sz::sensor_zone_create(m::<WH>(world), sd(shape_type,a,b,c,d), v3(tx,ty,tz)) as jlong
+});
+jni!(boolean sensorZoneSetEnabled(long world, int id, int enabled) {
+    sz::sensor_zone_set_enabled(m::<WH>(world), u32_from_jint(id), jb(enabled)).0 as jbyte
+});
+jni!(boolean sensorZonePoll(long world, int id) {
+    sz::sensor_zone_poll(m::<WH>(world), u32_from_jint(id)).0 as jbyte
+});
+jni!(int sensorZoneContactCount(long world, int id) {
+    sz::sensor_zone_contact_count(cp::<WH>(world), u32_from_jint(id)) as jint
+});
+jni!(int sensorZoneGetContacts(long world, int id, long out, int max_count) {
+    sz::sensor_zone_get_contacts(cp::<WH>(world), u32_from_jint(id), pm::<CRaw>(out), u32_from_jint(max_count)) as jint
+});
+jni!(boolean sensorZoneIsTriggered(long world, int id) {
+    sz::sensor_zone_is_triggered(cp::<WH>(world), u32_from_jint(id)).0 as jbyte
+});
+jni!(boolean sensorZoneGetTranslation(long world, int id, long out) {
+    sz::sensor_zone_get_translation(cp::<WH>(world), u32_from_jint(id), pm::<Vec3>(out)).0 as jbyte
+});
+jni!(boolean sensorZoneSetTranslation(long world, int id, double tx, double ty, double tz) {
+    sz::sensor_zone_set_translation(m::<WH>(world), u32_from_jint(id), v3(tx,ty,tz)).0 as jbyte
+});
+jni!(boolean sensorZoneDestroy(long world, int id) {
+    sz::sensor_zone_destroy(m::<WH>(world), u32_from_jint(id)).0 as jbyte
+});
+
+// ---- Ray-cast vehicle controller (fifth body type) ----
+jni!(long vehicleControllerCreate(long world, int shape_type, double a, double b, double c, double d, double tx, double ty, double tz) {
+    vc::vehicle_controller_create(m::<WH>(world), sd(shape_type,a,b,c,d), v3(tx,ty,tz)) as jlong
+});
+jni!(int vehicleControllerAddWheel(long world, int id, double ccx, double ccy, double ccz, double dx, double dy, double dz, double axx, double axy, double axz, double rest, double radius, double stiff, double comp, double damp, double slip, double travel, double maxf, double side) {
+    vc::vehicle_controller_add_wheel(m::<WH>(world), u32_from_jint(id), v3(ccx,ccy,ccz), v3(dx,dy,dz), v3(axx,axy,axz), rest, radius, stiff, comp, damp, slip, travel, maxf, side) as jint
+});
+jni!(boolean vehicleControllerSetEngineForce(long world, int id, int wheel, double force) {
+    vc::vehicle_controller_set_engine_force(m::<WH>(world), u32_from_jint(id), u32_from_jint(wheel), force).0 as jbyte
+});
+jni!(boolean vehicleControllerSetBrake(long world, int id, int wheel, double brake) {
+    vc::vehicle_controller_set_brake(m::<WH>(world), u32_from_jint(id), u32_from_jint(wheel), brake).0 as jbyte
+});
+jni!(boolean vehicleControllerSetSteering(long world, int id, int wheel, double steering) {
+    vc::vehicle_controller_set_steering(m::<WH>(world), u32_from_jint(id), u32_from_jint(wheel), steering).0 as jbyte
+});
+jni!(boolean vehicleControllerUpdate(long world, int id, double dt) {
+    vc::vehicle_controller_update(m::<WH>(world), u32_from_jint(id), dt).0 as jbyte
+});
+jni!(boolean vehicleControllerGetTranslation(long world, int id, long out) {
+    vc::vehicle_controller_get_translation(cp::<WH>(world), u32_from_jint(id), pm::<Vec3>(out)).0 as jbyte
+});
+jni!(boolean vehicleControllerGetVelocity(long world, int id, long out) {
+    vc::vehicle_controller_get_velocity(cp::<WH>(world), u32_from_jint(id), pm::<Vec3>(out)).0 as jbyte
+});
+jni!(boolean vehicleControllerWheelOnGround(long world, int id, int wheel) {
+    vc::vehicle_controller_wheel_on_ground(cp::<WH>(world), u32_from_jint(id), u32_from_jint(wheel)).0 as jbyte
+});
+jni!(boolean vehicleControllerWheelContactNormal(long world, int id, int wheel, long out) {
+    vc::vehicle_controller_wheel_contact_normal(cp::<WH>(world), u32_from_jint(id), u32_from_jint(wheel), pm::<Vec3>(out)).0 as jbyte
+});
+jni!(boolean vehicleControllerDestroy(long world, int id) {
+    vc::vehicle_controller_destroy(m::<WH>(world), u32_from_jint(id)).0 as jbyte
 });
 
 jni!(void worldClearEvents(long world) { ev::world_clear_events(m::<WH>(world)); });
