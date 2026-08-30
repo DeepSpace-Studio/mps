@@ -1,3 +1,4 @@
+use rapier3d::math::Rotation;
 use rapier3d::prelude::fluid::FluidWorld;
 use rapier3d::prelude::soft_body::{SoftBodyId, SoftBodySet};
 use rapier3d::prelude::{
@@ -114,6 +115,13 @@ pub struct PhysicsWorld {
     /// rigid terrain/entities.
     pub(crate) fluid_proxies:
         std::collections::HashMap<u32, Vec<Option<rapier3d::prelude::RigidBodyHandle>>>,
+    /// Phase 3 (skinned soft body): skeleton bindings for linear-blend skinning.
+    /// Keyed by soft-body id. Each entry maps a set of bone rigid bodies to
+    /// per-particle weight bindings; `world_step` applies the skinning (driving
+    /// particle positions from the live bone transforms) after the soft-body
+    /// integration step.
+    pub(crate) skin_bindings:
+        std::collections::HashMap<u32, crate::rapier::soft_body::SkeletonBinding>,
     /// Phase 5d: per-soft-body voxel→particle mapping so a dug-out voxel cell can
     /// be mapped back to the exact particle index to remove via `soft_body_voxel_dig`.
     /// Keyed by `SoftBodyId.0`; populated only by `soft_body_voxel_build`.
@@ -179,6 +187,7 @@ impl PhysicsWorld {
             soft_bodies: SoftBodySet::new(),
             fluids: Vec::new(),
             fluid_proxies: std::collections::HashMap::new(),
+            skin_bindings: std::collections::HashMap::new(),
             voxel_soft_meta: std::collections::HashMap::new(),
             soft_body_proxies: std::collections::HashMap::new(),
             hooks: crate::rapier::events::CallbackPhysicsHooks::new(events.clone()),
@@ -508,6 +517,46 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
             .inner
             .soft_bodies
             .step(world.inner.integration_parameters.dt);
+        // Phase 3 (skinned soft body): drive bound particles from live bone
+        // transforms via linear-blend skinning, after the soft-body integration.
+        for (sb_id, skin) in &world.inner.skin_bindings {
+            // Snapshot live bone transforms.
+            let mut bone_trans: Vec<Vector> = Vec::with_capacity(skin.bones.len());
+            let mut bone_rot: Vec<Rotation> = Vec::with_capacity(skin.bones.len());
+            let mut ok = true;
+            for h in &skin.bones {
+                match world.inner.bodies.get(*h) {
+                    Some(rb) => {
+                        bone_trans.push(rb.translation());
+                        bone_rot.push(*rb.rotation());
+                    }
+                    None => {
+                        ok = false;
+                        break;
+                    }
+                }
+            }
+            if !ok {
+                continue; // a bone handle disappeared; skip this body this step
+            }
+            if let Some(sb) = world.inner.soft_bodies.get_mut(SoftBodyId(*sb_id)) {
+                for (pi, vw) in &skin.vertices {
+                    let mut acc = Vector::ZERO;
+                    for k in 0..4 {
+                        if vw.weight[k] > 0.0 {
+                            let bi = vw.bone_idx[k] as usize;
+                            if bi < bone_trans.len() {
+                                let skinned = bone_rot[bi] * vw.local[k] + bone_trans[bi];
+                                acc += vw.weight[k] * skinned;
+                            }
+                        }
+                    }
+                    if let Some(p) = sb.particles.get_mut(*pi as usize) {
+                        p.pos = acc;
+                    }
+                }
+            }
+        }
         // Phase 14: world-level soft-soft (cross-body) collision. Runs after every
         // body has stepped; only bodies with `cross_collision` set collide with each
         // other (see `solve_cross_body_collisions`).

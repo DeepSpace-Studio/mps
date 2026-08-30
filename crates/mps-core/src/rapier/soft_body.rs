@@ -34,7 +34,7 @@ use crate::rapier::ffi::{
     unpack_rigid_body_handle, vec3_finite, vec3_from_rapier, vec3_to_rapier,
 };
 use rapier3d::dynamics::soft_body::TearCriterion;
-use rapier3d::math::Vector;
+use rapier3d::math::{Rotation, Vector};
 use rapier3d::prelude::soft_body::{
     CohesionParams, PlasticityParams, SelfCollisionParams, ThermalParams, ViscoelasticParams, Wind,
 };
@@ -44,6 +44,37 @@ use rapier3d::prelude::{
     RigidBodyType,
 };
 use std::collections::HashSet;
+
+/// Per-particle linear-blend-skinning (LBS) binding. A particle may be influenced
+/// by up to 4 bones; `weight` sums to 1. `local[k]` is the particle's rest
+/// position expressed in bone `bone_idx[k]`'s bind-pose frame (an offset vector),
+/// precomputed at bind time, so the per-step skinning is just
+/// `Σ w_k · (boneRot_k · local_k + boneTrans_k)`.
+#[derive(Clone)]
+pub(crate) struct VertexSkin {
+    pub bone_idx: [u32; 4],
+    pub weight: [f64; 4],
+    pub local: [Vector; 4],
+}
+
+impl Default for VertexSkin {
+    fn default() -> Self {
+        Self {
+            bone_idx: [0; 4],
+            weight: [0.0; 4],
+            local: [Vector::ZERO; 4],
+        }
+    }
+}
+
+/// A skeleton bound to one soft body: the list of bone rigid bodies, each bone's
+/// bind-pose world translation/rotation, and the per-particle bindings.
+pub(crate) struct SkeletonBinding {
+    pub bones: Vec<RigidBodyHandle>,
+    pub bind_translation: Vec<Vector>,
+    pub bind_rotation: Vec<Rotation>,
+    pub vertices: std::collections::HashMap<u32, VertexSkin>,
+}
 
 /// Phase 5d bookkeeping: which voxel cell maps to which soft-body particle.
 ///
@@ -5022,6 +5053,185 @@ pub extern "C" fn soft_body_enable_collision(
             proxies.push(Some(h));
         }
         world.inner.soft_body_proxies.insert(id, proxies);
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Bind a skeleton (a list of rigid bodies acting as bones) to a soft body for
+/// linear-blend skinning (LBS). Records each bone's current world transform as its
+/// bind pose and precomputes the inverse; per-particle weights are then set with
+/// [`soft_body_set_vertex_weights`]. `world_step` applies the skinning every step.
+///
+/// * `bone_count` — number of bones (≤ `bones.len()`).
+/// * `bones` — pointer to `bone_count` `RigidBodyHandleRaw` (packed `u64`) values.
+///
+/// Returns the number of bones bound, or `0` on error.
+///
+/// # Safety
+/// `world` must be valid; `bones` must point to `bone_count` valid handle words.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_bind_skeleton(
+    world: *mut WorldHandle,
+    id: u32,
+    bone_count: u32,
+    bones: *const u64,
+) -> u32 {
+    ffi_guard(0, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "soft_body_bind_skeleton: world is null");
+            return 0;
+        };
+        if id as usize >= world.inner.soft_bodies.len() {
+            set_error(ERR_NOT_FOUND, "soft_body_bind_skeleton: unknown id");
+            return 0;
+        }
+        if bone_count == 0 || bones.is_null() {
+            set_error(ERR_INVALID_ARGUMENT, "soft_body_bind_skeleton: no bones");
+            return 0;
+        }
+        let count = bone_count as usize;
+        let mut handles: Vec<RigidBodyHandle> = Vec::with_capacity(count);
+        let mut bind_translation: Vec<Vector> = Vec::with_capacity(count);
+        let mut bind_rotation: Vec<Rotation> = Vec::with_capacity(count);
+        for i in 0..count {
+            let raw = unsafe { *bones.add(i) };
+            let h = unpack_rigid_body_handle(raw);
+            let rb = match world.inner.bodies.get(h) {
+                Some(rb) => rb,
+                None => {
+                    set_error(ERR_NOT_FOUND, "soft_body_bind_skeleton: bad bone handle");
+                    return 0;
+                }
+            };
+            handles.push(h);
+            bind_translation.push(rb.translation());
+            bind_rotation.push(*rb.rotation());
+        }
+        let binding = SkeletonBinding {
+            bones: handles,
+            bind_translation,
+            bind_rotation,
+            vertices: std::collections::HashMap::new(),
+        };
+        world.inner.skin_bindings.insert(id, binding);
+        clear_error();
+        bone_count
+    })
+}
+
+/// Bind one soft-body particle to up to 4 bones with linear-blend-skinning
+/// weights. Weights need not be normalized; they are normalized here. The
+/// particle's current world position is recorded as its rest pose and converted
+/// into each bone's bind-pose frame for the per-step skinning.
+///
+/// * `bone_indices` — pointer to `4` `u32` bone slots (unused slots ignored).
+/// * `weights` — pointer to `4` `f64` weight slots.
+///
+/// Returns `Bool::TRUE` on success.
+///
+/// # Safety
+/// `world` must be valid; `bone_indices`/`weights` must point to 4 elements.
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_set_vertex_weights(
+    world: *mut WorldHandle,
+    id: u32,
+    particle_index: u32,
+    bone_indices: *const u32,
+    weights: *const f64,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(
+                ERR_NULL_POINTER,
+                "soft_body_set_vertex_weights: world is null",
+            );
+            return Bool::FALSE;
+        };
+        let idx = id as usize;
+        if idx >= world.inner.soft_bodies.len() {
+            set_error(ERR_NOT_FOUND, "soft_body_set_vertex_weights: unknown id");
+            return Bool::FALSE;
+        }
+        if bone_indices.is_null() || weights.is_null() {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_vertex_weights: null pointers",
+            );
+            return Bool::FALSE;
+        }
+        let binding = match world.inner.skin_bindings.get_mut(&id) {
+            Some(b) => b,
+            None => {
+                set_error(
+                    ERR_NOT_FOUND,
+                    "soft_body_set_vertex_weights: skeleton not bound",
+                );
+                return Bool::FALSE;
+            }
+        };
+        let sb = match world.inner.soft_bodies.get(SoftBodyId(id)) {
+            Some(sb) => sb,
+            None => {
+                set_error(ERR_NOT_FOUND, "soft_body_set_vertex_weights: bad body");
+                return Bool::FALSE;
+            }
+        };
+        let pi = particle_index as usize;
+        let p = match sb.particles.get(pi) {
+            Some(p) => p,
+            None => {
+                set_error(
+                    ERR_INVALID_ARGUMENT,
+                    "soft_body_set_vertex_weights: bad particle index",
+                );
+                return Bool::FALSE;
+            }
+        };
+        let rest = p.pos;
+        let mut bone_idx = [0u32; 4];
+        let mut weight = [0.0f64; 4];
+        let mut local = [Vector::ZERO; 4];
+        let mut wsum = 0.0f64;
+        for k in 0..4 {
+            let w = unsafe { *weights.add(k) };
+            if w <= 0.0 {
+                continue;
+            }
+            let bi = unsafe { *bone_indices.add(k) } as usize;
+            if bi >= binding.bones.len() {
+                set_error(
+                    ERR_INVALID_ARGUMENT,
+                    "soft_body_set_vertex_weights: bone index out of range",
+                );
+                return Bool::FALSE;
+            }
+            bone_idx[k] = bi as u32;
+            weight[k] = w;
+            wsum += w;
+            // Rest position expressed in bone `bi`'s bind-pose frame (offset vector).
+            local[k] = binding.bind_rotation[bi].inverse() * (rest - binding.bind_translation[bi]);
+        }
+        if wsum <= 0.0 {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_vertex_weights: no positive weights",
+            );
+            return Bool::FALSE;
+        }
+        // Normalize weights so the blend is affine-invariant.
+        #[allow(clippy::needless_range_loop)]
+        for k in 0..4 {
+            weight[k] /= wsum;
+        }
+        binding.vertices.insert(
+            particle_index,
+            VertexSkin {
+                bone_idx,
+                weight,
+                local,
+            },
+        );
         clear_error();
         Bool::TRUE
     })

@@ -5754,6 +5754,45 @@ Bool soft_body_enable_collision(struct WorldHandle *world,
                                 Bool enabled);
 
 /**
+ * Bind a skeleton (a list of rigid bodies acting as bones) to a soft body for
+ * linear-blend skinning (LBS). Records each bone's current world transform as its
+ * bind pose and precomputes the inverse; per-particle weights are then set with
+ * [`soft_body_set_vertex_weights`]. `world_step` applies the skinning every step.
+ *
+ * * `bone_count` — number of bones (≤ `bones.len()`).
+ * * `bones` — pointer to `bone_count` `RigidBodyHandleRaw` (packed `u64`) values.
+ *
+ * Returns the number of bones bound, or `0` on error.
+ *
+ * # Safety
+ * `world` must be valid; `bones` must point to `bone_count` valid handle words.
+ */
+uint32_t soft_body_bind_skeleton(struct WorldHandle *world,
+                                 uint32_t id,
+                                 uint32_t bone_count,
+                                 const uint64_t *bones);
+
+/**
+ * Bind one soft-body particle to up to 4 bones with linear-blend-skinning
+ * weights. Weights need not be normalized; they are normalized here. The
+ * particle's current world position is recorded as its rest pose and converted
+ * into each bone's bind-pose frame for the per-step skinning.
+ *
+ * * `bone_indices` — pointer to `4` `u32` bone slots (unused slots ignored).
+ * * `weights` — pointer to `4` `f64` weight slots.
+ *
+ * Returns `Bool::TRUE` on success.
+ *
+ * # Safety
+ * `world` must be valid; `bone_indices`/`weights` must point to 4 elements.
+ */
+Bool soft_body_set_vertex_weights(struct WorldHandle *world,
+                                  uint32_t id,
+                                  uint32_t particle_index,
+                                  const uint32_t *bone_indices,
+                                  const double *weights);
+
+/**
  * # Safety
  * `out_probability` must be null or point to a valid, writable `CollisionProbability`.
  */

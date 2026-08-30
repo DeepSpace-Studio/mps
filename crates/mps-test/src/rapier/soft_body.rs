@@ -6008,4 +6008,101 @@ mod tests {
         );
         world_destroy(world);
     }
+
+    #[test]
+    fn soft_body_skinning_follows_bones() {
+        // Phase 3: a particle bound 50/50 to two bones should track the midpoint
+        // of the live bone positions after a bone moves.
+        let world = make_world();
+
+        // Two fixed bones: A at origin, B at (1,0,0).
+        let a_builder =
+            mps_core::rapier::rigid_body::rigid_body_builder_create(BodyStatus::Fixed as u32);
+        mps_core::rapier::rigid_body::rigid_body_builder_set_translation(
+            a_builder,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        let a = mps_core::rapier::rigid_body::world_insert_rigid_body(
+            world,
+            mps_core::rapier::rigid_body::rigid_body_builder_build(a_builder),
+        );
+        let b_builder =
+            mps_core::rapier::rigid_body::rigid_body_builder_create(BodyStatus::Fixed as u32);
+        mps_core::rapier::rigid_body::rigid_body_builder_set_translation(
+            b_builder,
+            Vec3 {
+                x: 1.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        let b = mps_core::rapier::rigid_body::world_insert_rigid_body(
+            world,
+            mps_core::rapier::rigid_body::rigid_body_builder_build(b_builder),
+        );
+        let bones = [a, b];
+
+        // One soft-body particle at the midpoint (0.5,0,0).
+        let id = soft_body_create(
+            world,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+        let p = soft_body_add_particle(world, id, 0.5, 0.0, 0.0, 1.0, Bool::FALSE);
+        assert_eq!(p, 0);
+
+        assert_eq!(
+            mps_core::rapier::soft_body::soft_body_bind_skeleton(world, id, 2, bones.as_ptr()),
+            2
+        );
+        let bone_indices = [0u32, 1, 0, 0];
+        let weights = [0.5f64, 0.5, 0.0, 0.0];
+        assert_eq!(
+            mps_core::rapier::soft_body::soft_body_set_vertex_weights(
+                world,
+                id,
+                0,
+                bone_indices.as_ptr(),
+                weights.as_ptr()
+            ),
+            Bool::TRUE
+        );
+
+        // Move bone B to (2,0,0); the skinned particle should track the midpoint (1,0,0).
+        mps_core::rapier::rigid_body::rigid_body_set_translation(
+            world,
+            b,
+            Vec3 {
+                x: 2.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            Bool::TRUE,
+        );
+        for _ in 0..10 {
+            world_step(world, 1.0 / 60.0);
+        }
+
+        let mut pos = Vec3::default();
+        assert_eq!(
+            soft_body_get_particle(world, id, 0, &mut pos as *mut Vec3, std::ptr::null_mut()),
+            Bool::TRUE
+        );
+        assert!(
+            (pos.x - 1.0).abs() < 1e-6 && pos.y.abs() < 1e-6 && pos.z.abs() < 1e-6,
+            "skinned particle should sit at bone midpoint (1,0,0), got ({},{},{})",
+            pos.x,
+            pos.y,
+            pos.z
+        );
+        world_destroy(world);
+    }
 }
