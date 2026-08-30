@@ -41,6 +41,9 @@ pub fn Sidebar() -> Element {
                     a { class: "nav-link", href: "#sec-batch", { t!("nav-batch") } }
                     a { class: "nav-link", href: "#sec-voxel", { t!("nav-voxel") } }
                     a { class: "nav-link", href: "#sec-soft-body", { t!("nav-soft-body") } }
+                    a { class: "nav-link", href: "#sec-character-body", { t!("nav-character-body") } }
+                    a { class: "nav-link", href: "#sec-sensor-zone", { t!("nav-sensor-zone") } }
+                    a { class: "nav-link", href: "#sec-vehicle-controller", { t!("nav-vehicle-controller") } }
                     a { class: "nav-link", href: "#sec-api", { t!("nav-api") } }
                 }
                 details { class: "nav-group", open: true,

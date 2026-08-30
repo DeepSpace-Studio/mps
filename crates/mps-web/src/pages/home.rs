@@ -12,6 +12,7 @@ use crate::pages::api::Api;
 use crate::pages::architecture::Architecture;
 use crate::pages::arena::Arena;
 use crate::pages::batch::Batch;
+use crate::pages::character_body::CharacterBody;
 use crate::pages::cosmos::Cosmos;
 use crate::pages::cosmos_arena::CosmosArena;
 use crate::pages::cosmos_flight::CosmosFlight;
@@ -27,7 +28,9 @@ use crate::pages::integrators::Integrators;
 use crate::pages::jni::Jni;
 use crate::pages::moons::Moons;
 use crate::pages::quickstart::Quickstart;
+use crate::pages::sensor_zone::SensorZone;
 use crate::pages::soft_body::SoftBody;
+use crate::pages::vehicle_controller::VehicleController;
 use crate::pages::voxel::Voxel;
 
 /// The whole documentation, rendered as one inline page. A sticky TOC provides
@@ -83,6 +86,9 @@ pub fn Home() -> Element {
             Formula {}
             Voxel {}
             SoftBody {}
+            CharacterBody {}
+            SensorZone {}
+            VehicleController {}
             Moons {}
             Events {}
             Arena {}
