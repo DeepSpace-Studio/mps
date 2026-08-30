@@ -982,6 +982,96 @@ pub extern "C" fn soft_body_set_distance_constraint_activation(
     })
 }
 
+/// Phase 32 — 设置单条距离约束（按 `add_distance_constraint` 返回的索引）的肌肉
+/// 纤维走向 `dir = (dx, dy, dz)`。非零向量被归一化后作为主动收缩方向（各向异性
+/// 驱动）；全零向量清除纤维（退回沿边收缩）。返回 `Bool::FALSE` 表示 `id` 未知 /
+/// 索引越界 / 向量非有限。
+///
+/// # Safety
+/// `world` 必须有效。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_set_fibre_direction(
+    world: *mut WorldHandle,
+    id: u32,
+    index: u32,
+    dx: f64,
+    dy: f64,
+    dz: f64,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(ERR_NOT_FOUND, "soft_body_set_fibre_direction: unknown id");
+            return Bool::FALSE;
+        };
+        let dir = Vector {
+            x: dx,
+            y: dy,
+            z: dz,
+        };
+        if sb.set_fibre_direction(index as usize, dir) {
+            clear_error();
+            Bool::TRUE
+        } else {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_fibre_direction: bad index/value",
+            );
+            Bool::FALSE
+        }
+    })
+}
+
+/// Phase 32 — 设置单条弹簧（按 `add_spring` 返回的索引）的肌肉纤维走向，语义同
+/// `soft_body_set_fibre_direction`。返回 `Bool::FALSE` 表示 `id` 未知 / 索引越界 /
+/// 向量非有限。
+///
+/// # Safety
+/// `world` 必须有效。
+#[unsafe(no_mangle)]
+pub extern "C" fn soft_body_set_spring_fibre_direction(
+    world: *mut WorldHandle,
+    id: u32,
+    index: u32,
+    dx: f64,
+    dy: f64,
+    dz: f64,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let sid = rapier3d::prelude::soft_body::SoftBodyId(id);
+        let Some(sb) = world.inner.soft_bodies.get_mut(sid) else {
+            set_error(
+                ERR_NOT_FOUND,
+                "soft_body_set_spring_fibre_direction: unknown id",
+            );
+            return Bool::FALSE;
+        };
+        let dir = Vector {
+            x: dx,
+            y: dy,
+            z: dz,
+        };
+        if sb.set_spring_fibre_direction(index as usize, dir) {
+            clear_error();
+            Bool::TRUE
+        } else {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "soft_body_set_spring_fibre_direction: bad index/value",
+            );
+            Bool::FALSE
+        }
+    })
+}
+
 /// Phase 28 — 关闭黏连/可撕 glue（等同 `cohesion = None`，不再互相吸附）。
 ///
 /// # Returns
@@ -3131,6 +3221,15 @@ fn sb_push_option_f64(buf: &mut Vec<u8>, v: Option<f64>) {
         None => sb_push_u8(buf, 0),
     }
 }
+fn sb_push_option_vec3(buf: &mut Vec<u8>, v: Option<Vector>) {
+    match v {
+        Some(v) => {
+            sb_push_u8(buf, 1);
+            sb_push_vec(buf, v);
+        }
+        None => sb_push_u8(buf, 0),
+    }
+}
 
 // ── little-endian readers ────────────────────────────────────────────────────────
 struct SbCursor<'a> {
@@ -3171,6 +3270,12 @@ impl<'a> SbCursor<'a> {
         match self.take_u8()? {
             0 => Some(None),
             _ => Some(Some(self.take_f64()?)),
+        }
+    }
+    fn take_option_vec3(&mut self) -> Option<Option<Vector>> {
+        match self.take_u8()? {
+            0 => Some(None),
+            _ => Some(self.take_vec()),
         }
     }
 }
@@ -3232,6 +3337,7 @@ fn sb_serialize_body(buf: &mut Vec<u8>, b: &SoftBody) {
         sb_push_f64(buf, s.stiffness);
         sb_push_f64(buf, s.damping);
         sb_push_f64(buf, s.activation);
+        sb_push_option_vec3(buf, s.fibre);
     }
     // distance constraints
     sb_push_u32(buf, b.distance_constraints.len() as u32);
@@ -3242,6 +3348,7 @@ fn sb_serialize_body(buf: &mut Vec<u8>, b: &SoftBody) {
         sb_push_f64(buf, d.compliance);
         sb_push_f64(buf, d.compression);
         sb_push_f64(buf, d.activation);
+        sb_push_option_vec3(buf, d.fibre);
     }
     // tetrahedra (+ rest volumes)
     sb_push_u32(buf, b.tetrahedra.len() as u32);
@@ -3469,6 +3576,7 @@ fn sb_deserialize_body(c: &mut SbCursor) -> Option<SoftBody> {
             stiffness: c.take_f64()?,
             damping: c.take_f64()?,
             activation: c.take_f64()?,
+            fibre: c.take_option_vec3()?,
         });
     }
     let nd = c.take_u32()? as usize;
@@ -3481,6 +3589,7 @@ fn sb_deserialize_body(c: &mut SbCursor) -> Option<SoftBody> {
             compliance: c.take_f64()?,
             compression: c.take_f64()?,
             activation: c.take_f64()?,
+            fibre: c.take_option_vec3()?,
         });
     }
     let nt = c.take_u32()? as usize;

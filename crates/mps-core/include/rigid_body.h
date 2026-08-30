@@ -4515,6 +4515,37 @@ Bool soft_body_set_distance_constraint_activation(struct WorldHandle *world,
                                                   double activation);
 
 /**
+ * Phase 32 — 设置单条距离约束（按 `add_distance_constraint` 返回的索引）的肌肉
+ * 纤维走向 `dir = (dx, dy, dz)`。非零向量被归一化后作为主动收缩方向（各向异性
+ * 驱动）；全零向量清除纤维（退回沿边收缩）。返回 `Bool::FALSE` 表示 `id` 未知 /
+ * 索引越界 / 向量非有限。
+ *
+ * # Safety
+ * `world` 必须有效。
+ */
+Bool soft_body_set_fibre_direction(struct WorldHandle *world,
+                                   uint32_t id,
+                                   uint32_t index,
+                                   double dx,
+                                   double dy,
+                                   double dz);
+
+/**
+ * Phase 32 — 设置单条弹簧（按 `add_spring` 返回的索引）的肌肉纤维走向，语义同
+ * `soft_body_set_fibre_direction`。返回 `Bool::FALSE` 表示 `id` 未知 / 索引越界 /
+ * 向量非有限。
+ *
+ * # Safety
+ * `world` 必须有效。
+ */
+Bool soft_body_set_spring_fibre_direction(struct WorldHandle *world,
+                                          uint32_t id,
+                                          uint32_t index,
+                                          double dx,
+                                          double dy,
+                                          double dz);
+
+/**
  * Phase 28 — 关闭黏连/可撕 glue（等同 `cohesion = None`，不再互相吸附）。
  *
  * # Returns

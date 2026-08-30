@@ -36,13 +36,13 @@ mod tests {
         soft_body_set_neo_hookean, soft_body_set_particle_velocity, soft_body_set_plasticity,
         soft_body_set_pressure, soft_body_set_self_collision,
         soft_body_set_self_collision_friction, soft_body_set_spring_activation,
-        soft_body_set_spring_stiffness, soft_body_set_substeps, soft_body_set_tear_energy,
-        soft_body_set_tear_strain, soft_body_set_tear_stress, soft_body_set_thermal,
-        soft_body_set_viscoelastic, soft_body_set_volume_conservation, soft_body_sleep,
-        soft_body_state_size, soft_body_step_implicit, soft_body_step_mass_spring,
-        soft_body_subdivide_tetrahedra, soft_body_tear_now, soft_body_total_volume,
-        soft_body_voxel_build, soft_body_voxel_dig, soft_body_wake, soft_chain_create,
-        soft_chain_node_handles,
+        soft_body_set_spring_fibre_direction, soft_body_set_spring_stiffness,
+        soft_body_set_substeps, soft_body_set_tear_energy, soft_body_set_tear_strain,
+        soft_body_set_tear_stress, soft_body_set_thermal, soft_body_set_viscoelastic,
+        soft_body_set_volume_conservation, soft_body_sleep, soft_body_state_size,
+        soft_body_step_implicit, soft_body_step_mass_spring, soft_body_subdivide_tetrahedra,
+        soft_body_tear_now, soft_body_total_volume, soft_body_voxel_build, soft_body_voxel_dig,
+        soft_body_wake, soft_chain_create, soft_chain_node_handles,
     };
     use mps_core::rapier::voxel::{collider_builder_create_voxels, collider_voxel_edit};
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
@@ -5503,6 +5503,48 @@ mod tests {
             p.x.is_finite() && p.x < 1.0 - 1e-3,
             "restored activation must contract: {}",
             p.x
+        );
+        world_destroy(world);
+    }
+
+    #[test]
+    fn soft_body_fibre_direction_set_and_save_restore() {
+        // Set a muscle-fibre direction on a spring + verify it survives save/restore.
+        let world = world_create(Vec3::default());
+        let id = soft_body_create(world, Vec3::default());
+        let a = soft_body_add_particle(world, id, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        let b = soft_body_add_particle(world, id, 1.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        assert_eq!(soft_body_add_spring(world, id, a, b, 50.0, 0.5), Bool::TRUE);
+        // single spring → index 0
+        assert_eq!(
+            soft_body_set_spring_fibre_direction(world, id, 0, 0.0, 1.0, 0.0),
+            Bool::TRUE
+        );
+        // save
+        let n = soft_body_state_size(world, id);
+        assert!(n > 0);
+        let mut buf = vec![0u8; n as usize];
+        assert_eq!(
+            soft_body_save_state(world, id, buf.as_mut_ptr(), n),
+            Bool::TRUE
+        );
+        // restore into a fresh body
+        let id2 = soft_body_create(world, Vec3::default());
+        let a2 = soft_body_add_particle(world, id2, 0.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        let b2 = soft_body_add_particle(world, id2, 1.0, 0.0, 0.0, 1.0, Bool::FALSE);
+        soft_body_add_spring(world, id2, a2, b2, 50.0, 0.5);
+        assert_eq!(
+            soft_body_restore_state(world, id2, buf.as_ptr(), n),
+            Bool::TRUE
+        );
+        // invalid fibre vector (non-finite) is rejected
+        assert_eq!(
+            soft_body_set_spring_fibre_direction(world, id, 0, f64::NAN, 0.0, 0.0),
+            Bool::FALSE
+        );
+        assert_eq!(
+            soft_body_set_spring_fibre_direction(world, 999, 0, 0.0, 1.0, 0.0),
+            Bool::FALSE
         );
         world_destroy(world);
     }

@@ -1802,5 +1802,8 @@ jni!(boolean softBodySetDamping(long world, int id, double d) { sb::soft_body_se
 jni!(boolean softBodySetActivation(long world, int id, double gamma) { sb::soft_body_set_activation(m::<WH>(world), id as u32, gamma).0 as jbyte });
 jni!(boolean softBodySetSpringActivation(long world, int id, int index, double activation) { sb::soft_body_set_spring_activation(m::<WH>(world), id as u32, index as u32, activation).0 as jbyte });
 jni!(boolean softBodySetDistanceConstraintActivation(long world, int id, int index, double activation) { sb::soft_body_set_distance_constraint_activation(m::<WH>(world), id as u32, index as u32, activation).0 as jbyte });
+// Phase 32: 肌纤维走向（各向异性主动收缩方向）
+jni!(boolean softBodySetFibreDirection(long world, int id, int index, double dx, double dy, double dz) { sb::soft_body_set_fibre_direction(m::<WH>(world), id as u32, index as u32, dx, dy, dz).0 as jbyte });
+jni!(boolean softBodySetSpringFibreDirection(long world, int id, int index, double dx, double dy, double dz) { sb::soft_body_set_spring_fibre_direction(m::<WH>(world), id as u32, index as u32, dx, dy, dz).0 as jbyte });
 // Phase 5f: 软体-刚体碰撞（proxy collider 桥接）
 jni!(boolean softBodyEnableCollision(long world, int id, double particle_radius, int enabled) { sb::soft_body_enable_collision(m::<WH>(world), id as u32, particle_radius, jb(enabled)).0 as jbyte });
