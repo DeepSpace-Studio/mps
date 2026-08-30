@@ -764,6 +764,24 @@ jni!(boolean characterBodyGetTranslation(long world, int id, long out) {
 jni!(boolean characterBodyDestroy(long world, int id) {
     cb_::character_body_destroy(m::<WH>(world), u32_from_jint(id)).0 as jbyte
 });
+jni!(boolean characterBodySetUp(long world, int id, double ux, double uy, double uz) {
+    cb_::character_body_set_up(m::<WH>(world), u32_from_jint(id), v3(ux,uy,uz)).0 as jbyte
+});
+jni!(boolean characterBodySetOffsetAbsolute(long world, int id, double offset) {
+    cb_::character_body_set_offset_absolute(m::<WH>(world), u32_from_jint(id), offset).0 as jbyte
+});
+jni!(boolean characterBodySetOffsetRelative(long world, int id, double offset) {
+    cb_::character_body_set_offset_relative(m::<WH>(world), u32_from_jint(id), offset).0 as jbyte
+});
+jni!(boolean characterBodySetAutostep(long world, int id, int enabled, double max_height, double min_width, int include_dynamic_bodies) {
+    cb_::character_body_set_autostep(m::<WH>(world), u32_from_jint(id), jb(enabled), max_height, min_width, jb(include_dynamic_bodies)).0 as jbyte
+});
+jni!(boolean characterBodySetSnapToGround(long world, int id, int enabled, double distance) {
+    cb_::character_body_set_snap_to_ground(m::<WH>(world), u32_from_jint(id), jb(enabled), distance).0 as jbyte
+});
+jni!(boolean characterBodySetSlopeAngles(long world, int id, double max_climb_angle, double min_slide_angle) {
+    cb_::character_body_set_slope_angles(m::<WH>(world), u32_from_jint(id), max_climb_angle, min_slide_angle).0 as jbyte
+});
 
 // ---- Sensor trigger zone (fourth body type) ----
 jni!(long sensorZoneCreate(long world, int shape_type, double a, double b, double c, double d, double tx, double ty, double tz) {

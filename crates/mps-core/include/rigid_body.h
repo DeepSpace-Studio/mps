@@ -1712,6 +1712,56 @@ EffectiveCharacterMovement character_body_move(struct WorldHandle *world,
                                                double dt);
 
 /**
+ * Set the character's up vector (used for slope/ground semantics). Defaults to
+ * world +Y. Mirrors `KinematicCharacterController::setUp`.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+Bool character_body_set_up(struct WorldHandle *world, uint32_t id, Vec3 up);
+
+/**
+ * Set the character controller's skin/offset (absolute, in metres).
+ */
+Bool character_body_set_offset_absolute(struct WorldHandle *world, uint32_t id, double offset);
+
+/**
+ * Set the character controller's skin/offset (relative, as a fraction of the
+ * shape's dimensions).
+ */
+Bool character_body_set_offset_relative(struct WorldHandle *world, uint32_t id, double offset);
+
+/**
+ * Enable / disable auto-stepping so the character can climb block-sized ledges
+ * (e.g. a 1-metre Minecraft step). `max_height` and `min_width` are absolute
+ * metres; `include_dynamic_bodies` lets the step ride on moving platforms.
+ */
+Bool character_body_set_autostep(struct WorldHandle *world,
+                                 uint32_t id,
+                                 Bool enabled,
+                                 double max_height,
+                                 double min_width,
+                                 Bool include_dynamic_bodies);
+
+/**
+ * Enable / disable snap-to-ground so the character sticks to block surfaces
+ * instead of floating a hair above them after a step.
+ */
+Bool character_body_set_snap_to_ground(struct WorldHandle *world,
+                                       uint32_t id,
+                                       Bool enabled,
+                                       double distance);
+
+/**
+ * Set the slope-climb / slope-slide angles (radians). Tune these so the
+ * character climbs gentle block ramps but slides down steep ones.
+ */
+Bool character_body_set_slope_angles(struct WorldHandle *world,
+                                     uint32_t id,
+                                     double max_climb_angle,
+                                     double min_slide_angle);
+
+/**
  * Destroy a character body, removing its rigid body, collider and controller
  * state. Returns `Bool::TRUE` on success.
  *

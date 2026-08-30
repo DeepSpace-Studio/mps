@@ -8,7 +8,7 @@
 //! This layer reuses the collision query construction already in `controller.rs`
 //! and just binds a controller to a kinematic body. No fork changes.
 
-use rapier3d::control::KinematicCharacterController;
+use rapier3d::control::{CharacterAutostep, CharacterLength, KinematicCharacterController};
 use rapier3d::prelude::{QueryFilter, RigidBodyBuilder, RigidBodyHandle, RigidBodyType, Vector};
 
 use crate::rapier::error::{
@@ -156,6 +156,242 @@ pub extern "C" fn character_body_move(
             .last_movement = result;
         clear_error();
         result
+    })
+}
+
+/// Set the character's up vector (used for slope/ground semantics). Defaults to
+/// world +Y. Mirrors `KinematicCharacterController::setUp`.
+///
+/// # Safety
+/// `world` must be a valid pointer returned by `world_create`.
+#[unsafe(no_mangle)]
+pub extern "C" fn character_body_set_up(world: *mut WorldHandle, id: u32, up: Vec3) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !world.inner.character_bodies.contains_key(&id) {
+            set_error(ERR_NOT_FOUND, "character_body_set_up: unknown id");
+            return Bool::FALSE;
+        }
+        if !vec3_finite(up) {
+            set_error(ERR_INVALID_ARGUMENT, "character_body_set_up: non-finite up");
+            return Bool::FALSE;
+        }
+        world
+            .inner
+            .character_bodies
+            .get_mut(&id)
+            .unwrap()
+            .controller
+            .up = vec3_to_rapier(up);
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Set the character controller's skin/offset (absolute, in metres).
+#[unsafe(no_mangle)]
+pub extern "C" fn character_body_set_offset_absolute(
+    world: *mut WorldHandle,
+    id: u32,
+    offset: f64,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !world.inner.character_bodies.contains_key(&id) {
+            set_error(
+                ERR_NOT_FOUND,
+                "character_body_set_offset_absolute: unknown id",
+            );
+            return Bool::FALSE;
+        }
+        if !offset.is_finite() || offset < 0.0 {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "offset must be finite and non-negative",
+            );
+            return Bool::FALSE;
+        }
+        world
+            .inner
+            .character_bodies
+            .get_mut(&id)
+            .unwrap()
+            .controller
+            .offset = CharacterLength::Absolute(offset);
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Set the character controller's skin/offset (relative, as a fraction of the
+/// shape's dimensions).
+#[unsafe(no_mangle)]
+pub extern "C" fn character_body_set_offset_relative(
+    world: *mut WorldHandle,
+    id: u32,
+    offset: f64,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !world.inner.character_bodies.contains_key(&id) {
+            set_error(
+                ERR_NOT_FOUND,
+                "character_body_set_offset_relative: unknown id",
+            );
+            return Bool::FALSE;
+        }
+        if !offset.is_finite() || offset < 0.0 {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "offset must be finite and non-negative",
+            );
+            return Bool::FALSE;
+        }
+        world
+            .inner
+            .character_bodies
+            .get_mut(&id)
+            .unwrap()
+            .controller
+            .offset = CharacterLength::Relative(offset);
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Enable / disable auto-stepping so the character can climb block-sized ledges
+/// (e.g. a 1-metre Minecraft step). `max_height` and `min_width` are absolute
+/// metres; `include_dynamic_bodies` lets the step ride on moving platforms.
+#[unsafe(no_mangle)]
+pub extern "C" fn character_body_set_autostep(
+    world: *mut WorldHandle,
+    id: u32,
+    enabled: Bool,
+    max_height: f64,
+    min_width: f64,
+    include_dynamic_bodies: Bool,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !world.inner.character_bodies.contains_key(&id) {
+            set_error(ERR_NOT_FOUND, "character_body_set_autostep: unknown id");
+            return Bool::FALSE;
+        }
+        if enabled.0 != 0
+            && (!max_height.is_finite()
+                || !min_width.is_finite()
+                || max_height < 0.0
+                || min_width < 0.0)
+        {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "autostep dimensions must be finite and non-negative",
+            );
+            return Bool::FALSE;
+        }
+        world
+            .inner
+            .character_bodies
+            .get_mut(&id)
+            .unwrap()
+            .controller
+            .autostep = if enabled.0 != 0 {
+            Some(CharacterAutostep {
+                max_height: CharacterLength::Absolute(max_height),
+                min_width: CharacterLength::Absolute(min_width),
+                include_dynamic_bodies: include_dynamic_bodies.0 != 0,
+            })
+        } else {
+            None
+        };
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Enable / disable snap-to-ground so the character sticks to block surfaces
+/// instead of floating a hair above them after a step.
+#[unsafe(no_mangle)]
+pub extern "C" fn character_body_set_snap_to_ground(
+    world: *mut WorldHandle,
+    id: u32,
+    enabled: Bool,
+    distance: f64,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !world.inner.character_bodies.contains_key(&id) {
+            set_error(
+                ERR_NOT_FOUND,
+                "character_body_set_snap_to_ground: unknown id",
+            );
+            return Bool::FALSE;
+        }
+        if enabled.0 != 0 && (!distance.is_finite() || distance < 0.0) {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "snap distance must be finite and non-negative",
+            );
+            return Bool::FALSE;
+        }
+        world
+            .inner
+            .character_bodies
+            .get_mut(&id)
+            .unwrap()
+            .controller
+            .snap_to_ground = if enabled.0 != 0 {
+            Some(CharacterLength::Absolute(distance))
+        } else {
+            None
+        };
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Set the slope-climb / slope-slide angles (radians). Tune these so the
+/// character climbs gentle block ramps but slides down steep ones.
+#[unsafe(no_mangle)]
+pub extern "C" fn character_body_set_slope_angles(
+    world: *mut WorldHandle,
+    id: u32,
+    max_climb_angle: f64,
+    min_slide_angle: f64,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !world.inner.character_bodies.contains_key(&id) {
+            set_error(ERR_NOT_FOUND, "character_body_set_slope_angles: unknown id");
+            return Bool::FALSE;
+        }
+        if !max_climb_angle.is_finite() || !min_slide_angle.is_finite() {
+            set_error(ERR_INVALID_ARGUMENT, "slope angles must be finite");
+            return Bool::FALSE;
+        }
+        let cb = world.inner.character_bodies.get_mut(&id).unwrap();
+        cb.controller.max_slope_climb_angle = max_climb_angle;
+        cb.controller.min_slope_slide_angle = min_slide_angle;
+        clear_error();
+        Bool::TRUE
     })
 }
 

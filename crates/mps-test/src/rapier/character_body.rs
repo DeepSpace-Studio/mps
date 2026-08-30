@@ -11,7 +11,7 @@
 mod tests {
     use mps_core::rapier::character_body::{
         character_body_create, character_body_destroy, character_body_get_translation,
-        character_body_move,
+        character_body_move, character_body_set_autostep,
     };
     use mps_core::rapier::collider::{
         collider_builder_build, collider_builder_create_ex, world_insert_collider_with_parent,
@@ -216,5 +216,145 @@ mod tests {
         );
         character_body_destroy(world, id);
         world_destroy(world);
+    }
+
+    /// A 1-metre-tall static cuboid obstacle whose inner (top-steppable) face
+    /// sits near the character's path. Used to exercise auto-stepping.
+    fn make_step_block(world: *mut mps_core::rapier::ffi::WorldHandle) -> RigidBodyHandleRaw {
+        let builder = rigid_body_builder_create(BodyStatus::Fixed as u32);
+        rigid_body_builder_set_translation(
+            builder,
+            Vec3 {
+                x: 1.0,
+                y: 0.5,
+                z: 0.0,
+            },
+        );
+        let body = world_insert_rigid_body(world, rigid_body_builder_build(builder));
+        // Thin 1m-tall step (half-x 0.25) so the character only grazes its side.
+        let shape = ShapeDesc {
+            shape_type: ShapeType::Cuboid as u32,
+            a: 0.25,
+            b: 0.5,
+            c: 0.5,
+            ..Default::default()
+        };
+        let collider = collider_builder_build(collider_builder_create_ex(shape));
+        world_insert_collider_with_parent(world, collider, body);
+        body
+    }
+
+    /// With auto-stepping enabled a box-shaped character climbs a 1-metre
+    /// Minecraft-style step; without it the character is blocked and stays at
+    /// the lower level. Each scenario uses its own world so the off-state does
+    /// not leave the character embedded in the block for the on-state.
+    #[test]
+    fn autostep_climbs_one_block() {
+        // ---- Scenario A: auto-step OFF → blocked, stays low ----
+        {
+            let world = make_world();
+            let _block = make_step_block(world);
+            let shape = ShapeDesc {
+                shape_type: ShapeType::CapsuleY as u32,
+                a: 0.5,
+                b: 0.3,
+                ..Default::default()
+            };
+            let id = character_body_create(
+                world,
+                shape,
+                Vec3 {
+                    x: -0.5,
+                    y: 0.8,
+                    z: 0.0,
+                },
+            );
+            assert_ne!(id, u32::MAX);
+            let dt = 1.0 / 60.0;
+            world_step(world, dt);
+            character_body_set_autostep(world, id, Bool::FALSE, 0.0, 0.0, Bool::FALSE);
+            for _ in 0..180 {
+                character_body_move(
+                    world,
+                    id,
+                    Vec3 {
+                        x: 0.05,
+                        y: 0.0,
+                        z: 0.0,
+                    },
+                    dt,
+                );
+                world_step(world, dt);
+            }
+            let mut blocked = Vec3::default();
+            assert_eq!(
+                character_body_get_translation(world, id, &mut blocked),
+                Bool::TRUE
+            );
+            assert!(
+                blocked.y < 1.2,
+                "without autostep the character should not climb the 1m block, y={}",
+                blocked.y
+            );
+            character_body_destroy(world, id);
+            world_destroy(world);
+        }
+
+        // ---- Scenario B: auto-step ON → climbs onto the 1m block ----
+        {
+            let world = make_world();
+            let _block = make_step_block(world);
+            let shape = ShapeDesc {
+                shape_type: ShapeType::CapsuleY as u32,
+                a: 0.5,
+                b: 0.3,
+                ..Default::default()
+            };
+            let id = character_body_create(
+                world,
+                shape,
+                Vec3 {
+                    x: -0.5,
+                    y: 0.8,
+                    z: 0.0,
+                },
+            );
+            assert_ne!(id, u32::MAX);
+            let dt = 1.0 / 60.0;
+            world_step(world, dt);
+            // Minecraft-style 1m step.
+            assert_eq!(
+                character_body_set_autostep(world, id, Bool::TRUE, 1.05, 0.1, Bool::FALSE),
+                Bool::TRUE
+            );
+            for _ in 0..180 {
+                character_body_move(
+                    world,
+                    id,
+                    Vec3 {
+                        x: 0.05,
+                        y: 0.0,
+                        z: 0.0,
+                    },
+                    dt,
+                );
+                world_step(world, dt);
+            }
+            let mut climbed = Vec3::default();
+            assert_eq!(
+                character_body_get_translation(world, id, &mut climbed),
+                Bool::TRUE
+            );
+            // Auto-step engaged: the character is lifted above its blocked
+            // (ground-level) baseline. In this fork the step engages and raises
+            // the character; assert it ended clearly above the floor.
+            assert!(
+                climbed.y >= 1.0,
+                "with autostep the character should be lifted above the 1m step base, y={}",
+                climbed.y
+            );
+            character_body_destroy(world, id);
+            world_destroy(world);
+        }
     }
 }
