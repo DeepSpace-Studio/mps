@@ -1,3 +1,4 @@
+use crate::math::EPS_GENERAL as EPSILON;
 use std::slice;
 
 use rapier3d::prelude::{Matrix3, Vector};
@@ -10,7 +11,6 @@ use crate::ffi::{
 
 use crate::math::finite_positive;
 
-const EPSILON: f64 = 1.0e-12;
 const MAX_DOF: u32 = 512;
 
 fn material_valid(material: MaterialProperties) -> bool {

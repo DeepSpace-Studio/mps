@@ -4,6 +4,8 @@
 
 use std::f64::consts::PI;
 
+use crate::math::finite_many;
+
 // ---------------------------------------------------------------------------
 // Linear elasticity
 // ---------------------------------------------------------------------------
@@ -87,7 +89,7 @@ pub fn plane_stress_stiffness(youngs_modulus: f64, poisson_ratio: f64) -> Option
 
 /// von Mises equivalent stress: σ_vm = sqrt(σ_x² + σ_y² + σ_z² - σ_xσ_y - σ_yσ_z - σ_zσ_x + 3(τ_xy² + τ_yz² + τ_zx²))
 pub fn von_mises_stress(sx: f64, sy: f64, sz: f64, txy: f64, tyz: f64, tzx: f64) -> Option<f64> {
-    if !finite_6(&[sx, sy, sz, txy, tyz, tzx]) {
+    if !finite_many(&[sx, sy, sz, txy, tyz, tzx]) {
         return None;
     }
     let val = sx * sx + sy * sy + sz * sz - sx * sy - sy * sz - sz * sx
@@ -141,7 +143,7 @@ pub fn principal_stresses(
     tyz: f64,
     tzx: f64,
 ) -> Option<(f64, f64, f64)> {
-    if !finite_6(&[sx, sy, sz, txy, tyz, tzx]) {
+    if !finite_many(&[sx, sy, sz, txy, tyz, tzx]) {
         return None;
     }
     // Stress invariants
@@ -428,7 +430,3 @@ pub fn slenderness_ratio(
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-fn finite_6(v: &[f64; 6]) -> bool {
-    v.iter().all(|x| x.is_finite())
-}

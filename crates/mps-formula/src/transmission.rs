@@ -4,9 +4,8 @@ use crate::ffi::{
     ScrewConstraintDesc, ScrewConstraintReport, SpiralConstraintDesc, SpiralConstraintReport, Vec3,
 };
 
-use crate::math::{finite, finite_non_negative, finite_positive};
+use crate::math::{EPS_GENERAL as EPSILON, finite, finite_non_negative, finite_positive};
 
-const EPSILON: f64 = 1.0e-12;
 pub const TAU: f64 = std::f64::consts::TAU;
 
 fn wrap_tau(angle: f64) -> f64 {

@@ -96,10 +96,7 @@ pub enum PitchDistribution {
     /// Constant collective pitch `θ` across the blade.
     Uniform { theta: f64 },
     /// Linear twist from `theta_root` at the hub to `theta_tip` at `r = R`.
-    Linear {
-        theta_root: f64,
-        theta_tip: f64,
-    },
+    Linear { theta_root: f64, theta_tip: f64 },
     /// Caller-supplied per-station pitch (one entry per quadrature station,
     /// in the same order `BladeElementResult` iterates). Otherwise returned
     /// as `None` on length mismatch.
@@ -209,7 +206,11 @@ pub fn compute_rotor_forces(
         // per-blade station increments
         let d_t = q_dyn * (cl * cos_phi - cd * sin_phi);
         let d_q = q_dyn * (cl * sin_phi + cd * cos_phi) * x;
-        let w = if i == 0 || i + 1 == stations { 0.5 } else { 1.0 };
+        let w = if i == 0 || i + 1 == stations {
+            0.5
+        } else {
+            1.0
+        };
         thrust += d_t * w * n_b;
         torque += d_q * w * n_b;
         if d_t.abs() > 0.0 || d_q.abs() > 0.0 {

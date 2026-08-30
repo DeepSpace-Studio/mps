@@ -18,9 +18,8 @@ use crate::ffi::{
     LorenzStepReport, LyapunovReport,
 };
 
-use crate::math::{KahanSum, finite, finite_positive};
+use crate::math::{EPS_TIGHT as EPSILON, KahanSum, finite, finite_positive};
 
-const EPSILON: f64 = 1.0e-14;
 const DIST_EPSILON: f64 = 1.0e-16;
 
 // ---------------------------------------------------------------------------

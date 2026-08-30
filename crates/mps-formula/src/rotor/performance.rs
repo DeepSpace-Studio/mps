@@ -35,15 +35,14 @@ use crate::error::{ERR_INVALID_ARGUMENT, set_error};
 /// `P_0 = σ·C_d0·ρ·A·(ΩR)³ / 8`.
 ///
 /// `None` when the rotor geometry / density / angular speed are invalid.
-pub fn rotor_profile_power(
-    rotor: &RotorParams,
-    rho: f64,
-    omega: f64,
-) -> Option<f64> {
+pub fn rotor_profile_power(rotor: &RotorParams, rho: f64, omega: f64) -> Option<f64> {
     let sigma = rotor.solidity()?;
     let area = rotor.disk_area()?;
     if !finite_positive(rho) || !finite_positive(omega) {
-        set_error(ERR_INVALID_ARGUMENT, "rotor_profile_power: rho<=0 / omega<=0 / NaN");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "rotor_profile_power: rho<=0 / omega<=0 / NaN",
+        );
         return None;
     }
     let v_tip = omega * rotor.radius;
@@ -65,7 +64,10 @@ pub fn rotor_total_power(
 ) -> Option<f64> {
     let parts = [induced_power, profile_power, climb_power, parasite_power];
     if !parts.iter().all(|p| finite_non_negative(*p)) {
-        set_error(ERR_INVALID_ARGUMENT, "rotor_total_power: negative/NaN power term");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "rotor_total_power: negative/NaN power term",
+        );
         return None;
     }
     Some(parts.iter().sum())
@@ -83,7 +85,11 @@ pub fn rotor_flat_plate_area(reference_area: f64, drag_coefficient: f64) -> Opti
 
 /// Parasite power `P_p = ½ ρ V∞³ · f` (W) given a flat-plate area `f`
 /// (m²) and free-stream speed `V∞` (m/s).
-pub fn rotor_parasite_power(density: f64, free_stream_speed: f64, flat_plate_area: f64) -> Option<f64> {
+pub fn rotor_parasite_power(
+    density: f64,
+    free_stream_speed: f64,
+    flat_plate_area: f64,
+) -> Option<f64> {
     if !finite_positive(density)
         || !finite_non_negative(free_stream_speed)
         || !finite_non_negative(flat_plate_area)
@@ -99,7 +105,10 @@ pub fn rotor_parasite_power(density: f64, free_stream_speed: f64, flat_plate_are
 /// descending aircraft contributes negative power.
 pub fn rotor_climb_power(thrust: f64, climb_rate: f64) -> Option<f64> {
     if !finite_non_negative(thrust) || !finite(climb_rate) {
-        set_error(ERR_INVALID_ARGUMENT, "rotor_climb_power: bad thrust / climb rate");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "rotor_climb_power: bad thrust / climb rate",
+        );
         return None;
     }
     Some(thrust * climb_rate)
@@ -112,7 +121,10 @@ pub fn rotor_climb_power(thrust: f64, climb_rate: f64) -> Option<f64> {
 /// everything through [`rotor_total_power`].
 pub fn rotor_hover_efficiency(ideal_power: f64, actual_power: f64) -> Option<f64> {
     if !finite_non_negative(ideal_power) || !finite_positive(actual_power) {
-        set_error(ERR_INVALID_ARGUMENT, "rotor_hover_efficiency: ideal<0 / actual<=0 / NaN");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "rotor_hover_efficiency: ideal<0 / actual<=0 / NaN",
+        );
         return None;
     }
     Some(ideal_power / actual_power)

@@ -8,9 +8,8 @@ use crate::ffi::{
     SoftSpring, SoftVolumeConstraint, Vec3, vec3_finite, vec3_from_rapier, vec3_to_rapier,
 };
 
-use crate::math::{KahanSum, finite_non_negative, finite_positive};
+use crate::math::{EPS_GENERAL as EPSILON, KahanSum, finite_non_negative, finite_positive};
 
-const EPSILON: f64 = 1.0e-12;
 const MAX_PARTICLES: u32 = 2_000_000;
 const MAX_CONSTRAINTS: u32 = 2_000_000;
 

@@ -15,10 +15,9 @@ use crate::ffi::{
 };
 use crate::math::mul_add;
 
-use crate::math::{finite_non_negative, finite_positive};
+use crate::math::{EPS_GENERAL as EPSILON, finite_non_negative, finite_positive};
 
 pub const SPEED_OF_LIGHT: f64 = 299_792_458.0;
-const EPSILON: f64 = 1.0e-12;
 
 fn write_out<T: Copy>(out: *mut T, value: T) -> Bool {
     let Some(out) = (unsafe { out.as_mut() }) else {

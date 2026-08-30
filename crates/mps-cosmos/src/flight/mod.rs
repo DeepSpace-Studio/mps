@@ -24,8 +24,14 @@ pub mod dynamics;
 pub mod stability;
 pub mod trim;
 
-pub use dynamics::{FlightControls, FlightDynamics, RigidBodyState, default_airfoil, simulate_one_step, total_forces_and_moments};
-pub use stability::{PowerIterationResult, StabilityDerivatives, linearize, longitudinal_modes, longitudinal_submatrix, power_iteration};
+pub use dynamics::{
+    FlightControls, FlightDynamics, RigidBodyState, default_airfoil, simulate_one_step,
+    total_forces_and_moments,
+};
+pub use stability::{
+    PowerIterationResult, StabilityDerivatives, linearize, longitudinal_modes,
+    longitudinal_submatrix, power_iteration,
+};
 pub use trim::{FlightTarget, TrimControls, TrimError, Trimmer, hover_target, level_flight_target};
 
 use rapier3d::prelude::{Rotation, Vector};

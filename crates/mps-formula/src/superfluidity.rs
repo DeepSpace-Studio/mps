@@ -14,9 +14,8 @@ use crate::ffi::{
     GpTimeEvolutionParams, QuantisedCirculation, Vec3, VortexReconnectionReport, VortexRing,
     VortexSegment, VortexTangleStats, vec3_finite,
 };
-use crate::math::{KahanSum, finite_non_negative, finite_positive};
+use crate::math::{EPS_TIGHT as EPSILON, KahanSum, finite_non_negative, finite_positive};
 
-const EPSILON: f64 = 1.0e-14;
 const FOUR_PI: f64 = 12.566_370_614_359_172;
 /// Planck constant (kg·m²/s)
 const PLANCK: f64 = 6.626_070_15e-34;

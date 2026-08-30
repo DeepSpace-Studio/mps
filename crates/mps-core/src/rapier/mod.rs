@@ -43,6 +43,7 @@ pub mod query;
 pub use mps_formula::relativity;
 pub mod rigid_body;
 pub mod rtree;
+pub use mps_formula::rotor;
 pub mod shared_arena;
 pub mod soft_body;
 pub use mps_formula::softbody;

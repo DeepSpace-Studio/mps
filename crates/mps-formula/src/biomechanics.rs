@@ -4,9 +4,7 @@ use crate::ffi::{
     SkeletalJointLimit,
 };
 
-use crate::math::{finite_non_negative, finite_positive};
-
-const EPSILON: f64 = 1.0e-12;
+use crate::math::{EPS_GENERAL as EPSILON, finite_non_negative, finite_positive};
 
 fn muscle_desc_valid(desc: HillMuscleDesc) -> bool {
     finite_positive(desc.max_isometric_force)

@@ -10,11 +10,10 @@ use crate::ffi::{
 };
 use crate::math::mul_add;
 
-use crate::math::{finite_non_negative, finite_positive};
+use crate::math::{EPS_GENERAL as EPSILON, finite_many, finite_non_negative, finite_positive};
 
 const MAX_NBODY_PARTICLES: u32 = 100_000;
 const SPEED_OF_LIGHT: f64 = 299_792_458.0;
-const EPSILON: f64 = 1.0e-12;
 
 #[derive(Clone, Copy)]
 struct Bounds {
@@ -776,7 +775,7 @@ pub fn hubble_distance(velocity: f64, hubble_constant: f64) -> Option<f64> {
 
 /// NFW dark matter density profile: rho(r) = rho_0 / (r/r_s * (1 + r/r_s)^2)
 pub fn nfw_density(radius: f64, scale_radius: f64, characteristic_density: f64) -> Option<f64> {
-    if !finite_4(radius, scale_radius, characteristic_density, 0.0)
+    if !finite_many(&[radius, scale_radius, characteristic_density, 0.0])
         || scale_radius <= 0.0
         || characteristic_density < 0.0
     {
@@ -795,7 +794,7 @@ pub fn nfw_enclosed_mass(
     scale_radius: f64,
     characteristic_density: f64,
 ) -> Option<f64> {
-    if !finite_4(radius, scale_radius, characteristic_density, 0.0)
+    if !finite_many(&[radius, scale_radius, characteristic_density, 0.0])
         || scale_radius <= 0.0
         || characteristic_density < 0.0
     {
@@ -846,7 +845,7 @@ pub fn jeans_mass(temperature: f64, density: f64, mean_molecular_weight: f64) ->
     let g = 6.67430e-11;
     let kb = 1.380649e-23;
     let mh = 1.6735575e-27;
-    if !finite_4(temperature, density, mean_molecular_weight, 0.0)
+    if !finite_many(&[temperature, density, mean_molecular_weight, 0.0])
         || temperature < 0.0
         || density <= 0.0
         || mean_molecular_weight <= 0.0
@@ -862,7 +861,7 @@ pub fn jeans_length(temperature: f64, density: f64, mean_molecular_weight: f64) 
     let g = 6.67430e-11;
     let kb = 1.380649e-23;
     let mh = 1.6735575e-27;
-    if !finite_4(temperature, density, mean_molecular_weight, 0.0)
+    if !finite_many(&[temperature, density, mean_molecular_weight, 0.0])
         || temperature < 0.0
         || density <= 0.0
         || mean_molecular_weight <= 0.0
@@ -871,10 +870,6 @@ pub fn jeans_length(temperature: f64, density: f64, mean_molecular_weight: f64) 
     }
     let cs = (kb * temperature / (mean_molecular_weight * mh)).sqrt();
     Some(cs * (PI / (g * density)).sqrt())
-}
-
-fn finite_4(a: f64, b: f64, c: f64, d: f64) -> bool {
-    a.is_finite() && b.is_finite() && c.is_finite() && d.is_finite()
 }
 
 // ---------------------------------------------------------------------------
@@ -945,7 +940,7 @@ pub fn ss73_disk_temperature(
 ) -> Option<f64> {
     let g = 6.67430e-11;
     let sigma = 5.670_374_419e-8;
-    if !finite_4(mass_kg, accretion_rate, radius, inner_radius)
+    if !finite_many(&[mass_kg, accretion_rate, radius, inner_radius])
         || mass_kg <= 0.0
         || accretion_rate < 0.0
         || radius <= 0.0
@@ -990,7 +985,9 @@ pub fn nickel56_decay_luminosity(nickel_mass_kg: f64, time_days: f64) -> Option<
 
 /// Transit depth: δ = (R_p / R_s)²
 pub fn transit_depth(planet_radius: f64, star_radius: f64) -> Option<f64> {
-    if !finite_4(planet_radius, star_radius, 0.0, 0.0) || planet_radius < 0.0 || star_radius <= 0.0
+    if !finite_many(&[planet_radius, star_radius, 0.0, 0.0])
+        || planet_radius < 0.0
+        || star_radius <= 0.0
     {
         return None;
     }
@@ -1005,7 +1002,7 @@ pub fn radial_velocity_semi_amplitude(
     inclination: f64,
 ) -> Option<f64> {
     let g = 6.67430e-11;
-    if !finite_4(planet_mass_kg, star_mass_kg, period, inclination)
+    if !finite_many(&[planet_mass_kg, star_mass_kg, period, inclination])
         || planet_mass_kg <= 0.0
         || star_mass_kg <= 0.0
         || period <= 0.0
@@ -1034,7 +1031,7 @@ pub fn habitable_zone_boundaries(star_luminosity_solar: f64) -> Option<(f64, f64
 /// Circular velocity for NFW dark matter halo: V_c²(r) = V_c²_r · ln(1+cx) - cx/(1+cx) / (ln(1+c) - c/(1+c))
 /// Returns V_c in km/s at radius r in units of the scale radius.
 pub fn nfw_circular_velocity(r: f64, v_max: f64, r_scale: f64) -> Option<f64> {
-    if !finite_4(r, v_max, r_scale, 0.0) || r < 0.0 || v_max <= 0.0 || r_scale <= 0.0 {
+    if !finite_many(&[r, v_max, r_scale, 0.0]) || r < 0.0 || v_max <= 0.0 || r_scale <= 0.0 {
         return None;
     }
     let x = r / r_scale;
@@ -1102,7 +1099,7 @@ pub fn hubble_parameter_z(
     omega_l: f64,
     h0: f64,
 ) -> Option<f64> {
-    if !finite_4(redshift, omega_m, omega_r, omega_l) || !h0.is_finite() {
+    if !finite_many(&[redshift, omega_m, omega_r, omega_l]) || !h0.is_finite() {
         return None;
     }
     if omega_m < 0.0 || omega_r < 0.0 || omega_l < 0.0 || h0 <= 0.0 {

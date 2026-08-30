@@ -13,9 +13,11 @@ use crate::ffi::{
     PicStepReport, PlasmaParamsReport, VlasovMomentReport,
 };
 
-use crate::math::{KahanSum, finite, finite_non_negative, finite_positive};
+use crate::math::{
+    EPS_TIGHT as EPSILON, KahanSum, clamp, finite, finite_many, finite_non_negative,
+    finite_positive,
+};
 
-const EPSILON: f64 = 1.0e-14;
 const MASS_EPSILON: f64 = 1.0e-30;
 pub const PI: f64 = std::f64::consts::PI;
 const VACUUM_PERMITTIVITY: f64 = 8.854_187_812_8e-12;
@@ -55,16 +57,6 @@ fn pic_particle_valid(p: &PicParticle) -> bool {
 
 fn vec3_length_sq(x: f64, y: f64, z: f64) -> f64 {
     x * x + y * y + z * z
-}
-
-fn clamp(x: f64, lo: f64, hi: f64) -> f64 {
-    if x < lo {
-        lo
-    } else if x > hi {
-        hi
-    } else {
-        x
-    }
 }
 
 // ===========================================================================
@@ -1088,7 +1080,7 @@ pub fn safety_factor(
     major_radius: f64,
     poloidal_field: f64,
 ) -> Option<f64> {
-    if !finite_4(minor_radius, toroidal_field, major_radius, poloidal_field)
+    if !finite_many(&[minor_radius, toroidal_field, major_radius, poloidal_field])
         || minor_radius <= 0.0
         || toroidal_field <= 0.0
         || major_radius <= 0.0
@@ -1138,10 +1130,6 @@ pub fn mirror_loss_cone_angle(max_field: f64, min_field: f64) -> Option<f64> {
         return None;
     }
     Some((min_field / max_field).sqrt().asin())
-}
-
-fn finite_4(a: f64, b: f64, c: f64, d: f64) -> bool {
-    a.is_finite() && b.is_finite() && c.is_finite() && d.is_finite()
 }
 
 // ===========================================================================

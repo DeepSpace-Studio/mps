@@ -9,9 +9,10 @@ use crate::ffi::{
     MagneticFluxReport, MaxwellPointReport, Vec3, vec3_finite, vec3_from_rapier, vec3_to_rapier,
 };
 
-use crate::math::{KahanSum, finite_non_negative, finite_positive};
+use crate::math::{
+    EPS_GENERAL as EPSILON, KahanSum, finite_many, finite_non_negative, finite_positive,
+};
 
-const EPSILON: f64 = 1.0e-12;
 const VACUUM_PERMITTIVITY: f64 = 8.854_187_812_8e-12;
 const VACUUM_PERMEABILITY: f64 = 1.256_637_062_12e-6;
 const MAX_FIELD_CELLS: u32 = 2_000_000;
@@ -361,7 +362,7 @@ pub fn biot_savart_element(current: f64, dl: Vec3, position: Vec3, point: Vec3) 
 /// Returns B at `point` from wire from `p1` to `p2` carrying current.
 pub fn biot_savart_wire_segment(current: f64, p1: Vec3, p2: Vec3, point: Vec3) -> Option<Vec3> {
     let mu0 = 1.25663706212e-6;
-    if !finite_6(&[current, p1.x, p1.y, p1.z, p2.x, p2.y]) || !vec3_finite(point) {
+    if !finite_many(&[current, p1.x, p1.y, p1.z, p2.x, p2.y]) || !vec3_finite(point) {
         return None;
     }
     let a = vec3_to_rapier(p1);
@@ -482,10 +483,6 @@ pub fn wave_frequency(wavelength: f64) -> Option<f64> {
         return None;
     }
     Some(c / wavelength)
-}
-
-fn finite_6(v: &[f64; 6]) -> bool {
-    v.iter().all(|x| x.is_finite())
 }
 
 // ---------------------------------------------------------------------------

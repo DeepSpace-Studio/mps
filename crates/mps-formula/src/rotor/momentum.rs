@@ -43,7 +43,10 @@ use crate::error::{ERR_INVALID_ARGUMENT, set_error};
 /// `radius <= 0`, negative / NaN thrust) return `None`.
 pub fn rotor_hover_induced_velocity(thrust: f64, rho: f64, radius: f64) -> Option<f64> {
     if !momentum_inputs_ok(thrust, rho, radius) {
-        set_error(ERR_INVALID_ARGUMENT, "rotor_hover_induced_velocity: thrust<0 / rho<=0 / radius<=0 / NaN");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "rotor_hover_induced_velocity: thrust<0 / rho<=0 / radius<=0 / NaN",
+        );
         return None;
     }
     if thrust == 0.0 {
@@ -60,7 +63,10 @@ pub fn rotor_hover_induced_velocity(thrust: f64, rho: f64, radius: f64) -> Optio
 /// `(thrust, rho, radius)` triple.
 pub fn rotor_hover_power(thrust: f64, induced_velocity: f64) -> Option<f64> {
     if !finite_non_negative(thrust) || !finite_non_negative(induced_velocity) {
-        set_error(ERR_INVALID_ARGUMENT, "rotor_hover_power: thrust or v_h negative / NaN");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "rotor_hover_power: thrust or v_h negative / NaN",
+        );
         return None;
     }
     Some(thrust * induced_velocity)
@@ -84,7 +90,10 @@ pub fn rotor_climb_induced_velocity(
     climb_rate: f64,
 ) -> Option<f64> {
     if !momentum_inputs_ok(thrust, rho, radius) || !finite(climb_rate) {
-        set_error(ERR_INVALID_ARGUMENT, "rotor_climb_induced_velocity: bad inputs");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "rotor_climb_induced_velocity: bad inputs",
+        );
         return None;
     }
     let v_h = rotor_hover_induced_velocity(thrust, rho, radius)?;
@@ -112,7 +121,10 @@ pub fn rotor_forward_induced_velocity(
     axial_speed: f64,
 ) -> Option<f64> {
     if !momentum_inputs_ok(thrust, rho, radius) || !finite(axial_speed) {
-        set_error(ERR_INVALID_ARGUMENT, "rotor_forward_induced_velocity: bad inputs");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "rotor_forward_induced_velocity: bad inputs",
+        );
         return None;
     }
     let v_h = rotor_hover_induced_velocity(thrust, rho, radius)?;
@@ -146,7 +158,10 @@ pub fn rotor_forward_induced_velocity(
 /// or `P_actual` non-finite is rejected.
 pub fn rotor_figure_of_merit(ideal_power: f64, actual_power: f64) -> Option<f64> {
     if !finite_non_negative(ideal_power) || !finite_positive(actual_power) {
-        set_error(ERR_INVALID_ARGUMENT, "rotor_figure_of_merit: ideal<0 / actual<=0 / NaN");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "rotor_figure_of_merit: ideal<0 / actual<=0 / NaN",
+        );
         return None;
     }
     Some(ideal_power / actual_power)
@@ -158,7 +173,10 @@ pub fn rotor_figure_of_merit(ideal_power: f64, actual_power: f64) -> Option<f64>
 /// the Mach-number check (`V_tip + a_slant` < local sonic speed).
 pub fn rotor_tip_speed(omega: f64, radius: f64) -> Option<f64> {
     if !finite_non_negative(omega) || !finite_positive(radius) {
-        set_error(ERR_INVALID_ARGUMENT, "rotor_tip_speed: omega<0 / radius<=0 / NaN");
+        set_error(
+            ERR_INVALID_ARGUMENT,
+            "rotor_tip_speed: omega<0 / radius<=0 / NaN",
+        );
         return None;
     }
     Some(omega * radius)
@@ -170,10 +188,7 @@ pub fn rotor_tip_speed(omega: f64, radius: f64) -> Option<f64> {
 /// and unsteady effects become dominant; the caller is responsible for
 /// rejecting such operating points, this function only computes the ratio.
 pub fn rotor_advance_ratio(forward_speed: f64, omega: f64, radius: f64) -> Option<f64> {
-    if !finite_non_negative(forward_speed)
-        || !finite_positive(omega)
-        || !finite_positive(radius)
-    {
+    if !finite_non_negative(forward_speed) || !finite_positive(omega) || !finite_positive(radius) {
         set_error(ERR_INVALID_ARGUMENT, "rotor_advance_ratio: bad inputs");
         return None;
     }

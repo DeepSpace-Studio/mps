@@ -76,6 +76,7 @@ pub fn __cosmos_profile_record(phase: &'static str, elapsed: std::time::Duration
 pub mod arena;
 pub mod bodies;
 pub mod ffi;
+pub mod flight;
 pub mod gravity;
 pub mod integrator;
 pub mod orbit;

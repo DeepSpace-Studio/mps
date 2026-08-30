@@ -3,10 +3,9 @@ use crate::ffi::{
     Bool, QuantumBarrier, QuantumOscillatorReport, QuantumTunnelingReport, QuantumWaveFunction,
 };
 
-use crate::math::{finite_non_negative, finite_positive};
+use crate::math::{EPS_GENERAL as EPSILON, finite_non_negative, finite_positive};
 use std::f64::consts::PI;
 
-const EPSILON: f64 = 1.0e-12;
 pub const REDUCED_PLANCK: f64 = 1.054_571_817e-34;
 pub const PLANCK: f64 = 6.62607015e-34;
 

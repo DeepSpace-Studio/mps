@@ -6,10 +6,9 @@ use crate::ffi::{
     TopologyOptimizationReport,
 };
 
-use crate::math::{KahanSum, finite_non_negative, finite_positive};
+use crate::math::{EPS_GENERAL as EPSILON, KahanSum, finite_non_negative, finite_positive};
 
 const MAX_DENSITY_CELLS: u32 = 2_000_000;
-const EPSILON: f64 = 1.0e-12;
 
 fn params_valid(params: TopologyOptimizationParams) -> bool {
     params.volume_fraction.is_finite()

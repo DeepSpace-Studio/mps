@@ -18,9 +18,8 @@ use crate::ffi::{
     ThinFilmInterferenceReport, ThinFilmParams, YoungSlitPoint,
 };
 
-use crate::math::{finite, finite_non_negative, finite_positive};
+use crate::math::{EPS_TIGHT as EPSILON, finite, finite_non_negative, finite_positive};
 
-const EPSILON: f64 = 1.0e-14;
 pub const PI: f64 = std::f64::consts::PI;
 const TWO_PI: f64 = 2.0 * PI;
 

@@ -17,7 +17,3 @@ pub fn vec3_from_rapier(value: Vector) -> Vec3 {
         z: value.z,
     }
 }
-
-pub fn clamp01(value: f64) -> f64 {
-    value.clamp(0.0, 1.0)
-}

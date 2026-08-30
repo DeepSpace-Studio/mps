@@ -6,9 +6,8 @@
 use crate::ffi::{
     Bool, MolecularForceLaw, MolecularPairReport, MolecularParticle, Vec3, vec3_finite,
 };
-use crate::math::{finite_non_negative, finite_positive};
+use crate::math::{EPS_GENERAL as EPSILON, finite_non_negative, finite_positive};
 
-const EPSILON: f64 = 1.0e-12;
 const VACUUM_COULOMB_CONSTANT: f64 = 8.987_551_792_3e9;
 
 fn particle_valid(particle: MolecularParticle) -> bool {
