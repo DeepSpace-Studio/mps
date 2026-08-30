@@ -11,6 +11,7 @@ use crate::rapier::error::{
 };
 use crate::rapier::ffi::{Bool, Vec3, WorldHandle, vec3_finite, vec3_from_rapier, vec3_to_rapier};
 use rapier3d::prelude::fluid::{FluidParams, FluidWorld};
+use rapier3d::prelude::{ColliderBuilder, RigidBodyBuilder, RigidBodyHandle, RigidBodyType};
 
 /// Create an SPH fluid world and return its id (the `Vec` index in
 /// `PhysicsWorld.fluids`). Returns `u32::MAX` on error.
@@ -219,6 +220,87 @@ pub extern "C" fn fluid_step(world: *mut WorldHandle, id: u32, dt: f64) -> Bool 
             return Bool::FALSE;
         }
         world.inner.fluids[idx].step(dt);
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Enable or disable rigid-body collision coupling for an SPH fluid.
+///
+/// When `enabled` is `Bool::TRUE`, one dynamic `Ball` collider (radius
+/// `particle_radius`) is created per particle and registered in the world's
+/// collision-proxy table (`fluid_proxies`); `world_step` then syncs particle
+/// poses into these proxies before the rigid step and reads the contacted poses
+/// back afterwards, so the fluid is blocked/stacked by terrain and other rigid
+/// bodies (and by its own particles, maintaining incompressibility). When
+/// `Bool::FALSE`, any existing proxies are removed.
+///
+/// Unlike soft-body proxies, fluid proxies keep the default (all-groups) collision
+/// filter so particles collide with each other and with rigid bodies.
+///
+/// Returns `Bool::TRUE` on success.
+///
+/// # Safety
+/// `world` must be a valid world pointer returned by `world_create`.
+#[unsafe(no_mangle)]
+pub extern "C" fn fluid_enable_collision(
+    world: *mut WorldHandle,
+    id: u32,
+    particle_radius: f64,
+    enabled: Bool,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "fluid_enable_collision: world is null");
+            return Bool::FALSE;
+        };
+        let idx = id as usize;
+        if idx >= world.inner.fluids.len() {
+            set_error(ERR_NOT_FOUND, "fluid_enable_collision: unknown id");
+            return Bool::FALSE;
+        }
+        if particle_radius <= 0.0 || !particle_radius.is_finite() {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "fluid_enable_collision: bad particle_radius",
+            );
+            return Bool::FALSE;
+        }
+        if enabled == Bool::FALSE {
+            if let Some(proxies) = world.inner.fluid_proxies.remove(&id) {
+                for ph in proxies.into_iter().flatten() {
+                    world.inner.bodies.remove(
+                        ph,
+                        &mut world.inner.islands,
+                        &mut world.inner.colliders,
+                        &mut world.inner.impulse_joints,
+                        &mut world.inner.multibody_joints,
+                        false,
+                    );
+                }
+            }
+            clear_error();
+            return Bool::TRUE;
+        }
+        // Build proxies for every particle.
+        let mut proxies: Vec<Option<RigidBodyHandle>> =
+            Vec::with_capacity(world.inner.fluids[idx].particles.len());
+        for p in &world.inner.fluids[idx].particles {
+            let rb = RigidBodyBuilder::new(RigidBodyType::Dynamic)
+                .gravity_scale(0.0)
+                .additional_mass(p.mass)
+                .translation(p.pos)
+                .linvel(p.vel)
+                .build();
+            let h = world.inner.bodies.insert(rb);
+            let col = ColliderBuilder::ball(particle_radius).density(0.0).build();
+            world
+                .inner
+                .colliders
+                .insert_with_parent(col, h, &mut world.inner.bodies);
+            proxies.push(Some(h));
+        }
+        world.inner.fluid_proxies.insert(id, proxies);
         clear_error();
         Bool::TRUE
     })

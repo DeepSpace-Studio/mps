@@ -2983,6 +2983,30 @@ Bool fluid_get_particle(const struct WorldHandle *world,
 Bool fluid_step(struct WorldHandle *world, uint32_t id, double dt);
 
 /**
+ * Enable or disable rigid-body collision coupling for an SPH fluid.
+ *
+ * When `enabled` is `Bool::TRUE`, one dynamic `Ball` collider (radius
+ * `particle_radius`) is created per particle and registered in the world's
+ * collision-proxy table (`fluid_proxies`); `world_step` then syncs particle
+ * poses into these proxies before the rigid step and reads the contacted poses
+ * back afterwards, so the fluid is blocked/stacked by terrain and other rigid
+ * bodies (and by its own particles, maintaining incompressibility). When
+ * `Bool::FALSE`, any existing proxies are removed.
+ *
+ * Unlike soft-body proxies, fluid proxies keep the default (all-groups) collision
+ * filter so particles collide with each other and with rigid bodies.
+ *
+ * Returns `Bool::TRUE` on success.
+ *
+ * # Safety
+ * `world` must be a valid world pointer returned by `world_create`.
+ */
+Bool fluid_enable_collision(struct WorldHandle *world,
+                            uint32_t id,
+                            double particle_radius,
+                            Bool enabled);
+
+/**
  * # Safety
  *
  * `out_report` must point to writable space for one `StressIntensityReport`.

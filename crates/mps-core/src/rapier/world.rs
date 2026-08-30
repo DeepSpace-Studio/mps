@@ -103,6 +103,17 @@ pub struct PhysicsWorld {
     /// rigid-body pipeline, mirroring `soft_bodies`. See
     /// `.hermes/plans/2026-08-30_fluid-sph-roadmap.md`.
     pub fluids: Vec<FluidWorld>,
+    /// Phase 2 (fluid SPH ↔ rigid): per-fluid collision proxies. When a fluid has
+    /// collision coupling enabled (via `fluid_enable_collision`), each particle is
+    /// backed by a dynamic `RigidBody` + `Ball` collider, parallel to
+    /// `FluidWorld.particles`. The integration layer syncs particle poses into these
+    /// proxies before the rigid step and reads the contacted poses back afterwards.
+    /// Keyed by fluid id (its `Vec` index in `fluids`). Unlike soft-body proxies,
+    /// fluid proxies keep the default (all-groups) collision filter so that fluid
+    /// particles collide with each other (maintaining incompressibility) and with
+    /// rigid terrain/entities.
+    pub(crate) fluid_proxies:
+        std::collections::HashMap<u32, Vec<Option<rapier3d::prelude::RigidBodyHandle>>>,
     /// Phase 5d: per-soft-body voxel→particle mapping so a dug-out voxel cell can
     /// be mapped back to the exact particle index to remove via `soft_body_voxel_dig`.
     /// Keyed by `SoftBodyId.0`; populated only by `soft_body_voxel_build`.
@@ -167,6 +178,7 @@ impl PhysicsWorld {
             ccd_solver: CCDSolver::new(),
             soft_bodies: SoftBodySet::new(),
             fluids: Vec::new(),
+            fluid_proxies: std::collections::HashMap::new(),
             voxel_soft_meta: std::collections::HashMap::new(),
             soft_body_proxies: std::collections::HashMap::new(),
             hooks: crate::rapier::events::CallbackPhysicsHooks::new(events.clone()),
@@ -511,6 +523,23 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
             world.inner.integration_parameters.dt,
         );
 
+        // Phase 2 (fluid SPH ↔ rigid): sync each coupled fluid's particle poses into
+        // its collision proxies *before* the rigid step, so the narrow-phase sees the
+        // current particle positions/velocities and resolves contacts against terrain.
+        for (fi, fluid) in world.inner.fluids.iter().enumerate() {
+            #[allow(clippy::collapsible_if)]
+            if let Some(proxies) = world.inner.fluid_proxies.get(&(fi as u32)) {
+                for (pi, ph) in proxies.iter().enumerate() {
+                    if let (Some(h), Some(p)) = (ph, fluid.particles.get(pi)) {
+                        if let Some(rb) = world.inner.bodies.get_mut(*h) {
+                            rb.set_translation(p.pos, true);
+                            rb.set_linvel(p.vel, true);
+                        }
+                    }
+                }
+            }
+        }
+
         world.inner.pipeline.step(
             world.inner.gravity,
             &world.inner.integration_parameters,
@@ -566,6 +595,25 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
         let dt = world.inner.integration_parameters.dt;
         for fluid in &mut world.inner.fluids {
             fluid.step(dt);
+        }
+
+        // Phase 2 (fluid SPH ↔ rigid): read the contacted proxy poses back into the
+        // particles so collision response (against terrain/entities) propagates into
+        // the fluid. Runs after `fluid.step` so the SPH integration happens first.
+        for (fi, fluid) in world.inner.fluids.iter_mut().enumerate() {
+            #[allow(clippy::collapsible_if)]
+            if let Some(proxies) = world.inner.fluid_proxies.get(&(fi as u32)) {
+                for (pi, ph) in proxies.iter().enumerate() {
+                    if let Some(h) = ph {
+                        if let Some(rb) = world.inner.bodies.get(*h) {
+                            if let Some(p) = fluid.particles.get_mut(pi) {
+                                p.pos = rb.translation();
+                                p.vel = rb.linvel();
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         // 4b. Clear the persistent user force/torque on every dynamic body.
