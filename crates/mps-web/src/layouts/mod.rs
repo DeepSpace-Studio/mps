@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', function () {
     try { localStorage.setItem('lang', l); } catch (e) {}
     history.replaceState(null, '', location.pathname);
   }
-  document.querySelectorAll('.lang-btn').forEach(function (b) {
+  document.querySelectorAll('.lang-item').forEach(function (b) {
     b.addEventListener('click', function (e) {
       e.preventDefault();
       var lang = b.getAttribute('data-lang') || 'zh-CN';
@@ -98,10 +98,42 @@ pub fn Sidebar() -> Element {
                 }
             }
             div { class: "sidebar-foot",
-                a { class: if zh { "lang-btn is-active" } else { "lang-btn" }, "data-lang": "zh-CN", "中" }
-                a { class: if !zh { "lang-btn is-active" } else { "lang-btn" }, "data-lang": "en", "EN" }
-                script { dangerous_inner_html: LANG_TOGGLE_JS }
+                p { class: "sidebar-foot-note", "MPS Rigid Body · v{VERSION}" }
             }
+        }
+    }
+}
+
+/// Top-right circular language dropdown.
+///
+/// Pure SSR / no-hydration: the open/close affordance is a native
+/// `<details>`/`<summary>` (works with zero client JS). Each option carries a
+/// `data-lang` attribute; the inline `LANG_TOGGLE_JS` script binds a click
+/// handler that writes the choice into `localStorage` + a `lang` cookie and
+/// reloads — the URL stays `/` (no jump), and the server re-renders in the
+/// chosen language. The `<script>` lives outside `<details>` so it is always
+/// present in the initial DOM and runs on `DOMContentLoaded`.
+#[component]
+pub fn LangDropdown() -> Element {
+    let i18n = i18n();
+    let zh = i18n.language() == "zh-CN";
+
+    rsx! {
+        div { class: "lang-dropdown",
+            details { class: "lang-menu",
+                summary { class: "lang-fab", { if zh { "中" } else { "EN" } } }
+                div { class: "lang-list",
+                    a { class: if zh { "lang-item is-active" } else { "lang-item" }, "data-lang": "zh-CN",
+                        span { class: "lang-check", "✓" }
+                        span { "中文" }
+                    }
+                    a { class: if !zh { "lang-item is-active" } else { "lang-item" }, "data-lang": "en",
+                        span { class: "lang-check", "✓" }
+                        span { "English" }
+                    }
+                }
+            }
+            script { dangerous_inner_html: LANG_TOGGLE_JS }
         }
     }
 }

@@ -52,7 +52,7 @@ fn detect_lang() -> LanguageIdentifier {
     langid!("zh-CN")
 }
 
-use crate::layouts::{Footer, Sidebar};
+use crate::layouts::{Footer, LangDropdown, Sidebar};
 use crate::metrics::{
     CELESTIAL_COUNT, CORE_FFI_COUNT, FORMULA_MODULE_COUNT, GRAVITY_MODEL_COUNT, INTEGRATOR_COUNT,
     JNI_METHOD_COUNT, TEST_COUNT,
@@ -105,6 +105,7 @@ pub fn Home() -> Element {
     rsx! {
         Sidebar {}
         div { class: "content-col",
+            LangDropdown {}
             main { class: "page-wrap",
             section { id: "sec-home", class: "doc-section doc-home",
                 div { class: "hero",
