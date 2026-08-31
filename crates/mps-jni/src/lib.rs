@@ -1962,3 +1962,10 @@ jni!(boolean softBodySetFibreDirection(long world, int id, int index, double dx,
 jni!(boolean softBodySetSpringFibreDirection(long world, int id, int index, double dx, double dy, double dz) { sb::soft_body_set_spring_fibre_direction(m::<WH>(world), id as u32, index as u32, dx, dy, dz).0 as jbyte });
 // Phase 5f: 软体-刚体碰撞（proxy collider 桥接）
 jni!(boolean softBodyEnableCollision(long world, int id, double particle_radius, int enabled) { sb::soft_body_enable_collision(m::<WH>(world), id as u32, particle_radius, jb(enabled)).0 as jbyte });
+// Phase 5f: 软体骨骼绑定 + 顶点蒙皮权重 (填补此前缺失的 JNI 绑定)
+jni!(int softBodyBindSkeleton(long world, int id, int boneCount, long bones) {
+    sb::soft_body_bind_skeleton(m::<WH>(world), id as u32, boneCount as u32, bones as *const u64) as jint
+});
+jni!(boolean softBodySetVertexWeights(long world, int id, int particleIndex, long boneIndices, long weights) {
+    sb::soft_body_set_vertex_weights(m::<WH>(world), id as u32, particleIndex as u32, boneIndices as *const u32, weights as *const f64).0 as jbyte
+});

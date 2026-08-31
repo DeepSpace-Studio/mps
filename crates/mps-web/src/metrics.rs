@@ -16,7 +16,7 @@ pub const VERSION: &str = "0.1.4";
 /// Total number of `#[test]` items in `mps-test`.
 pub const TEST_COUNT: &str = "985";
 /// Total number of `jni!(`/`jni_e_c!(` method entries in `mps-jni`.
-pub const JNI_METHOD_COUNT: &str = "497";
+pub const JNI_METHOD_COUNT: &str = "499";
 /// Total number of `pub extern "C" fn` declarations in `mps-core/rapier`.
 pub const CORE_FFI_COUNT: &str = "813";
 /// Number of `pub mod` formula submodules under mps-formula scientists+disciplines.
@@ -38,7 +38,7 @@ pub const FFI_QUERY: &str = "58";
 /// `pub extern "C" fn soft_body_*` declarations in mps-core/rapier.
 pub const FFI_SOFT_BODY: &str = "87";
 /// `jni!` entries with a `softBody*` method name in mps-jni.
-pub const JNI_SOFT_BODY: &str = "85";
+pub const JNI_SOFT_BODY: &str = "87";
 /// `#[test]` functions whose name contains `soft_body` in mps-test.
 pub const TEST_SOFT_BODY: &str = "89";
 /// Number of natural satellites (moons) in `mps-formula::celestial_data::MOONS`.
