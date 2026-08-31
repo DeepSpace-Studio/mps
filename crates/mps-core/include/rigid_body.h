@@ -2290,6 +2290,29 @@ uint32_t sensor_zone_get_contacts(const struct WorldHandle *world,
 Bool sensor_zone_is_triggered(const struct WorldHandle *world, uint32_t id);
 
 /**
+ * Read-and-clear the zone's sticky edge latch. Returns `Bool::TRUE` if a rising
+ * edge had been observed since the last consume/clear, then resets the latch to
+ * `FALSE`. In edge mode this is the reliable way to handle a one-shot trigger:
+ * call `poll` (or `world_step` + `poll`) then `consume` exactly once per event,
+ * so a single entry is never handled twice. No fork changes.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+Bool sensor_zone_consume(struct WorldHandle *world, uint32_t id);
+
+/**
+ * Reset the zone's trigger state: clears the sticky edge latch and the
+ * `ever_triggered` sticky flag. The current overlaps are left as-is (until the
+ * next `poll`). Use this to re-arm a zone after handling an event, or to forget a
+ * previous entry. No fork changes.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+Bool sensor_zone_clear(struct WorldHandle *world, uint32_t id);
+
+/**
  * Read the zone's world-space translation (its sensor collider pose).
  *
  * # Safety

@@ -6,16 +6,16 @@ mod tests {
         collider_builder_build, collider_builder_create_ex, world_insert_collider_with_parent,
     };
     use mps_core::rapier::ffi::{
-        Bool, ColliderHandleRaw, RigidBodyHandleRaw, ShapeDesc, ShapeType, Vec3,
+        BodyStatus, Bool, ColliderHandleRaw, RigidBodyHandleRaw, ShapeDesc, ShapeType, Vec3,
     };
     use mps_core::rapier::rigid_body::{
         rigid_body_builder_build, rigid_body_builder_create, rigid_body_builder_set_translation,
-        world_insert_rigid_body,
+        rigid_body_set_translation, world_insert_rigid_body,
     };
     use mps_core::rapier::sensor::{
-        sensor_zone_contact_count, sensor_zone_create, sensor_zone_destroy,
-        sensor_zone_get_contacts, sensor_zone_is_triggered, sensor_zone_poll, sensor_zone_set_edge,
-        sensor_zone_set_enabled, sensor_zone_set_shape,
+        sensor_zone_clear, sensor_zone_consume, sensor_zone_contact_count, sensor_zone_create,
+        sensor_zone_destroy, sensor_zone_get_contacts, sensor_zone_is_triggered, sensor_zone_poll,
+        sensor_zone_set_edge, sensor_zone_set_enabled, sensor_zone_set_shape,
     };
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
 
@@ -385,6 +385,121 @@ mod tests {
             Bool::TRUE,
             "level mode: stays triggered while overlapping"
         );
+        world_destroy(world);
+    }
+
+    /// `consume` returns TRUE exactly once per rising edge and then FALSE until the
+    /// next edge; `clear` resets the sticky state so the edge can re-arm after the
+    /// body leaves and re-enters the zone.
+    #[test]
+    fn consume_returns_one_shot_then_clear_rearms() {
+        let world = make_world();
+        // Start with NO body inside the zone.
+        let zone = sensor_zone_create(
+            world,
+            ShapeDesc {
+                shape_type: ShapeType::Cuboid as u32,
+                a: 0.5,
+                b: 0.5,
+                c: 0.5,
+                ..Default::default()
+            },
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        let dt = 1.0 / 60.0;
+        world_step(world, dt);
+        sensor_zone_poll(world, zone);
+        assert_eq!(
+            sensor_zone_consume(world, zone),
+            Bool::FALSE,
+            "empty zone: no edge to consume"
+        );
+
+        // Drop a ball inside; poll → fresh rising edge latches.
+        let ball = rigid_body_builder_create(BodyStatus::Fixed as u32);
+        rigid_body_builder_set_translation(
+            ball,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        let ball_body = world_insert_rigid_body(world, rigid_body_builder_build(ball));
+        world_insert_collider_with_parent(
+            world,
+            collider_builder_build(collider_builder_create_ex(ShapeDesc {
+                shape_type: ShapeType::Ball as u32,
+                a: 0.1,
+                ..Default::default()
+            })),
+            ball_body,
+        );
+        world_step(world, dt);
+        sensor_zone_poll(world, zone);
+
+        assert_eq!(
+            sensor_zone_consume(world, zone),
+            Bool::TRUE,
+            "first consume sees the edge"
+        );
+        assert_eq!(
+            sensor_zone_consume(world, zone),
+            Bool::FALSE,
+            "second consume sees nothing"
+        );
+        // Re-poll (still overlapping) must not produce a new edge/latch.
+        sensor_zone_poll(world, zone);
+        assert_eq!(
+            sensor_zone_consume(world, zone),
+            Bool::FALSE,
+            "staying overlapped does not re-latch"
+        );
+
+        // Move the ball out; zone goes empty.
+        rigid_body_set_translation(
+            world,
+            ball_body,
+            Vec3 {
+                x: 5.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            Bool::TRUE,
+        );
+        world_step(world, dt);
+        sensor_zone_poll(world, zone);
+        assert_eq!(
+            sensor_zone_consume(world, zone),
+            Bool::FALSE,
+            "no overlap after moving ball away"
+        );
+
+        // Re-arm from any prior sticky state, then move the ball back in → fresh edge.
+        assert_eq!(sensor_zone_clear(world, zone), Bool::TRUE);
+        rigid_body_set_translation(
+            world,
+            ball_body,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            Bool::TRUE,
+        );
+        world_step(world, dt);
+        sensor_zone_poll(world, zone);
+        assert_eq!(
+            sensor_zone_consume(world, zone),
+            Bool::TRUE,
+            "after clear + re-entry, consume sees the fresh edge"
+        );
+
+        sensor_zone_destroy(world, zone);
         world_destroy(world);
     }
 }

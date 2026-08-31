@@ -35,6 +35,11 @@ pub(crate) struct SensorZone {
     pub edge_mode: bool,
     /// Rising-edge latch: TRUE on the poll where an overlap first appeared.
     pub edge_triggered: bool,
+    /// Sticky one-shot latch: set TRUE on any rising edge, kept TRUE until the
+    /// caller consumes it via [`sensor_zone_consume`] (read-and-clear) or resets it
+    /// via [`sensor_zone_clear`]. Lets a one-frame edge trigger be reliably
+    /// observed even if `poll` runs multiple times before the app reads it.
+    pub triggered_latch: bool,
 }
 
 /// Create a sensor trigger zone from a shape descriptor. The sensor collider is
@@ -80,6 +85,7 @@ pub extern "C" fn sensor_zone_create(
                 enabled: true,
                 edge_mode: false,
                 edge_triggered: false,
+                triggered_latch: false,
             },
         );
         id
@@ -243,6 +249,8 @@ pub extern "C" fn sensor_zone_poll(world: *mut WorldHandle, id: u32) -> Bool {
         }
         // Rising edge: an overlap appeared this poll that was not present before.
         zone.edge_triggered = !overlaps.is_empty() && was_empty;
+        // Latch the edge so a one-frame trigger can be reliably consumed later.
+        zone.triggered_latch |= zone.edge_triggered;
         zone.current = overlaps;
         Bool::TRUE
     })
@@ -328,6 +336,57 @@ pub extern "C" fn sensor_zone_is_triggered(world: *const WorldHandle, id: u32) -
                 Bool::FALSE
             }
         }
+    })
+}
+
+/// Read-and-clear the zone's sticky edge latch. Returns `Bool::TRUE` if a rising
+/// edge had been observed since the last consume/clear, then resets the latch to
+/// `FALSE`. In edge mode this is the reliable way to handle a one-shot trigger:
+/// call `poll` (or `world_step` + `poll`) then `consume` exactly once per event,
+/// so a single entry is never handled twice. No fork changes.
+///
+/// # Safety
+/// `world` must be a valid pointer returned by `world_create`.
+#[unsafe(no_mangle)]
+pub extern "C" fn sensor_zone_consume(world: *mut WorldHandle, id: u32) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let Some(zone) = world.inner.sensor_zones.get_mut(&id) else {
+            set_error(ERR_NOT_FOUND, "sensor_zone_consume: unknown id");
+            return Bool::FALSE;
+        };
+        let was = zone.triggered_latch;
+        zone.triggered_latch = false;
+        clear_error();
+        Bool::from(was)
+    })
+}
+
+/// Reset the zone's trigger state: clears the sticky edge latch and the
+/// `ever_triggered` sticky flag. The current overlaps are left as-is (until the
+/// next `poll`). Use this to re-arm a zone after handling an event, or to forget a
+/// previous entry. No fork changes.
+///
+/// # Safety
+/// `world` must be a valid pointer returned by `world_create`.
+#[unsafe(no_mangle)]
+pub extern "C" fn sensor_zone_clear(world: *mut WorldHandle, id: u32) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let Some(zone) = world.inner.sensor_zones.get_mut(&id) else {
+            set_error(ERR_NOT_FOUND, "sensor_zone_clear: unknown id");
+            return Bool::FALSE;
+        };
+        zone.triggered_latch = false;
+        zone.ever_triggered = false;
+        clear_error();
+        Bool::TRUE
     })
 }
 

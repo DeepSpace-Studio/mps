@@ -846,6 +846,13 @@ jni!(boolean sensorZoneSetEdge(long world, int id, int edge) {
 jni!(boolean sensorZoneGetTranslation(long world, int id, long out) {
     sz::sensor_zone_get_translation(cp::<WH>(world), u32_from_jint(id), pm::<Vec3>(out)).0 as jbyte
 });
+jni!(boolean sensorZoneConsume(long world, int id) {
+    sz::sensor_zone_consume(m::<WH>(world), u32_from_jint(id)).0 as jbyte
+});
+jni!(boolean sensorZoneClear(long world, int id) {
+    sz::sensor_zone_clear(m::<WH>(world), u32_from_jint(id)).0 as jbyte
+});
+
 jni!(boolean sensorZoneSetTranslation(long world, int id, double tx, double ty, double tz) {
     sz::sensor_zone_set_translation(m::<WH>(world), u32_from_jint(id), v3(tx,ty,tz)).0 as jbyte
 });
