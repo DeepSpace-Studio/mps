@@ -970,3 +970,27 @@ char-mc-03-desc = set_snap_to_ground 在可配距离内把控制器吸附到斜�
 char-mc-04-title = 坡度限制与滑动
 char-mc-04-desc = set_slope_angles 夹住最大可爬角和最小滑动角；set_slide 让控制器沿爬不上去的坡滑下。is_grounded / is_on_ground / is_sliding_down_slope 读取上一帧运动结果。
 char-mc-note = is_on_ground 是混合版 Minecraft 跳跃门：接地「或」停在斜坡上（translation.y >= 0）。is_grounded 跟踪 rapier 原始接地标志；做跳跃系统时两个都要读。
+
+nav-changelog = 更新日志
+changelog-tag = 路线图
+changelog-title = 更新日志
+changelog-desc = 下面每一项能力都有真实提交支撑：{ $jni } 个 JNI 绑定覆盖 { $ffi } 个 C ABI 函数，由 { $tests } 个集成测试驱动——没有空想部分。
+changelog-grid-title = 能力里程碑
+changelog-grid-lead = 本 workspace 已从薄薄的 Rapier 封装，成长为完整的体类型 + 控制器工具箱。每张卡片都是一个真实落地的阶段。
+changelog-c1-title = 软体（Phase 3）
+changelog-c1-desc = rope / grid / SPH 流体 FFI、蒙皮 + 骨骼绑定、经 proxy collider 隔离的软体-软体碰撞，以及流体-刚体耦合让 SPH 粒子被地形挡住堆叠。
+changelog-c2-title = 体类型（Phase 3c-e）
+changelog-c2-desc = character_body、sensor_zone、射线载具控制器——各自有独立的 C ABI 面与对应的 JNI 绑定。
+changelog-c3-title = 角色手感（Minecraft）
+changelog-c3-desc = 自动上台阶 / 贴地 / 坡度夹制 / 滑动，外加混合版 is_on_ground 跳跃门，为方块世界移动手感调参。
+changelog-c4-title = 传感器上升沿触发
+changelog-c4-desc = 上升沿锁存 + consume / clear，一次触发后干净复位——不再重复触发。
+changelog-c5-title = WorldHandle JNI 对齐
+changelog-c5-desc = 全量 FFI↔JNI 审计闭合缺口：149 个 WorldHandle FFI 现已全部具备对应 JNI，含几何相交族（capsule / ssv / ellipsoid / prism / cylinder / spherical-shell / neural-bounds）。
+changelog-c6-title = 查询面
+changelog-c6-desc = sphere / obb / aabb / voxel / ray / point 投射，外加新的几何形状扫掠，全部可过滤、可批量。
+changelog-total-title = 当前规模
+changelog-total-lead = 来自 workspace 的实时数字：{ $jni } 个 JNI 方法，{ $ffi } 个 C ABI 函数，{ $tests } 个集成测试。
+changelog-stat-jni = JNI 方法
+changelog-stat-ffi = C ABI 函数
+changelog-stat-tests = 集成测试

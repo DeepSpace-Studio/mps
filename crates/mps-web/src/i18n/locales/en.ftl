@@ -973,3 +973,27 @@ char-mc-03-desc = set_snap_to_ground keeps the controller glued to slopes and st
 char-mc-04-title = Slope limits and slide
 char-mc-04-desc = set_slope_angles clamps the max climb and min slide angles; set_slide lets the controller slide down otherwise-unclimbable slopes. is_grounded / is_on_ground / is_sliding_down_slope read the last move.
 char-mc-note = is_on_ground is the hybrid Minecraft jump-gate: grounded OR resting on a slope (translation.y >= 0). is_grounded tracks rapier's raw grounded flag; read both when you build a jump system.
+
+nav-changelog = Changelog
+changelog-tag = ROADMAP
+changelog-title = Changelog
+changelog-desc = Every capability below is backed by committed code: { $jni } JNI bindings over { $ffi } C-ABI functions, exercised by { $tests } integration tests — none of it is aspirational.
+changelog-grid-title = Capability milestones
+changelog-grid-lead = The workspace has grown from a thin Rapier wrapper into a full body-type + controller toolkit. Each card is a real, shipped phase.
+changelog-c1-title = Soft bodies (Phase 3)
+changelog-c1-desc = rope / grid / SPH-fluid FFI, skinning + skeleton binding, soft-soft collision via proxy collider isolation, and fluid-rigid coupling so SPH particles stack behind terrain.
+changelog-c2-title = Body types (Phase 3c-e)
+changelog-c2-desc = character_body, sensor_zone, and a raycast vehicle controller — each with a dedicated C ABI surface and a matching JNI binding.
+changelog-c3-title = Character feel (Minecraft)
+changelog-c3-desc = autostep / snap-to-ground / slope clamps / slide, plus the hybrid is_on_ground jump-gate, tuned for blocky-world movement.
+changelog-c4-title = Sensor edge-trigger
+changelog-c4-desc = rising-edge latch with consume / clear so a trigger fires once and re-arms cleanly — no more double events.
+changelog-c5-title = World-handle JNI parity
+changelog-c5-desc = a full FFI<->JNI audit closed the gap: 149 world-handle FFI now have matching JNI, including the geometric-intersection family (capsule / ssv / ellipsoid / prism / cylinder / spherical-shell / neural-bounds).
+changelog-c6-title = Query surface
+changelog-c6-desc = sphere / obb / aabb / voxel / ray / point casts plus the new geometric shape sweeps, all filterable and array-friendly.
+changelog-total-title = Current scale
+changelog-total-lead = Live numbers from the workspace: { $jni } JNI methods, { $ffi } C-ABI functions, { $tests } integration tests.
+changelog-stat-jni = JNI methods
+changelog-stat-ffi = C-ABI functions
+changelog-stat-tests = integration tests

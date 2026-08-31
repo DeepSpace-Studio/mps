@@ -2,6 +2,7 @@ pub mod api;
 pub mod architecture;
 pub mod arena;
 pub mod batch;
+pub mod changelog;
 pub mod character_body;
 pub mod cosmos;
 pub mod cosmos_arena;

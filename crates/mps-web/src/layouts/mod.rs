@@ -45,6 +45,7 @@ pub fn Sidebar() -> Element {
                     a { class: "nav-link", href: "#sec-sensor-zone", { t!("nav-sensor-zone") } }
                     a { class: "nav-link", href: "#sec-vehicle-controller", { t!("nav-vehicle-controller") } }
                     a { class: "nav-link", href: "#sec-api", { t!("nav-api") } }
+                    a { class: "nav-link", href: "#sec-changelog", { t!("nav-changelog") } }
                 }
                 details { class: "nav-group", open: true,
                     summary { class: "nav-group-title", { t!("nav-group-cosmos") } }

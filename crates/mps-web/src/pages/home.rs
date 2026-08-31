@@ -12,6 +12,7 @@ use crate::pages::api::Api;
 use crate::pages::architecture::Architecture;
 use crate::pages::arena::Arena;
 use crate::pages::batch::Batch;
+use crate::pages::changelog::Changelog;
 use crate::pages::character_body::CharacterBody;
 use crate::pages::cosmos::Cosmos;
 use crate::pages::cosmos_arena::CosmosArena;
@@ -89,6 +90,7 @@ pub fn Home() -> Element {
             CharacterBody {}
             SensorZone {}
             VehicleController {}
+            Changelog {}
             Moons {}
             Events {}
             Arena {}
