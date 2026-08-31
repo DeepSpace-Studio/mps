@@ -1969,3 +1969,10 @@ jni!(int softBodyBindSkeleton(long world, int id, int boneCount, long bones) {
 jni!(boolean softBodySetVertexWeights(long world, int id, int particleIndex, long boneIndices, long weights) {
     sb::soft_body_set_vertex_weights(m::<WH>(world), id as u32, particleIndex as u32, boneIndices as *const u32, weights as *const f64).0 as jbyte
 });
+// Phase 5f: 软体链 (soft_chain) JNI 绑定
+jni!(long softChainCreate(long world, int nodeCount, double spacing, double nodeMass, double nodeRadius, long anchor, double ax, double ay, double az, double stiffness, double damping) {
+    sb::soft_chain_create(m::<WH>(world), nodeCount as u32, spacing, nodeMass, nodeRadius, anchor as RRaw, v3(ax, ay, az), stiffness, damping) as jlong
+});
+jni!(int softChainNodeHandles(long world, long outHandles, int capacity) {
+    sb::soft_chain_node_handles(cp::<WH>(world), outHandles as *mut RRaw, capacity as u32) as jint
+});
