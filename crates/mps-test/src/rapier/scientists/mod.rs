@@ -60,6 +60,8 @@ mod tests {
         assert_eq!(SCIENTIST_LUDWIG_PRANDTL.id, "ludwig_prandtl");
         assert_eq!(SCIENTIST_THEODORE_VON_KARMAN.id, "theodore_von_karman");
         assert_eq!(SCIENTIST_JEAN_LE_ROND_DALEMBERT.id, "jean_le_rond_dalembert");
+        assert_eq!(SCIENTIST_HENDRIK_LORENTZ.id, "hendrik_lorentz");
+        assert_eq!(SCIENTIST_GOTTFRIED_LEIBNIZ.id, "gottfried_leibniz");
     }
 
     #[test]

@@ -51,8 +51,10 @@ pub use self::erwin_schrodinger::SCIENTIST as SCIENTIST_ERWIN_SCHRODINGER;
 pub use self::galileo_galilei::SCIENTIST as SCIENTIST_GALILEO_GALILEI;
 pub use self::georg_ohm::SCIENTIST as SCIENTIST_GEORG_OHM;
 pub use self::george_stokes::SCIENTIST as SCIENTIST_GEORGE_STOKES;
+pub use self::gottfried_leibniz::SCIENTIST as SCIENTIST_GOTTFRIED_LEIBNIZ;
 pub use self::hans_christian_orsted::SCIENTIST as SCIENTIST_HANS_CHRISTIAN_ORSTED;
 pub use self::heinrich_hertz::SCIENTIST as SCIENTIST_HEINRICH_HERTZ;
+pub use self::hendrik_lorentz::SCIENTIST as SCIENTIST_HENDRIK_LORENTZ;
 pub use self::henri_poincare::SCIENTIST as SCIENTIST_HENRI_POINCARE;
 pub use self::hermann_von_helmholtz::SCIENTIST as SCIENTIST_HERMANN_VON_HELMHOLTZ;
 pub use self::isaac_newton::SCIENTIST as SCIENTIST_ISAAC_NEWTON;
@@ -132,10 +134,14 @@ pub mod galileo_galilei;
 pub mod georg_ohm;
 #[path = "george_stokes.rs"]
 pub mod george_stokes;
+#[path = "gottfried_leibniz.rs"]
+pub mod gottfried_leibniz;
 #[path = "hans_christian_orsted.rs"]
 pub mod hans_christian_orsted;
 #[path = "heinrich_hertz.rs"]
 pub mod heinrich_hertz;
+#[path = "hendrik_lorentz.rs"]
+pub mod hendrik_lorentz;
 #[path = "henri_poincare.rs"]
 pub mod henri_poincare;
 #[path = "hermann_von_helmholtz.rs"]
@@ -211,7 +217,7 @@ pub mod wolfgang_pauli;
 
 /// 收录的科学家总数。
 pub fn scientist_count() -> usize {
-    57
+    59
 }
 
 /// 收录的所有科学家记录（按 `id` 字典序）。
@@ -235,9 +241,11 @@ pub static SCIENTISTS: &[ScientistRecord] = &[
     self::erwin_schrodinger::SCIENTIST,
     self::galileo_galilei::SCIENTIST,
     self::georg_ohm::SCIENTIST,
+    self::gottfried_leibniz::SCIENTIST,
     self::george_stokes::SCIENTIST,
     self::hans_christian_orsted::SCIENTIST,
     self::heinrich_hertz::SCIENTIST,
+    self::hendrik_lorentz::SCIENTIST,
     self::henri_poincare::SCIENTIST,
     self::hermann_von_helmholtz::SCIENTIST,
     self::isaac_newton::SCIENTIST,
