@@ -32,6 +32,7 @@ pub fn VehicleController() -> Element {
                 div { class: "code-block",
                     code {
                         "vehicle_controller_create(world, shape, translation) -> u32\n"
+                        "vehicle_controller_set_shape(world, id, shape) -> Bool\n"
                         "vehicle_controller_add_wheel(world, id, chassis_conn, direction, axle, ...) -> u32\n"
                         "vehicle_controller_set_engine_force(world, id, wheel, force) -> Bool\n"
                         "vehicle_controller_set_brake(world, id, wheel, brake) -> Bool\n"

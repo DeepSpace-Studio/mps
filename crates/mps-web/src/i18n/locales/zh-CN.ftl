@@ -941,3 +941,16 @@ veh-cap-02-title = 驱动与转向
 veh-cap-02-desc = set_engine_force 沿前向轴驱动轮子；set_steering 与 set_brake 控制方向与抓地。
 veh-cap-03-title = 着地遥测
 veh-cap-03-desc = wheel_on_ground 与 wheel_contact_normal 报告逐轮接触，便于构建牵引逻辑。
+
+# ── Character Body: Minecraft 风格调参 (Phase 3c 批次新增)
+char-mc-title = Minecraft 风格调参
+char-mc-lead = Minecraft 系模块在角色控制器里塞的所有旋钮，这里都暴露成一行 setter，与 Mojang 的 KinematicCharacterController 镜像兼容。
+char-mc-01-title = 上方向与偏移
+char-mc-01-desc = set_up 为非 Y 轴朝上世界旋转控制器；set_offset_absolute / set_offset_relative 在刚体坐标系内平移碰撞胶囊。
+char-mc-02-title = 自动上台阶
+char-mc-02-desc = set_autostep 开关爬楼梯/台阶，可配最大高度、最小宽度，include-dynamic 标志让角色也能登上移动平台。
+char-mc-03-title = 贴地
+char-mc-03-desc = set_snap_to_ground 在可配距离内把控制器吸附到斜坡与台阶，避免卡在竖直接缝处悬空。
+char-mc-04-title = 坡度限制与滑动
+char-mc-04-desc = set_slope_angles 夹住最大可爬角和最小滑动角；set_slide 让控制器沿爬不上去的坡滑下。is_grounded / is_on_ground / is_sliding_down_slope 读取上一帧运动结果。
+char-mc-note = is_on_ground 是混合版 Minecraft 跳跃门：接地「或」停在斜坡上（translation.y >= 0）。is_grounded 跟踪 rapier 原始接地标志；做跳跃系统时两个都要读。

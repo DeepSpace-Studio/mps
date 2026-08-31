@@ -15,7 +15,7 @@ mod tests {
     use mps_core::rapier::sensor::{
         sensor_zone_contact_count, sensor_zone_create, sensor_zone_destroy,
         sensor_zone_get_contacts, sensor_zone_is_triggered, sensor_zone_poll,
-        sensor_zone_set_enabled,
+        sensor_zone_set_enabled, sensor_zone_set_shape,
     };
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
 
@@ -167,7 +167,21 @@ mod tests {
                 z: 0.0,
             },
         );
-        let _ball = make_ball(world, 0.0, 0.0, 0.0);
+        // Floor so the ball rests at y=0.3 inside the 2x2x2 zone (otherwise it falls
+        // out under gravity now that the zone no longer self-detects).
+        let fl = rigid_body_builder_create(mps_core::rapier::ffi::BodyStatus::Fixed as u32);
+        rigid_body_builder_set_translation(fl, Vec3 { x: 0.0, y: -0.5, z: 0.0 });
+        let flb = world_insert_rigid_body(world, rigid_body_builder_build(fl));
+        let fls = ShapeDesc {
+            shape_type: ShapeType::Cuboid as u32,
+            a: 20.0, b: 0.5, c: 20.0, ..Default::default()
+        };
+        world_insert_collider_with_parent(
+            world,
+            collider_builder_build(collider_builder_create_ex(fls)),
+            flb,
+        );
+        let _ball = make_ball(world, 0.0, 0.3, 0.0);
         let dt = 1.0 / 60.0;
         for _ in 0..60 {
             world_step(world, dt);
@@ -179,6 +193,64 @@ mod tests {
         let written = sensor_zone_get_contacts(world, zone, buf.as_mut_ptr(), count);
         assert_eq!(written, count);
         assert!(buf.iter().all(|h| *h != 0));
+        world_destroy(world);
+    }
+
+    /// `set_shape` mutates the sensor collider in place, so a fixed ball that was
+    /// outside a small zone becomes detectable after growing it. The ball is fixed
+    /// (no gravity) so the only collider the zone can detect is the ball itself.
+    #[test]
+    fn set_shape_grows_detection_volume() {
+        let world = make_world();
+        // Small 0.5×0.5×0.5 zone at origin.
+        let small = ShapeDesc {
+            shape_type: ShapeType::Cuboid as u32,
+            a: 0.25, b: 0.25, c: 0.25, ..Default::default()
+        };
+        let zone = sensor_zone_create(world, small, Vec3 { x: 0.0, y: 0.0, z: 0.0 });
+        assert_ne!(zone, u32::MAX);
+        // A FIXED ball parked at x=0.6 — inside the BIG zone (x∈[-1,1]) but outside
+        // the SMALL zone (x∈[-0.25,0.25]). Fixed => it never moves, so the only
+        // thing the zone can detect is the ball.
+        let fbuilder = rigid_body_builder_create(mps_core::rapier::ffi::BodyStatus::Fixed as u32);
+        rigid_body_builder_set_translation(fbuilder, Vec3 { x: 0.6, y: 0.0, z: 0.0 });
+        let fbody = world_insert_rigid_body(world, rigid_body_builder_build(fbuilder));
+        let fshape = ShapeDesc {
+            shape_type: ShapeType::Ball as u32,
+            a: 0.3, ..Default::default()
+        };
+        world_insert_collider_with_parent(
+            world,
+            collider_builder_build(collider_builder_create_ex(fshape)),
+            fbody,
+        );
+        let dt = 1.0 / 60.0;
+        for _ in 0..10 {
+            world_step(world, dt);
+            sensor_zone_poll(world, zone);
+        }
+        assert_eq!(
+            sensor_zone_contact_count(world, zone),
+            0,
+            "ball should be outside the small zone"
+        );
+
+        // Grow the zone to 2×2×2 — the ball is now inside.
+        let big = ShapeDesc {
+            shape_type: ShapeType::Cuboid as u32,
+            a: 1.0, b: 1.0, c: 1.0, ..Default::default()
+        };
+        assert_eq!(sensor_zone_set_shape(world, zone, big), Bool::TRUE);
+        for _ in 0..10 {
+            world_step(world, dt);
+            sensor_zone_poll(world, zone);
+        }
+        assert!(
+            sensor_zone_contact_count(world, zone) >= 1,
+            "zone should detect the ball after growing"
+        );
+        // Unknown id returns FALSE without panicking.
+        assert_eq!(sensor_zone_set_shape(world, zone + 999, big), Bool::FALSE);
         world_destroy(world);
     }
 }

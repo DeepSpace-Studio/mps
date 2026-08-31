@@ -32,10 +32,45 @@ pub fn CharacterBody() -> Element {
                     code {
                         "character_body_create(world, shape, translation) -> u32\n"
                         "character_body_move(world, id, desired, dt) -> EffectiveCharacterMovement\n"
+                        "character_body_set_shape(world, id, shape) -> Bool\n"
+                        "character_body_set_up(world, id, up) -> Bool\n"
+                        "character_body_set_offset_absolute(world, id, offset) -> Bool\n"
+                        "character_body_set_autostep(world, id, enabled, max_height, min_width, include_dynamic) -> Bool\n"
+                        "character_body_set_snap_to_ground(world, id, enabled, distance) -> Bool\n"
+                        "character_body_set_slope_angles(world, id, max_climb, min_slide) -> Bool\n"
+                        "character_body_set_slide(world, id, enabled) -> Bool\n"
+                        "character_body_is_grounded(world, id) -> Bool\n"
+                        "character_body_is_on_ground(world, id) -> Bool\n"
+                        "character_body_is_sliding_down_slope(world, id) -> Bool\n"
                         "character_body_get_translation(world, id, out) -> Bool\n"
                         "character_body_destroy(world, id) -> Bool\n"
                     }
                 }
+            }
+
+            // ── Minecraft-style tuning ───────────────────────────────────
+            div { class: "section-divider",
+                h2 { class: "section-heading", { t!("char-mc-title") } }
+                p { class: "p-lead", { t!("char-mc-lead") } }
+                div { class: "feature-grid",
+                    div { class: "feature-card",
+                        h3 { { t!("char-mc-01-title") } }
+                        p { { t!("char-mc-01-desc") } }
+                    }
+                    div { class: "feature-card",
+                        h3 { { t!("char-mc-02-title") } }
+                        p { { t!("char-mc-02-desc") } }
+                    }
+                    div { class: "feature-card",
+                        h3 { { t!("char-mc-03-title") } }
+                        p { { t!("char-mc-03-desc") } }
+                    }
+                    div { class: "feature-card",
+                        h3 { { t!("char-mc-04-title") } }
+                        p { { t!("char-mc-04-desc") } }
+                    }
+                }
+                p { class: "p-muted", { t!("char-mc-note") } }
             }
 
             // ── Capabilities ────────────────────────────────────────────

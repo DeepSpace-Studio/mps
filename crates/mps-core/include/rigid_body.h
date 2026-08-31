@@ -1698,6 +1698,18 @@ uint32_t query_intersect_aabb_rigid_bodies(const struct WorldHandle *world,
 uint32_t character_body_create(struct WorldHandle *world, ShapeDesc shape, Vec3 translation);
 
 /**
+ * Change a character body's collision shape after creation. The new shape is
+ * used by subsequent `character_body_move` calls (the controller shape-casts
+ * the shape directly, so no world collider is rebuilt). Useful for Minecraft
+ * style avatars that change hitbox (e.g. sneaking shrinks the box).
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`; `shape` must be a
+ * valid [`ShapeDesc`] (finite params).
+ */
+Bool character_body_set_shape(struct WorldHandle *world, uint32_t id, ShapeDesc shape);
+
+/**
  * Advance the character by `desired` (a desired translation for this step). The
  * controller resolves collisions/slopes/steps and the result is written back to
  * the kinematic body. Returns the effective movement (resolved translation,
@@ -1779,6 +1791,17 @@ Bool character_body_is_grounded(const struct WorldHandle *world, uint32_t id);
  * `character_body_move`. Useful for Minecraft-style ice/slide behaviour.
  */
 Bool character_body_is_sliding_down_slope(const struct WorldHandle *world, uint32_t id);
+
+/**
+ * Reliable "is the character standing on something" check for Minecraft-style
+ * jump logic. This fork's `is_grounded` classifies a capsule resting on a flat
+ * floor as `sliding_down_slope` (see `is_grounded_at_contact_manifold`'s normal
+ * convention), so it alone is NOT a good jump gate. This helper ORs `grounded`
+ * with `is_sliding_down_slope` and additionally excludes the case where the
+ * character is moving strongly upward (i.e. already jumping), giving a stable
+ * on-ground signal the caller can gate jumps on.
+ */
+Bool character_body_is_on_ground(const struct WorldHandle *world, uint32_t id);
 
 /**
  * Destroy a character body, removing its rigid body, collider and controller
@@ -2121,6 +2144,18 @@ struct ColliderBuilderHandle *collider_builder_create_fdh(const double *points_x
 uint32_t sensor_zone_create(struct WorldHandle *world, ShapeDesc shape, Vec3 translation);
 
 /**
+ * Change a sensor zone's shape after creation. The old sensor collider is
+ * removed from the world and a new one built from `shape` is inserted at the
+ * zone's current position. Useful for Minecraft-style trigger volumes that grow
+ * or shrink as the game state changes.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`; `shape` must be a
+ * valid [`ShapeDesc`] (finite params).
+ */
+Bool sensor_zone_set_shape(struct WorldHandle *world, uint32_t id, ShapeDesc shape);
+
+/**
  * Disable or (re-)enable a sensor zone. A disabled zone is skipped by `poll`.
  *
  * # Safety
@@ -2203,6 +2238,18 @@ Bool sensor_zone_destroy(struct WorldHandle *world, uint32_t id);
  * valid [`ShapeDesc`] (finite params).
  */
 uint32_t vehicle_controller_create(struct WorldHandle *world, ShapeDesc shape, Vec3 translation);
+
+/**
+ * Change a vehicle's chassis collision shape after creation. The existing
+ * chassis collider is removed and a new one built from `shape` is parented to
+ * the same dynamic chassis body (wheels/suspension are untouched). Useful for
+ * swapping the chassis hitbox (e.g. a Minecraft minecart vs. a boat).
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`; `shape` must be a
+ * valid [`ShapeDesc`] (finite params).
+ */
+Bool vehicle_controller_set_shape(struct WorldHandle *world, uint32_t id, ShapeDesc shape);
 
 /**
  * Add a wheel to the vehicle. All vectors are in the chassis' local space.

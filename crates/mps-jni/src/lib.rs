@@ -791,6 +791,12 @@ jni!(boolean characterBodyIsGrounded(long world, int id) {
 jni!(boolean characterBodyIsSlidingDownSlope(long world, int id) {
     cb_::character_body_is_sliding_down_slope(cp::<WH>(world), u32_from_jint(id)).0 as jbyte
 });
+jni!(boolean characterBodySetShape(long world, int id, int shape_type, double a, double b, double c, double d) {
+    cb_::character_body_set_shape(m::<WH>(world), u32_from_jint(id), sd(shape_type,a,b,c,d)).0 as jbyte
+});
+jni!(boolean characterBodyIsOnGround(long world, int id) {
+    cb_::character_body_is_on_ground(cp::<WH>(world), u32_from_jint(id)).0 as jbyte
+});
 
 // ---- Sensor trigger zone (fourth body type) ----
 jni!(long sensorZoneCreate(long world, int shape_type, double a, double b, double c, double d, double tx, double ty, double tz) {
@@ -798,6 +804,9 @@ jni!(long sensorZoneCreate(long world, int shape_type, double a, double b, doubl
 });
 jni!(boolean sensorZoneSetEnabled(long world, int id, int enabled) {
     sz::sensor_zone_set_enabled(m::<WH>(world), u32_from_jint(id), jb(enabled)).0 as jbyte
+});
+jni!(boolean sensorZoneSetShape(long world, int id, int shape_type, double a, double b, double c, double d) {
+    sz::sensor_zone_set_shape(m::<WH>(world), u32_from_jint(id), sd(shape_type,a,b,c,d)).0 as jbyte
 });
 jni!(boolean sensorZonePoll(long world, int id) {
     sz::sensor_zone_poll(m::<WH>(world), u32_from_jint(id)).0 as jbyte
@@ -824,6 +833,9 @@ jni!(boolean sensorZoneDestroy(long world, int id) {
 // ---- Ray-cast vehicle controller (fifth body type) ----
 jni!(long vehicleControllerCreate(long world, int shape_type, double a, double b, double c, double d, double tx, double ty, double tz) {
     vc::vehicle_controller_create(m::<WH>(world), sd(shape_type,a,b,c,d), v3(tx,ty,tz)) as jlong
+});
+jni!(boolean vehicleControllerSetShape(long world, int id, int shape_type, double a, double b, double c, double d) {
+    vc::vehicle_controller_set_shape(m::<WH>(world), u32_from_jint(id), sd(shape_type,a,b,c,d)).0 as jbyte
 });
 jni!(int vehicleControllerAddWheel(long world, int id, double ccx, double ccy, double ccz, double dx, double dy, double dz, double axx, double axy, double axz, double rest, double radius, double stiff, double comp, double damp, double slip, double travel, double maxf, double side) {
     vc::vehicle_controller_add_wheel(m::<WH>(world), u32_from_jint(id), v3(ccx,ccy,ccz), v3(dx,dy,dz), v3(axx,axy,axz), rest, radius, stiff, comp, damp, slip, travel, maxf, side) as jint

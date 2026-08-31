@@ -11,7 +11,7 @@
 use rapier3d::prelude::QueryFilter;
 
 use crate::rapier::error::{
-    ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, ffi_guard, set_error,
+    ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, clear_error, ffi_guard, set_error,
 };
 use crate::rapier::ffi::{
     Bool, ColliderHandleRaw, ShapeDesc, Vec3, WorldHandle, shape_desc_valid, shape_from_desc,
@@ -79,6 +79,54 @@ pub extern "C" fn sensor_zone_create(
     })
 }
 
+/// Change a sensor zone's shape after creation. The old sensor collider is
+/// removed from the world and a new one built from `shape` is inserted at the
+/// zone's current position. Useful for Minecraft-style trigger volumes that grow
+/// or shrink as the game state changes.
+///
+/// # Safety
+/// `world` must be a valid pointer returned by `world_create`; `shape` must be a
+/// valid [`ShapeDesc`] (finite params).
+#[unsafe(no_mangle)]
+pub extern "C" fn sensor_zone_set_shape(
+    world: *mut WorldHandle,
+    id: u32,
+    shape: ShapeDesc,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !shape_desc_valid(shape) {
+            set_error(ERR_INVALID_ARGUMENT, "sensor_zone_set_shape: invalid shape");
+            return Bool::FALSE;
+        }
+        // Mutate the existing sensor collider's shape in place (same handle, same
+        // pose). This keeps `zone.collider` valid and avoids rebuilding the body.
+        let zone = match world.inner.sensor_zones.get_mut(&id) {
+            Some(z) => z,
+            None => {
+                set_error(ERR_NOT_FOUND, "sensor_zone_set_shape: unknown id");
+                return Bool::FALSE;
+            }
+        };
+        let handle = crate::rapier::ffi::unpack_collider_handle(zone.collider);
+        match world.inner.colliders.get_mut(handle) {
+            Some(collider) => collider.set_shape(shape_from_desc(shape)),
+            None => {
+                set_error(ERR_NOT_FOUND, "sensor_zone_set_shape: collider missing");
+                return Bool::FALSE;
+            }
+        }
+        // Reset overlap bookkeeping; the next poll recomputes it.
+        zone.current.clear();
+        zone.ever_triggered = false;
+        clear_error();
+        Bool::TRUE
+    })
+}
+
 /// Disable or (re-)enable a sensor zone. A disabled zone is skipped by `poll`.
 ///
 /// # Safety
@@ -143,7 +191,11 @@ pub extern "C" fn sensor_zone_poll(world: *mut WorldHandle, id: u32) -> Bool {
             let pose = *collider.position();
             let shape = collider.shape();
             let mut set = std::collections::HashSet::new();
+            // Exclude the zone's own collider so it doesn't report itself.
             for (other, _) in query.intersect_shape(pose, shape) {
+                if other == handle {
+                    continue;
+                }
                 set.insert(crate::rapier::ffi::pack_collider_handle(other));
             }
             set

@@ -11,8 +11,9 @@
 mod tests {
     use mps_core::rapier::character_body::{
         character_body_create, character_body_destroy, character_body_get_translation,
-        character_body_is_grounded, character_body_is_sliding_down_slope, character_body_move,
-        character_body_set_autostep, character_body_set_slide,
+        character_body_is_grounded, character_body_is_on_ground,
+        character_body_is_sliding_down_slope, character_body_move, character_body_set_autostep,
+        character_body_set_shape, character_body_set_slide,
     };
     use mps_core::rapier::collider::{
         collider_builder_build, collider_builder_create_ex, world_insert_collider_with_parent,
@@ -490,6 +491,185 @@ mod tests {
                 enabled
             );
         }
+        character_body_destroy(world, id);
+        world_destroy(world);
+    }
+
+    /// `set_shape` lets a Minecraft-style avatar switch hitbox, and the new shape
+    /// is used by subsequent moves. We push the avatar toward a single narrow
+    /// pillar: a WIDE avatar is stopped further away than a THIN one (which fits
+    /// closer), proving the live collision profile changed.
+    #[test]
+    fn set_shape_switches_collision_profile() {
+        let world = make_world();
+        let _floor = make_floor(world);
+        // A single narrow pillar at x=0 (x∈[-0.15,0.15]), full height.
+        let pillar = rigid_body_builder_create(BodyStatus::Fixed as u32);
+        rigid_body_builder_set_translation(
+            pillar,
+            Vec3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            },
+        );
+        let pb = world_insert_rigid_body(world, rigid_body_builder_build(pillar));
+        let ps = ShapeDesc {
+            shape_type: ShapeType::Cuboid as u32,
+            a: 0.15,
+            b: 1.0,
+            c: 5.0,
+            ..Default::default()
+        };
+        world_insert_collider_with_parent(
+            world,
+            collider_builder_build(collider_builder_create_ex(ps)),
+            pb,
+        );
+        let dt = 1.0 / 60.0;
+
+        // WIDE ball (radius 0.5) rammed into the pillar from the left.
+        let wide = ShapeDesc {
+            shape_type: ShapeType::Ball as u32,
+            a: 0.5,
+            ..Default::default()
+        };
+        let id = character_body_create(
+            world,
+            wide,
+            Vec3 {
+                x: -1.0,
+                y: 0.5,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+        for _ in 0..120 {
+            character_body_move(
+                world,
+                id,
+                Vec3 {
+                    x: 0.1,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                dt,
+            );
+            world_step(world, dt);
+        }
+        let mut wide_p = Vec3::default();
+        assert_eq!(
+            character_body_get_translation(world, id, &mut wide_p),
+            Bool::TRUE
+        );
+        assert!(
+            wide_p.x < -0.2,
+            "wide avatar should be stopped short of the pillar, x={}",
+            wide_p.x
+        );
+
+        // Now shrink to a THIN ball (radius 0.1): it fits closer to the pillar.
+        let thin = ShapeDesc {
+            shape_type: ShapeType::Ball as u32,
+            a: 0.1,
+            ..Default::default()
+        };
+        assert_eq!(character_body_set_shape(world, id, thin), Bool::TRUE);
+        for _ in 0..120 {
+            character_body_move(
+                world,
+                id,
+                Vec3 {
+                    x: 0.1,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                dt,
+            );
+            world_step(world, dt);
+        }
+        let mut thin_p = Vec3::default();
+        assert_eq!(
+            character_body_get_translation(world, id, &mut thin_p),
+            Bool::TRUE
+        );
+        assert!(
+            thin_p.x > wide_p.x,
+            "after set_shape the thin avatar should advance closer to the pillar (wide x={}, thin x={})",
+            wide_p.x,
+            thin_p.x
+        );
+        // Both remain on the left side of the pillar (blocked), just at different x.
+        assert!(
+            thin_p.x < 0.0,
+            "thin avatar should still be blocked by the pillar, x={}",
+            thin_p.x
+        );
+        character_body_destroy(world, id);
+        world_destroy(world);
+    }
+
+    /// `is_on_ground` gives a reliable jump gate: TRUE when resting on the floor,
+    /// FALSE while moving upward (jumping).
+    #[test]
+    fn is_on_ground_reflects_contact() {
+        let world = make_world();
+        let _floor = make_floor(world);
+        let shape = ShapeDesc {
+            shape_type: ShapeType::CapsuleY as u32,
+            a: 0.5,
+            b: 0.3,
+            ..Default::default()
+        };
+        let id = character_body_create(
+            world,
+            shape,
+            Vec3 {
+                x: 0.0,
+                y: 1.5,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+        let dt = 1.0 / 60.0;
+        // Drop onto the floor.
+        for _ in 0..40 {
+            character_body_move(
+                world,
+                id,
+                Vec3 {
+                    x: 0.0,
+                    y: -0.1,
+                    z: 0.0,
+                },
+                dt,
+            );
+            world_step(world, dt);
+        }
+        assert_eq!(
+            character_body_is_on_ground(world, id),
+            Bool::TRUE,
+            "resting on the floor should report on-ground"
+        );
+        // Jump upward; the helper should stop reporting on-ground.
+        character_body_move(
+            world,
+            id,
+            Vec3 {
+                x: 0.0,
+                y: 0.3,
+                z: 0.0,
+            },
+            dt,
+        );
+        world_step(world, dt);
+        assert_eq!(
+            character_body_is_on_ground(world, id),
+            Bool::FALSE,
+            "moving upward (jumping) should not report on-ground"
+        );
+        // Unknown id returns FALSE without panicking.
+        assert_eq!(character_body_is_on_ground(world, id + 999), Bool::FALSE);
         character_body_destroy(world, id);
         world_destroy(world);
     }

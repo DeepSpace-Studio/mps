@@ -82,6 +82,46 @@ pub extern "C" fn character_body_create(
     })
 }
 
+/// Change a character body's collision shape after creation. The new shape is
+/// used by subsequent `character_body_move` calls (the controller shape-casts
+/// the shape directly, so no world collider is rebuilt). Useful for Minecraft
+/// style avatars that change hitbox (e.g. sneaking shrinks the box).
+///
+/// # Safety
+/// `world` must be a valid pointer returned by `world_create`; `shape` must be a
+/// valid [`ShapeDesc`] (finite params).
+#[unsafe(no_mangle)]
+pub extern "C" fn character_body_set_shape(
+    world: *mut WorldHandle,
+    id: u32,
+    shape: ShapeDesc,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !shape_desc_valid(shape) {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "character_body_set_shape: invalid shape",
+            );
+            return Bool::FALSE;
+        }
+        match world.inner.character_bodies.get_mut(&id) {
+            Some(cb) => {
+                cb.shape = shape;
+                clear_error();
+                Bool::TRUE
+            }
+            None => {
+                set_error(ERR_NOT_FOUND, "character_body_set_shape: unknown id");
+                Bool::FALSE
+            }
+        }
+    })
+}
+
 /// Advance the character by `desired` (a desired translation for this step). The
 /// controller resolves collisions/slopes/steps and the result is written back to
 /// the kinematic body. Returns the effective movement (resolved translation,
@@ -456,6 +496,36 @@ pub extern "C" fn character_body_is_sliding_down_slope(world: *const WorldHandle
                     ERR_NOT_FOUND,
                     "character_body_is_sliding_down_slope: unknown id",
                 );
+                Bool::FALSE
+            }
+        }
+    })
+}
+
+/// Reliable "is the character standing on something" check for Minecraft-style
+/// jump logic. This fork's `is_grounded` classifies a capsule resting on a flat
+/// floor as `sliding_down_slope` (see `is_grounded_at_contact_manifold`'s normal
+/// convention), so it alone is NOT a good jump gate. This helper ORs `grounded`
+/// with `is_sliding_down_slope` and additionally excludes the case where the
+/// character is moving strongly upward (i.e. already jumping), giving a stable
+/// on-ground signal the caller can gate jumps on.
+#[unsafe(no_mangle)]
+pub extern "C" fn character_body_is_on_ground(world: *const WorldHandle, id: u32) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        match world.inner.character_bodies.get(&id) {
+            Some(cb) => {
+                let touching = cb.last_movement.grounded.0 != 0
+                    || cb.last_movement.is_sliding_down_slope.0 != 0;
+                // Exclude an active upward jump (vertical speed well above 0).
+                let rising = cb.last_movement.translation.y > 0.05;
+                Bool::from(touching && !rising)
+            }
+            None => {
+                set_error(ERR_NOT_FOUND, "character_body_is_on_ground: unknown id");
                 Bool::FALSE
             }
         }

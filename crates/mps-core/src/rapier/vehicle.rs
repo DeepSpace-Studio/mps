@@ -16,7 +16,7 @@ use rapier3d::prelude::{
 };
 
 use crate::rapier::error::{
-    ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, ffi_guard, set_error,
+    ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, clear_error, ffi_guard, set_error,
 };
 use crate::rapier::ffi::{
     Bool, ShapeDesc, Vec3, WorldHandle, shape_desc_valid, shape_from_desc, vec3_finite,
@@ -71,6 +71,73 @@ pub extern "C" fn vehicle_controller_create(
             .vehicle_controllers
             .insert(id, VehicleController { controller, body });
         id
+    })
+}
+
+/// Change a vehicle's chassis collision shape after creation. The existing
+/// chassis collider is removed and a new one built from `shape` is parented to
+/// the same dynamic chassis body (wheels/suspension are untouched). Useful for
+/// swapping the chassis hitbox (e.g. a Minecraft minecart vs. a boat).
+///
+/// # Safety
+/// `world` must be a valid pointer returned by `world_create`; `shape` must be a
+/// valid [`ShapeDesc`] (finite params).
+#[unsafe(no_mangle)]
+pub extern "C" fn vehicle_controller_set_shape(
+    world: *mut WorldHandle,
+    id: u32,
+    shape: ShapeDesc,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !shape_desc_valid(shape) {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "vehicle_controller_set_shape: invalid shape",
+            );
+            return Bool::FALSE;
+        }
+        let body = match world.inner.vehicle_controllers.get(&id) {
+            Some(v) => v.body,
+            None => {
+                set_error(ERR_NOT_FOUND, "vehicle_controller_set_shape: unknown id");
+                return Bool::FALSE;
+            }
+        };
+        // Mutate the chassis collider's shape in place (same handle, same body).
+        // This avoids removing/re-inserting the collider, which would leave the body
+        // massless mid-step and destabilize the ray-cast vehicle suspension.
+        let old_handle = match world.inner.bodies.get(body) {
+            Some(b) => match b.colliders().first() {
+                Some(h) => *h,
+                None => {
+                    set_error(
+                        ERR_NOT_FOUND,
+                        "vehicle_controller_set_shape: no chassis collider",
+                    );
+                    return Bool::FALSE;
+                }
+            },
+            None => {
+                set_error(ERR_NOT_FOUND, "vehicle_controller_set_shape: body missing");
+                return Bool::FALSE;
+            }
+        };
+        match world.inner.colliders.get_mut(old_handle) {
+            Some(collider) => collider.set_shape(shape_from_desc(shape)),
+            None => {
+                set_error(
+                    ERR_NOT_FOUND,
+                    "vehicle_controller_set_shape: collider missing",
+                );
+                return Bool::FALSE;
+            }
+        }
+        clear_error();
+        Bool::TRUE
     })
 }
 

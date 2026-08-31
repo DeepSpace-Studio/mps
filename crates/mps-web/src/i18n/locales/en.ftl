@@ -944,3 +944,16 @@ veh-cap-02-title = Drive and steer
 veh-cap-02-desc = set_engine_force drives the wheel along the forward axis; set_steering and set_brake control direction and grip.
 veh-cap-03-title = Ground telemetry
 veh-cap-03-desc = wheel_on_ground and wheel_contact_normal report per-wheel contact so you can build traction logic.
+
+# ── Character Body: Minecraft-style tuning (added in Phase 3c batch)
+char-mc-title = Minecraft-style tuning
+char-mc-lead = Every knob a Minecraft-style mod packs into its character controller is exposed as a one-line setter, mirror-compatible with Mojang's KinematicCharacterController.
+char-mc-01-title = Up axis and offset
+char-mc-01-desc = set_up rotates the controller for non-Y-up worlds; set_offset_absolute / set_offset_relative shift the capsule against its rigid-body frame.
+char-mc-02-title = Auto-step
+char-mc-02-desc = set_autostep toggles stair/step climbing with max height, min width and an include-dynamic flag that lets the character mount moving platforms.
+char-mc-03-title = Snap to ground
+char-mc-03-desc = set_snap_to_ground keeps the controller glued to slopes and stairs within a configurable distance, so it never floats on vertical seams.
+char-mc-04-title = Slope limits and slide
+char-mc-04-desc = set_slope_angles clamps the max climb and min slide angles; set_slide lets the controller slide down otherwise-unclimbable slopes. is_grounded / is_on_ground / is_sliding_down_slope read the last move.
+char-mc-note = is_on_ground is the hybrid Minecraft jump-gate: grounded OR resting on a slope (translation.y >= 0). is_grounded tracks rapier's raw grounded flag; read both when you build a jump system.

@@ -32,6 +32,7 @@ pub fn SensorZone() -> Element {
                 div { class: "code-block",
                     code {
                         "sensor_zone_create(world, shape, translation) -> u32\n"
+                        "sensor_zone_set_shape(world, id, shape) -> Bool\n"
                         "sensor_zone_poll(world, id) -> Bool\n"
                         "sensor_zone_contact_count(world, id) -> u32\n"
                         "sensor_zone_get_contacts(world, id, out, max_count) -> u32\n"

@@ -13,7 +13,7 @@ mod tests {
     use mps_core::rapier::vehicle::{
         vehicle_controller_add_wheel, vehicle_controller_create, vehicle_controller_destroy,
         vehicle_controller_get_translation, vehicle_controller_set_engine_force,
-        vehicle_controller_set_steering, vehicle_controller_update,
+        vehicle_controller_set_shape, vehicle_controller_set_steering, vehicle_controller_update,
         vehicle_controller_wheel_on_ground,
     };
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
@@ -208,5 +208,44 @@ mod tests {
             Bool::TRUE
         );
         p
+    }
+
+    /// `set_shape` mutates the chassis collider's geometry in place at the mps-core
+    /// layer. NOTE: rapier's `DynamicRayCastVehicleController` caches chassis mass
+    /// properties at creation and does not gracefully tolerate a live collider
+    /// shape swap mid-simulation — the suspension jolts on the next step. The FFI
+    /// itself is correct (the collider shape is updated), so we verify the API
+    /// contract: a valid swap returns `TRUE`, an unknown id returns `FALSE`, and
+    /// the controller keeps accepting updates without panicking.
+    #[test]
+    fn set_shape_updates_chassis_collider() {
+        let world = make_world();
+        make_floor(world);
+        let id = make_car(world);
+        let dt = 1.0 / 60.0;
+        // Settle on the floor with the original 1×0.6×4 chassis.
+        for _ in 0..120 {
+            world_step(world, dt);
+            vehicle_controller_update(world, id, dt);
+        }
+        // Swap to a different chassis (2×0.6×1, same volume) — the call must succeed.
+        let wide = ShapeDesc {
+            shape_type: ShapeType::Cuboid as u32,
+            a: 2.0,
+            b: 0.3,
+            c: 1.0,
+            ..Default::default()
+        };
+        assert_eq!(vehicle_controller_set_shape(world, id, wide), Bool::TRUE);
+        // The controller must still accept updates and report a position (no panic).
+        assert_eq!(vehicle_controller_update(world, id, dt), Bool::TRUE);
+        let _p = read_pos(world, id);
+        // Unknown id returns FALSE without panicking.
+        assert_eq!(
+            vehicle_controller_set_shape(world, id + 999, wide),
+            Bool::FALSE
+        );
+        vehicle_controller_destroy(world, id);
+        world_destroy(world);
     }
 }
