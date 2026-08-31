@@ -1,6 +1,31 @@
 use dioxus::prelude::*;
+use dioxus_fullstack::FullstackContext;
 use dioxus_i18n::{prelude::*, t};
+use unic_langid::LanguageIdentifier;
 use unic_langid::langid;
+
+/// Detect the requested UI language from the SSR request query string
+/// (`?lang=en` / `?lang=zh-CN`). Falls back to `zh-CN` when there is no
+/// server context (pure SSR setup still resolves this on first render).
+fn detect_lang() -> LanguageIdentifier {
+    if let Some(ctx) = FullstackContext::current() {
+        let parts = ctx.parts_mut();
+        if let Some(query) = parts.uri.query() {
+            for pair in query.split('&') {
+                let mut it = pair.splitn(2, '=');
+                if let (Some(key), Some(val)) = (it.next(), it.next()) {
+                    if key == "lang" && val == "en" {
+                        return langid!("en");
+                    }
+                    if key == "lang" && val == "zh-CN" {
+                        return langid!("zh-CN");
+                    }
+                }
+            }
+        }
+    }
+    langid!("zh-CN")
+}
 
 use crate::layouts::{Footer, Sidebar};
 use crate::metrics::{
@@ -40,8 +65,14 @@ use crate::pages::voxel::Voxel;
 pub fn Home() -> Element {
     // Initialise i18n (Fluent) for SSR rendering.
     use_init_i18n(|| {
-        I18nConfig::new(langid!("zh-CN"))
-            .with_fallback(langid!("zh-CN"))
+        let lang = detect_lang();
+        let fallback = if lang == langid!("en") {
+            langid!("zh-CN")
+        } else {
+            langid!("en")
+        };
+        I18nConfig::new(lang)
+            .with_fallback(fallback)
             .with_locale((langid!("zh-CN"), include_str!("../i18n/locales/zh-CN.ftl")))
             .with_locale((langid!("en"), include_str!("../i18n/locales/en.ftl")))
     });
