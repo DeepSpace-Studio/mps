@@ -29,7 +29,12 @@ pub mod formulas {
     /// ```
     ///
     /// The nodal lines of these modes trace the classic Chladni figures.
-    pub fn chladni_mode_frequency(m: u32, n: u32, side_length: f64, wave_speed: f64) -> Option<f64> {
+    pub fn chladni_mode_frequency(
+        m: u32,
+        n: u32,
+        side_length: f64,
+        wave_speed: f64,
+    ) -> Option<f64> {
         if !finite_positive(side_length) || !finite_positive(wave_speed) {
             return None;
         }

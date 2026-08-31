@@ -43,15 +43,13 @@ pub mod formulas {
     /// ```
     ///
     /// Equals the eigenvalue for an eigenvector `x`; bounds the spectrum otherwise.
-    pub fn rayleigh_quotient(
-        a11: f64,
-        a12: f64,
-        a22: f64,
-        x1: f64,
-        x2: f64,
-    ) -> Option<f64> {
-        if !finite_non_negative(a11) || !a11.is_finite() || !a12.is_finite() || !a22.is_finite()
-            || !x1.is_finite() || !x2.is_finite()
+    pub fn rayleigh_quotient(a11: f64, a12: f64, a22: f64, x1: f64, x2: f64) -> Option<f64> {
+        if !finite_non_negative(a11)
+            || !a11.is_finite()
+            || !a12.is_finite()
+            || !a22.is_finite()
+            || !x1.is_finite()
+            || !x2.is_finite()
         {
             return None;
         }

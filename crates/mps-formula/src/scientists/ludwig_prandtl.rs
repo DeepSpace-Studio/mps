@@ -32,7 +32,10 @@ pub mod formulas {
         free_stream_velocity: f64,
         kinematic_viscosity: f64,
     ) -> Option<f64> {
-        if !finite_positive(x) || !finite_positive(free_stream_velocity) || !finite_positive(kinematic_viscosity) {
+        if !finite_positive(x)
+            || !finite_positive(free_stream_velocity)
+            || !finite_positive(kinematic_viscosity)
+        {
             return None;
         }
         let re_x = free_stream_velocity * x / kinematic_viscosity;

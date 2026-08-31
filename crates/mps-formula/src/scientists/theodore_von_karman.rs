@@ -52,7 +52,10 @@ pub mod formulas {
         characteristic_length: f64,
         flow_velocity: f64,
     ) -> Option<f64> {
-        if !finite_positive(strouhal) || !finite_positive(characteristic_length) || !finite_positive(flow_velocity) {
+        if !finite_positive(strouhal)
+            || !finite_positive(characteristic_length)
+            || !finite_positive(flow_velocity)
+        {
             return None;
         }
         Some(strouhal * flow_velocity / characteristic_length)
