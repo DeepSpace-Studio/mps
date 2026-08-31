@@ -34,9 +34,11 @@ pub struct ScientistRecord {
 pub use self::albert_einstein::SCIENTIST as SCIENTIST_ALBERT_EINSTEIN;
 pub use self::andre_marie_ampere::SCIENTIST as SCIENTIST_ANDRE_MARIE_AMPERE;
 pub use self::archimedes::SCIENTIST as SCIENTIST_ARCHIMEDES;
+pub use self::augustin_fresnel::SCIENTIST as SCIENTIST_AUGUSTIN_FRESNEL;
 pub use self::bernhard_riemann::SCIENTIST as SCIENTIST_BERNHARD_RIEMANN;
 pub use self::carl_friedrich_gauss::SCIENTIST as SCIENTIST_CARL_FRIEDRICH_GAUSS;
 pub use self::charles_augustin_de_coulomb::SCIENTIST as SCIENTIST_CHARLES_AUGUSTIN_DE_COULOMB;
+pub use self::christiaan_huygens::SCIENTIST as SCIENTIST_CHRISTIAAN_HUYGENS;
 pub use self::claude_louis_navier::SCIENTIST as SCIENTIST_CLAUDE_LOUIS_NAVIER;
 pub use self::daniel_bernoulli::SCIENTIST as SCIENTIST_DANIEL_BERNOULLI;
 pub use self::enrico_fermi::SCIENTIST as SCIENTIST_ENRICO_FERMI;
@@ -73,6 +75,7 @@ pub use self::richard_feynman::SCIENTIST as SCIENTIST_RICHARD_FEYNMAN;
 pub use self::rudolf_clausius::SCIENTIST as SCIENTIST_RUDOLF_CLAUSIUS;
 pub use self::sadi_carnot::SCIENTIST as SCIENTIST_SADI_CARNOT;
 pub use self::satyendra_nath_bose::SCIENTIST as SCIENTIST_SATYENDRA_NATH_BOSE;
+pub use self::thomas_young::SCIENTIST as SCIENTIST_THOMAS_YOUNG;
 pub use self::werner_heisenberg::SCIENTIST as SCIENTIST_WERNER_HEISENBERG;
 pub use self::willard_gibbs::SCIENTIST as SCIENTIST_WILLARD_GIBBS;
 pub use self::william_rowan_hamilton::SCIENTIST as SCIENTIST_WILLIAM_ROWAN_HAMILTON;
@@ -85,6 +88,8 @@ pub mod albert_einstein;
 pub mod andre_marie_ampere;
 #[path = "archimedes.rs"]
 pub mod archimedes;
+#[path = "augustin_fresnel.rs"]
+pub mod augustin_fresnel;
 #[path = "bernhard_riemann.rs"]
 pub mod bernhard_riemann;
 #[path = "carl_friedrich_gauss.rs"]
@@ -93,6 +98,8 @@ pub mod carl_friedrich_gauss;
 pub mod charles_augustin_de_coulomb;
 #[path = "chen_ning_yang.rs"]
 pub mod chen_ning_yang;
+#[path = "christiaan_huygens.rs"]
+pub mod christiaan_huygens;
 #[path = "claude_louis_navier.rs"]
 pub mod claude_louis_navier;
 #[path = "daniel_bernoulli.rs"]
@@ -167,6 +174,8 @@ pub mod rudolf_clausius;
 pub mod sadi_carnot;
 #[path = "satyendra_nath_bose.rs"]
 pub mod satyendra_nath_bose;
+#[path = "thomas_young.rs"]
+pub mod thomas_young;
 #[path = "werner_heisenberg.rs"]
 pub mod werner_heisenberg;
 #[path = "willard_gibbs.rs"]
@@ -178,7 +187,7 @@ pub mod wolfgang_pauli;
 
 /// 收录的科学家总数。
 pub fn scientist_count() -> usize {
-    46
+    49
 }
 
 /// 收录的所有科学家记录（按 `id` 字典序）。
@@ -186,9 +195,11 @@ pub static SCIENTISTS: &[ScientistRecord] = &[
     self::albert_einstein::SCIENTIST,
     self::andre_marie_ampere::SCIENTIST,
     self::archimedes::SCIENTIST,
+    self::augustin_fresnel::SCIENTIST,
     self::bernhard_riemann::SCIENTIST,
     self::carl_friedrich_gauss::SCIENTIST,
     self::charles_augustin_de_coulomb::SCIENTIST,
+    self::christiaan_huygens::SCIENTIST,
     self::claude_louis_navier::SCIENTIST,
     self::daniel_bernoulli::SCIENTIST,
     self::enrico_fermi::SCIENTIST,
@@ -227,6 +238,7 @@ pub static SCIENTISTS: &[ScientistRecord] = &[
     self::satyendra_nath_bose::SCIENTIST,
     self::werner_heisenberg::SCIENTIST,
     self::willard_gibbs::SCIENTIST,
+    self::thomas_young::SCIENTIST,
     self::william_rowan_hamilton::SCIENTIST,
     self::wolfgang_pauli::SCIENTIST,
 ];
