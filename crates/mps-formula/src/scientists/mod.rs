@@ -59,6 +59,7 @@ pub use self::isaac_newton::SCIENTIST as SCIENTIST_ISAAC_NEWTON;
 pub use self::james_clerk_maxwell::SCIENTIST as SCIENTIST_JAMES_CLERK_MAXWELL;
 pub use self::james_thomson::SCIENTIST as SCIENTIST_JAMES_THOMSON;
 pub use self::james_watt::SCIENTIST as SCIENTIST_JAMES_WATT;
+pub use self::jean_le_rond_dalembert::SCIENTIST as SCIENTIST_JEAN_LE_ROND_DALEMBERT;
 pub use self::johannes_kepler::SCIENTIST as SCIENTIST_JOHANNES_KEPLER;
 pub use self::joseph_fourier::SCIENTIST as SCIENTIST_JOSEPH_FOURIER;
 pub use self::joseph_louis_lagrange::SCIENTIST as SCIENTIST_JOSEPH_LOUIS_LAGRANGE;
@@ -67,6 +68,7 @@ pub use self::lev_landau::SCIENTIST as SCIENTIST_LEV_LANDAU;
 pub use self::lord_kelvin::SCIENTIST as SCIENTIST_LORD_KELVIN;
 pub use self::lord_rayleigh::SCIENTIST as SCIENTIST_LORD_RAYLEIGH;
 pub use self::ludwig_boltzmann::SCIENTIST as SCIENTIST_LUDWIG_BOLTZMANN;
+pub use self::ludwig_prandtl::SCIENTIST as SCIENTIST_LUDWIG_PRANDTL;
 pub use self::marie_curie::SCIENTIST as SCIENTIST_MARIE_CURIE;
 pub use self::max_planck::SCIENTIST as SCIENTIST_MAX_PLANCK;
 pub use self::michael_faraday::SCIENTIST as SCIENTIST_MICHAEL_FARADAY;
@@ -80,6 +82,7 @@ pub use self::richard_feynman::SCIENTIST as SCIENTIST_RICHARD_FEYNMAN;
 pub use self::rudolf_clausius::SCIENTIST as SCIENTIST_RUDOLF_CLAUSIUS;
 pub use self::sadi_carnot::SCIENTIST as SCIENTIST_SADI_CARNOT;
 pub use self::satyendra_nath_bose::SCIENTIST as SCIENTIST_SATYENDRA_NATH_BOSE;
+pub use self::theodore_von_karman::SCIENTIST as SCIENTIST_THEODORE_VON_KARMAN;
 pub use self::thomas_young::SCIENTIST as SCIENTIST_THOMAS_YOUNG;
 pub use self::werner_heisenberg::SCIENTIST as SCIENTIST_WERNER_HEISENBERG;
 pub use self::willard_gibbs::SCIENTIST as SCIENTIST_WILLARD_GIBBS;
@@ -145,6 +148,8 @@ pub mod james_clerk_maxwell;
 pub mod james_thomson;
 #[path = "james_watt.rs"]
 pub mod james_watt;
+#[path = "jean_le_rond_dalembert.rs"]
+pub mod jean_le_rond_dalembert;
 #[path = "johannes_kepler.rs"]
 pub mod johannes_kepler;
 #[path = "joseph_fourier.rs"]
@@ -161,6 +166,8 @@ pub mod lord_kelvin;
 pub mod lord_rayleigh;
 #[path = "ludwig_boltzmann.rs"]
 pub mod ludwig_boltzmann;
+#[path = "ludwig_prandtl.rs"]
+pub mod ludwig_prandtl;
 #[path = "marie_curie.rs"]
 pub mod marie_curie;
 #[path = "max_planck.rs"]
@@ -189,6 +196,8 @@ pub mod rudolf_clausius;
 pub mod sadi_carnot;
 #[path = "satyendra_nath_bose.rs"]
 pub mod satyendra_nath_bose;
+#[path = "theodore_von_karman.rs"]
+pub mod theodore_von_karman;
 #[path = "thomas_young.rs"]
 pub mod thomas_young;
 #[path = "werner_heisenberg.rs"]
@@ -202,7 +211,7 @@ pub mod wolfgang_pauli;
 
 /// 收录的科学家总数。
 pub fn scientist_count() -> usize {
-    54
+    57
 }
 
 /// 收录的所有科学家记录（按 `id` 字典序）。
@@ -235,6 +244,7 @@ pub static SCIENTISTS: &[ScientistRecord] = &[
     self::james_clerk_maxwell::SCIENTIST,
     self::james_thomson::SCIENTIST,
     self::james_watt::SCIENTIST,
+    self::jean_le_rond_dalembert::SCIENTIST,
     self::johannes_kepler::SCIENTIST,
     self::joseph_fourier::SCIENTIST,
     self::joseph_louis_lagrange::SCIENTIST,
@@ -243,6 +253,7 @@ pub static SCIENTISTS: &[ScientistRecord] = &[
     self::lord_kelvin::SCIENTIST,
     self::lord_rayleigh::SCIENTIST,
     self::ludwig_boltzmann::SCIENTIST,
+    self::ludwig_prandtl::SCIENTIST,
     self::marie_curie::SCIENTIST,
     self::max_planck::SCIENTIST,
     self::mitchell_feigenbaum::SCIENTIST,
@@ -258,6 +269,7 @@ pub static SCIENTISTS: &[ScientistRecord] = &[
     self::satyendra_nath_bose::SCIENTIST,
     self::werner_heisenberg::SCIENTIST,
     self::willard_gibbs::SCIENTIST,
+    self::theodore_von_karman::SCIENTIST,
     self::thomas_young::SCIENTIST,
     self::william_rowan_hamilton::SCIENTIST,
     self::wolfgang_pauli::SCIENTIST,
