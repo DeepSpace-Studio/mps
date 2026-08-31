@@ -631,6 +631,25 @@ jni!(long queryProjectPoint(long world, double x, double y, double z, double max
     if let Some(out) = unsafe { pm::<PointProjection>(out_projection).as_mut() } { *out = projection; }
     collider as jlong
 });
+// Phase 5h: query *_out 变体补齐 JNI (直接绑定 query_cast_ray_out / query_project_point_out / query_cast_shape_out)
+jni!(long queryCastRayOut(long world, double ox, double oy, double oz, double dx, double dy, double dz, double max_toi, int solid, int flags, int memberships, int filter, int use_groups, long exclude_collider, int use_exclude_collider, long exclude_rigid_body, int use_exclude_rigid_body, long out_hit) {
+    let world_ptr = cp::<WH>(world);
+    if world_ptr.is_null() { er::set_error(er::ERR_NULL_POINTER, "world is null"); return 0; }
+    let filter_desc = query_filter_args!(flags, memberships, filter, use_groups, exclude_collider, use_exclude_collider, exclude_rigid_body, use_exclude_rigid_body);
+    let hit = qu::query_cast_ray_out(world_ptr, v3(ox, oy, oz), v3(dx, dy, dz), max_toi, jb(solid), filter_desc, pm::<RayHit>(out_hit));
+    hit as jlong
+});
+jni!(long queryProjectPointOut(long world, double x, double y, double z, double max_dist, int solid, int flags, int memberships, int filter, int use_groups, long exclude_collider, int use_exclude_collider, long exclude_rigid_body, int use_exclude_rigid_body, long out_collider, long out_projection) {
+    let world_ptr = cp::<WH>(world);
+    if world_ptr.is_null() { er::set_error(er::ERR_NULL_POINTER, "world is null"); return 0; }
+    let filter_desc = query_filter_args!(flags, memberships, filter, use_groups, exclude_collider, use_exclude_collider, exclude_rigid_body, use_exclude_rigid_body);
+    let collider = qu::query_project_point_out(world_ptr, v3(x, y, z), max_dist, jb(solid), filter_desc, pm::<CRaw>(out_collider), pm::<PointProjection>(out_projection));
+    collider as jlong
+});
+jni!(long queryCastShapeOut(long world, int shape_type, double a, double b, double c, double d, double tx, double ty, double tz, double qi, double qj, double qk, double qw, double vx, double vy, double vz, double max_toi, double target_distance, int stop_at_penetration, int compute_impact_geometry_on_penetration, int flags, int memberships, int filter, int use_groups, long exclude_collider, int use_exclude_collider, long exclude_rigid_body, int use_exclude_rigid_body, long out_hit) {
+    let hit = qu::query_cast_shape_out(cp::<WH>(world), sd(shape_type, a, b, c, d), v3(tx,ty,tz), qt(qi,qj,qk,qw), v3(vx,vy,vz), ShapeCastOptionsDesc { max_time_of_impact: max_toi, target_distance, stop_at_penetration: jb(stop_at_penetration), compute_impact_geometry_on_penetration: jb(compute_impact_geometry_on_penetration) }, query_filter_args!(flags,memberships,filter,use_groups,exclude_collider,use_exclude_collider,exclude_rigid_body,use_exclude_rigid_body), pm::<ShapeCastHit>(out_hit));
+    hit as jlong
+});
 
 jni!(int queryIntersectPointCount(long world, double x, double y, double z, int flags, int memberships, int filter, int use_groups, long exclude_collider, int use_exclude_collider, long exclude_rigid_body, int use_exclude_rigid_body) {
     qu::query_intersect_point_count(cp::<WH>(world), v3(x, y, z), query_filter_args!(flags,memberships,filter,use_groups,exclude_collider,use_exclude_collider,exclude_rigid_body,use_exclude_rigid_body)) as jint

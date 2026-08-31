@@ -16,7 +16,7 @@ pub const VERSION: &str = "0.1.4";
 /// Total number of `#[test]` items in `mps-test`.
 pub const TEST_COUNT: &str = "985";
 /// Total number of `jni!(`/`jni_e_c!(` method entries in `mps-jni`.
-pub const JNI_METHOD_COUNT: &str = "514";
+pub const JNI_METHOD_COUNT: &str = "517";
 /// Total number of `pub extern "C" fn` declarations in `mps-core/rapier`.
 pub const CORE_FFI_COUNT: &str = "813";
 /// Number of `pub mod` formula submodules under mps-formula scientists+disciplines.
