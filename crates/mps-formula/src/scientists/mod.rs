@@ -32,6 +32,7 @@ pub struct ScientistRecord {
 
 /// 各科学家的 `ScientistRecord` 常量（按 `id` 字典序重导出为 `SCIENTIST_<ID>`）。
 pub use self::albert_einstein::SCIENTIST as SCIENTIST_ALBERT_EINSTEIN;
+pub use self::aleksandr_lyapunov::SCIENTIST as SCIENTIST_ALEKSANDR_LYAPUNOV;
 pub use self::andre_marie_ampere::SCIENTIST as SCIENTIST_ANDRE_MARIE_AMPERE;
 pub use self::archimedes::SCIENTIST as SCIENTIST_ARCHIMEDES;
 pub use self::augustin_fresnel::SCIENTIST as SCIENTIST_AUGUSTIN_FRESNEL;
@@ -41,6 +42,7 @@ pub use self::charles_augustin_de_coulomb::SCIENTIST as SCIENTIST_CHARLES_AUGUST
 pub use self::christiaan_huygens::SCIENTIST as SCIENTIST_CHRISTIAAN_HUYGENS;
 pub use self::claude_louis_navier::SCIENTIST as SCIENTIST_CLAUDE_LOUIS_NAVIER;
 pub use self::daniel_bernoulli::SCIENTIST as SCIENTIST_DANIEL_BERNOULLI;
+pub use self::edward_lorenz::SCIENTIST as SCIENTIST_EDWARD_LORENZ;
 pub use self::enrico_fermi::SCIENTIST as SCIENTIST_ENRICO_FERMI;
 pub use self::ernest_rutherford::SCIENTIST as SCIENTIST_ERNEST_RUTHERFORD;
 pub use self::ernst_mach::SCIENTIST as SCIENTIST_ERNST_MACH;
@@ -66,6 +68,7 @@ pub use self::ludwig_boltzmann::SCIENTIST as SCIENTIST_LUDWIG_BOLTZMANN;
 pub use self::marie_curie::SCIENTIST as SCIENTIST_MARIE_CURIE;
 pub use self::max_planck::SCIENTIST as SCIENTIST_MAX_PLANCK;
 pub use self::michael_faraday::SCIENTIST as SCIENTIST_MICHAEL_FARADAY;
+pub use self::mitchell_feigenbaum::SCIENTIST as SCIENTIST_MITCHELL_FEIGENBAUM;
 pub use self::niels_bohr::SCIENTIST as SCIENTIST_NIELS_BOHR;
 pub use self::osborne_reynolds::SCIENTIST as SCIENTIST_OSBORNE_REYNOLDS;
 pub use self::paul_dirac::SCIENTIST as SCIENTIST_PAUL_DIRAC;
@@ -84,6 +87,8 @@ pub use self::wolfgang_pauli::SCIENTIST as SCIENTIST_WOLFGANG_PAULI;
 /// 各科学家的子模块（元数据 + `formulas` 实现）。
 #[path = "albert_einstein.rs"]
 pub mod albert_einstein;
+#[path = "aleksandr_lyapunov.rs"]
+pub mod aleksandr_lyapunov;
 #[path = "andre_marie_ampere.rs"]
 pub mod andre_marie_ampere;
 #[path = "archimedes.rs"]
@@ -104,6 +109,8 @@ pub mod christiaan_huygens;
 pub mod claude_louis_navier;
 #[path = "daniel_bernoulli.rs"]
 pub mod daniel_bernoulli;
+#[path = "edward_lorenz.rs"]
+pub mod edward_lorenz;
 #[path = "enrico_fermi.rs"]
 pub mod enrico_fermi;
 #[path = "ernest_rutherford.rs"]
@@ -154,6 +161,8 @@ pub mod marie_curie;
 pub mod max_planck;
 #[path = "michael_faraday.rs"]
 pub mod michael_faraday;
+#[path = "mitchell_feigenbaum.rs"]
+pub mod mitchell_feigenbaum;
 #[path = "niels_bohr.rs"]
 pub mod niels_bohr;
 #[path = "osborne_reynolds.rs"]
@@ -187,12 +196,13 @@ pub mod wolfgang_pauli;
 
 /// 收录的科学家总数。
 pub fn scientist_count() -> usize {
-    49
+    52
 }
 
 /// 收录的所有科学家记录（按 `id` 字典序）。
 pub static SCIENTISTS: &[ScientistRecord] = &[
     self::albert_einstein::SCIENTIST,
+    self::aleksandr_lyapunov::SCIENTIST,
     self::andre_marie_ampere::SCIENTIST,
     self::archimedes::SCIENTIST,
     self::augustin_fresnel::SCIENTIST,
@@ -202,6 +212,7 @@ pub static SCIENTISTS: &[ScientistRecord] = &[
     self::christiaan_huygens::SCIENTIST,
     self::claude_louis_navier::SCIENTIST,
     self::daniel_bernoulli::SCIENTIST,
+    self::edward_lorenz::SCIENTIST,
     self::enrico_fermi::SCIENTIST,
     self::ernest_rutherford::SCIENTIST,
     self::ernst_mach::SCIENTIST,
@@ -226,6 +237,7 @@ pub static SCIENTISTS: &[ScientistRecord] = &[
     self::ludwig_boltzmann::SCIENTIST,
     self::marie_curie::SCIENTIST,
     self::max_planck::SCIENTIST,
+    self::mitchell_feigenbaum::SCIENTIST,
     self::michael_faraday::SCIENTIST,
     self::niels_bohr::SCIENTIST,
     self::osborne_reynolds::SCIENTIST,
