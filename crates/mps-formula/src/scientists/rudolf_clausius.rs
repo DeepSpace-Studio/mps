@@ -37,4 +37,13 @@ pub mod formulas {
         }
         Some(p1 * (-latent_heat / 8.314462618 * (1.0 / t2 - 1.0 / t1)).exp())
     }
+
+    /// Clausius entropy change: ΔS = Q_rev / T
+    /// For a reversible heat transfer at constant temperature.
+    pub fn clausius_entropy_change(heat_rev: f64, temperature: f64) -> Option<f64> {
+        if !heat_rev.is_finite() || !temperature.is_finite() || temperature <= 0.0 {
+            return None;
+        }
+        Some(heat_rev / temperature)
+    }
 }

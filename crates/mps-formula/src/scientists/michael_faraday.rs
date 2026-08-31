@@ -34,4 +34,13 @@ pub mod formulas {
         }
         Some(verdet_constant * magnetic_field * path_length)
     }
+
+    /// Faraday's law of induction: EMF = -dΦ/dt
+    /// For a uniform rate of flux change: |EMF| = flux_rate
+    pub fn faraday_induction_emf(flux_rate: f64) -> Option<f64> {
+        if !flux_rate.is_finite() {
+            return None;
+        }
+        Some(flux_rate.abs())
+    }
 }

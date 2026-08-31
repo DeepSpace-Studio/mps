@@ -54,4 +54,17 @@ pub mod formulas {
         }
         Some(internal_energy + pressure * volume - temperature * entropy)
     }
+
+    /// Gibbs phase rule: F = C - P + 2
+    /// C = number of components, P = number of phases, F = degrees of freedom.
+    pub fn gibbs_phase_rule(components: u32, phases: u32) -> Option<i32> {
+        if components == 0 || phases == 0 {
+            return None;
+        }
+        let f = components as i32 - phases as i32 + 2;
+        if f < 0 {
+            return None;
+        }
+        Some(f)
+    }
 }

@@ -116,4 +116,12 @@ pub mod formulas {
 
         pnm
     }
+
+    /// Gauss's law: electric flux through a closed surface = Q_enclosed / ε₀
+    pub fn gauss_law_electric_flux(charge: f64, epsilon0: f64) -> Option<f64> {
+        if !charge.is_finite() || !epsilon0.is_finite() || epsilon0 <= 0.0 {
+            return None;
+        }
+        Some(charge / epsilon0)
+    }
 }

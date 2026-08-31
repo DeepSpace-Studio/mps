@@ -15,7 +15,7 @@ pub const SCIENTIST: ScientistRecord = ScientistRecord {
     death_year: Some(1630),
     field_id: "astro",
     nationality: "German",
-    contribution: "Kepler's laws of planetary motion",
+    contribution: "Kepler's l of planetary motion",
     key_constants: "",
 };
 
@@ -105,5 +105,23 @@ pub mod formulas {
         };
 
         (a, e, inc, raan, argp, nu)
+    }
+
+    /// Kepler's third law (scalar): T² = 4π² a³ / (GM)
+    /// Returns orbital period `T` given semi-major axis `a` and central mass `M`.
+    pub fn kepler_period(semi_major_axis: f64, mass: f64) -> Option<f64> {
+        if !semi_major_axis.is_finite()
+            || !mass.is_finite()
+            || semi_major_axis <= 0.0
+            || mass <= 0.0
+        {
+            return None;
+        }
+        const G: f64 = 6.674_30e-11;
+        let period = 2.0 * std::f64::consts::PI * (semi_major_axis.powi(3) / (G * mass)).sqrt();
+        if !period.is_finite() {
+            return None;
+        }
+        Some(period)
     }
 }

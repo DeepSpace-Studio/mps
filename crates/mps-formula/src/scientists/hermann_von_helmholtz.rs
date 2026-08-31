@@ -43,4 +43,23 @@ pub mod formulas {
         }
         Some(internal_energy - temperature * entropy)
     }
+
+    /// Magnetic field at the center of a Helmholtz coil pair:
+    /// B = (μ₀ * N * I * R²) / (R² + (d/2)²)^(3/2)
+    /// where d = R (ideal Helmholtz spacing), so B = (8/5)^(3/2) * μ₀ * N * I / R
+    pub fn helmholtz_coil_field(current: f64, turns: f64, radius: f64) -> Option<f64> {
+        if !current.is_finite()
+            || !turns.is_finite()
+            || !radius.is_finite()
+            || radius <= 0.0
+            || turns <= 0.0
+        {
+            return None;
+        }
+        const MU0: f64 = 1.256_637_062_12e-6;
+        // ideal Helmholtz: separation = radius, field at center:
+        // B = (8/5)^(3/2) * μ₀ * N * I / R
+        let factor = (8.0_f64 / 5.0_f64).powf(1.5);
+        Some(factor * MU0 * turns * current / radius)
+    }
 }

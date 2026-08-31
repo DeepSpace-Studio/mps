@@ -36,4 +36,20 @@ pub mod formulas {
         }
         Some(cp * viscosity / conductivity)
     }
+
+    /// Convert Kelvin to Celsius: °C = K - 273.15
+    pub fn kelvin_to_celsius(kelvin: f64) -> Option<f64> {
+        if !kelvin.is_finite() || kelvin < 0.0 {
+            return None;
+        }
+        Some(kelvin - 273.15)
+    }
+
+    /// Convert Celsius to Kelvin: K = °C + 273.15
+    pub fn celsius_to_kelvin(celsius: f64) -> Option<f64> {
+        if !celsius.is_finite() {
+            return None;
+        }
+        Some(celsius + 273.15)
+    }
 }

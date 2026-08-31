@@ -52,4 +52,26 @@ pub mod formulas {
         let ratio = temperature / debye_temperature;
         Some(12.0 * std::f64::consts::PI.powi(4) / 5.0 * n_atoms * r * ratio.powi(3))
     }
+
+    /// Debye shielding length: λ_D = √(ε₀ k_B T / (n e²))
+    /// For a plasma with electron density `n`, temperature `T`, returns Debye length in meters.
+    /// `epsilon0` = vacuum permittivity (F/m), `k_B` = Boltzmann constant, `e` = elementary charge.
+    pub fn debye_shielding_length(
+        temperature: f64,
+        electron_density: f64,
+        epsilon0: f64,
+        k_b: f64,
+        e: f64,
+    ) -> Option<f64> {
+        if !finite_5(temperature, electron_density, epsilon0, k_b, e)
+            || temperature <= 0.0
+            || electron_density <= 0.0
+            || epsilon0 <= 0.0
+            || k_b <= 0.0
+            || e <= 0.0
+        {
+            return None;
+        }
+        Some((epsilon0 * k_b * temperature / (electron_density * e * e)).sqrt())
+    }
 }
