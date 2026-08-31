@@ -3,6 +3,33 @@ use dioxus_i18n::{prelude::*, t};
 
 use crate::metrics::VERSION;
 
+/// Inline client script (no hydration / WASM — pure SSR site). It:
+/// - migrates any legacy `?lang=` deep link into a `lang` cookie + localStorage,
+///   then strips the query from the URL (so GitHub-Pages routing is never hit);
+/// - binds the `.lang-btn` toggles to write `lang` into both localStorage and a
+///   cookie, then `location.reload()` — the URL stays `/`, satisfying the
+///   "no URL jump" requirement while the server re-renders the chosen language.
+const LANG_TOGGLE_JS: &str = r#"
+document.addEventListener('DOMContentLoaded', function () {
+  var p = new URLSearchParams(location.search);
+  var l = p.get('lang');
+  if (l) {
+    document.cookie = 'lang=' + l + ';path=/;max-age=31536000';
+    try { localStorage.setItem('lang', l); } catch (e) {}
+    history.replaceState(null, '', location.pathname);
+  }
+  document.querySelectorAll('.lang-btn').forEach(function (b) {
+    b.addEventListener('click', function (e) {
+      e.preventDefault();
+      var lang = b.getAttribute('data-lang') || 'zh-CN';
+      document.cookie = 'lang=' + lang + ';path=/;max-age=31536000';
+      try { localStorage.setItem('lang', lang); } catch (e) {}
+      location.reload();
+    });
+  });
+});
+"#;
+
 /// Single-page doc theme — GitBook-style: fixed left sidebar + content column.
 /// Rich but tasteful: deep-space panel, grouped nav, refined cards.
 /// Native in-page anchor scrolling (no router, no client JS).
@@ -71,8 +98,9 @@ pub fn Sidebar() -> Element {
                 }
             }
             div { class: "sidebar-foot",
-                a { class: if zh { "lang-btn is-active" } else { "lang-btn" }, href: "/?lang=zh-CN", "中" }
-                a { class: if !zh { "lang-btn is-active" } else { "lang-btn" }, href: "/?lang=en", "EN" }
+                a { class: if zh { "lang-btn is-active" } else { "lang-btn" }, "data-lang": "zh-CN", "中" }
+                a { class: if !zh { "lang-btn is-active" } else { "lang-btn" }, "data-lang": "en", "EN" }
+                script { dangerous_inner_html: LANG_TOGGLE_JS }
             }
         }
     }

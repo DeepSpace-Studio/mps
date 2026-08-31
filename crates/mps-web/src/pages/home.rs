@@ -4,12 +4,37 @@ use dioxus_i18n::{prelude::*, t};
 use unic_langid::LanguageIdentifier;
 use unic_langid::langid;
 
-/// Detect the requested UI language from the SSR request query string
-/// (`?lang=en` / `?lang=zh-CN`). Falls back to `zh-CN` when there is no
-/// server context (pure SSR setup still resolves this on first render).
+/// Detect the requested UI language for SSR rendering.
+///
+/// Preference order (all server-readable, none require a URL change):
+/// 1. `lang` cookie — set by the lang toggle (survives reload with the URL
+///    staying `/`, which sidesteps GitHub-Pages `?lang=` routing issues).
+/// 2. legacy `?lang=` query (kept for backward-compatible deep links; the
+///    client script migrates it into a cookie on first load).
+///
+/// Falls back to `zh-CN`.
 fn detect_lang() -> LanguageIdentifier {
     if let Some(ctx) = FullstackContext::current() {
         let parts = ctx.parts_mut();
+        // 1) cookie
+        if let Some(s) = parts
+            .headers
+            .get(dioxus_fullstack::http::header::COOKIE)
+            .and_then(|c| c.to_str().ok())
+        {
+            for kv in s.split(';') {
+                let mut it = kv.trim().splitn(2, '=');
+                if let (Some(k), Some(v)) = (it.next(), it.next()) {
+                    if k == "lang" && v == "en" {
+                        return langid!("en");
+                    }
+                    if k == "lang" && v == "zh-CN" {
+                        return langid!("zh-CN");
+                    }
+                }
+            }
+        }
+        // 2) legacy URL query
         if let Some(query) = parts.uri.query() {
             for pair in query.split('&') {
                 let mut it = pair.splitn(2, '=');
