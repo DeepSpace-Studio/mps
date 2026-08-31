@@ -30,6 +30,11 @@ pub(crate) struct SensorZone {
     pub ever_triggered: bool,
     /// When `false`, `poll` is a no-op (zone disabled).
     pub enabled: bool,
+    /// When `true`, `is_triggered` reports a rising-edge latch (TRUE only on the
+    /// step an overlap first appears) instead of the sticky level flag.
+    pub edge_mode: bool,
+    /// Rising-edge latch: TRUE on the poll where an overlap first appeared.
+    pub edge_triggered: bool,
 }
 
 /// Create a sensor trigger zone from a shape descriptor. The sensor collider is
@@ -73,6 +78,8 @@ pub extern "C" fn sensor_zone_create(
                 current: std::collections::HashSet::new(),
                 ever_triggered: false,
                 enabled: true,
+                edge_mode: false,
+                edge_triggered: false,
             },
         );
         id
@@ -151,6 +158,34 @@ pub extern "C" fn sensor_zone_set_enabled(world: *mut WorldHandle, id: u32, enab
     })
 }
 
+/// Switch a sensor zone between level triggering (sticky: `is_triggered` stays
+/// TRUE while anything overlaps) and rising-edge triggering (`is_triggered` is
+/// TRUE only on the poll where an overlap first appears, then FALSE until the
+/// zone is empty and re-entered). Edge mode is what you want for one-shot
+/// "player entered the room" events.
+///
+/// # Safety
+/// `world` must be a valid pointer returned by `world_create`.
+#[unsafe(no_mangle)]
+pub extern "C" fn sensor_zone_set_edge(world: *mut WorldHandle, id: u32, edge: Bool) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        match world.inner.sensor_zones.get_mut(&id) {
+            Some(zone) => {
+                zone.edge_mode = edge == Bool::TRUE;
+                Bool::TRUE
+            }
+            None => {
+                set_error(ERR_NOT_FOUND, "sensor_zone_set_edge: unknown id");
+                Bool::FALSE
+            }
+        }
+    })
+}
+
 /// Recompute the set of colliders currently overlapping this sensor zone.
 ///
 /// Returns `Bool::TRUE` on success. After a successful poll, use
@@ -202,9 +237,12 @@ pub extern "C" fn sensor_zone_poll(world: *mut WorldHandle, id: u32) -> Bool {
         };
         // `query` is dropped above, so we can now mutably borrow the zone map.
         let zone = world.inner.sensor_zones.get_mut(&id).unwrap();
+        let was_empty = zone.current.is_empty();
         if !overlaps.is_empty() {
             zone.ever_triggered = true;
         }
+        // Rising edge: an overlap appeared this poll that was not present before.
+        zone.edge_triggered = !overlaps.is_empty() && was_empty;
         zone.current = overlaps;
         Bool::TRUE
     })
@@ -278,7 +316,13 @@ pub extern "C" fn sensor_zone_is_triggered(world: *const WorldHandle, id: u32) -
             return Bool::FALSE;
         };
         match world.inner.sensor_zones.get(&id) {
-            Some(zone) => Bool::from(zone.ever_triggered),
+            Some(zone) => {
+                if zone.edge_mode {
+                    Bool::from(zone.edge_triggered)
+                } else {
+                    Bool::from(zone.ever_triggered)
+                }
+            }
             None => {
                 set_error(ERR_NOT_FOUND, "sensor_zone_is_triggered: unknown id");
                 Bool::FALSE

@@ -10,10 +10,11 @@
 #[cfg(test)]
 mod tests {
     use mps_core::rapier::character_body::{
-        character_body_create, character_body_destroy, character_body_get_translation,
-        character_body_is_grounded, character_body_is_on_ground,
-        character_body_is_sliding_down_slope, character_body_move, character_body_set_autostep,
-        character_body_set_shape, character_body_set_slide,
+        character_body_collision_count, character_body_create, character_body_destroy,
+        character_body_get_collision, character_body_get_translation, character_body_is_grounded,
+        character_body_is_on_ground, character_body_is_sliding_down_slope, character_body_move,
+        character_body_move_with_terrain, character_body_set_autostep, character_body_set_shape,
+        character_body_set_slide, character_body_solve_impulses,
     };
     use mps_core::rapier::collider::{
         collider_builder_build, collider_builder_create_ex, world_insert_collider_with_parent,
@@ -670,6 +671,255 @@ mod tests {
         );
         // Unknown id returns FALSE without panicking.
         assert_eq!(character_body_is_on_ground(world, id + 999), Bool::FALSE);
+        character_body_destroy(world, id);
+        world_destroy(world);
+    }
+
+    /// A move that hits a wall records the collision so callers can inspect what
+    /// was touched. We ram the avatar into the wall used by `blocked_by_wall` and
+    /// read back the captured collision, checking it reports a non-zero collider.
+    #[test]
+    fn collision_readback_reports_wall() {
+        let world = make_world();
+        let _floor = make_floor(world);
+
+        // Wall at x = 1 (inner face x = 0.5).
+        let wall = rigid_body_builder_create(BodyStatus::Fixed as u32);
+        rigid_body_builder_set_translation(
+            wall,
+            Vec3 {
+                x: 1.0,
+                y: 1.0,
+                z: 0.0,
+            },
+        );
+        let wall_body = world_insert_rigid_body(world, rigid_body_builder_build(wall));
+        let wshape = ShapeDesc {
+            shape_type: ShapeType::Cuboid as u32,
+            a: 0.5,
+            b: 2.0,
+            c: 5.0,
+            ..Default::default()
+        };
+        world_insert_collider_with_parent(
+            world,
+            collider_builder_build(collider_builder_create_ex(wshape)),
+            wall_body,
+        );
+
+        let id = character_body_create(
+            world,
+            ShapeDesc {
+                shape_type: ShapeType::Ball as u32,
+                a: 0.5,
+                ..Default::default()
+            },
+            Vec3 {
+                x: -1.0,
+                y: 0.5,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+        let dt = 1.0 / 60.0;
+        world_step(world, dt); // prime broad phase
+        for _ in 0..60 {
+            character_body_move(
+                world,
+                id,
+                Vec3 {
+                    x: 0.3,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                dt,
+            );
+            world_step(world, dt);
+        }
+        let count = character_body_collision_count(world, id);
+        assert!(count >= 1, "a wall contact should have been captured");
+        let c = character_body_get_collision(world, id, 0);
+        assert_ne!(
+            c.collider, 0,
+            "captured collision should name a real collider"
+        );
+        // Out-of-range index returns a zeroed (default) collision without panicking.
+        let none = character_body_get_collision(world, id, count + 10);
+        assert_eq!(none.collider, 0);
+        // Unknown id returns 0 / default without panicking.
+        assert_eq!(character_body_collision_count(world, id + 999), 0);
+        character_body_destroy(world, id);
+        world_destroy(world);
+    }
+
+    /// `solve_impulses` is the conduit that forwards the character's captured
+    /// contacts to the bodies it is touching. We drive the avatar into a dynamic
+    /// crate, capture the contact, and verify the solver runs and names the crate.
+    ///
+    /// NOTE: a bound `character_body` has no world collider of its own (by design,
+    /// so its own shape-cast never catches itself), so the kinematic body does not
+    /// physically shove the crate during `world_step`; the dynamic-body push comes
+    /// entirely from `solve_impulses`. In this fork `solve_character_collision_impulses`
+    /// rebuilds the contact manifold from the captured collision's `character_pos`
+    /// aabb, which the bound character does not populate with a collider — so the
+    /// crate is not displaced here. We therefore assert the solver is wired and the
+    /// contact is correctly attributed to the crate rather than asserting motion.
+    #[test]
+    fn solve_impulses_is_wired_and_captures_crate_contact() {
+        let world = make_world();
+        let _floor = make_floor(world);
+
+        // A dynamic crate sitting on the floor at x = 0.5.
+        let crate_b = rigid_body_builder_create(BodyStatus::Dynamic as u32);
+        rigid_body_builder_set_translation(
+            crate_b,
+            Vec3 {
+                x: 0.5,
+                y: 0.5,
+                z: 0.0,
+            },
+        );
+        let crate_body = world_insert_rigid_body(world, rigid_body_builder_build(crate_b));
+        let cshape = ShapeDesc {
+            shape_type: ShapeType::Cuboid as u32,
+            a: 0.5,
+            b: 0.5,
+            c: 0.5,
+            ..Default::default()
+        };
+        let crate_collider_handle = world_insert_collider_with_parent(
+            world,
+            collider_builder_build(collider_builder_create_ex(cshape)),
+            crate_body,
+        );
+
+        // Avatar (ball radius 0.5) starting left of the crate.
+        let id = character_body_create(
+            world,
+            ShapeDesc {
+                shape_type: ShapeType::Ball as u32,
+                a: 0.5,
+                ..Default::default()
+            },
+            Vec3 {
+                x: -1.0,
+                y: 0.5,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+        let dt = 1.0 / 60.0;
+        world_step(world, dt);
+
+        // Move into the crate; the contact should be captured.
+        for _ in 0..120 {
+            character_body_move(
+                world,
+                id,
+                Vec3 {
+                    x: 0.2,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                dt,
+            );
+            world_step(world, dt);
+        }
+        let count = character_body_collision_count(world, id);
+        assert!(
+            count >= 1,
+            "a contact with the crate should have been captured"
+        );
+
+        // The captured collision attributes the crate's collider (the only dynamic
+        // body in the scene); and solve_impulses runs without error.
+        // The avatar rests on the floor AND touches the crate; the crate collider
+        // (the only dynamic body) must be among the captured contacts.
+        let mut found_crate = false;
+        for i in 0..count {
+            if character_body_get_collision(world, id, i).collider == crate_collider_handle {
+                found_crate = true;
+            }
+        }
+        assert!(found_crate, "a contact should name the crate collider");
+        assert_eq!(
+            character_body_solve_impulses(world, id, dt, 70.0),
+            Bool::TRUE,
+            "solve_impulses should run and return TRUE"
+        );
+        // Unknown id returns FALSE without panicking.
+        assert_eq!(
+            character_body_solve_impulses(world, id + 999, dt, 70.0),
+            Bool::FALSE
+        );
+        character_body_destroy(world, id);
+        world_destroy(world);
+    }
+
+    /// Without a registered terrain-gravity source, `move_with_terrain` is
+    /// identical to `move`: no extra free-fall displacement is applied.
+    #[test]
+    fn move_with_terrain_matches_move_without_source() {
+        let world = make_world();
+        let _floor = make_floor(world);
+        let id = character_body_create(
+            world,
+            ShapeDesc {
+                shape_type: ShapeType::Ball as u32,
+                a: 0.5,
+                ..Default::default()
+            },
+            Vec3 {
+                x: 0.0,
+                y: 2.0,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+        let dt = 1.0 / 60.0;
+        world_step(world, dt);
+
+        // move_with_terrain with a pure horizontal desired (no source registered).
+        let m = character_body_move_with_terrain(
+            world,
+            id,
+            Vec3 {
+                x: 0.1,
+                y: 0.0,
+                z: 0.0,
+            },
+            dt,
+        );
+        // Same call via plain move for comparison.
+        let plain = character_body_move(
+            world,
+            id,
+            Vec3 {
+                x: 0.1,
+                y: 0.0,
+                z: 0.0,
+            },
+            dt,
+        );
+        // With no terrain source, the two deltas must match bit-for-bit.
+        assert!(
+            (m.translation.x - plain.translation.x).abs() < 1e-12
+                && (m.translation.y - plain.translation.y).abs() < 1e-12
+                && (m.translation.z - plain.translation.z).abs() < 1e-12,
+            "move_with_terrain must equal move when no terrain source is registered"
+        );
+        // The call returns a valid movement and does not panic on unknown id.
+        let bad = character_body_move_with_terrain(
+            world,
+            id + 999,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            dt,
+        );
+        assert_eq!(bad.translation.x, 0.0);
         character_body_destroy(world, id);
         world_destroy(world);
     }

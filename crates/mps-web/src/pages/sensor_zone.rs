@@ -39,6 +39,7 @@ pub fn SensorZone() -> Element {
                         "sensor_zone_get_translation(world, id, out) -> Bool\n"
                         "sensor_zone_set_translation(world, id, translation) -> Bool\n"
                         "sensor_zone_set_enabled(world, id, enabled) -> Bool\n"
+                        "sensor_zone_set_edge(world, id, edge_only) -> Bool\n"
                         "sensor_zone_is_triggered(world, id) -> Bool\n"
                         "sensor_zone_destroy(world, id) -> Bool\n"
                     }
@@ -61,6 +62,10 @@ pub fn SensorZone() -> Element {
                     div { class: "feature-card",
                         h3 { { t!("sensor-cap-03-title") } }
                         p { { t!("sensor-cap-03-desc") } }
+                    }
+                    div { class: "feature-card",
+                        h3 { { t!("sensor-cap-04-title") } }
+                        p { { t!("sensor-cap-04-desc") } }
                     }
                 }
             }

@@ -8,7 +8,9 @@
 //! This layer reuses the collision query construction already in `controller.rs`
 //! and just binds a controller to a kinematic body. No fork changes.
 
-use rapier3d::control::{CharacterAutostep, CharacterLength, KinematicCharacterController};
+use rapier3d::control::{
+    CharacterAutostep, CharacterCollision, CharacterLength, KinematicCharacterController,
+};
 use rapier3d::prelude::{QueryFilter, RigidBodyBuilder, RigidBodyHandle, RigidBodyType, Vector};
 
 use crate::rapier::error::{
@@ -27,6 +29,11 @@ pub(crate) struct CharacterBody {
     pub body: RigidBodyHandle,
     pub shape: ShapeDesc,
     pub last_movement: EffectiveCharacterMovement,
+    /// Collisions captured by the most recent `character_body_move` (cleared each
+    /// call, populated by the move's collision callback). Read back via
+    /// `character_body_collision_count` / `character_body_get_collision` and fed to
+    /// `character_body_solve_impulses`.
+    pub collisions: Vec<CharacterCollision>,
 }
 
 /// Create a character body in `world` from a collider shape and an initial
@@ -75,6 +82,7 @@ pub extern "C" fn character_body_create(
                 body,
                 shape,
                 last_movement: EffectiveCharacterMovement::default(),
+                collisions: Vec::new(),
             },
         );
         clear_error();
@@ -156,6 +164,7 @@ pub extern "C" fn character_body_move(
         // Resolve the desired movement against the world (read-only query).
         let body = world.inner.character_bodies.get(&id).unwrap().body;
         let current = world.inner.bodies.get(body).unwrap().translation();
+        let mut collected: Vec<CharacterCollision> = Vec::new();
         let movement = {
             let cb = world.inner.character_bodies.get(&id).unwrap();
             let shape = shape_from_desc(cb.shape);
@@ -171,9 +180,16 @@ pub extern "C" fn character_body_move(
                 shape.as_ref(),
                 &isometry_from_parts(vec3_from_rapier(current), Quat::default()),
                 vec3_to_rapier(desired),
-                |_collision| {},
+                |collision| collected.push(collision),
             )
         };
+        // Store this step's collisions for read-back / impulse solving.
+        world
+            .inner
+            .character_bodies
+            .get_mut(&id)
+            .unwrap()
+            .collisions = collected;
 
         // `movement.translation` is the *delta* to apply this step; add it to the
         // current pose and queue it as the next kinematic translation so the
@@ -529,6 +545,233 @@ pub extern "C" fn character_body_is_on_ground(world: *const WorldHandle, id: u32
                 Bool::FALSE
             }
         }
+    })
+}
+
+/// Number of collisions captured by the most recent `character_body_move`. Use
+/// this with [`character_body_get_collision`] to inspect what the character hit
+/// (e.g. to apply custom push forces or build a contact-reporting system).
+///
+/// # Safety
+/// `world` must be a valid pointer returned by `world_create`.
+#[unsafe(no_mangle)]
+pub extern "C" fn character_body_collision_count(world: *const WorldHandle, id: u32) -> u32 {
+    ffi_guard(0, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return 0;
+        };
+        match world.inner.character_bodies.get(&id) {
+            Some(cb) => cb.collisions.len() as u32,
+            None => {
+                set_error(ERR_NOT_FOUND, "character_body_collision_count: unknown id");
+                0
+            }
+        }
+    })
+}
+
+/// Read the `index`-th collision captured by the most recent `character_body_move`.
+/// Returns a default (all-zero) collision if `index` is out of range.
+///
+/// # Safety
+/// `world` must be a valid pointer returned by `world_create`.
+#[unsafe(no_mangle)]
+pub extern "C" fn character_body_get_collision(
+    world: *const WorldHandle,
+    id: u32,
+    index: u32,
+) -> crate::rapier::ffi::CharacterCollision {
+    ffi_guard(crate::rapier::ffi::CharacterCollision::default(), || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return crate::rapier::ffi::CharacterCollision::default();
+        };
+        let Some(cb) = world.inner.character_bodies.get(&id) else {
+            set_error(ERR_NOT_FOUND, "character_body_get_collision: unknown id");
+            return crate::rapier::ffi::CharacterCollision::default();
+        };
+        match cb.collisions.get(index as usize) {
+            Some(c) => crate::rapier::ffi::CharacterCollision {
+                collider: crate::rapier::ffi::pack_collider_handle(c.handle),
+                character_translation: vec3_from_rapier(c.character_pos.translation),
+                translation_applied: vec3_from_rapier(c.translation_applied),
+                translation_remaining: vec3_from_rapier(c.translation_remaining),
+                world_witness1: vec3_from_rapier(c.hit.witness1),
+                world_witness2: vec3_from_rapier(c.hit.witness2),
+                normal1: vec3_from_rapier(c.hit.normal1),
+                normal2: vec3_from_rapier(c.hit.normal2),
+                time_of_impact: c.hit.time_of_impact,
+            },
+            None => {
+                set_error(
+                    ERR_NOT_FOUND,
+                    "character_body_get_collision: index out of range",
+                );
+                crate::rapier::ffi::CharacterCollision::default()
+            }
+        }
+    })
+}
+
+/// Apply the impulses accumulated from the latest `character_body_move` to the
+/// dynamic bodies the character is touching. This is how a kinematic character
+/// "pushes" crates/other rigid bodies — rapier does not auto-apply them; the
+/// caller must invoke this after each move that reported contacts. No fork
+/// changes: it forwards to the controller's `solve_character_collision_impulses`.
+///
+/// # Safety
+/// `world` must be a valid pointer returned by `world_create`.
+#[unsafe(no_mangle)]
+pub extern "C" fn character_body_solve_impulses(
+    world: *mut WorldHandle,
+    id: u32,
+    dt: f64,
+    character_mass: f64,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        if !world.inner.character_bodies.contains_key(&id) {
+            set_error(ERR_NOT_FOUND, "character_body_solve_impulses: unknown id");
+            return Bool::FALSE;
+        }
+        if !dt.is_finite() || dt <= 0.0 || !character_mass.is_finite() || character_mass < 0.0 {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "character_body_solve_impulses: invalid dt/mass",
+            );
+            return Bool::FALSE;
+        }
+        let _query_lock = world.inner.query_lock.write();
+        let shape = shape_from_desc(world.inner.character_bodies.get(&id).unwrap().shape);
+        let mut query = world.inner.broad_phase.as_query_pipeline_mut(
+            world.inner.narrow_phase.query_dispatcher(),
+            &mut world.inner.bodies,
+            &mut world.inner.colliders,
+            rapier3d::prelude::QueryFilter::default(),
+        );
+        // Forward the captured collisions straight to the controller (no
+        // reconstruction needed — they are already rapier CharacterCollision).
+        world
+            .inner
+            .character_bodies
+            .get(&id)
+            .unwrap()
+            .controller
+            .solve_character_collision_impulses(
+                dt,
+                &mut query,
+                shape.as_ref(),
+                character_mass,
+                world
+                    .inner
+                    .character_bodies
+                    .get(&id)
+                    .unwrap()
+                    .collisions
+                    .iter(),
+            );
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Like [`character_body_move`] but additionally samples the world's registered
+/// terrain gravity (polyhedron / DEM / lunar-mascon) at the character's current
+/// position and folds the resulting free-fall displacement (`½·a·dt²`) into the
+/// desired translation, so the character falls toward and stands on an irregular
+/// small-body surface instead of floating. When no terrain-gravity law is
+/// registered this is identical to `character_body_move`.
+///
+/// # Safety
+/// `world` must be a valid pointer returned by `world_create`.
+#[unsafe(no_mangle)]
+pub extern "C" fn character_body_move_with_terrain(
+    world: *mut WorldHandle,
+    id: u32,
+    desired: Vec3,
+    dt: f64,
+) -> EffectiveCharacterMovement {
+    ffi_guard(EffectiveCharacterMovement::default(), || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return EffectiveCharacterMovement::default();
+        };
+        if !world.inner.character_bodies.contains_key(&id) {
+            set_error(
+                ERR_NOT_FOUND,
+                "character_body_move_with_terrain: unknown id",
+            );
+            return EffectiveCharacterMovement::default();
+        }
+        if !dt.is_finite() || dt <= 0.0 || !vec3_finite(desired) {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "character_body_move_with_terrain: invalid dt/desired",
+            );
+            return EffectiveCharacterMovement::default();
+        }
+
+        // Sample terrain gravity and fold the free-fall displacement into desired.
+        let mut desired = vec3_to_rapier(desired);
+        if let Some(source) = &world.inner.terrain_gravity_source {
+            let accel = crate::rapier::terrain_gravity::terrain_gravity_acceleration(source, {
+                let body = world.inner.character_bodies.get(&id).unwrap().body;
+                vec3_from_rapier(world.inner.bodies.get(body).unwrap().translation())
+            });
+            desired += vec3_to_rapier(accel) * (0.5 * dt * dt);
+        }
+
+        // Delegate the resolve + kinematic write-back to the shared move path.
+        let body = world.inner.character_bodies.get(&id).unwrap().body;
+        let current = world.inner.bodies.get(body).unwrap().translation();
+        let mut collected: Vec<CharacterCollision> = Vec::new();
+        let movement = {
+            let cb = world.inner.character_bodies.get(&id).unwrap();
+            let shape = shape_from_desc(cb.shape);
+            let query = world.inner.broad_phase.as_query_pipeline(
+                world.inner.narrow_phase.query_dispatcher(),
+                &world.inner.bodies,
+                &world.inner.colliders,
+                QueryFilter::default(),
+            );
+            cb.controller.move_shape(
+                dt,
+                &query,
+                shape.as_ref(),
+                &isometry_from_parts(vec3_from_rapier(current), Quat::default()),
+                desired,
+                |collision| collected.push(collision),
+            )
+        };
+        world
+            .inner
+            .character_bodies
+            .get_mut(&id)
+            .unwrap()
+            .collisions = collected;
+
+        let new_pos = current + movement.translation;
+        if let Some(rb) = world.inner.bodies.get_mut(body) {
+            rb.set_next_kinematic_translation(new_pos);
+        }
+
+        let result = EffectiveCharacterMovement {
+            translation: vec3_from_rapier(movement.translation),
+            grounded: movement.grounded.into(),
+            is_sliding_down_slope: movement.is_sliding_down_slope.into(),
+        };
+        world
+            .inner
+            .character_bodies
+            .get_mut(&id)
+            .unwrap()
+            .last_movement = result;
+        clear_error();
+        result
     })
 }
 

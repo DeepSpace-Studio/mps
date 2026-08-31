@@ -42,6 +42,10 @@ pub fn CharacterBody() -> Element {
                         "character_body_is_grounded(world, id) -> Bool\n"
                         "character_body_is_on_ground(world, id) -> Bool\n"
                         "character_body_is_sliding_down_slope(world, id) -> Bool\n"
+                        "character_body_move_with_terrain(world, id, desired, dt) -> EffectiveCharacterMovement\n"
+                        "character_body_collision_count(world, id) -> u32\n"
+                        "character_body_get_collision(world, id, index) -> CharacterCollision\n"
+                        "character_body_solve_impulses(world, id, dt, mass) -> Bool\n"
                         "character_body_get_translation(world, id, out) -> Bool\n"
                         "character_body_destroy(world, id) -> Bool\n"
                     }
@@ -71,6 +75,27 @@ pub fn CharacterBody() -> Element {
                     }
                 }
                 p { class: "p-muted", { t!("char-mc-note") } }
+            }
+
+            // ── Collision readback & terrain gravity ──────────────────────
+            div { class: "section-divider",
+                h2 { class: "section-heading", { t!("char-col-title") } }
+                p { class: "p-lead", { t!("char-col-lead") } }
+                p { class: "p-muted", { t!("char-col-body") } }
+                div { class: "feature-grid",
+                    div { class: "feature-card",
+                        h3 { { t!("char-col-01-title") } }
+                        p { { t!("char-col-01-desc") } }
+                    }
+                    div { class: "feature-card",
+                        h3 { { t!("char-col-02-title") } }
+                        p { { t!("char-col-02-desc") } }
+                    }
+                    div { class: "feature-card",
+                        h3 { { t!("char-col-03-title") } }
+                        p { { t!("char-col-03-desc") } }
+                    }
+                }
             }
 
             // ── Capabilities ────────────────────────────────────────────

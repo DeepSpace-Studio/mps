@@ -797,6 +797,22 @@ jni!(boolean characterBodySetShape(long world, int id, int shape_type, double a,
 jni!(boolean characterBodyIsOnGround(long world, int id) {
     cb_::character_body_is_on_ground(cp::<WH>(world), u32_from_jint(id)).0 as jbyte
 });
+jni!(int characterBodyCollisionCount(long world, int id) {
+    cb_::character_body_collision_count(cp::<WH>(world), u32_from_jint(id)) as jint
+});
+jni!(long characterBodyGetCollision(long world, int id, int index, long out_collision) {
+    let collision = cb_::character_body_get_collision(cp::<WH>(world), u32_from_jint(id), u32_from_jint(index));
+    if let Some(out) = unsafe { pm::<CharacterCollision>(out_collision).as_mut() } { *out = collision; }
+    collision.collider as jlong
+});
+jni!(boolean characterBodySolveImpulses(long world, int id, double dt, double character_mass) {
+    cb_::character_body_solve_impulses(m::<WH>(world), u32_from_jint(id), dt, character_mass).0 as jbyte
+});
+jni!(long characterBodyMoveWithTerrain(long world, int id, double dx, double dy, double dz, double dt, long out_movement) {
+    let m = cb_::character_body_move_with_terrain(m::<WH>(world), u32_from_jint(id), v3(dx,dy,dz), dt);
+    if let Some(out) = unsafe { pm::<EffectiveCharacterMovement>(out_movement).as_mut() } { *out = m; }
+    m.translation.y as jlong
+});
 
 // ---- Sensor trigger zone (fourth body type) ----
 jni!(long sensorZoneCreate(long world, int shape_type, double a, double b, double c, double d, double tx, double ty, double tz) {
@@ -819,6 +835,9 @@ jni!(int sensorZoneGetContacts(long world, int id, long out, int max_count) {
 });
 jni!(boolean sensorZoneIsTriggered(long world, int id) {
     sz::sensor_zone_is_triggered(cp::<WH>(world), u32_from_jint(id)).0 as jbyte
+});
+jni!(boolean sensorZoneSetEdge(long world, int id, int edge) {
+    sz::sensor_zone_set_edge(m::<WH>(world), u32_from_jint(id), jb(edge)).0 as jbyte
 });
 jni!(boolean sensorZoneGetTranslation(long world, int id, long out) {
     sz::sensor_zone_get_translation(cp::<WH>(world), u32_from_jint(id), pm::<Vec3>(out)).0 as jbyte

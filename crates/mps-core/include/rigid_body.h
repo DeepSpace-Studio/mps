@@ -1804,6 +1804,58 @@ Bool character_body_is_sliding_down_slope(const struct WorldHandle *world, uint3
 Bool character_body_is_on_ground(const struct WorldHandle *world, uint32_t id);
 
 /**
+ * Number of collisions captured by the most recent `character_body_move`. Use
+ * this with [`character_body_get_collision`] to inspect what the character hit
+ * (e.g. to apply custom push forces or build a contact-reporting system).
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+uint32_t character_body_collision_count(const struct WorldHandle *world, uint32_t id);
+
+/**
+ * Read the `index`-th collision captured by the most recent `character_body_move`.
+ * Returns a default (all-zero) collision if `index` is out of range.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+CharacterCollision character_body_get_collision(const struct WorldHandle *world,
+                                                uint32_t id,
+                                                uint32_t index);
+
+/**
+ * Apply the impulses accumulated from the latest `character_body_move` to the
+ * dynamic bodies the character is touching. This is how a kinematic character
+ * "pushes" crates/other rigid bodies — rapier does not auto-apply them; the
+ * caller must invoke this after each move that reported contacts. No fork
+ * changes: it forwards to the controller's `solve_character_collision_impulses`.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+Bool character_body_solve_impulses(struct WorldHandle *world,
+                                   uint32_t id,
+                                   double dt,
+                                   double character_mass);
+
+/**
+ * Like [`character_body_move`] but additionally samples the world's registered
+ * terrain gravity (polyhedron / DEM / lunar-mascon) at the character's current
+ * position and folds the resulting free-fall displacement (`½·a·dt²`) into the
+ * desired translation, so the character falls toward and stands on an irregular
+ * small-body surface instead of floating. When no terrain-gravity law is
+ * registered this is identical to `character_body_move`.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+EffectiveCharacterMovement character_body_move_with_terrain(struct WorldHandle *world,
+                                                            uint32_t id,
+                                                            Vec3 desired,
+                                                            double dt);
+
+/**
  * Destroy a character body, removing its rigid body, collider and controller
  * state. Returns `Bool::TRUE` on success.
  *
@@ -2162,6 +2214,18 @@ Bool sensor_zone_set_shape(struct WorldHandle *world, uint32_t id, ShapeDesc sha
  * `world` must be a valid pointer returned by `world_create`.
  */
 Bool sensor_zone_set_enabled(struct WorldHandle *world, uint32_t id, Bool enabled);
+
+/**
+ * Switch a sensor zone between level triggering (sticky: `is_triggered` stays
+ * TRUE while anything overlaps) and rising-edge triggering (`is_triggered` is
+ * TRUE only on the poll where an overlap first appears, then FALSE until the
+ * zone is empty and re-entered). Edge mode is what you want for one-shot
+ * "player entered the room" events.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+Bool sensor_zone_set_edge(struct WorldHandle *world, uint32_t id, Bool edge);
 
 /**
  * Recompute the set of colliders currently overlapping this sensor zone.

@@ -14,7 +14,7 @@ mod tests {
     };
     use mps_core::rapier::sensor::{
         sensor_zone_contact_count, sensor_zone_create, sensor_zone_destroy,
-        sensor_zone_get_contacts, sensor_zone_is_triggered, sensor_zone_poll,
+        sensor_zone_get_contacts, sensor_zone_is_triggered, sensor_zone_poll, sensor_zone_set_edge,
         sensor_zone_set_enabled, sensor_zone_set_shape,
     };
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
@@ -170,11 +170,21 @@ mod tests {
         // Floor so the ball rests at y=0.3 inside the 2x2x2 zone (otherwise it falls
         // out under gravity now that the zone no longer self-detects).
         let fl = rigid_body_builder_create(mps_core::rapier::ffi::BodyStatus::Fixed as u32);
-        rigid_body_builder_set_translation(fl, Vec3 { x: 0.0, y: -0.5, z: 0.0 });
+        rigid_body_builder_set_translation(
+            fl,
+            Vec3 {
+                x: 0.0,
+                y: -0.5,
+                z: 0.0,
+            },
+        );
         let flb = world_insert_rigid_body(world, rigid_body_builder_build(fl));
         let fls = ShapeDesc {
             shape_type: ShapeType::Cuboid as u32,
-            a: 20.0, b: 0.5, c: 20.0, ..Default::default()
+            a: 20.0,
+            b: 0.5,
+            c: 20.0,
+            ..Default::default()
         };
         world_insert_collider_with_parent(
             world,
@@ -205,19 +215,38 @@ mod tests {
         // Small 0.5×0.5×0.5 zone at origin.
         let small = ShapeDesc {
             shape_type: ShapeType::Cuboid as u32,
-            a: 0.25, b: 0.25, c: 0.25, ..Default::default()
+            a: 0.25,
+            b: 0.25,
+            c: 0.25,
+            ..Default::default()
         };
-        let zone = sensor_zone_create(world, small, Vec3 { x: 0.0, y: 0.0, z: 0.0 });
+        let zone = sensor_zone_create(
+            world,
+            small,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
         assert_ne!(zone, u32::MAX);
         // A FIXED ball parked at x=0.6 — inside the BIG zone (x∈[-1,1]) but outside
         // the SMALL zone (x∈[-0.25,0.25]). Fixed => it never moves, so the only
         // thing the zone can detect is the ball.
         let fbuilder = rigid_body_builder_create(mps_core::rapier::ffi::BodyStatus::Fixed as u32);
-        rigid_body_builder_set_translation(fbuilder, Vec3 { x: 0.6, y: 0.0, z: 0.0 });
+        rigid_body_builder_set_translation(
+            fbuilder,
+            Vec3 {
+                x: 0.6,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
         let fbody = world_insert_rigid_body(world, rigid_body_builder_build(fbuilder));
         let fshape = ShapeDesc {
             shape_type: ShapeType::Ball as u32,
-            a: 0.3, ..Default::default()
+            a: 0.3,
+            ..Default::default()
         };
         world_insert_collider_with_parent(
             world,
@@ -238,7 +267,10 @@ mod tests {
         // Grow the zone to 2×2×2 — the ball is now inside.
         let big = ShapeDesc {
             shape_type: ShapeType::Cuboid as u32,
-            a: 1.0, b: 1.0, c: 1.0, ..Default::default()
+            a: 1.0,
+            b: 1.0,
+            c: 1.0,
+            ..Default::default()
         };
         assert_eq!(sensor_zone_set_shape(world, zone, big), Bool::TRUE);
         for _ in 0..10 {
@@ -251,6 +283,108 @@ mod tests {
         );
         // Unknown id returns FALSE without panicking.
         assert_eq!(sensor_zone_set_shape(world, zone + 999, big), Bool::FALSE);
+        world_destroy(world);
+    }
+
+    /// In rising-edge mode, `is_triggered` is TRUE only on the poll where an
+    /// overlap first appears, then FALSE on the next poll even though the ball is
+    /// still inside (until the zone is emptied and re-entered).
+    #[test]
+    fn edge_trigger_fires_on_enter() {
+        let world = make_world();
+        // Fixed ball parked at x=0.6, inside the BIG zone (x in [-1,1]) but outside
+        // the SMALL zone (x in [-0.25,0.25]). Fixed so it never moves.
+        let fb = rigid_body_builder_create(mps_core::rapier::ffi::BodyStatus::Fixed as u32);
+        rigid_body_builder_set_translation(
+            fb,
+            Vec3 {
+                x: 0.6,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        let fbody = world_insert_rigid_body(world, rigid_body_builder_build(fb));
+        world_insert_collider_with_parent(
+            world,
+            collider_builder_build(collider_builder_create_ex(ShapeDesc {
+                shape_type: ShapeType::Ball as u32,
+                a: 0.3,
+                ..Default::default()
+            })),
+            fbody,
+        );
+
+        // Small zone at origin so the fixed ball starts OUTSIDE it.
+        let small = ShapeDesc {
+            shape_type: ShapeType::Cuboid as u32,
+            a: 0.25,
+            b: 0.25,
+            c: 0.25,
+            ..Default::default()
+        };
+        let zone = sensor_zone_create(
+            world,
+            small,
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        assert_ne!(zone, u32::MAX);
+        // Enable rising-edge mode.
+        assert_eq!(sensor_zone_set_edge(world, zone, Bool::TRUE), Bool::TRUE);
+        // Unknown id returns FALSE without panicking.
+        assert_eq!(
+            sensor_zone_set_edge(world, zone + 999, Bool::TRUE),
+            Bool::FALSE
+        );
+
+        let dt = 1.0 / 60.0;
+        // Prime: ball is outside the small zone -> no overlap.
+        world_step(world, dt);
+        sensor_zone_poll(world, zone);
+        assert_eq!(
+            sensor_zone_is_triggered(world, zone),
+            Bool::FALSE,
+            "edge mode: nothing triggered before overlap"
+        );
+
+        // Grow the zone so the ball is now inside -> a rising edge should fire.
+        let big = ShapeDesc {
+            shape_type: ShapeType::Cuboid as u32,
+            a: 1.0,
+            b: 1.0,
+            c: 1.0,
+            ..Default::default()
+        };
+        assert_eq!(sensor_zone_set_shape(world, zone, big), Bool::TRUE);
+        world_step(world, dt);
+        sensor_zone_poll(world, zone);
+        assert_eq!(
+            sensor_zone_is_triggered(world, zone),
+            Bool::TRUE,
+            "edge mode: should fire on the enter poll"
+        );
+
+        // Next poll: ball still inside, but it is no longer a NEW overlap -> FALSE.
+        world_step(world, dt);
+        sensor_zone_poll(world, zone);
+        assert_eq!(
+            sensor_zone_is_triggered(world, zone),
+            Bool::FALSE,
+            "edge mode: should NOT retrigger while still overlapping"
+        );
+
+        // Reset to level mode: now it reports TRUE while overlapping.
+        assert_eq!(sensor_zone_set_edge(world, zone, Bool::FALSE), Bool::TRUE);
+        world_step(world, dt);
+        sensor_zone_poll(world, zone);
+        assert_eq!(
+            sensor_zone_is_triggered(world, zone),
+            Bool::TRUE,
+            "level mode: stays triggered while overlapping"
+        );
         world_destroy(world);
     }
 }
