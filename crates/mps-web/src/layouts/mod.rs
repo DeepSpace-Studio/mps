@@ -10,7 +10,9 @@ use crate::metrics::VERSION;
 ///   cookie, then `location.reload()` — the URL stays `/`, satisfying the
 ///   "no URL jump" requirement while the server re-renders the chosen language.
 const LANG_TOGGLE_JS: &str = r#"
-document.addEventListener('DOMContentLoaded', function () {
+(function () {
+  // Migrate any legacy ?lang= deep link into cookie + localStorage, then
+  // strip the query so the URL stays clean (no GitHub-Pages routing hit).
   var p = new URLSearchParams(location.search);
   var l = p.get('lang');
   if (l) {
@@ -18,16 +20,20 @@ document.addEventListener('DOMContentLoaded', function () {
     try { localStorage.setItem('lang', l); } catch (e) {}
     history.replaceState(null, '', location.pathname);
   }
-  document.querySelectorAll('.lang-item').forEach(function (b) {
-    b.addEventListener('click', function (e) {
-      e.preventDefault();
-      var lang = b.getAttribute('data-lang') || 'zh-CN';
-      document.cookie = 'lang=' + lang + ';path=/;max-age=31536000';
-      try { localStorage.setItem('lang', lang); } catch (e) {}
-      location.reload();
-    });
+  // Use event delegation on `document` (not per-node binding): under Dioxus
+  // fullstack hydration the rendered DOM nodes are rebuilt, which would drop
+  // listeners attached directly to .lang-item. A delegated listener survives
+  // any DOM rebuild because it lives on the stable `document` node.
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest('.lang-item');
+    if (!t) return;
+    e.preventDefault();
+    var lang = t.getAttribute('data-lang') || 'zh-CN';
+    document.cookie = 'lang=' + lang + ';path=/;max-age=31536000';
+    try { localStorage.setItem('lang', lang); } catch (err) {}
+    location.reload();
   });
-});
+})();
 "#;
 
 /// Single-page doc theme — GitBook-style: fixed left sidebar + content column.
@@ -106,13 +112,14 @@ pub fn Sidebar() -> Element {
 
 /// Top-right circular language dropdown.
 ///
-/// Pure SSR / no-hydration: the open/close affordance is a native
-/// `<details>`/`<summary>` (works with zero client JS). Each option carries a
-/// `data-lang` attribute; the inline `LANG_TOGGLE_JS` script binds a click
-/// handler that writes the choice into `localStorage` + a `lang` cookie and
-/// reloads — the URL stays `/` (no jump), and the server re-renders in the
-/// chosen language. The `<script>` lives outside `<details>` so it is always
-/// present in the initial DOM and runs on `DOMContentLoaded`.
+/// Open/close is a native `<details>`/`<summary>` (zero client JS needed for
+/// the affordance itself). Each option is a real `<a href="/?lang=...">` so a
+/// click always navigates even if client JS is unavailable; the inline
+/// `LANG_TOGGLE_JS` (event-delegated on `document`, which survives Dioxus
+/// fullstack hydration DOM rebuilds) intercepts the click, writes the choice
+/// into `localStorage` + a `lang` cookie, and reloads with the URL staying
+/// `/` (no visible jump). The server re-renders in the chosen language from
+/// either the cookie or the legacy `?lang=` query.
 #[component]
 pub fn LangDropdown() -> Element {
     let i18n = i18n();
@@ -123,11 +130,11 @@ pub fn LangDropdown() -> Element {
             details { class: "lang-menu",
                 summary { class: "lang-fab", { if zh { "中" } else { "EN" } } }
                 div { class: "lang-list",
-                    a { class: if zh { "lang-item is-active" } else { "lang-item" }, "data-lang": "zh-CN",
+                    a { class: if zh { "lang-item is-active" } else { "lang-item" }, href: "/?lang=zh-CN", "data-lang": "zh-CN",
                         span { class: "lang-check", "✓" }
                         span { "中文" }
                     }
-                    a { class: if !zh { "lang-item is-active" } else { "lang-item" }, "data-lang": "en",
+                    a { class: if !zh { "lang-item is-active" } else { "lang-item" }, href: "/?lang=en", "data-lang": "en",
                         span { class: "lang-check", "✓" }
                         span { "English" }
                     }
