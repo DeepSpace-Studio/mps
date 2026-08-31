@@ -66,6 +66,9 @@ mod tests {
         assert_eq!(SCIENTIST_MAX_BORN.id, "max_born");
         assert_eq!(SCIENTIST_JAMES_CHADWICK.id, "james_chadwick");
         assert_eq!(SCIENTIST_HIDEKI_YUKAWA.id, "hideki_yukawa");
+        assert_eq!(SCIENTIST_KARL_SCHWARZSCHILD.id, "karl_schwarzschild");
+        assert_eq!(SCIENTIST_EDWIN_HUBBLE.id, "edwin_hubble");
+        assert_eq!(SCIENTIST_ARTHUR_EDDINGTON.id, "arthur_eddington");
     }
 
     #[test]

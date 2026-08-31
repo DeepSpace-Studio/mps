@@ -35,6 +35,7 @@ pub use self::albert_einstein::SCIENTIST as SCIENTIST_ALBERT_EINSTEIN;
 pub use self::aleksandr_lyapunov::SCIENTIST as SCIENTIST_ALEKSANDR_LYAPUNOV;
 pub use self::andre_marie_ampere::SCIENTIST as SCIENTIST_ANDRE_MARIE_AMPERE;
 pub use self::archimedes::SCIENTIST as SCIENTIST_ARCHIMEDES;
+pub use self::arthur_eddington::SCIENTIST as SCIENTIST_ARTHUR_EDDINGTON;
 pub use self::augustin_fresnel::SCIENTIST as SCIENTIST_AUGUSTIN_FRESNEL;
 pub use self::bernhard_riemann::SCIENTIST as SCIENTIST_BERNHARD_RIEMANN;
 pub use self::carl_friedrich_gauss::SCIENTIST as SCIENTIST_CARL_FRIEDRICH_GAUSS;
@@ -43,6 +44,7 @@ pub use self::christiaan_huygens::SCIENTIST as SCIENTIST_CHRISTIAAN_HUYGENS;
 pub use self::claude_louis_navier::SCIENTIST as SCIENTIST_CLAUDE_LOUIS_NAVIER;
 pub use self::daniel_bernoulli::SCIENTIST as SCIENTIST_DANIEL_BERNOULLI;
 pub use self::edward_lorenz::SCIENTIST as SCIENTIST_EDWARD_LORENZ;
+pub use self::edwin_hubble::SCIENTIST as SCIENTIST_EDWIN_HUBBLE;
 pub use self::enrico_fermi::SCIENTIST as SCIENTIST_ENRICO_FERMI;
 pub use self::ernest_rutherford::SCIENTIST as SCIENTIST_ERNEST_RUTHERFORD;
 pub use self::ernst_chladni::SCIENTIST as SCIENTIST_ERNST_CHLADNI;
@@ -67,6 +69,7 @@ pub use self::jean_le_rond_dalembert::SCIENTIST as SCIENTIST_JEAN_LE_ROND_DALEMB
 pub use self::johannes_kepler::SCIENTIST as SCIENTIST_JOHANNES_KEPLER;
 pub use self::joseph_fourier::SCIENTIST as SCIENTIST_JOSEPH_FOURIER;
 pub use self::joseph_louis_lagrange::SCIENTIST as SCIENTIST_JOSEPH_LOUIS_LAGRANGE;
+pub use self::karl_schwarzschild::SCIENTIST as SCIENTIST_KARL_SCHWARZSCHILD;
 pub use self::leonhard_euler::SCIENTIST as SCIENTIST_LEONHARD_EULER;
 pub use self::lev_landau::SCIENTIST as SCIENTIST_LEV_LANDAU;
 pub use self::lord_kelvin::SCIENTIST as SCIENTIST_LORD_KELVIN;
@@ -104,6 +107,8 @@ pub mod aleksandr_lyapunov;
 pub mod andre_marie_ampere;
 #[path = "archimedes.rs"]
 pub mod archimedes;
+#[path = "arthur_eddington.rs"]
+pub mod arthur_eddington;
 #[path = "augustin_fresnel.rs"]
 pub mod augustin_fresnel;
 #[path = "bernhard_riemann.rs"]
@@ -122,6 +127,8 @@ pub mod claude_louis_navier;
 pub mod daniel_bernoulli;
 #[path = "edward_lorenz.rs"]
 pub mod edward_lorenz;
+#[path = "edwin_hubble.rs"]
+pub mod edwin_hubble;
 #[path = "enrico_fermi.rs"]
 pub mod enrico_fermi;
 #[path = "ernest_rutherford.rs"]
@@ -170,6 +177,8 @@ pub mod johannes_kepler;
 pub mod joseph_fourier;
 #[path = "joseph_louis_lagrange.rs"]
 pub mod joseph_louis_lagrange;
+#[path = "karl_schwarzschild.rs"]
+pub mod karl_schwarzschild;
 #[path = "leonhard_euler.rs"]
 pub mod leonhard_euler;
 #[path = "lev_landau.rs"]
@@ -229,15 +238,17 @@ pub mod wolfgang_pauli;
 
 /// 收录的科学家总数。
 pub fn scientist_count() -> usize {
-    63
+    66
 }
 
 /// 收录的所有科学家记录（按 `id` 字典序）。
 pub static SCIENTISTS: &[ScientistRecord] = &[
     self::albert_einstein::SCIENTIST,
+    self::edwin_hubble::SCIENTIST,
     self::aleksandr_lyapunov::SCIENTIST,
     self::andre_marie_ampere::SCIENTIST,
     self::archimedes::SCIENTIST,
+    self::arthur_eddington::SCIENTIST,
     self::augustin_fresnel::SCIENTIST,
     self::bernhard_riemann::SCIENTIST,
     self::carl_friedrich_gauss::SCIENTIST,
@@ -268,6 +279,7 @@ pub static SCIENTISTS: &[ScientistRecord] = &[
     self::james_watt::SCIENTIST,
     self::jean_le_rond_dalembert::SCIENTIST,
     self::johannes_kepler::SCIENTIST,
+    self::karl_schwarzschild::SCIENTIST,
     self::joseph_fourier::SCIENTIST,
     self::joseph_louis_lagrange::SCIENTIST,
     self::leonhard_euler::SCIENTIST,
