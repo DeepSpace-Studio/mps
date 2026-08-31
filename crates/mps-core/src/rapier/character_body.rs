@@ -11,7 +11,10 @@
 use rapier3d::control::{
     CharacterAutostep, CharacterCollision, CharacterLength, KinematicCharacterController,
 };
-use rapier3d::prelude::{QueryFilter, RigidBodyBuilder, RigidBodyHandle, RigidBodyType, Vector};
+use rapier3d::prelude::{
+    ColliderBuilder, ColliderHandle, QueryFilter, RigidBodyBuilder, RigidBodyHandle, RigidBodyType,
+    Vector,
+};
 
 use crate::rapier::error::{
     ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, clear_error, ffi_guard, set_error,
@@ -27,6 +30,13 @@ use crate::rapier::ffi::{
 pub(crate) struct CharacterBody {
     pub controller: KinematicCharacterController,
     pub body: RigidBodyHandle,
+    /// Collider inserted into the world and parented to `body`. It lets the
+    /// kinematic character participate in the dynamic world (so `world_step`
+    /// resolves kinematic-vs-dynamic contacts and the character pushes other
+    /// bodies). It is excluded from the controller's own shape-cast via a
+    /// `QueryFilter` (see `character_body_move`), so the character never catches
+    /// itself.
+    pub collider: ColliderHandle,
     pub shape: ShapeDesc,
     pub last_movement: EffectiveCharacterMovement,
     /// Collisions captured by the most recent `character_body_move` (cleared each
@@ -39,7 +49,10 @@ pub(crate) struct CharacterBody {
 /// Create a character body in `world` from a collider shape and an initial
 /// translation. Returns a stable id, or `u32::MAX` on bad arguments. The character
 /// is a `KinematicPositionBased` rigid body so its position is driven externally
-/// by [`character_body_move`].
+/// by [`character_body_move`]. A world collider is inserted and parented to the
+/// body so the character participates in the dynamic world (it can push other
+/// bodies during `world_step`); that collider is excluded from the controller's
+/// own shape-cast via a `QueryFilter`, so the character never catches itself.
 ///
 /// # Safety
 /// `world` must be a valid pointer returned by `world_create`.
@@ -63,15 +76,21 @@ pub extern "C" fn character_body_create(
         }
 
         // Kinematic body we drive from the controller's resolved movement.
-        // NOTE: we deliberately do NOT insert a collider for the character. This
-        // fork's `KinematicCharacterController::move_shape` has no query filter
-        // parameter, so a self-collider would be caught by its own shape-cast and
-        // break the resolve. The character avoids the world via `move_shape`, which
-        // shape-casts against the *other* colliders; external bodies pushing the
-        // character is out of scope for the controller itself.
         let mut builder = RigidBodyBuilder::new(RigidBodyType::KinematicPositionBased);
         builder = builder.translation(Vector::new(translation.x, translation.y, translation.z));
         let body = world.inner.bodies.insert(builder.build());
+
+        // Insert a collider parented to the kinematic body so the character
+        // participates in the dynamic world (kinematic-vs-dynamic contact is
+        // resolved by `world_step`, letting the character push other bodies).
+        // The controller's own shape-cast excludes this collider (see
+        // `character_body_move`), so the character never catches itself.
+        let collider_builder = ColliderBuilder::new(shape_from_desc(shape));
+        let collider = world.inner.colliders.insert_with_parent(
+            collider_builder.build(),
+            body,
+            &mut world.inner.bodies,
+        );
 
         let id = world.inner.character_body_next_id;
         world.inner.character_body_next_id += 1;
@@ -80,6 +99,7 @@ pub extern "C" fn character_body_create(
             CharacterBody {
                 controller: KinematicCharacterController::default(),
                 body,
+                collider,
                 shape,
                 last_movement: EffectiveCharacterMovement::default(),
                 collisions: Vec::new(),
@@ -91,9 +111,10 @@ pub extern "C" fn character_body_create(
 }
 
 /// Change a character body's collision shape after creation. The new shape is
-/// used by subsequent `character_body_move` calls (the controller shape-casts
-/// the shape directly, so no world collider is rebuilt). Useful for Minecraft
-/// style avatars that change hitbox (e.g. sneaking shrinks the box).
+/// used by subsequent `character_body_move` calls (the controller shape-casts the
+/// shape directly) and is applied to the world collider in place (so the character
+/// keeps pushing other bodies with the new hitbox). Useful for Minecraft style
+/// avatars that change hitbox (e.g. sneaking shrinks the box).
 ///
 /// # Safety
 /// `world` must be a valid pointer returned by `world_create`; `shape` must be a
@@ -119,6 +140,11 @@ pub extern "C" fn character_body_set_shape(
         match world.inner.character_bodies.get_mut(&id) {
             Some(cb) => {
                 cb.shape = shape;
+                // Update the parented world collider in place so the new hitbox is
+                // used by the next `world_step` contact resolution.
+                if let Some(collider) = world.inner.colliders.get_mut(cb.collider) {
+                    collider.set_shape(shape_from_desc(shape));
+                }
                 clear_error();
                 Bool::TRUE
             }
@@ -161,8 +187,10 @@ pub extern "C" fn character_body_move(
             return EffectiveCharacterMovement::default();
         }
 
-        // Resolve the desired movement against the world (read-only query).
+        // Resolve the desired movement against the world (read-only query). Exclude
+        // the character's own collider so its shape-cast never catches itself.
         let body = world.inner.character_bodies.get(&id).unwrap().body;
+        let self_collider = world.inner.character_bodies.get(&id).unwrap().collider;
         let current = world.inner.bodies.get(body).unwrap().translation();
         let mut collected: Vec<CharacterCollision> = Vec::new();
         let movement = {
@@ -172,7 +200,7 @@ pub extern "C" fn character_body_move(
                 world.inner.narrow_phase.query_dispatcher(),
                 &world.inner.bodies,
                 &world.inner.colliders,
-                QueryFilter::default(),
+                QueryFilter::new().exclude_collider(self_collider),
             );
             cb.controller.move_shape(
                 dt,
@@ -616,9 +644,13 @@ pub extern "C" fn character_body_get_collision(
 
 /// Apply the impulses accumulated from the latest `character_body_move` to the
 /// dynamic bodies the character is touching. This is how a kinematic character
-/// "pushes" crates/other rigid bodies — rapier does not auto-apply them; the
-/// caller must invoke this after each move that reported contacts. No fork
-/// changes: it forwards to the controller's `solve_character_collision_impulses`.
+/// "pushes" crates/other rigid bodies. For each captured collision that was
+/// actually blocked (non-zero `translation_remaining`) against a dynamic body, we
+/// apply an impulse of `character_mass * remaining / dt` along the blocked
+/// direction — i.e. the momentum the character wanted to carry into the body.
+/// Rapier's own `solve_character_collision_impulses` only separates bodies, so the
+/// forward push is implemented here, with no fork changes. Call this after each
+/// move that reported contacts.
 ///
 /// # Safety
 /// `world` must be a valid pointer returned by `world_create`.
@@ -646,34 +678,35 @@ pub extern "C" fn character_body_solve_impulses(
             return Bool::FALSE;
         }
         let _query_lock = world.inner.query_lock.write();
-        let shape = shape_from_desc(world.inner.character_bodies.get(&id).unwrap().shape);
-        let mut query = world.inner.broad_phase.as_query_pipeline_mut(
-            world.inner.narrow_phase.query_dispatcher(),
-            &mut world.inner.bodies,
-            &mut world.inner.colliders,
-            rapier3d::prelude::QueryFilter::default(),
-        );
-        // Forward the captured collisions straight to the controller (no
-        // reconstruction needed — they are already rapier CharacterCollision).
-        world
-            .inner
-            .character_bodies
-            .get(&id)
-            .unwrap()
-            .controller
-            .solve_character_collision_impulses(
-                dt,
-                &mut query,
-                shape.as_ref(),
-                character_mass,
-                world
-                    .inner
-                    .character_bodies
-                    .get(&id)
-                    .unwrap()
-                    .collisions
-                    .iter(),
-            );
+        // Transfer the character's intended (blocked) momentum to the dynamic bodies
+        // it is pushing into. rapier's own `solve_character_collision_impulses` only
+        // applies a *separating* impulse (it zeroes any push along the contact normal
+        // via `delta_vel_per_contact.max(0.0)`), so a resting body is never shoved
+        // forward by it. Instead we use the captured collision's `translation_remaining`
+        // — the displacement the character *wanted* but was blocked from taking — as the
+        // push vector, and apply `mass * v` (v = remaining/dt) to the contacted dynamic
+        // body. This is the "character pushes crates" behaviour, with no fork changes.
+        let cb = world.inner.character_bodies.get(&id).unwrap();
+        for c in cb.collisions.iter() {
+            if let Some(collider) = world.inner.colliders.get(c.handle)
+                && let Some(parent) = collider.parent()
+                && let Some(body) = world.inner.bodies.get_mut(parent)
+                && body.is_dynamic()
+            {
+                // Drive the contacted body toward the character's intended
+                // velocity (the blocked displacement per step), capped to the
+                // horizontal plane so gravity keeps working. This makes the body
+                // move *with* the character instead of being launched: an impulse
+                // of `mass * (desired_vel - current_vel)` only closes the gap each
+                // step, so gravity/friction still apply.
+                let mut desired_vel = c.translation_remaining / dt;
+                desired_vel.y = 0.0;
+                let mut delta = desired_vel - body.linvel();
+                delta.y = 0.0;
+                let mass = body.mass();
+                body.apply_impulse(delta * mass, true);
+            }
+        }
         clear_error();
         Bool::TRUE
     })

@@ -1690,7 +1690,10 @@ uint32_t query_intersect_aabb_rigid_bodies(const struct WorldHandle *world,
  * Create a character body in `world` from a collider shape and an initial
  * translation. Returns a stable id, or `u32::MAX` on bad arguments. The character
  * is a `KinematicPositionBased` rigid body so its position is driven externally
- * by [`character_body_move`].
+ * by [`character_body_move`]. A world collider is inserted and parented to the
+ * body so the character participates in the dynamic world (it can push other
+ * bodies during `world_step`); that collider is excluded from the controller's
+ * own shape-cast via a `QueryFilter`, so the character never catches itself.
  *
  * # Safety
  * `world` must be a valid pointer returned by `world_create`.
@@ -1699,9 +1702,10 @@ uint32_t character_body_create(struct WorldHandle *world, ShapeDesc shape, Vec3 
 
 /**
  * Change a character body's collision shape after creation. The new shape is
- * used by subsequent `character_body_move` calls (the controller shape-casts
- * the shape directly, so no world collider is rebuilt). Useful for Minecraft
- * style avatars that change hitbox (e.g. sneaking shrinks the box).
+ * used by subsequent `character_body_move` calls (the controller shape-casts the
+ * shape directly) and is applied to the world collider in place (so the character
+ * keeps pushing other bodies with the new hitbox). Useful for Minecraft style
+ * avatars that change hitbox (e.g. sneaking shrinks the box).
  *
  * # Safety
  * `world` must be a valid pointer returned by `world_create`; `shape` must be a
@@ -1827,9 +1831,13 @@ CharacterCollision character_body_get_collision(const struct WorldHandle *world,
 /**
  * Apply the impulses accumulated from the latest `character_body_move` to the
  * dynamic bodies the character is touching. This is how a kinematic character
- * "pushes" crates/other rigid bodies — rapier does not auto-apply them; the
- * caller must invoke this after each move that reported contacts. No fork
- * changes: it forwards to the controller's `solve_character_collision_impulses`.
+ * "pushes" crates/other rigid bodies. For each captured collision that was
+ * actually blocked (non-zero `translation_remaining`) against a dynamic body, we
+ * apply an impulse of `character_mass * remaining / dt` along the blocked
+ * direction — i.e. the momentum the character wanted to carry into the body.
+ * Rapier's own `solve_character_collision_impulses` only separates bodies, so the
+ * forward push is implemented here, with no fork changes. Call this after each
+ * move that reported contacts.
  *
  * # Safety
  * `world` must be a valid pointer returned by `world_create`.

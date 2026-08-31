@@ -25,7 +25,7 @@ mod tests {
     };
     use mps_core::rapier::rigid_body::{
         rigid_body_builder_build, rigid_body_builder_create, rigid_body_builder_set_translation,
-        world_insert_rigid_body,
+        rigid_body_get_translation, world_insert_rigid_body,
     };
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
 
@@ -752,20 +752,13 @@ mod tests {
         world_destroy(world);
     }
 
-    /// `solve_impulses` is the conduit that forwards the character's captured
-    /// contacts to the bodies it is touching. We drive the avatar into a dynamic
-    /// crate, capture the contact, and verify the solver runs and names the crate.
-    ///
-    /// NOTE: a bound `character_body` has no world collider of its own (by design,
-    /// so its own shape-cast never catches itself), so the kinematic body does not
-    /// physically shove the crate during `world_step`; the dynamic-body push comes
-    /// entirely from `solve_impulses`. In this fork `solve_character_collision_impulses`
-    /// rebuilds the contact manifold from the captured collision's `character_pos`
-    /// aabb, which the bound character does not populate with a collider — so the
-    /// crate is not displaced here. We therefore assert the solver is wired and the
-    /// contact is correctly attributed to the crate rather than asserting motion.
+    /// With a world collider parented to the character body, `world_step` resolves
+    /// the kinematic-vs-dynamic contact and the character physically pushes the
+    /// crate. We drive the avatar into a dynamic crate and confirm the crate is
+    /// displaced, that the contact is captured/attributed to the crate, and that
+    /// `solve_impulses` runs without error.
     #[test]
-    fn solve_impulses_is_wired_and_captures_crate_contact() {
+    fn character_pushes_dynamic_crate_via_world_step() {
         let world = make_world();
         let _floor = make_floor(world);
 
@@ -809,9 +802,11 @@ mod tests {
         );
         assert_ne!(id, u32::MAX);
         let dt = 1.0 / 60.0;
-        world_step(world, dt);
+        world_step(world, dt); // prime broad phase
 
-        // Move into the crate; the contact should be captured.
+        // Push the avatar into the crate; its collider shoves the crate during step.
+        // solve_impulses forwards the captured contact to the dynamic body each step.
+        let mut saw_crate_contact = false;
         for _ in 0..120 {
             character_body_move(
                 world,
@@ -824,30 +819,34 @@ mod tests {
                 dt,
             );
             world_step(world, dt);
-        }
-        let count = character_body_collision_count(world, id);
-        assert!(
-            count >= 1,
-            "a contact with the crate should have been captured"
-        );
-
-        // The captured collision attributes the crate's collider (the only dynamic
-        // body in the scene); and solve_impulses runs without error.
-        // The avatar rests on the floor AND touches the crate; the crate collider
-        // (the only dynamic body) must be among the captured contacts.
-        let mut found_crate = false;
-        for i in 0..count {
-            if character_body_get_collision(world, id, i).collider == crate_collider_handle {
-                found_crate = true;
+            character_body_solve_impulses(world, id, dt, 70.0);
+            // While in contact, the captured collision must name the crate collider.
+            let n = character_body_collision_count(world, id);
+            for i in 0..n {
+                if character_body_get_collision(world, id, i).collider == crate_collider_handle {
+                    saw_crate_contact = true;
+                }
             }
         }
-        assert!(found_crate, "a contact should name the crate collider");
+
+        // The crate should have been shoved to the right of its start.
+        let crate_pos = rigid_body_get_translation(world, crate_body).x;
+        assert!(
+            crate_pos > 0.6,
+            "crate should be pushed by the character collider, x={}",
+            crate_pos
+        );
+        assert!(
+            saw_crate_contact,
+            "a contact with the crate collider should have been captured during the push"
+        );
+
+        // solve_impulses runs without error; unknown id returns FALSE.
         assert_eq!(
             character_body_solve_impulses(world, id, dt, 70.0),
             Bool::TRUE,
             "solve_impulses should run and return TRUE"
         );
-        // Unknown id returns FALSE without panicking.
         assert_eq!(
             character_body_solve_impulses(world, id + 999, dt, 70.0),
             Bool::FALSE
