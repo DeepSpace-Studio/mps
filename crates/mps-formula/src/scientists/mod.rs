@@ -45,6 +45,7 @@ pub use self::daniel_bernoulli::SCIENTIST as SCIENTIST_DANIEL_BERNOULLI;
 pub use self::edward_lorenz::SCIENTIST as SCIENTIST_EDWARD_LORENZ;
 pub use self::enrico_fermi::SCIENTIST as SCIENTIST_ENRICO_FERMI;
 pub use self::ernest_rutherford::SCIENTIST as SCIENTIST_ERNEST_RUTHERFORD;
+pub use self::ernst_chladni::SCIENTIST as SCIENTIST_ERNST_CHLADNI;
 pub use self::ernst_mach::SCIENTIST as SCIENTIST_ERNST_MACH;
 pub use self::erwin_schrodinger::SCIENTIST as SCIENTIST_ERWIN_SCHRODINGER;
 pub use self::galileo_galilei::SCIENTIST as SCIENTIST_GALILEO_GALILEI;
@@ -64,6 +65,7 @@ pub use self::joseph_louis_lagrange::SCIENTIST as SCIENTIST_JOSEPH_LOUIS_LAGRANG
 pub use self::leonhard_euler::SCIENTIST as SCIENTIST_LEONHARD_EULER;
 pub use self::lev_landau::SCIENTIST as SCIENTIST_LEV_LANDAU;
 pub use self::lord_kelvin::SCIENTIST as SCIENTIST_LORD_KELVIN;
+pub use self::lord_rayleigh::SCIENTIST as SCIENTIST_LORD_RAYLEIGH;
 pub use self::ludwig_boltzmann::SCIENTIST as SCIENTIST_LUDWIG_BOLTZMANN;
 pub use self::marie_curie::SCIENTIST as SCIENTIST_MARIE_CURIE;
 pub use self::max_planck::SCIENTIST as SCIENTIST_MAX_PLANCK;
@@ -115,6 +117,8 @@ pub mod edward_lorenz;
 pub mod enrico_fermi;
 #[path = "ernest_rutherford.rs"]
 pub mod ernest_rutherford;
+#[path = "ernst_chladni.rs"]
+pub mod ernst_chladni;
 #[path = "ernst_mach.rs"]
 pub mod ernst_mach;
 #[path = "erwin_schrodinger.rs"]
@@ -153,6 +157,8 @@ pub mod leonhard_euler;
 pub mod lev_landau;
 #[path = "lord_kelvin.rs"]
 pub mod lord_kelvin;
+#[path = "lord_rayleigh.rs"]
+pub mod lord_rayleigh;
 #[path = "ludwig_boltzmann.rs"]
 pub mod ludwig_boltzmann;
 #[path = "marie_curie.rs"]
@@ -196,7 +202,7 @@ pub mod wolfgang_pauli;
 
 /// 收录的科学家总数。
 pub fn scientist_count() -> usize {
-    52
+    54
 }
 
 /// 收录的所有科学家记录（按 `id` 字典序）。
@@ -215,6 +221,7 @@ pub static SCIENTISTS: &[ScientistRecord] = &[
     self::edward_lorenz::SCIENTIST,
     self::enrico_fermi::SCIENTIST,
     self::ernest_rutherford::SCIENTIST,
+    self::ernst_chladni::SCIENTIST,
     self::ernst_mach::SCIENTIST,
     self::erwin_schrodinger::SCIENTIST,
     self::galileo_galilei::SCIENTIST,
@@ -234,6 +241,7 @@ pub static SCIENTISTS: &[ScientistRecord] = &[
     self::leonhard_euler::SCIENTIST,
     self::lev_landau::SCIENTIST,
     self::lord_kelvin::SCIENTIST,
+    self::lord_rayleigh::SCIENTIST,
     self::ludwig_boltzmann::SCIENTIST,
     self::marie_curie::SCIENTIST,
     self::max_planck::SCIENTIST,

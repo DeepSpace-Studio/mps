@@ -55,6 +55,8 @@ mod tests {
         assert_eq!(SCIENTIST_ALEKSANDR_LYAPUNOV.id, "aleksandr_lyapunov");
         assert_eq!(SCIENTIST_EDWARD_LORENZ.id, "edward_lorenz");
         assert_eq!(SCIENTIST_MITCHELL_FEIGENBAUM.id, "mitchell_feigenbaum");
+        assert_eq!(SCIENTIST_ERNST_CHLADNI.id, "ernst_chladni");
+        assert_eq!(SCIENTIST_LORD_RAYLEIGH.id, "lord_rayleigh");
     }
 
     #[test]
