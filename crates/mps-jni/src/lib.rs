@@ -694,6 +694,14 @@ jni!(int queryIntersectAabbRigidBodyCountAll(long world, double min_x, double mi
 jni!(int queryIntersectAabbRigidBodiesAll(long world, double min_x, double min_y, double min_z, double max_x, double max_y, double max_z, long out_handles, int capacity) {
     qu::query_intersect_aabb_rigid_bodies_all(cp::<WH>(world), aa(min_x,min_y,min_z,max_x,max_y,max_z), pm::<RRaw>(out_handles), u32_from_jint(capacity)) as jint
 });
+// Phase 5j: compat aabb_rigid_body 非 _all 变体补齐 JNI
+jni!(int queryIntersectAabbRigidBodyCount(long world, double min_x, double min_y, double min_z, double max_x, double max_y, double max_z, int flags, int memberships, int filter, int use_groups, long exclude_collider, int use_exclude_collider, long exclude_rigid_body, int use_exclude_rigid_body) {
+    com::query_intersect_aabb_rigid_body_count(cp::<WH>(world), aa(min_x,min_y,min_z,max_x,max_y,max_z), query_filter_args!(flags,memberships,filter,use_groups,exclude_collider,use_exclude_collider,exclude_rigid_body,use_exclude_rigid_body)) as jint
+});
+jni!(int queryIntersectAabbRigidBodies(long world, double min_x, double min_y, double min_z, double max_x, double max_y, double max_z, int flags, int memberships, int filter, int use_groups, long exclude_collider, int use_exclude_collider, long exclude_rigid_body, int use_exclude_rigid_body, long out_handles, int capacity) {
+    com::query_intersect_aabb_rigid_bodies(cp::<WH>(world), aa(min_x,min_y,min_z,max_x,max_y,max_z), query_filter_args!(flags,memberships,filter,use_groups,exclude_collider,use_exclude_collider,exclude_rigid_body,use_exclude_rigid_body), pm::<RRaw>(out_handles), u32_from_jint(capacity)) as jint
+});
+
 jni!(int queryIntersectObbCount(long world, double cx, double cy, double cz, double hx, double hy, double hz, double qi, double qj, double qk, double qw, int flags, int memberships, int filter, int use_groups, long exclude_collider, int use_exclude_collider, long exclude_rigid_body, int use_exclude_rigid_body) {
     qu::query_intersect_obb_count(cp::<WH>(world), Obb { center: v3(cx,cy,cz), half_extents: v3(hx,hy,hz), rotation: qt(qi,qj,qk,qw) }, query_filter_args!(flags,memberships,filter,use_groups,exclude_collider,use_exclude_collider,exclude_rigid_body,use_exclude_rigid_body)) as jint
 });
@@ -705,6 +713,99 @@ jni!(int queryIntersectObbCounts(long world, long obbs, int queryCount, int flag
 });
 jni!(int queryIntersectObbAll(long world, double cx, double cy, double cz, double hx, double hy, double hz, double qi, double qj, double qk, double qw, long out_handles, int capacity) {
     qu::query_intersect_obb_all(cp::<WH>(world), Obb { center: v3(cx,cy,cz), half_extents: v3(hx,hy,hz), rotation: qt(qi,qj,qk,qw) }, pm::<CRaw>(out_handles), u32_from_jint(capacity)) as jint
+});
+
+// Phase 5i: bounds/neural 几何相交族 JNI 补齐 (capsule/ssv/ellipsoid/prism/cylinder/spherical_shell/neural_bounds)
+// Capsule
+jni!(int queryIntersectCapsuleCount(long world, double ax, double ay, double az, double bx, double by, double bz, double radius, int flags, int memberships, int filter, int use_groups, long exclude_collider, int use_exclude_collider, long exclude_rigid_body, int use_exclude_rigid_body) {
+    bo::query_intersect_capsule_count(cp::<WH>(world), Capsule { a: v3(ax,ay,az), b: v3(bx,by,bz), radius }, query_filter_args!(flags,memberships,filter,use_groups,exclude_collider,use_exclude_collider,exclude_rigid_body,use_exclude_rigid_body)) as jint
+});
+jni!(int queryIntersectCapsuleCountAll(long world, double ax, double ay, double az, double bx, double by, double bz, double radius) {
+    bo::query_intersect_capsule_count_all(cp::<WH>(world), Capsule { a: v3(ax,ay,az), b: v3(bx,by,bz), radius }) as jint
+});
+jni!(int queryIntersectCapsule(long world, double ax, double ay, double az, double bx, double by, double bz, double radius, int flags, int memberships, int filter, int use_groups, long exclude_collider, int use_exclude_collider, long exclude_rigid_body, int use_exclude_rigid_body, long out_handles, int capacity) {
+    bo::query_intersect_capsule(cp::<WH>(world), Capsule { a: v3(ax,ay,az), b: v3(bx,by,bz), radius }, query_filter_args!(flags,memberships,filter,use_groups,exclude_collider,use_exclude_collider,exclude_rigid_body,use_exclude_rigid_body), pm::<CRaw>(out_handles), u32_from_jint(capacity)) as jint
+});
+jni!(int queryIntersectCapsuleAll(long world, double ax, double ay, double az, double bx, double by, double bz, double radius, long out_handles, int capacity) {
+    bo::query_intersect_capsule_all(cp::<WH>(world), Capsule { a: v3(ax,ay,az), b: v3(bx,by,bz), radius }, pm::<CRaw>(out_handles), u32_from_jint(capacity)) as jint
+});
+// Ssv
+jni!(int queryIntersectSsvCount(long world, double ax, double ay, double az, double bx, double by, double bz, double radius, int flags, int memberships, int filter, int use_groups, long exclude_collider, int use_exclude_collider, long exclude_rigid_body, int use_exclude_rigid_body) {
+    bo::query_intersect_ssv_count(cp::<WH>(world), Ssv { a: v3(ax,ay,az), b: v3(bx,by,bz), radius }, query_filter_args!(flags,memberships,filter,use_groups,exclude_collider,use_exclude_collider,exclude_rigid_body,use_exclude_rigid_body)) as jint
+});
+jni!(int queryIntersectSsvCountAll(long world, double ax, double ay, double az, double bx, double by, double bz, double radius) {
+    bo::query_intersect_ssv_count_all(cp::<WH>(world), Ssv { a: v3(ax,ay,az), b: v3(bx,by,bz), radius }) as jint
+});
+jni!(int queryIntersectSsv(long world, double ax, double ay, double az, double bx, double by, double bz, double radius, int flags, int memberships, int filter, int use_groups, long exclude_collider, int use_exclude_collider, long exclude_rigid_body, int use_exclude_rigid_body, long out_handles, int capacity) {
+    bo::query_intersect_ssv(cp::<WH>(world), Ssv { a: v3(ax,ay,az), b: v3(bx,by,bz), radius }, query_filter_args!(flags,memberships,filter,use_groups,exclude_collider,use_exclude_collider,exclude_rigid_body,use_exclude_rigid_body), pm::<CRaw>(out_handles), u32_from_jint(capacity)) as jint
+});
+jni!(int queryIntersectSsvAll(long world, double ax, double ay, double az, double bx, double by, double bz, double radius, long out_handles, int capacity) {
+    bo::query_intersect_ssv_all(cp::<WH>(world), Ssv { a: v3(ax,ay,az), b: v3(bx,by,bz), radius }, pm::<CRaw>(out_handles), u32_from_jint(capacity)) as jint
+});
+// Ellipsoid
+jni!(int queryIntersectEllipsoidCount(long world, double cx, double cy, double cz, double rx, double ry, double rz, double qi, double qj, double qk, double qw, int segments, int flags, int memberships, int filter, int use_groups, long exclude_collider, int use_exclude_collider, long exclude_rigid_body, int use_exclude_rigid_body) {
+    bo::query_intersect_ellipsoid_count(cp::<WH>(world), Ellipsoid { center: v3(cx,cy,cz), radii: v3(rx,ry,rz), rotation: qt(qi,qj,qk,qw), segments: u32_from_jint(segments) }, query_filter_args!(flags,memberships,filter,use_groups,exclude_collider,use_exclude_collider,exclude_rigid_body,use_exclude_rigid_body)) as jint
+});
+jni!(int queryIntersectEllipsoidCountAll(long world, double cx, double cy, double cz, double rx, double ry, double rz, double qi, double qj, double qk, double qw, int segments) {
+    bo::query_intersect_ellipsoid_count_all(cp::<WH>(world), Ellipsoid { center: v3(cx,cy,cz), radii: v3(rx,ry,rz), rotation: qt(qi,qj,qk,qw), segments: u32_from_jint(segments) }) as jint
+});
+jni!(int queryIntersectEllipsoid(long world, double cx, double cy, double cz, double rx, double ry, double rz, double qi, double qj, double qk, double qw, int segments, int flags, int memberships, int filter, int use_groups, long exclude_collider, int use_exclude_collider, long exclude_rigid_body, int use_exclude_rigid_body, long out_handles, int capacity) {
+    bo::query_intersect_ellipsoid(cp::<WH>(world), Ellipsoid { center: v3(cx,cy,cz), radii: v3(rx,ry,rz), rotation: qt(qi,qj,qk,qw), segments: u32_from_jint(segments) }, query_filter_args!(flags,memberships,filter,use_groups,exclude_collider,use_exclude_collider,exclude_rigid_body,use_exclude_rigid_body), pm::<CRaw>(out_handles), u32_from_jint(capacity)) as jint
+});
+jni!(int queryIntersectEllipsoidAll(long world, double cx, double cy, double cz, double rx, double ry, double rz, double qi, double qj, double qk, double qw, int segments, long out_handles, int capacity) {
+    bo::query_intersect_ellipsoid_all(cp::<WH>(world), Ellipsoid { center: v3(cx,cy,cz), radii: v3(rx,ry,rz), rotation: qt(qi,qj,qk,qw), segments: u32_from_jint(segments) }, pm::<CRaw>(out_handles), u32_from_jint(capacity)) as jint
+});
+// Prism
+jni!(int queryIntersectPrismCount(long world, double cx, double cy, double cz, double radius, double half_height, int sides, double qi, double qj, double qk, double qw, int flags, int memberships, int filter, int use_groups, long exclude_collider, int use_exclude_collider, long exclude_rigid_body, int use_exclude_rigid_body) {
+    bo::query_intersect_prism_count(cp::<WH>(world), Prism { center: v3(cx,cy,cz), radius, half_height, sides: u32_from_jint(sides), rotation: qt(qi,qj,qk,qw) }, query_filter_args!(flags,memberships,filter,use_groups,exclude_collider,use_exclude_collider,exclude_rigid_body,use_exclude_rigid_body)) as jint
+});
+jni!(int queryIntersectPrismCountAll(long world, double cx, double cy, double cz, double radius, double half_height, int sides, double qi, double qj, double qk, double qw) {
+    bo::query_intersect_prism_count_all(cp::<WH>(world), Prism { center: v3(cx,cy,cz), radius, half_height, sides: u32_from_jint(sides), rotation: qt(qi,qj,qk,qw) }) as jint
+});
+jni!(int queryIntersectPrism(long world, double cx, double cy, double cz, double radius, double half_height, int sides, double qi, double qj, double qk, double qw, int flags, int memberships, int filter, int use_groups, long exclude_collider, int use_exclude_collider, long exclude_rigid_body, int use_exclude_rigid_body, long out_handles, int capacity) {
+    bo::query_intersect_prism(cp::<WH>(world), Prism { center: v3(cx,cy,cz), radius, half_height, sides: u32_from_jint(sides), rotation: qt(qi,qj,qk,qw) }, query_filter_args!(flags,memberships,filter,use_groups,exclude_collider,use_exclude_collider,exclude_rigid_body,use_exclude_rigid_body), pm::<CRaw>(out_handles), u32_from_jint(capacity)) as jint
+});
+jni!(int queryIntersectPrismAll(long world, double cx, double cy, double cz, double radius, double half_height, int sides, double qi, double qj, double qk, double qw, long out_handles, int capacity) {
+    bo::query_intersect_prism_all(cp::<WH>(world), Prism { center: v3(cx,cy,cz), radius, half_height, sides: u32_from_jint(sides), rotation: qt(qi,qj,qk,qw) }, pm::<CRaw>(out_handles), u32_from_jint(capacity)) as jint
+});
+// Cylinder
+jni!(int queryIntersectCylinderCount(long world, double cx, double cy, double cz, double radius, double half_height, double qi, double qj, double qk, double qw, int flags, int memberships, int filter, int use_groups, long exclude_collider, int use_exclude_collider, long exclude_rigid_body, int use_exclude_rigid_body) {
+    bo::query_intersect_cylinder_count(cp::<WH>(world), Cylinder { center: v3(cx,cy,cz), radius, half_height, rotation: qt(qi,qj,qk,qw) }, query_filter_args!(flags,memberships,filter,use_groups,exclude_collider,use_exclude_collider,exclude_rigid_body,use_exclude_rigid_body)) as jint
+});
+jni!(int queryIntersectCylinderCountAll(long world, double cx, double cy, double cz, double radius, double half_height, double qi, double qj, double qk, double qw) {
+    bo::query_intersect_cylinder_count_all(cp::<WH>(world), Cylinder { center: v3(cx,cy,cz), radius, half_height, rotation: qt(qi,qj,qk,qw) }) as jint
+});
+jni!(int queryIntersectCylinder(long world, double cx, double cy, double cz, double radius, double half_height, double qi, double qj, double qk, double qw, int flags, int memberships, int filter, int use_groups, long exclude_collider, int use_exclude_collider, long exclude_rigid_body, int use_exclude_rigid_body, long out_handles, int capacity) {
+    bo::query_intersect_cylinder(cp::<WH>(world), Cylinder { center: v3(cx,cy,cz), radius, half_height, rotation: qt(qi,qj,qk,qw) }, query_filter_args!(flags,memberships,filter,use_groups,exclude_collider,use_exclude_collider,exclude_rigid_body,use_exclude_rigid_body), pm::<CRaw>(out_handles), u32_from_jint(capacity)) as jint
+});
+jni!(int queryIntersectCylinderAll(long world, double cx, double cy, double cz, double radius, double half_height, double qi, double qj, double qk, double qw, long out_handles, int capacity) {
+    bo::query_intersect_cylinder_all(cp::<WH>(world), Cylinder { center: v3(cx,cy,cz), radius, half_height, rotation: qt(qi,qj,qk,qw) }, pm::<CRaw>(out_handles), u32_from_jint(capacity)) as jint
+});
+// SphericalShell
+jni!(int queryIntersectSphericalShellCount(long world, double cx, double cy, double cz, double inner_radius, double outer_radius, int flags, int memberships, int filter, int use_groups, long exclude_collider, int use_exclude_collider, long exclude_rigid_body, int use_exclude_rigid_body) {
+    bo::query_intersect_spherical_shell_count(cp::<WH>(world), SphericalShell { center: v3(cx,cy,cz), inner_radius, outer_radius }, query_filter_args!(flags,memberships,filter,use_groups,exclude_collider,use_exclude_collider,exclude_rigid_body,use_exclude_rigid_body)) as jint
+});
+jni!(int queryIntersectSphericalShellCountAll(long world, double cx, double cy, double cz, double inner_radius, double outer_radius) {
+    bo::query_intersect_spherical_shell_count_all(cp::<WH>(world), SphericalShell { center: v3(cx,cy,cz), inner_radius, outer_radius }) as jint
+});
+jni!(int queryIntersectSphericalShell(long world, double cx, double cy, double cz, double inner_radius, double outer_radius, int flags, int memberships, int filter, int use_groups, long exclude_collider, int use_exclude_collider, long exclude_rigid_body, int use_exclude_rigid_body, long out_handles, int capacity) {
+    bo::query_intersect_spherical_shell(cp::<WH>(world), SphericalShell { center: v3(cx,cy,cz), inner_radius, outer_radius }, query_filter_args!(flags,memberships,filter,use_groups,exclude_collider,use_exclude_collider,exclude_rigid_body,use_exclude_rigid_body), pm::<CRaw>(out_handles), u32_from_jint(capacity)) as jint
+});
+jni!(int queryIntersectSphericalShellAll(long world, double cx, double cy, double cz, double inner_radius, double outer_radius, long out_handles, int capacity) {
+    bo::query_intersect_spherical_shell_all(cp::<WH>(world), SphericalShell { center: v3(cx,cy,cz), inner_radius, outer_radius }, pm::<CRaw>(out_handles), u32_from_jint(capacity)) as jint
+});
+// NeuralBounds
+jni!(int queryIntersectNeuralBoundsCount(long world, double cx, double cy, double cz, double hx, double hy, double hz, double qi, double qj, double qk, double qw, int sample_resolution, int hidden_width, int hidden_layers, int activation, double output_scale, double padding, long weights, int weight_count, int flags, int memberships, int filter, int use_groups, long exclude_collider, int use_exclude_collider, long exclude_rigid_body, int use_exclude_rigid_body) {
+    neu::query_intersect_neural_bounds_count(cp::<WH>(world), NeuralBoundsDesc { center: v3(cx,cy,cz), half_extents: v3(hx,hy,hz), rotation: qt(qi,qj,qk,qw), sample_resolution: u32_from_jint(sample_resolution), hidden_width: u32_from_jint(hidden_width), hidden_layers: u32_from_jint(hidden_layers), activation: neural_activation(activation), output_scale, padding }, p::<f64>(weights), u32_from_jint(weight_count), query_filter_args!(flags,memberships,filter,use_groups,exclude_collider,use_exclude_collider,exclude_rigid_body,use_exclude_rigid_body)) as jint
+});
+jni!(int queryIntersectNeuralBoundsCountAll(long world, double cx, double cy, double cz, double hx, double hy, double hz, double qi, double qj, double qk, double qw, int sample_resolution, int hidden_width, int hidden_layers, int activation, double output_scale, double padding, long weights, int weight_count) {
+    neu::query_intersect_neural_bounds_count_all(cp::<WH>(world), NeuralBoundsDesc { center: v3(cx,cy,cz), half_extents: v3(hx,hy,hz), rotation: qt(qi,qj,qk,qw), sample_resolution: u32_from_jint(sample_resolution), hidden_width: u32_from_jint(hidden_width), hidden_layers: u32_from_jint(hidden_layers), activation: neural_activation(activation), output_scale, padding }, p::<f64>(weights), u32_from_jint(weight_count)) as jint
+});
+jni!(int queryIntersectNeuralBounds(long world, double cx, double cy, double cz, double hx, double hy, double hz, double qi, double qj, double qk, double qw, int sample_resolution, int hidden_width, int hidden_layers, int activation, double output_scale, double padding, long weights, int weight_count, int flags, int memberships, int filter, int use_groups, long exclude_collider, int use_exclude_collider, long exclude_rigid_body, int use_exclude_rigid_body, long out_handles, int capacity) {
+    neu::query_intersect_neural_bounds(cp::<WH>(world), NeuralBoundsDesc { center: v3(cx,cy,cz), half_extents: v3(hx,hy,hz), rotation: qt(qi,qj,qk,qw), sample_resolution: u32_from_jint(sample_resolution), hidden_width: u32_from_jint(hidden_width), hidden_layers: u32_from_jint(hidden_layers), activation: neural_activation(activation), output_scale, padding }, p::<f64>(weights), u32_from_jint(weight_count), query_filter_args!(flags,memberships,filter,use_groups,exclude_collider,use_exclude_collider,exclude_rigid_body,use_exclude_rigid_body), pm::<CRaw>(out_handles), u32_from_jint(capacity)) as jint
+});
+jni!(int queryIntersectNeuralBoundsAll(long world, double cx, double cy, double cz, double hx, double hy, double hz, double qi, double qj, double qk, double qw, int sample_resolution, int hidden_width, int hidden_layers, int activation, double output_scale, double padding, long weights, int weight_count, long out_handles, int capacity) {
+    neu::query_intersect_neural_bounds_all(cp::<WH>(world), NeuralBoundsDesc { center: v3(cx,cy,cz), half_extents: v3(hx,hy,hz), rotation: qt(qi,qj,qk,qw), sample_resolution: u32_from_jint(sample_resolution), hidden_width: u32_from_jint(hidden_width), hidden_layers: u32_from_jint(hidden_layers), activation: neural_activation(activation), output_scale, padding }, p::<f64>(weights), u32_from_jint(weight_count), pm::<CRaw>(out_handles), u32_from_jint(capacity)) as jint
 });
 
 jni!(int queryIntersectVoxelAabb(long world, double min_x, double min_y, double min_z, double max_x, double max_y, double max_z, int flags, int memberships, int filter, int use_groups, long exclude_collider, int use_exclude_collider, long exclude_rigid_body, int use_exclude_rigid_body, long out_handles, int capacity) {
