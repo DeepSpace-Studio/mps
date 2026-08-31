@@ -13,8 +13,9 @@ mod tests {
         character_body_collision_count, character_body_create, character_body_destroy,
         character_body_get_collision, character_body_get_translation, character_body_is_grounded,
         character_body_is_on_ground, character_body_is_sliding_down_slope, character_body_move,
-        character_body_move_with_terrain, character_body_set_autostep, character_body_set_shape,
-        character_body_set_slide, character_body_solve_impulses,
+        character_body_move_with_terrain, character_body_set_apply_impulses_to_dynamic_bodies,
+        character_body_set_autostep, character_body_set_shape, character_body_set_slide,
+        character_body_solve_impulses,
     };
     use mps_core::rapier::collider::{
         collider_builder_build, collider_builder_create_ex, world_insert_collider_with_parent,
@@ -851,6 +852,111 @@ mod tests {
             character_body_solve_impulses(world, id + 999, dt, 70.0),
             Bool::FALSE
         );
+        character_body_destroy(world, id);
+        world_destroy(world);
+    }
+
+    /// With `apply_impulses_to_dynamic_bodies` disabled, solve_impulses is a no-op
+    /// and the character does not shove the crate — the crate stays at its start.
+    #[test]
+    fn disable_impulses_keeps_crate_in_place() {
+        let world = make_world();
+        let _floor = make_floor(world);
+
+        let crate_b = rigid_body_builder_create(BodyStatus::Dynamic as u32);
+        rigid_body_builder_set_translation(
+            crate_b,
+            Vec3 {
+                x: 0.5,
+                y: 0.5,
+                z: 0.0,
+            },
+        );
+        let crate_body = world_insert_rigid_body(world, rigid_body_builder_build(crate_b));
+        let cshape = ShapeDesc {
+            shape_type: ShapeType::Cuboid as u32,
+            a: 0.5,
+            b: 0.5,
+            c: 0.5,
+            ..Default::default()
+        };
+        world_insert_collider_with_parent(
+            world,
+            collider_builder_build(collider_builder_create_ex(cshape)),
+            crate_body,
+        );
+
+        let id = character_body_create(
+            world,
+            ShapeDesc {
+                shape_type: ShapeType::Ball as u32,
+                a: 0.5,
+                ..Default::default()
+            },
+            Vec3 {
+                x: -1.0,
+                y: 0.5,
+                z: 0.0,
+            },
+        );
+        assert_ne!(id, u32::MAX);
+        let dt = 1.0 / 60.0;
+        world_step(world, dt);
+
+        // Turn the push off, then drive into the crate for many steps.
+        assert_eq!(
+            character_body_set_apply_impulses_to_dynamic_bodies(world, id, Bool::FALSE),
+            Bool::TRUE
+        );
+        for _ in 0..120 {
+            character_body_move(
+                world,
+                id,
+                Vec3 {
+                    x: 0.2,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                dt,
+            );
+            world_step(world, dt);
+            character_body_solve_impulses(world, id, dt, 70.0);
+        }
+
+        // The crate must not have moved.
+        let crate_pos = rigid_body_get_translation(world, crate_body).x;
+        assert!(
+            (crate_pos - 0.5).abs() < 1e-3,
+            "crate should stay put when impulses are disabled, x={}",
+            crate_pos
+        );
+
+        // Re-enabling makes the same drive push it again.
+        assert_eq!(
+            character_body_set_apply_impulses_to_dynamic_bodies(world, id, Bool::TRUE),
+            Bool::TRUE
+        );
+        for _ in 0..120 {
+            character_body_move(
+                world,
+                id,
+                Vec3 {
+                    x: 0.2,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                dt,
+            );
+            world_step(world, dt);
+            character_body_solve_impulses(world, id, dt, 70.0);
+        }
+        let crate_pos2 = rigid_body_get_translation(world, crate_body).x;
+        assert!(
+            crate_pos2 > 0.6,
+            "crate should move again after re-enabling impulses, x={}",
+            crate_pos2
+        );
+
         character_body_destroy(world, id);
         world_destroy(world);
     }

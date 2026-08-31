@@ -115,6 +115,10 @@ pub fn CharacterBody() -> Element {
                         h3 { { t!("char-cap-03-title") } }
                         p { { t!("char-cap-03-desc") } }
                     }
+                    div { class: "feature-card",
+                        h3 { { t!("char-cap-04-title") } }
+                        p { { t!("char-cap-04-desc") } }
+                    }
                 }
             }
         }

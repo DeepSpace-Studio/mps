@@ -1848,6 +1848,19 @@ Bool character_body_solve_impulses(struct WorldHandle *world,
                                    double character_mass);
 
 /**
+ * Enable or disable transferring the character's intended momentum to the dynamic
+ * bodies it is blocked against (default: enabled). When disabled, the character
+ * still resolves against static geometry but does not shove dynamic bodies — it
+ * "ghosts" through them. No fork changes.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+Bool character_body_set_apply_impulses_to_dynamic_bodies(struct WorldHandle *world,
+                                                         uint32_t id,
+                                                         Bool enabled);
+
+/**
  * Like [`character_body_move`] but additionally samples the world's registered
  * terrain gravity (polyhedron / DEM / lunar-mascon) at the character's current
  * position and folds the resulting free-fall displacement (`½·a·dt²`) into the

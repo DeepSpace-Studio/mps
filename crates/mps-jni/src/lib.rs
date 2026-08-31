@@ -808,6 +808,10 @@ jni!(long characterBodyGetCollision(long world, int id, int index, long out_coll
 jni!(boolean characterBodySolveImpulses(long world, int id, double dt, double character_mass) {
     cb_::character_body_solve_impulses(m::<WH>(world), u32_from_jint(id), dt, character_mass).0 as jbyte
 });
+jni!(boolean characterBodySetApplyImpulsesToDynamicBodies(long world, int id, boolean enabled) {
+    cb_::character_body_set_apply_impulses_to_dynamic_bodies(m::<WH>(world), u32_from_jint(id), Bool::from(enabled != 0)).0 as jbyte
+});
+
 jni!(long characterBodyMoveWithTerrain(long world, int id, double dx, double dy, double dz, double dt, long out_movement) {
     let m = cb_::character_body_move_with_terrain(m::<WH>(world), u32_from_jint(id), v3(dx,dy,dz), dt);
     if let Some(out) = unsafe { pm::<EffectiveCharacterMovement>(out_movement).as_mut() } { *out = m; }

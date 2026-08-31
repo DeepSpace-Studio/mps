@@ -38,6 +38,11 @@ pub(crate) struct CharacterBody {
     /// itself.
     pub collider: ColliderHandle,
     pub shape: ShapeDesc,
+    /// When true (default), `character_body_solve_impulses` transfers the
+    /// character's intended momentum to the dynamic bodies it is blocked against.
+    /// Set false to make the character "ghost" through dynamic bodies without
+    /// shoving them (it still resolves against static geometry).
+    pub apply_impulses_to_dynamic_bodies: bool,
     pub last_movement: EffectiveCharacterMovement,
     /// Collisions captured by the most recent `character_body_move` (cleared each
     /// call, populated by the move's collision callback). Read back via
@@ -101,6 +106,7 @@ pub extern "C" fn character_body_create(
                 body,
                 collider,
                 shape,
+                apply_impulses_to_dynamic_bodies: true,
                 last_movement: EffectiveCharacterMovement::default(),
                 collisions: Vec::new(),
             },
@@ -687,6 +693,10 @@ pub extern "C" fn character_body_solve_impulses(
         // push vector, and apply `mass * v` (v = remaining/dt) to the contacted dynamic
         // body. This is the "character pushes crates" behaviour, with no fork changes.
         let cb = world.inner.character_bodies.get(&id).unwrap();
+        if !cb.apply_impulses_to_dynamic_bodies {
+            clear_error();
+            return Bool::TRUE;
+        }
         for c in cb.collisions.iter() {
             if let Some(collider) = world.inner.colliders.get(c.handle)
                 && let Some(parent) = collider.parent()
@@ -707,6 +717,37 @@ pub extern "C" fn character_body_solve_impulses(
                 body.apply_impulse(delta * mass, true);
             }
         }
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Enable or disable transferring the character's intended momentum to the dynamic
+/// bodies it is blocked against (default: enabled). When disabled, the character
+/// still resolves against static geometry but does not shove dynamic bodies — it
+/// "ghosts" through them. No fork changes.
+///
+/// # Safety
+/// `world` must be a valid pointer returned by `world_create`.
+#[unsafe(no_mangle)]
+pub extern "C" fn character_body_set_apply_impulses_to_dynamic_bodies(
+    world: *mut WorldHandle,
+    id: u32,
+    enabled: Bool,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "world is null");
+            return Bool::FALSE;
+        };
+        let Some(cb) = world.inner.character_bodies.get_mut(&id) else {
+            set_error(
+                ERR_NOT_FOUND,
+                "character_body_set_apply_impulses: unknown id",
+            );
+            return Bool::FALSE;
+        };
+        cb.apply_impulses_to_dynamic_bodies = enabled.0 != 0;
         clear_error();
         Bool::TRUE
     })
