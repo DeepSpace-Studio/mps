@@ -941,6 +941,7 @@ sensor-cap-05-title = 消费与清除
 sensor-cap-04-desc = set_edge 把 is_triggered 切到边沿模式：仅在重叠首次出现的那次 poll 触发，之后保持 false，直到区域被清空并再次进入。
 sensor-cap-05-desc = sensor_zone_consume 读后清除一次性边沿锁存(每次进入仅 TRUE 一次); sensor_zone_clear 重新布防。零 fork。
 nav-vehicle-controller = 载具控制器
+nav-force-queue = 力队列
 veh-tag = 新增体类型
 veh-title = 射线载具控制器
 veh-desc = 用 rapier 的射线载具控制器驱动一个动态底盘刚体 - 悬挂、轮子、引擎力与转向。第五种体。
@@ -994,3 +995,58 @@ changelog-total-lead = 来自 workspace 的实时数字：{ $jni } 个 JNI 方�
 changelog-stat-jni = JNI 方法
 changelog-stat-ffi = C ABI 函数
 changelog-stat-tests = 集成测试
+
+# ---- Force Queue page ----
+force-queue-tag = // MPS
+force-queue-title = 零拷贝力队列
+force-queue-desc = 用于 Java 到 Rust 力施加的共享内存无锁队列 — 单生产者（Java），单消费者（world_step 中的 Rust）。热路径零 JNI 开销；力通过 DirectByteBuffer 支撑的环形缓冲流动。
+
+force-queue-overview-title = 概览
+force-queue-overview-lead = 力队列通过将所有力批量写入单个共享内存环形缓冲区，由 Java 写入、Rust 每帧消费一次，消除了逐力 JNI 调用。
+force-queue-overview-body = Java 经 ForceQueue（JNI）或 ForceQueueFFM（FFM）分配队列，将 body_id + force[3]（+ 可选 torque[3]）写入槽位，置位 bitmap 位，推进 head。原生 world_step 调用一次 rigid_body_consume_force_queue，它消费 [tail, head)，把力施加给 Rapier 刚体，清除位，推进 tail。热路径零 JNI。
+
+force-queue-layout-title = 内存布局
+force-queue-layout-desc = 队列是单块连续分配，包含三个区域：
+force-queue-layout-diagram = ForceQueueHeader (64 字节, #[repr(C, align(64))])\\n+----------+----------+----------+----------+--------+-----------+\\n| capacity | head     | tail     |generation| stride |  flags    |\\n|  u64     |  u64     |  u64     |   u64    |  u32   |   u32     |\\n+----------+----------+----------+----------+--------+-----------+\\nBitmap: (capacity + 63) / 64  x  u64  (每槽 1 位)\\nPayload: capacity x stride x 8 字节 (每分量 f64)\\nstride = 6 (body_id + force[3])  或  7 (body_id + force[3] + torque[3])
+force-queue-layout-note = 头部缓存行对齐（64 字节）。Bitmap 紧随其后。Payload 紧随 bitmap。所有偏移均由头部字段可算出 — 无需额外指针。
+
+force-queue-sync-title = 同步模型
+force-queue-sync-lead = 单生产者 / 单消费者无锁协议 — 无 CAS 循环，无互斥锁：
+force-queue-sync-li-1 = Java 写 payload + 置位 bitmap bit，release 语序
+force-queue-sync-li-2 = Java 推进 head，release 存储
+force-queue-sync-li-3 = Rust 读 head，acquire 加载（与 Java release 配对）
+force-queue-sync-li-4 = Rust 处理 [tail, head)，清除 bitmap bit，release 语序
+force-queue-sync-li-5 = Rust 推进 tail，release 存储
+force-queue-sync-li-6 = head 回绕时 generation 计数器解决 ABA，无需重量级原语
+
+force-queue-stride-title = Stride 模式
+force-queue-stride-desc = stride 字段控制的两种 payload 格式：
+force-queue-stride-col-mode = Stride
+force-queue-stride-col-desc = 布局
+force-queue-stride-col-use = 适用场景
+force-queue-stride-6-desc = body_id (f64) + force.x + force.y + force.z (6 f64 = 48 字节)
+force-queue-stride-6-use = 纯力施加（最常用）
+force-queue-stride-7-desc = body_id + force.x + force.y + force.z + torque.x + torque.y + torque.z (7 f64 = 56 字节)
+force-queue-stride-7-use = 力 + 力矩合在一个槽位（如带力臂的推进器）
+
+force-queue-ffi-title = C FFI 接口
+force-queue-ffi-desc = rigid_body.h 暴露单一入口：
+force-queue-ffi-sample = // 头部结构（64 字节对齐，cbindgen 导出）\ntypedef struct ForceQueueHeader {\n    uint64_t capacity;\n    uint64_t head;\n    uint64_t tail;\n    uint64_t generation;\n    uint32_t stride;\n    uint32_t flags;\n    // bitmap + payload 紧随内存后方\n} ForceQueueHeader;\n\n// 消费者 — world_step 中每帧调用一次或直接调用\nuint32_t rigid_body_consume_force_queue(void* world, ForceQueueHeader* queue);
+
+force-queue-jni-title = Java 生产者（JNI）
+force-queue-jni-desc = ForceQueue.java 封装 DirectByteBuffer，用 VarHandle 做 head/bitmap 原子访问：
+force-queue-jni-sample = // 分配队列（capacity 必须是 2 的幂）\nForceQueue queue = ForceQueue.allocate(capacity, 6); // stride 6 = 仅力\n\n// 为 body_id 入队一个力\nint slot = queue.tryEnqueue();\nif (slot >= 0) {\n    queue.writeForce(slot, bodyId, fx, fy, fz);\n    queue.commit(slot); // 置位 bitmap bit + release head\n}\n\n// 每帧一次：原生消费\nRapierNative.rigidBodyConsumeForceQueue(worldHandle, queue.address());
+
+force-queue-ffm-title = Java 生产者（FFM / Java 25+）
+force-queue-ffm-desc = ForceQueueFFM.java 用 MemorySegment + VarHandle 走相同协议，无需 JNIEnv：
+force-queue-ffm-sample = // 将原生队列内存映射为 MemorySegment\nMemorySegment segment = (MemorySegment) ForceQueueFFM.mapQueue(capacity, 6);\nForceQueueHeader header = ForceQueueHeader.of(segment);\n\n// 入队\nint slot = ForceQueueFFM.tryEnqueue(header);\nif (slot >= 0) {\n    ForceQueueFFM.writeForce(header, slot, bodyId, fx, fy, fz);\n    ForceQueueFFM.commit(header, slot);\n}\n\n// 通过 downcall 消费\nLinker linker = Linker.nativeLinker();\nMethodHandle consume = linker.downcallHandle(\n    SymbolLookup.loaderLookup().find(\"rigid_body_consume_force_queue\").get(),\n    FunctionDescriptor.of(ValueLayout.JAVA_INT,\n        ValueLayout.ADDRESS, ValueLayout.ADDRESS)\n);\nconsume.invokeExact(worldAddress, segment.address());
+
+force-queue-test-title = 集成测试
+force-queue-test-desc = mps-test/src/rapier/force_queue_integration.rs 覆盖完整循环：
+force-queue-test-sample = #[test]\nfn force_queue_integration_full_cycle() {\n    let world = world_create();\n    let body = rigid_body_create_dynamic(world, 0, 0, 0);\n    let queue = allocate_queue(1024, 6);\n    \n    // Java 风格：写力进槽位 0，置位，推进 head\n    write_force(queue, 0, body, 10.0, 0.0, 0.0);\n    set_bit(queue, 0);\n    atomic_store_release(&queue.head, 1);\n    \n    // 原生消费\n    rigid_body_consume_force_queue(world, queue);\n    \n    // 验证力已施加\n    let force = rigid_body_get_force(world, body);\n    assert!((force.x - 10.0).abs() < 1e-9);\n}
+
+force-queue-perf-title = 性能要点
+force-queue-perf-li-1 = 每帧单次 world_step 调用 — 力热路径零 JNI
+force-queue-perf-li-2 = 批量 N 个力 → 1 次 FFI 调用；将 FFI 开销分摊到成千上万个体
+force-queue-perf-li-3 = 缓存行对齐头部 + bitmap；伪共享最小化
+force-queue-perf-li-4 = Capacity 为 2 的幂 → 位掩码快速取模（无除法）

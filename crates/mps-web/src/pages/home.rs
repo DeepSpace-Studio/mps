@@ -73,6 +73,7 @@ use crate::pages::cosmos_orbit::CosmosOrbit;
 use crate::pages::cosmos_world::CosmosWorld;
 use crate::pages::events::Events;
 use crate::pages::ffm::Ffm;
+use crate::pages::force_queue::ForceQueue;
 use crate::pages::formula::Formula;
 use crate::pages::gravity::Gravity;
 use crate::pages::integrators::Integrators;
@@ -150,6 +151,7 @@ pub fn Home() -> Element {
             Changelog {}
             Moons {}
             Events {}
+            ForceQueue {}
             Arena {}
             Batch {}
             Cosmos {}

@@ -9,14 +9,20 @@ fn force_queue_integration_full_cycle() {
     use mps_core::rapier::ffi::Vec3;
     use mps_core::rapier::ffi::force_queue::{ForceQueueHeader, rigid_body_consume_force_queue};
     use mps_core::rapier::ffi::types::BodyStatus;
-    use mps_core::rapier::rigid_body::{rigid_body_builder_build, rigid_body_builder_create, world_insert_rigid_body};
+    use mps_core::rapier::rigid_body::{
+        rigid_body_builder_build, rigid_body_builder_create, world_insert_rigid_body,
+    };
     use mps_core::rapier::world::{world_create, world_destroy};
     use std::alloc::{Layout, alloc};
     use std::ptr;
     use std::sync::atomic::Ordering;
 
     // 1. Create a physics world
-    let gravity = Vec3 { x: 0.0, y: -9.81, z: 0.0 };
+    let gravity = Vec3 {
+        x: 0.0,
+        y: -9.81,
+        z: 0.0,
+    };
     let world = world_create(gravity);
     assert!(!world.is_null());
 
@@ -108,7 +114,10 @@ fn force_queue_integration_full_cycle() {
     // Set bitmap bit 1
     unsafe {
         let bitmap = (*hdr).bitmap();
-        bitmap[0].store(bitmap[0].load(Ordering::Acquire) | (1u64 << 1), Ordering::Release);
+        bitmap[0].store(
+            bitmap[0].load(Ordering::Acquire) | (1u64 << 1),
+            Ordering::Release,
+        );
     }
     // Advance head
     unsafe {
@@ -147,7 +156,10 @@ fn force_queue_integration_full_cycle() {
         payload[base + 5] = 0.0;
         payload[base + 6] = 0.0;
         let bitmap = (*hdr).bitmap();
-        bitmap[0].store(bitmap[0].load(Ordering::Acquire) | (1u64 << 2), Ordering::Release);
+        bitmap[0].store(
+            bitmap[0].load(Ordering::Acquire) | (1u64 << 2),
+            Ordering::Release,
+        );
     }
     let ret = rigid_body_consume_force_queue(world, hdr);
     assert_eq!(ret, ERR_OK);
@@ -202,14 +214,20 @@ fn force_queue_integration_stride6_only_force() {
     use mps_core::rapier::ffi::Vec3;
     use mps_core::rapier::ffi::force_queue::{ForceQueueHeader, rigid_body_consume_force_queue};
     use mps_core::rapier::ffi::types::BodyStatus;
-    use mps_core::rapier::rigid_body::{rigid_body_builder_build, rigid_body_builder_create, world_insert_rigid_body};
+    use mps_core::rapier::rigid_body::{
+        rigid_body_builder_build, rigid_body_builder_create, world_insert_rigid_body,
+    };
     use mps_core::rapier::world::{world_create, world_destroy};
     use std::alloc::{Layout, alloc};
     use std::ptr;
     use std::sync::atomic::Ordering;
 
     // Test with stride=6 (force only, no torque)
-    let gravity = Vec3 { x: 0.0, y: -9.81, z: 0.0 };
+    let gravity = Vec3 {
+        x: 0.0,
+        y: -9.81,
+        z: 0.0,
+    };
     let world = world_create(gravity);
     assert!(!world.is_null());
 
@@ -282,14 +300,20 @@ fn force_queue_integration_cancel_by_index() {
     use mps_core::rapier::ffi::Vec3;
     use mps_core::rapier::ffi::force_queue::{ForceQueueHeader, rigid_body_consume_force_queue};
     use mps_core::rapier::ffi::types::BodyStatus;
-    use mps_core::rapier::rigid_body::{rigid_body_builder_build, rigid_body_builder_create, world_insert_rigid_body};
+    use mps_core::rapier::rigid_body::{
+        rigid_body_builder_build, rigid_body_builder_create, world_insert_rigid_body,
+    };
     use mps_core::rapier::world::{world_create, world_destroy};
     use std::alloc::{Layout, alloc};
     use std::ptr;
     use std::sync::atomic::Ordering;
 
     // Test O(1) cancellation by clearing bitmap bit
-    let gravity = Vec3 { x: 0.0, y: -9.81, z: 0.0 };
+    let gravity = Vec3 {
+        x: 0.0,
+        y: -9.81,
+        z: 0.0,
+    };
     let world = world_create(gravity);
     assert!(!world.is_null());
 
@@ -382,14 +406,20 @@ fn force_queue_integration_wrap_around() {
     use mps_core::rapier::ffi::Vec3;
     use mps_core::rapier::ffi::force_queue::{ForceQueueHeader, rigid_body_consume_force_queue};
     use mps_core::rapier::ffi::types::BodyStatus;
-    use mps_core::rapier::rigid_body::{rigid_body_builder_build, rigid_body_builder_create, world_insert_rigid_body};
+    use mps_core::rapier::rigid_body::{
+        rigid_body_builder_build, rigid_body_builder_create, world_insert_rigid_body,
+    };
     use mps_core::rapier::world::{world_create, world_destroy};
     use std::alloc::{Layout, alloc};
     use std::ptr;
     use std::sync::atomic::Ordering;
 
     // Test generation counter increment on head wrap
-    let gravity = Vec3 { x: 0.0, y: -9.81, z: 0.0 };
+    let gravity = Vec3 {
+        x: 0.0,
+        y: -9.81,
+        z: 0.0,
+    };
     let world = world_create(gravity);
     assert!(!world.is_null());
 

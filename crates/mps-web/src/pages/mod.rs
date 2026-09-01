@@ -13,6 +13,7 @@ pub mod cosmos_orbit;
 pub mod cosmos_world;
 pub mod events;
 pub mod ffm;
+pub mod force_queue;
 pub mod formula;
 pub mod gravity;
 pub mod home;

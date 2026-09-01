@@ -944,6 +944,7 @@ sensor-cap-05-title = Consume and clear
 sensor-cap-04-desc = set_edge switches is_triggered to edge mode: it fires only on the poll where an overlap first appears, then stays false until the zone is emptied and re-entered.
 sensor-cap-05-desc = sensor_zone_consume read-and-clears the one-shot edge latch (TRUE exactly once per entry); sensor_zone_clear re-arms the zone. No fork changes.
 nav-vehicle-controller = Vehicle Controller
+nav-force-queue = Force Queue
 veh-tag = New body type
 veh-title = Ray-Cast Vehicle Controller
 veh-desc = A dynamic chassis body driven by rapier's ray-cast vehicle controller - suspension, wheels, engine force and steering. The fifth body type.
@@ -997,3 +998,58 @@ changelog-total-lead = Live numbers from the workspace: { $jni } JNI methods, { 
 changelog-stat-jni = JNI methods
 changelog-stat-ffi = C-ABI functions
 changelog-stat-tests = integration tests
+
+# ---- Force Queue page ----
+force-queue-tag = // MPS
+force-queue-title = Zero-Copy Force Queue
+force-queue-desc = Shared-memory lock-free queue for Java-to-Rust force application — single producer (Java), single consumer (Rust in world_step). No JNI overhead on the hot path; forces flow through a DirectByteBuffer-backed ring buffer.
+
+force-queue-overview-title = Overview
+force-queue-overview-lead = The force queue eliminates per-force JNI calls by batching all forces into a single shared-memory ring buffer that Java writes and Rust consumes once per frame.
+force-queue-overview-body = Java allocates the queue via ForceQueue (JNI) or ForceQueueFFM (FFM), writes body_id + force[3] (+ torque[3] optional) into slots, sets the bitmap bit, and advances head. The native world_step calls rigid_body_consume_force_queue once, which drains [tail, head), applies forces to Rapier bodies, clears bits, and advances tail. Zero JNI on the hot path.
+
+force-queue-layout-title = Memory Layout
+force-queue-layout-desc = The queue is a single contiguous allocation with three regions:
+force-queue-layout-diagram = ForceQueueHeader (64 bytes, #[repr(C, align(64))])\n+----------+----------+----------+----------+--------+-----------+\n| capacity | head     | tail     |generation| stride |  flags    |\n|  u64     |  u64     |  u64     |   u64    |  u32   |   u32     |\n+----------+----------+----------+----------+--------+-----------+\nBitmap: (capacity + 63) / 64  x  u64  (1 bit per slot)\nPayload: capacity x stride x 8 bytes (f64 per component)\nstride = 6 (body_id + force[3])  or  7 (body_id + force[3] + torque[3])
+force-queue-layout-note = Header is cache-line aligned (64 bytes). Bitmap follows immediately. Payload follows bitmap. All offsets computable from header fields — no separate pointers needed.
+
+force-queue-sync-title = Synchronization Model
+force-queue-sync-lead = Single-producer / single-consumer lock-free protocol — no CAS loops, no mutexes:
+force-queue-sync-li-1 = Java writes payload + sets bitmap bit with release ordering
+force-queue-sync-li-2 = Java advances head with release store
+force-queue-sync-li-3 = Rust loads head with acquire load (pairs with Java release)
+force-queue-sync-li-4 = Rust processes [tail, head), clears bitmap bits with release
+force-queue-sync-li-5 = Rust advances tail with release store
+force-queue-sync-li-6 = Generation counter on head wrap resolves ABA without heavyweight primitives
+
+force-queue-stride-title = Stride Modes
+force-queue-stride-desc = Two payload formats controlled by the stride field:
+force-queue-stride-col-mode = Stride
+force-queue-stride-col-desc = Layout
+force-queue-stride-col-use = Use case
+force-queue-stride-6-desc = body_id (f64) + force.x + force.y + force.z (6 f64 = 48 bytes)
+force-queue-stride-6-use = Pure force application (most common)
+force-queue-stride-7-desc = body_id + force.x + force.y + force.z + torque.x + torque.y + torque.z (7 f64 = 56 bytes)
+force-queue-stride-7-use = Force + torque in one slot (e.g., thruster with moment arm)
+
+force-queue-ffi-title = C FFI Surface
+force-queue-ffi-desc = One entry point exposed in rigid_body.h:
+force-queue-ffi-sample = // Header struct (64-byte aligned, cbindgen-exported)\ntypedef struct ForceQueueHeader {\n    uint64_t capacity;\n    uint64_t head;\n    uint64_t tail;\n    uint64_t generation;\n    uint32_t stride;\n    uint32_t flags;\n    // bitmap + payload follow in memory\n} ForceQueueHeader;\n\n// Consumer — called once per frame from world_step or directly\nuint32_t rigid_body_consume_force_queue(void* world, ForceQueueHeader* queue);
+
+force-queue-jni-title = Java Producer (JNI)
+force-queue-jni-desc = ForceQueue.java wraps a DirectByteBuffer and uses VarHandle for atomic head/bitmap access:
+force-queue-jni-sample = // Allocate queue (capacity must be power of 2)\nForceQueue queue = ForceQueue.allocate(capacity, 6); // stride 6 = force only\n\n// Enqueue a force for body_id\nint slot = queue.tryEnqueue();\nif (slot >= 0) {\n    queue.writeForce(slot, bodyId, fx, fy, fz);\n    queue.commit(slot); // sets bitmap bit + releases head\n}\n\n// Once per frame: native consumes\nRapierNative.rigidBodyConsumeForceQueue(worldHandle, queue.address());
+
+force-queue-ffm-title = Java Producer (FFM / Java 25+)
+force-queue-ffm-desc = ForceQueueFFM.java uses MemorySegment + VarHandle for the same protocol without JNIEnv:
+force-queue-ffm-sample = // Map native queue memory as MemorySegment\nMemorySegment segment = (MemorySegment) ForceQueueFFM.mapQueue(capacity, 6);\nForceQueueHeader header = ForceQueueHeader.of(segment);\n\n// Enqueue\nint slot = ForceQueueFFM.tryEnqueue(header);\nif (slot >= 0) {\n    ForceQueueFFM.writeForce(header, slot, bodyId, fx, fy, fz);\n    ForceQueueFFM.commit(header, slot);\n}\n\n// Consume via downcall\nLinker linker = Linker.nativeLinker();\nMethodHandle consume = linker.downcallHandle(\n    SymbolLookup.loaderLookup().find(\"rigid_body_consume_force_queue\").get(),\n    FunctionDescriptor.of(ValueLayout.JAVA_INT,\n        ValueLayout.ADDRESS, ValueLayout.ADDRESS)\n);\nconsume.invokeExact(worldAddress, segment.address());
+
+force-queue-test-title = Integration Tests
+force-queue-test-desc = mps-test/src/rapier/force_queue_integration.rs covers the full cycle:
+force-queue-test-sample = #[test]\nfn force_queue_integration_full_cycle() {\n    let world = world_create();\n    let body = rigid_body_create_dynamic(world, 0, 0, 0);\n    let queue = allocate_queue(1024, 6);\n    \n    // Java-style: write force into slot 0, set bit, advance head\n    write_force(queue, 0, body, 10.0, 0.0, 0.0);\n    set_bit(queue, 0);\n    atomic_store_release(&queue.head, 1);\n    \n    // Native consume\n    rigid_body_consume_force_queue(world, queue);\n    \n    // Verify force applied\n    let force = rigid_body_get_force(world, body);\n    assert!((force.x - 10.0).abs() < 1e-9);\n}
+
+force-queue-perf-title = Performance Notes
+force-queue-perf-li-1 = Single world_step call per frame — zero JNI on force hot path
+force-queue-perf-li-2 = Batch N forces → 1 FFI call; amortizes FFI overhead over thousands of bodies
+force-queue-perf-li-3 = Cache-line aligned header + bitmap; false-sharing minimized
+force-queue-perf-li-4 = Capacity power-of-2 → fast modulo via bitmask (no division)
