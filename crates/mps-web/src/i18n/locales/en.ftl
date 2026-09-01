@@ -1034,19 +1034,15 @@ force-queue-stride-7-use = Force + torque in one slot (e.g., thruster with momen
 
 force-queue-ffi-title = C FFI Surface
 force-queue-ffi-desc = One entry point exposed in rigid_body.h:
-force-queue-ffi-sample = // Header struct (64-byte aligned, cbindgen-exported)\ntypedef struct ForceQueueHeader {\n    uint64_t capacity;\n    uint64_t head;\n    uint64_t tail;\n    uint64_t generation;\n    uint32_t stride;\n    uint32_t flags;\n    // bitmap + payload follow in memory\n} ForceQueueHeader;\n\n// Consumer — called once per frame from world_step or directly\nuint32_t rigid_body_consume_force_queue(void* world, ForceQueueHeader* queue);
 
 force-queue-jni-title = Java Producer (JNI)
 force-queue-jni-desc = ForceQueue.java wraps a DirectByteBuffer and uses VarHandle for atomic head/bitmap access:
-force-queue-jni-sample = // Allocate queue (capacity must be power of 2)\nForceQueue queue = ForceQueue.allocate(capacity, 6); // stride 6 = force only\n\n// Enqueue a force for body_id\nint slot = queue.tryEnqueue();\nif (slot >= 0) {\n    queue.writeForce(slot, bodyId, fx, fy, fz);\n    queue.commit(slot); // sets bitmap bit + releases head\n}\n\n// Once per frame: native consumes\nRapierNative.rigidBodyConsumeForceQueue(worldHandle, queue.address());
 
 force-queue-ffm-title = Java Producer (FFM / Java 25+)
 force-queue-ffm-desc = ForceQueueFFM.java uses MemorySegment + VarHandle for the same protocol without JNIEnv:
-force-queue-ffm-sample = // Map native queue memory as MemorySegment\nMemorySegment segment = (MemorySegment) ForceQueueFFM.mapQueue(capacity, 6);\nForceQueueHeader header = ForceQueueHeader.of(segment);\n\n// Enqueue\nint slot = ForceQueueFFM.tryEnqueue(header);\nif (slot >= 0) {\n    ForceQueueFFM.writeForce(header, slot, bodyId, fx, fy, fz);\n    ForceQueueFFM.commit(header, slot);\n}\n\n// Consume via downcall\nLinker linker = Linker.nativeLinker();\nMethodHandle consume = linker.downcallHandle(\n    SymbolLookup.loaderLookup().find(\"rigid_body_consume_force_queue\").get(),\n    FunctionDescriptor.of(ValueLayout.JAVA_INT,\n        ValueLayout.ADDRESS, ValueLayout.ADDRESS)\n);\nconsume.invokeExact(worldAddress, segment.address());
 
 force-queue-test-title = Integration Tests
 force-queue-test-desc = mps-test/src/rapier/force_queue_integration.rs covers the full cycle:
-force-queue-test-sample = #[test]\nfn force_queue_integration_full_cycle() {\n    let world = world_create();\n    let body = rigid_body_create_dynamic(world, 0, 0, 0);\n    let queue = allocate_queue(1024, 6);\n    \n    // Java-style: write force into slot 0, set bit, advance head\n    write_force(queue, 0, body, 10.0, 0.0, 0.0);\n    set_bit(queue, 0);\n    atomic_store_release(&queue.head, 1);\n    \n    // Native consume\n    rigid_body_consume_force_queue(world, queue);\n    \n    // Verify force applied\n    let force = rigid_body_get_force(world, body);\n    assert!((force.x - 10.0).abs() < 1e-9);\n}
 
 force-queue-perf-title = Performance Notes
 force-queue-perf-li-1 = Single world_step call per frame — zero JNI on force hot path

@@ -1031,19 +1031,15 @@ force-queue-stride-7-use = 力 + 力矩合在一个槽位（如带力臂的推�
 
 force-queue-ffi-title = C FFI 接口
 force-queue-ffi-desc = rigid_body.h 暴露单一入口：
-force-queue-ffi-sample = // 头部结构（64 字节对齐，cbindgen 导出）\ntypedef struct ForceQueueHeader {\n    uint64_t capacity;\n    uint64_t head;\n    uint64_t tail;\n    uint64_t generation;\n    uint32_t stride;\n    uint32_t flags;\n    // bitmap + payload 紧随内存后方\n} ForceQueueHeader;\n\n// 消费者 — world_step 中每帧调用一次或直接调用\nuint32_t rigid_body_consume_force_queue(void* world, ForceQueueHeader* queue);
 
 force-queue-jni-title = Java 生产者（JNI）
 force-queue-jni-desc = ForceQueue.java 封装 DirectByteBuffer，用 VarHandle 做 head/bitmap 原子访问：
-force-queue-jni-sample = // 分配队列（capacity 必须是 2 的幂）\nForceQueue queue = ForceQueue.allocate(capacity, 6); // stride 6 = 仅力\n\n// 为 body_id 入队一个力\nint slot = queue.tryEnqueue();\nif (slot >= 0) {\n    queue.writeForce(slot, bodyId, fx, fy, fz);\n    queue.commit(slot); // 置位 bitmap bit + release head\n}\n\n// 每帧一次：原生消费\nRapierNative.rigidBodyConsumeForceQueue(worldHandle, queue.address());
 
 force-queue-ffm-title = Java 生产者（FFM / Java 25+）
 force-queue-ffm-desc = ForceQueueFFM.java 用 MemorySegment + VarHandle 走相同协议，无需 JNIEnv：
-force-queue-ffm-sample = // 将原生队列内存映射为 MemorySegment\nMemorySegment segment = (MemorySegment) ForceQueueFFM.mapQueue(capacity, 6);\nForceQueueHeader header = ForceQueueHeader.of(segment);\n\n// 入队\nint slot = ForceQueueFFM.tryEnqueue(header);\nif (slot >= 0) {\n    ForceQueueFFM.writeForce(header, slot, bodyId, fx, fy, fz);\n    ForceQueueFFM.commit(header, slot);\n}\n\n// 通过 downcall 消费\nLinker linker = Linker.nativeLinker();\nMethodHandle consume = linker.downcallHandle(\n    SymbolLookup.loaderLookup().find(\"rigid_body_consume_force_queue\").get(),\n    FunctionDescriptor.of(ValueLayout.JAVA_INT,\n        ValueLayout.ADDRESS, ValueLayout.ADDRESS)\n);\nconsume.invokeExact(worldAddress, segment.address());
 
 force-queue-test-title = 集成测试
 force-queue-test-desc = mps-test/src/rapier/force_queue_integration.rs 覆盖完整循环：
-force-queue-test-sample = #[test]\nfn force_queue_integration_full_cycle() {\n    let world = world_create();\n    let body = rigid_body_create_dynamic(world, 0, 0, 0);\n    let queue = allocate_queue(1024, 6);\n    \n    // Java 风格：写力进槽位 0，置位，推进 head\n    write_force(queue, 0, body, 10.0, 0.0, 0.0);\n    set_bit(queue, 0);\n    atomic_store_release(&queue.head, 1);\n    \n    // 原生消费\n    rigid_body_consume_force_queue(world, queue);\n    \n    // 验证力已施加\n    let force = rigid_body_get_force(world, body);\n    assert!((force.x - 10.0).abs() < 1e-9);\n}
 
 force-queue-perf-title = 性能要点
 force-queue-perf-li-1 = 每帧单次 world_step 调用 — 力热路径零 JNI
