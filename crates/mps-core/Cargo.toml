@@ -16,6 +16,7 @@ rayon = { workspace = true }
 anvilkit = { workspace = true, optional = true }
 bevy_ecs = { workspace = true, optional = true }
 dashmap = { workspace = true }
+mps-bindgen-macro = { path = "../mps-bindgen-macro" }
 
 [features]
 default = []

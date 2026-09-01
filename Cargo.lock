@@ -3733,6 +3733,7 @@ dependencies = [
  "cbindgen",
  "dashmap 7.0.0-rc2",
  "hashbrown 0.17.1",
+ "mps-bindgen-macro",
  "mps-build-common",
  "mps-formula",
  "parking_lot",

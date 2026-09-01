@@ -227,6 +227,33 @@ fn is_repr_c(attrs: &[syn::Attribute]) -> bool {
     })
 }
 
+/// Extract `align(N)` from `#[repr(C, align(N))]` or `#[repr(align(N))]`.
+fn repr_align(attrs: &[syn::Attribute]) -> Option<u64> {
+    for a in attrs {
+        if a.path().is_ident("repr")
+            && let syn::Meta::List(ml) = &a.meta
+        {
+            let tokens = ml.tokens.to_string();
+            // Look for `align(N)` pattern (with optional spaces: `align ( 64 )`)
+            if let Some(pos) = tokens.find("align") {
+                let after = &tokens[pos + "align".len()..];
+                // Find the opening paren
+                if let Some(paren_pos) = after.find('(') {
+                    let after_paren = &after[paren_pos + 1..];
+                    // Find the closing paren
+                    if let Some(end_pos) = after_paren.find(')') {
+                        let num = after_paren[..end_pos].trim();
+                        if let Ok(n) = num.parse::<u64>() {
+                            return Some(n);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 fn is_pub(vis: &Visibility) -> bool {
     matches!(vis, Visibility::Public(_))
 }
@@ -284,13 +311,15 @@ fn parse_struct(
         }
     }
 
-    let size = align_up(offset, max_align);
+    // Use explicit #[repr(align(N))] if present, otherwise fall back to computed max_align
+    let explicit_align = repr_align(&s.attrs).unwrap_or(max_align);
+    let size = align_up(offset, explicit_align);
     Ok(StructInfo {
         name,
         java_name,
         fields,
         size,
-        align: max_align,
+        align: explicit_align,
         package,
     })
 }

@@ -25,9 +25,11 @@
 use crate::rapier::error::{ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, ERR_OK};
 use crate::rapier::ffi::convert::unpack_rigid_body_handle;
 use core::sync::atomic::{AtomicU64, Ordering};
+use mps_bindgen_macro::java_struct;
 use rapier3d::prelude::Vector;
 
 #[repr(C, align(64))]
+#[java_struct(package = "org.polaris2023.mps.ffi")]
 pub struct ForceQueueHeader {
     /// Total slot capacity (must be power of 2 for fast modulo via mask).
     pub capacity: u64,
