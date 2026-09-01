@@ -4824,6 +4824,108 @@ uint32_t rtree_query_aabb(struct RTreeHandle *tree,
                           uint32_t capacity);
 
 /**
+ * Create a servo body in `world` from a collider shape and an initial
+ * translation. The body is dynamic with a collider parented to it. Returns a
+ * stable id, or `u32::MAX` on bad arguments.
+ *
+ * - `kp`: proportional gain (applied uniformly to all axes).
+ * - `kd`: derivative gain (applied uniformly to all axes).
+ * - `ki`: integral gain. When `> 0`, a full `PidController` is used; when
+ *   `== 0`, a pure `PdController` (no integral term) is used instead.
+ * - `axes`: bitfield selecting which axes the controller affects (see
+ *   `axes_from_u8`). `0` means all axes.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`; `shape` must be
+ * a valid [`ShapeDesc`] (finite params).
+ */
+uint32_t servo_body_create(struct WorldHandle *world,
+                           ShapeDesc shape,
+                           Vec3 translation,
+                           double kp,
+                           double kd,
+                           double ki,
+                           uint8_t axes);
+
+/**
+ * Set the target world-space position the servo drives toward.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+Bool servo_body_set_target_position(struct WorldHandle *world, uint32_t id, Vec3 position);
+
+/**
+ * Set the target world-space rotation (as a quaternion `i, j, k, w`) the servo
+ * drives toward.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+Bool servo_body_set_target_rotation(struct WorldHandle *world, uint32_t id, Quat rotation);
+
+/**
+ * Set the target linear velocity (world space) the servo drives toward.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+Bool servo_body_set_target_velocity(struct WorldHandle *world, uint32_t id, Vec3 velocity);
+
+/**
+ * Set the target angular velocity (world space) the servo drives toward.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+Bool servo_body_set_target_angular_velocity(struct WorldHandle *world, uint32_t id, Vec3 velocity);
+
+/**
+ * Advance the servo controller by `dt`: compute the PD/PID velocity-level
+ * correction from the body's current pose/velocity vs. the target and write
+ * it back via `set_linvel`/`set_angvel`. Call **after** `world_step`.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+Bool servo_body_update(struct WorldHandle *world, uint32_t id, double dt);
+
+/**
+ * Read the body's world-space translation.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`; `out` may be null.
+ */
+Bool servo_body_get_translation(const struct WorldHandle *world, uint32_t id, Vec3 *out);
+
+/**
+ * Read the body's world-space linear velocity.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`; `out` may be null.
+ */
+Bool servo_body_get_velocity(const struct WorldHandle *world, uint32_t id, Vec3 *out);
+
+/**
+ * Read the packed rigid-body handle so the caller can use the general
+ * `rigid_body_*` FFI (forces, impulses, mass properties, etc.) on the
+ * servo's underlying body.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+RigidBodyHandleRaw servo_body_get_rigid_body_handle(const struct WorldHandle *world, uint32_t id);
+
+/**
+ * Destroy a servo body by id. Removes the controller, the rigid body, and its
+ * parented collider from the world. Returns `FALSE` if the id is unknown.
+ *
+ * # Safety
+ * `world` must be a valid pointer returned by `world_create`.
+ */
+Bool servo_body_destroy(struct WorldHandle *world, uint32_t id);
+
+/**
  * Create a skeletal soft body as a chain (line) of spring-linked rigid nodes.
  *
  * Nodes are placed `spacing` apart along `axis` starting at the world origin (or

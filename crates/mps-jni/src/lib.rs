@@ -29,7 +29,8 @@ use mps_core::rapier::{
     bounds as bo, character_body as cb_, collider as col, compat as com, controller as cc,
     crbtree as crt, dop, error as er, events as ev, fracture as fr, joints as jo, matmech as mm,
     molecular as mol, neural as neu, query as qu, rigid_body as rb, rtree as rt, sensor as sz,
-    soft_body as sb, spaceflight as sf, thermo as th, vehicle as vc, voxel as vx, world as wo,
+    servo_body as sv, soft_body as sb, spaceflight as sf, thermo as th, vehicle as vc, voxel as vx,
+    world as wo,
 };
 use mps_core::rapier3d::prelude::{Collider as CB, RigidBody as RB};
 use mps_ffm as abi;
@@ -1062,6 +1063,38 @@ jni!(boolean vehicleControllerWheelContactNormal(long world, int id, int wheel, 
 });
 jni!(boolean vehicleControllerDestroy(long world, int id) {
     vc::vehicle_controller_destroy(m::<WH>(world), u32_from_jint(id)).0 as jbyte
+});
+
+// ---- PD/PID servo body (sixth body type) ----
+jni!(long servoBodyCreate(long world, int shape_type, double a, double b, double c, double d, double tx, double ty, double tz, double kp, double kd, double ki, int axes) {
+    sv::servo_body_create(m::<WH>(world), sd(shape_type,a,b,c,d), v3(tx,ty,tz), kp, kd, ki, axes as u8) as jlong
+});
+jni!(boolean servoBodySetTargetPosition(long world, int id, double x, double y, double z) {
+    sv::servo_body_set_target_position(m::<WH>(world), u32_from_jint(id), v3(x,y,z)).0 as jbyte
+});
+jni!(boolean servoBodySetTargetRotation(long world, int id, double i, double j, double k, double w) {
+    sv::servo_body_set_target_rotation(m::<WH>(world), u32_from_jint(id), qt(i,j,k,w)).0 as jbyte
+});
+jni!(boolean servoBodySetTargetVelocity(long world, int id, double x, double y, double z) {
+    sv::servo_body_set_target_velocity(m::<WH>(world), u32_from_jint(id), v3(x,y,z)).0 as jbyte
+});
+jni!(boolean servoBodySetTargetAngularVelocity(long world, int id, double x, double y, double z) {
+    sv::servo_body_set_target_angular_velocity(m::<WH>(world), u32_from_jint(id), v3(x,y,z)).0 as jbyte
+});
+jni!(boolean servoBodyUpdate(long world, int id, double dt) {
+    sv::servo_body_update(m::<WH>(world), u32_from_jint(id), dt).0 as jbyte
+});
+jni!(boolean servoBodyGetTranslation(long world, int id, long out) {
+    sv::servo_body_get_translation(cp::<WH>(world), u32_from_jint(id), pm::<Vec3>(out)).0 as jbyte
+});
+jni!(boolean servoBodyGetVelocity(long world, int id, long out) {
+    sv::servo_body_get_velocity(cp::<WH>(world), u32_from_jint(id), pm::<Vec3>(out)).0 as jbyte
+});
+jni!(long servoBodyGetRigidBodyHandle(long world, int id) {
+    sv::servo_body_get_rigid_body_handle(cp::<WH>(world), u32_from_jint(id)) as jlong
+});
+jni!(boolean servoBodyDestroy(long world, int id) {
+    sv::servo_body_destroy(m::<WH>(world), u32_from_jint(id)).0 as jbyte
 });
 
 jni!(void worldClearEvents(long world) { ev::world_clear_events(m::<WH>(world)); });

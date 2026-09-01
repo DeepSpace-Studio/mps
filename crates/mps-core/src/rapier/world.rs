@@ -136,6 +136,11 @@ pub struct PhysicsWorld {
     pub(crate) vehicle_controllers:
         std::collections::HashMap<u32, crate::rapier::vehicle::VehicleController>,
     pub(crate) vehicle_controller_next_id: u32,
+    /// PD/PID servo bodies (dynamic rigid body + velocity-level servo
+    /// controller). Keyed by a stable id assigned at creation
+    /// (`servo_body_next_id`).
+    pub(crate) servo_bodies: std::collections::HashMap<u32, crate::rapier::servo_body::ServoBody>,
+    pub(crate) servo_body_next_id: u32,
     /// Phase 5d: per-soft-body voxel→particle mapping so a dug-out voxel cell can
     /// be mapped back to the exact particle index to remove via `soft_body_voxel_dig`.
     /// Keyed by `SoftBodyId.0`; populated only by `soft_body_voxel_build`.
@@ -208,6 +213,8 @@ impl PhysicsWorld {
             sensor_zone_next_id: 0,
             vehicle_controllers: std::collections::HashMap::new(),
             vehicle_controller_next_id: 0,
+            servo_bodies: std::collections::HashMap::new(),
+            servo_body_next_id: 0,
             voxel_soft_meta: std::collections::HashMap::new(),
             soft_body_proxies: std::collections::HashMap::new(),
             hooks: crate::rapier::events::CallbackPhysicsHooks::new(events.clone()),

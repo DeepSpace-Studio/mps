@@ -72,6 +72,7 @@ pub mod rapier {
     pub mod rigid_body;
     pub mod rtree;
     pub mod sensor;
+    pub mod servo_body;
     pub mod shared_arena;
     pub mod soft_body;
     pub mod softbody;
