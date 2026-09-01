@@ -111,6 +111,7 @@ jobs:
             "/jni"
             "/ffm"
             "/api"
+            "/force-queue"
             "/404"
           )
 
