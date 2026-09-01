@@ -9,21 +9,14 @@ fn force_queue_integration_full_cycle() {
     use mps_core::rapier::ffi::Vec3;
     use mps_core::rapier::ffi::force_queue::{ForceQueueHeader, rigid_body_consume_force_queue};
     use mps_core::rapier::ffi::types::BodyStatus;
-    use mps_core::rapier::rigid_body::{
-        rigid_body_builder_build, rigid_body_builder_create, rigid_body_builder_destroy,
-        world_insert_rigid_body,
-    };
+    use mps_core::rapier::rigid_body::{rigid_body_builder_build, rigid_body_builder_create, world_insert_rigid_body};
     use mps_core::rapier::world::{world_create, world_destroy};
     use std::alloc::{Layout, alloc};
     use std::ptr;
     use std::sync::atomic::Ordering;
 
     // 1. Create a physics world
-    let gravity = Vec3 {
-        x: 0.0,
-        y: -9.81,
-        z: 0.0,
-    };
+    let gravity = Vec3 { x: 0.0, y: -9.81, z: 0.0 };
     let world = world_create(gravity);
     assert!(!world.is_null());
 
@@ -46,7 +39,7 @@ fn force_queue_integration_full_cycle() {
     // 3. Allocate a force queue (capacity=16, stride=7 for force+torque)
     let capacity = 16u64;
     let stride = 7u32;
-    let bitmap_words = (capacity + 63) / 64;
+    let bitmap_words = capacity.div_ceil(64);
     let header_size = 64usize;
     let bitmap_size = bitmap_words as usize * 8;
     let payload_size = capacity as usize * stride as usize * 8;
@@ -80,7 +73,7 @@ fn force_queue_integration_full_cycle() {
     // 7. Enqueue a force on body1 (slot 0)
     unsafe {
         let payload = (*hdr).payload_mut();
-        let base = 0 * stride as usize;
+        let base = 0;
         payload[base] = body1_handle as f64;
         payload[base + 1] = 100.0; // fx
         payload[base + 2] = 0.0; // fy
@@ -103,7 +96,7 @@ fn force_queue_integration_full_cycle() {
     // 8. Enqueue a force on body2 (slot 1)
     unsafe {
         let payload = (*hdr).payload_mut();
-        let base = 1 * stride as usize;
+        let base = stride as usize;
         payload[base] = body2_handle as f64;
         payload[base + 1] = 0.0; // fx
         payload[base + 2] = 50.0; // fy
@@ -115,10 +108,7 @@ fn force_queue_integration_full_cycle() {
     // Set bitmap bit 1
     unsafe {
         let bitmap = (*hdr).bitmap();
-        bitmap[0].store(
-            bitmap[0].load(Ordering::Acquire) | (1u64 << 1),
-            Ordering::Release,
-        );
+        bitmap[0].store(bitmap[0].load(Ordering::Acquire) | (1u64 << 1), Ordering::Release);
     }
     // Advance head
     unsafe {
@@ -157,10 +147,7 @@ fn force_queue_integration_full_cycle() {
         payload[base + 5] = 0.0;
         payload[base + 6] = 0.0;
         let bitmap = (*hdr).bitmap();
-        bitmap[0].store(
-            bitmap[0].load(Ordering::Acquire) | (1u64 << 2),
-            Ordering::Release,
-        );
+        bitmap[0].store(bitmap[0].load(Ordering::Acquire) | (1u64 << 2), Ordering::Release);
     }
     let ret = rigid_body_consume_force_queue(world, hdr);
     assert_eq!(ret, ERR_OK);
@@ -215,20 +202,14 @@ fn force_queue_integration_stride6_only_force() {
     use mps_core::rapier::ffi::Vec3;
     use mps_core::rapier::ffi::force_queue::{ForceQueueHeader, rigid_body_consume_force_queue};
     use mps_core::rapier::ffi::types::BodyStatus;
-    use mps_core::rapier::rigid_body::{
-        rigid_body_builder_build, rigid_body_builder_create, world_insert_rigid_body,
-    };
+    use mps_core::rapier::rigid_body::{rigid_body_builder_build, rigid_body_builder_create, world_insert_rigid_body};
     use mps_core::rapier::world::{world_create, world_destroy};
     use std::alloc::{Layout, alloc};
     use std::ptr;
     use std::sync::atomic::Ordering;
 
     // Test with stride=6 (force only, no torque)
-    let gravity = Vec3 {
-        x: 0.0,
-        y: -9.81,
-        z: 0.0,
-    };
+    let gravity = Vec3 { x: 0.0, y: -9.81, z: 0.0 };
     let world = world_create(gravity);
     assert!(!world.is_null());
 
@@ -239,7 +220,7 @@ fn force_queue_integration_stride6_only_force() {
 
     let capacity = 8u64;
     let stride = 6u32;
-    let bitmap_words = (capacity + 63) / 64;
+    let bitmap_words = capacity.div_ceil(64);
     let header_size = 64usize;
     let bitmap_size = bitmap_words as usize * 8;
     let payload_size = capacity as usize * stride as usize * 8;
@@ -265,11 +246,11 @@ fn force_queue_integration_stride6_only_force() {
     // Enqueue force only (stride=6)
     unsafe {
         let payload = (*hdr).payload_mut();
-        let base = 0 * stride as usize;
-        payload[base] = body_handle as f64;
-        payload[base + 1] = 10.0; // fx
-        payload[base + 2] = 20.0; // fy
-        payload[base + 3] = 30.0; // fz
+        // slot 0: base = 0
+        payload[0] = body_handle as f64;
+        payload[1] = 10.0; // fx
+        payload[2] = 20.0; // fy
+        payload[3] = 30.0; // fz
     }
     {
         let bitmap = unsafe { (*hdr).bitmap() };
@@ -301,20 +282,14 @@ fn force_queue_integration_cancel_by_index() {
     use mps_core::rapier::ffi::Vec3;
     use mps_core::rapier::ffi::force_queue::{ForceQueueHeader, rigid_body_consume_force_queue};
     use mps_core::rapier::ffi::types::BodyStatus;
-    use mps_core::rapier::rigid_body::{
-        rigid_body_builder_build, rigid_body_builder_create, world_insert_rigid_body,
-    };
+    use mps_core::rapier::rigid_body::{rigid_body_builder_build, rigid_body_builder_create, world_insert_rigid_body};
     use mps_core::rapier::world::{world_create, world_destroy};
     use std::alloc::{Layout, alloc};
     use std::ptr;
     use std::sync::atomic::Ordering;
 
     // Test O(1) cancellation by clearing bitmap bit
-    let gravity = Vec3 {
-        x: 0.0,
-        y: -9.81,
-        z: 0.0,
-    };
+    let gravity = Vec3 { x: 0.0, y: -9.81, z: 0.0 };
     let world = world_create(gravity);
     assert!(!world.is_null());
 
@@ -325,7 +300,7 @@ fn force_queue_integration_cancel_by_index() {
 
     let capacity = 8u64;
     let stride = 7u32;
-    let bitmap_words = (capacity + 63) / 64;
+    let bitmap_words = capacity.div_ceil(64);
     let header_size = 64usize;
     let bitmap_size = bitmap_words as usize * 8;
     let payload_size = capacity as usize * stride as usize * 8;
@@ -349,10 +324,10 @@ fn force_queue_integration_cancel_by_index() {
     }
 
     // Enqueue 3 forces
-    for i in 0..3 {
+    for i in 0..3u64 {
         unsafe {
             let payload = (*hdr).payload_mut();
-            let base = i * stride as usize;
+            let base = i as usize * stride as usize;
             payload[base] = body_handle as f64;
             payload[base + 1] = 10.0 * (i + 1) as f64;
             payload[base + 2] = 0.0;
@@ -367,7 +342,7 @@ fn force_queue_integration_cancel_by_index() {
             );
             let head_ptr =
                 core::ptr::addr_of_mut!((*hdr).head) as *mut std::sync::atomic::AtomicU64;
-            (*head_ptr).store((i + 1) as u64, Ordering::Release);
+            (*head_ptr).store(i + 1, Ordering::Release);
         }
     }
 
@@ -407,20 +382,14 @@ fn force_queue_integration_wrap_around() {
     use mps_core::rapier::ffi::Vec3;
     use mps_core::rapier::ffi::force_queue::{ForceQueueHeader, rigid_body_consume_force_queue};
     use mps_core::rapier::ffi::types::BodyStatus;
-    use mps_core::rapier::rigid_body::{
-        rigid_body_builder_build, rigid_body_builder_create, world_insert_rigid_body,
-    };
+    use mps_core::rapier::rigid_body::{rigid_body_builder_build, rigid_body_builder_create, world_insert_rigid_body};
     use mps_core::rapier::world::{world_create, world_destroy};
     use std::alloc::{Layout, alloc};
     use std::ptr;
     use std::sync::atomic::Ordering;
 
     // Test generation counter increment on head wrap
-    let gravity = Vec3 {
-        x: 0.0,
-        y: -9.81,
-        z: 0.0,
-    };
+    let gravity = Vec3 { x: 0.0, y: -9.81, z: 0.0 };
     let world = world_create(gravity);
     assert!(!world.is_null());
 
@@ -431,7 +400,7 @@ fn force_queue_integration_wrap_around() {
 
     let capacity = 4u64; // Small capacity to force wrap
     let stride = 7u32;
-    let bitmap_words = (capacity + 63) / 64;
+    let bitmap_words = capacity.div_ceil(64);
     let header_size = 64usize;
     let bitmap_size = bitmap_words as usize * 8;
     let payload_size = capacity as usize * stride as usize * 8;
@@ -474,7 +443,7 @@ fn force_queue_integration_wrap_around() {
                 );
                 let head_ptr =
                     core::ptr::addr_of_mut!((*hdr).head) as *mut std::sync::atomic::AtomicU64;
-                (*head_ptr).store((i + 1) as u64, Ordering::Release);
+                (*head_ptr).store(i + 1, Ordering::Release);
             }
         }
         // Consume
