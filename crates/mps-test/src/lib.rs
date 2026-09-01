@@ -42,6 +42,8 @@ pub mod rapier {
     pub mod ffi;
     pub mod fluid;
     pub mod fluid_sph;
+    pub mod force_queue;
+    pub mod force_queue_integration;
     pub mod forces;
     pub mod fracture;
     pub mod galactic_dynamics;

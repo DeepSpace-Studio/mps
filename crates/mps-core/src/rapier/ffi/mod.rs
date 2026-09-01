@@ -1,7 +1,9 @@
 pub mod convert;
+pub mod force_queue;
 pub mod types;
 
 pub use convert::*;
+pub use force_queue::*;
 pub use types::*;
 
 /// Common body for the *pure calculator* FFI wrappers.

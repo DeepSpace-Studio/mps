@@ -137,6 +137,8 @@ typedef struct CharacterControllerHandle CharacterControllerHandle;
 
 typedef struct ColliderBuilderHandle ColliderBuilderHandle;
 
+typedef struct ForceQueueHeader ForceQueueHeader;
+
 typedef struct JointBuilderHandle JointBuilderHandle;
 
 typedef struct RTreeHandle RTreeHandle;
@@ -3250,6 +3252,18 @@ uint8_t world_set_jeans_escape_law_flag(struct WorldHandle *world, JeansEscapeLa
  * pointer is a no-op.
  */
 void world_clear_jeans_escape_law(struct WorldHandle *world);
+
+/**
+ * Consumes all active slots in the force queue and applies forces to Rapier bodies.
+ *
+ * # Safety
+ * - `world` must be a valid `WorldHandle` from `rigid_body_world_create`.
+ * - `queue` must point to a valid `ForceQueueHeader` allocated by Java with
+ *   matching `capacity`, `stride`, and sufficient trailing memory for bitmap + payload.
+ * - Java must be the sole producer; Rust (this call) is the sole consumer.
+ * - The queue memory must remain valid for the duration of this call.
+ */
+uint32_t rigid_body_consume_force_queue(struct WorldHandle *world, struct ForceQueueHeader *queue);
 
 /**
  * # Safety

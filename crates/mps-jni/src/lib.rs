@@ -13,16 +13,17 @@ use mps_core::rapier::ffi::{
     ColliderHandleRaw as CRaw, CollisionEventRecord as CER, ContactForceEventRecord,
     CoulombFrictionLaw, Cylinder, DynamicalFrictionLaw, EddingtonRadiationPressureLaw,
     EffectiveCharacterMovement, Ellipsoid, ExternalForceLaw, FluidForceReport, FluidVolume,
-    FractureEnergyReport, FractureFragmentDesc, FractureMaterial, FractureModeReport,
-    FractureReplaceReport, GriffithReport, HohmannTransfer, ImpulseJointHandleRaw as JRaw,
-    InteractionGroupsDesc, JeansEscapeLaw, JointBuilderHandle as JBH, MinerDamageReport,
-    MolecularForceLaw, MolecularPairReport, MolecularParticle, MonDGravityLaw, NeuralBoundsDesc,
-    NewtonGravityLaw, Obb, PointProjection, Prism, PulsarMagneticDipoleLaw, Quat,
-    QuaternionDerivative, QueryFilterDesc, RTreeHandle as RTH, RayHit,
-    RigidBodyBuilderHandle as RBH, RigidBodyHandleRaw as RRaw, ScalarKalman, ShapeCastHit,
-    ShapeCastOptionsDesc, ShapeDesc, SnCurveReport, SolarWindPressureLaw, Sphere, SphericalShell,
-    Ssv, StressIntensityReport, TrajectoryEnvironment, TrajectoryForceReport, Vec3,
-    VoxelBuildStats, VoxelColliderOptions, WorldHandle as WH, XrayIrradiationLaw,
+    ForceQueueHeader, FractureEnergyReport, FractureFragmentDesc, FractureMaterial,
+    FractureModeReport, FractureReplaceReport, GriffithReport, HohmannTransfer,
+    ImpulseJointHandleRaw as JRaw, InteractionGroupsDesc, JeansEscapeLaw,
+    JointBuilderHandle as JBH, MinerDamageReport, MolecularForceLaw, MolecularPairReport,
+    MolecularParticle, MonDGravityLaw, NeuralBoundsDesc, NewtonGravityLaw, Obb, PointProjection,
+    Prism, PulsarMagneticDipoleLaw, Quat, QuaternionDerivative, QueryFilterDesc,
+    RTreeHandle as RTH, RayHit, RigidBodyBuilderHandle as RBH, RigidBodyHandleRaw as RRaw,
+    ScalarKalman, ShapeCastHit, ShapeCastOptionsDesc, ShapeDesc, SnCurveReport,
+    SolarWindPressureLaw, Sphere, SphericalShell, Ssv, StressIntensityReport,
+    TrajectoryEnvironment, TrajectoryForceReport, Vec3, VoxelBuildStats, VoxelColliderOptions,
+    WorldHandle as WH, XrayIrradiationLaw, rigid_body_consume_force_queue,
 };
 use mps_core::rapier::{
     bounds as bo, character_body as cb_, collider as col, compat as com, controller as cc,
@@ -1018,6 +1019,11 @@ jni!(boolean sensorZoneSetTranslation(long world, int id, double tx, double ty, 
 });
 jni!(boolean sensorZoneDestroy(long world, int id) {
     sz::sensor_zone_destroy(m::<WH>(world), u32_from_jint(id)).0 as jbyte
+});
+
+// ---- Force Queue (shared-memory zero-copy force application) ----
+jni!(int rigidBodyConsumeForceQueue(long world, long queue) {
+    rigid_body_consume_force_queue(m::<WH>(world), pm::<ForceQueueHeader>(queue)) as jint
 });
 
 // ---- Ray-cast vehicle controller (fifth body type) ----
