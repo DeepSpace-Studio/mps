@@ -49,6 +49,7 @@ pub mod rapier {
     pub mod forces;
     pub mod fracture;
     pub mod galactic_dynamics;
+    pub mod granular;
     pub mod gravitational_models;
     pub mod heliophysics;
     pub mod high_energy_astro;

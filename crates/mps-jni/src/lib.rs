@@ -28,9 +28,9 @@ use mps_core::rapier::ffi::{
 use mps_core::rapier::{
     balloon as bl, bounds as bo, character_body as cb_, cloth as cl, collider as col,
     compat as com, controller as cc, crbtree as crt, dop, error as er, events as ev,
-    fracture as fr, joints as jo, matmech as mm, molecular as mol, neural as neu, query as qu,
-    rigid_body as rb, rope as rp, rtree as rt, sensor as sz, servo_body as sv, soft_body as sb,
-    spaceflight as sf, thermo as th, vehicle as vc, voxel as vx, world as wo,
+    fracture as fr, granular as gr, joints as jo, matmech as mm, molecular as mol, neural as neu,
+    query as qu, rigid_body as rb, rope as rp, rtree as rt, sensor as sz, servo_body as sv,
+    soft_body as sb, spaceflight as sf, thermo as th, vehicle as vc, voxel as vx, world as wo,
 };
 use mps_core::rapier3d::prelude::{Collider as CB, RigidBody as RB};
 use mps_ffm as abi;
@@ -2231,4 +2231,21 @@ jni!(long softBalloonCreate(long world, int rings, int segments, double cx, doub
             iterations: iterations as u32,
         },
     ) as jlong
+});
+// 颗粒体（granular.rs）：DEM 粒子云（径向弹簧-阻尼排斥 + Coulomb 摩擦）。
+// world_step 自动推进全部颗粒体;softGranularStep 是可选手动子步钩子。
+jni!(long softGranularCreate(long world, double gx, double gy, double gz, double particle_radius, double normal_stiffness, double normal_damping, double friction, double tangential_damping) {
+    gr::granular_create(m::<WH>(world), v3(gx, gy, gz), particle_radius, normal_stiffness, normal_damping, friction, tangential_damping) as jlong
+});
+jni!(long softGranularAddParticle(long world, int id, double x, double y, double z, double vx, double vy, double vz, double mass, double radius) {
+    gr::granular_add_particle(m::<WH>(world), id as u32, x, y, z, vx, vy, vz, mass, radius) as jlong
+});
+jni!(long softGranularParticleCount(long world, int id) {
+    gr::granular_particle_count(cp::<WH>(world), id as u32) as jlong
+});
+jni!(int softGranularReadParticles(long world, int id, long out_pos, long out_vel, int capacity) {
+    gr::granular_read_particles(cp::<WH>(world), id as u32, pm::<Vec3>(out_pos), pm::<Vec3>(out_vel), capacity as u32) as jint
+});
+jni!(boolean softGranularStep(long world, int id, double dt) {
+    gr::granular_step(m::<WH>(world), id as u32, dt).0 as jbyte
 });

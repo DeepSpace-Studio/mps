@@ -3808,6 +3808,81 @@ Bool world_replace_body_with_fracture_fragments(struct WorldHandle *world,
                                                 FractureReplaceReport *out_report);
 
 /**
+ * Create a DEM granular body and return its id (the `Vec` index in
+ * `PhysicsWorld.granular_bodies`). Returns `u32::MAX` on error.
+ *
+ * `gravity` is the body acceleration for every particle (typically the
+ * world's gravity, so a granular pile falls like everything else).
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer or null.
+ */
+uint32_t granular_create(struct WorldHandle *world,
+                         Vec3 gravity,
+                         double particle_radius,
+                         double normal_stiffness,
+                         double normal_damping,
+                         double friction,
+                         double tangential_damping);
+
+/**
+ * Append a particle to a granular body. Returns the particle index or
+ * `u32::MAX` on error.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer or null.
+ */
+uint32_t granular_add_particle(struct WorldHandle *world,
+                               uint32_t id,
+                               double x,
+                               double y,
+                               double z,
+                               double vx,
+                               double vy,
+                               double vz,
+                               double mass,
+                               double radius);
+
+/**
+ * Number of particles in a granular body. Returns `u32::MAX` for an unknown
+ * id.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer or null.
+ */
+uint32_t granular_particle_count(const struct WorldHandle *world, uint32_t id);
+
+/**
+ * Batch-read granular particle positions + velocities into `out_pos` /
+ * `out_vel` (each with `capacity` slots). Either out-pointer may be null to
+ * skip that channel. Returns the real particle count (callers retry with a
+ * bigger buffer when `capacity` is short). Null world / unknown id → `0`.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer or null; `out_pos` / `out_vel` must
+ * be null or point to writable memory for `capacity` values each.
+ */
+uint32_t granular_read_particles(const struct WorldHandle *world,
+                                 uint32_t id,
+                                 Vec3 *out_pos,
+                                 Vec3 *out_vel,
+                                 uint32_t capacity);
+
+/**
+ * Manually advance one granular body by `dt`. `world_step` already ticks
+ * every granular body — this is for callers that want a custom substep loop.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer or null.
+ */
+Bool granular_step(struct WorldHandle *world, uint32_t id, double dt);
+
+/**
  * Create a rope body along the straight span `start → end`.
  *
  * Returns the new `SoftBodyId` (as `u32`), or `u32::MAX` with the

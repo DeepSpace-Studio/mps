@@ -45,6 +45,7 @@
 - [cloth.md](mps-core/cloth.md) — `cloth.rs`：布料体（矩形网格 + 结构/剪切/弯曲三族弹簧，`soft_cloth_*` 入口）。
 - [rope.md](mps-core/rope.md) — `rope.rs`：绳索/缆绳体（单向 cable 约束 + 绞盘，`soft_rope_create` 入口）。
 - [balloon.md](mps-core/balloon.md) — `balloon.rs`：气囊/充气体（闭合受压球壳 + Phase 11 压力模型，`soft_balloon_create` 入口）。
+- [granular.md](mps-core/granular.md) — `granular.rs`：颗粒体（DEM 接触模型 + Coulomb 摩擦，`granular_*` 入口）。
 - [fluid.md](mps-core/fluid.md) — `fluid.rs`：流体力学力（浮力/阻力/SPH 等）。
 - [molecular.md](mps-core/molecular.md) — `molecular.rs`：分子力（Lennard-Jones/Coulomb）。
 - [fracture.md](mps-core/fracture.md) — `fracture.rs`：断裂力学与刚体碎裂 `fracture_*` 入口。

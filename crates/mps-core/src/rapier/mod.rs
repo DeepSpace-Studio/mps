@@ -31,6 +31,7 @@ pub mod fluid;
 pub mod fluid_sph;
 pub mod forces;
 pub mod fracture;
+pub mod granular;
 pub mod rope;
 pub use mps_formula::galactic_dynamics;
 pub use mps_formula::gravitational_models;

@@ -1,5 +1,6 @@
 use rapier3d::math::Rotation;
 use rapier3d::prelude::fluid::FluidWorld;
+use rapier3d::prelude::granular::GranularWorld;
 use rapier3d::prelude::soft_body::{SoftBodyId, SoftBodySet};
 use rapier3d::prelude::{
     ActiveHooks, BroadPhaseBvh, CCDSolver, ColliderHandle, ColliderSet, ImpulseJointSet,
@@ -104,6 +105,9 @@ pub struct PhysicsWorld {
     /// rigid-body pipeline, mirroring `soft_bodies`. See
     /// `.hermes/plans/2026-08-30_fluid-sph-roadmap.md`.
     pub fluids: Vec<FluidWorld>,
+    /// DEM granular bodies (Phase 36): particle clouds advanced independently
+    /// after the rigid pipeline, mirroring `fluids`.
+    pub granular_bodies: Vec<GranularWorld>,
     /// Phase 2 (fluid SPH ↔ rigid): per-fluid collision proxies. When a fluid has
     /// collision coupling enabled (via `fluid_enable_collision`), each particle is
     /// backed by a dynamic `RigidBody` + `Ball` collider, parallel to
@@ -205,6 +209,7 @@ impl PhysicsWorld {
             ccd_solver: CCDSolver::new(),
             soft_bodies: SoftBodySet::new(),
             fluids: Vec::new(),
+            granular_bodies: Vec::new(),
             fluid_proxies: std::collections::HashMap::new(),
             skin_bindings: std::collections::HashMap::new(),
             character_bodies: std::collections::HashMap::new(),
@@ -671,6 +676,11 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
         let dt = world.inner.integration_parameters.dt;
         for fluid in &mut world.inner.fluids {
             fluid.step(dt);
+        }
+        // Phase 36 (granular DEM): advance every granular particle cloud
+        // independently, after the rigid pipeline. No rigid coupling yet.
+        for granular in &mut world.inner.granular_bodies {
+            granular.step(dt);
         }
 
         // Phase 2 (fluid SPH ↔ rigid): read the contacted proxy poses back into the
