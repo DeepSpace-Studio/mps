@@ -26,6 +26,10 @@ fork 侧 `rapier/src/dynamics/granular.rs` + mps-core FFI `crates/mps-core/src/r
 
 `softGranularCreate / softGranularAddParticle / softGranularParticleCount / softGranularReadParticles / softGranularStep`,后续(Phase 37+)计划:voxel 挖掘联动(`soft_body_voxel_dig` → 生成颗粒)、与刚体的 proxy 碰撞耦合(照 fluid_proxies 模板)、空间哈希 broad-phase。
 
+## Phase 37:voxel 挖掘 → 颗粒生成联动
+
+`granular_link_voxel_dig(world, dig_grain_body, grain_mass, grain_radius)` 建立链接后,`collider_voxel_edit(solid=0)` 真正挖掉一个格子(changed=true)时,会在格子世界中心向链接的颗粒体生成一颗颗粒(零初速);`dig_grain_body = u32::MAX` 解链;`granular_get_voxel_dig_link` 查询当前链接。已挖空/未链接不生成。这是"挖月壤"链路的最后一环:voxel 地形 + `collider_voxel_edit` 挖掘 + 颗粒体承接碎屑。
+
 ## 数值注意
 
 显式积分稳定性:`k_n / m · dt² < 1`。默认 `k_n=800` 配 `m≥0.05`、`dt=1/60` 安全;调参先加大 `normal_damping` 再加 `k_n`。

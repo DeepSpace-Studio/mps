@@ -2249,3 +2249,10 @@ jni!(int softGranularReadParticles(long world, int id, long out_pos, long out_ve
 jni!(boolean softGranularStep(long world, int id, double dt) {
     gr::granular_step(m::<WH>(world), id as u32, dt).0 as jbyte
 });
+// Phase 37: voxel 挖掘 → 颗粒生成联动（dig_grain_body = u32::MAX 解链）。
+jni!(boolean softGranularLinkVoxelDig(long world, int dig_grain_body, double grain_mass, double grain_radius) {
+    gr::granular_link_voxel_dig(m::<WH>(world), dig_grain_body as u32, grain_mass, grain_radius).0 as jbyte
+});
+jni!(boolean softGranularGetVoxelDigLink(long world, long out_body, long out_mass, long out_radius) {
+    gr::granular_get_voxel_dig_link(cp::<WH>(world), pm::<u32>(out_body), pm::<f64>(out_mass), pm::<f64>(out_radius)).0 as jbyte
+});

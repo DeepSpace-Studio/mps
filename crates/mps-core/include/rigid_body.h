@@ -3883,6 +3883,39 @@ uint32_t granular_read_particles(const struct WorldHandle *world,
 Bool granular_step(struct WorldHandle *world, uint32_t id, double dt);
 
 /**
+ * Link voxel digging to grain spawning: from now on, digging a solid cell
+ * out of any voxel collider (`collider_voxel_edit` with `solid = 0`, or a
+ * `soft_body_voxel_dig` that propagates to the collider grid) spawns one
+ * grain of `grain_mass` / `grain_radius` at the cell's world centre into the
+ * granular body `dig_grain_body`. Pass `dig_grain_body = u32::MAX` to unlink.
+ *
+ * Returns `Bool::FALSE` (and changes nothing) when `dig_grain_body` is not
+ * `u32::MAX` and does not name an existing granular body.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer or null.
+ */
+Bool granular_link_voxel_dig(struct WorldHandle *world,
+                             uint32_t dig_grain_body,
+                             double grain_mass,
+                             double grain_radius);
+
+/**
+ * Query the current voxel-dig → grain-spawn link. Returns `Bool::TRUE` when
+ * linked (writing the body id / mass / radius through the non-null out
+ * pointers), `Bool::FALSE` when unlinked or the world is null.
+ *
+ * # Safety
+ *
+ * All out pointers may be null; `world` must be a valid world pointer or null.
+ */
+Bool granular_get_voxel_dig_link(const struct WorldHandle *world,
+                                 uint32_t *out_body,
+                                 double *out_mass,
+                                 double *out_radius);
+
+/**
  * Create a rope body along the straight span `start → end`.
  *
  * Returns the new `SoftBodyId` (as `u32`), or `u32::MAX` with the

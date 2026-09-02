@@ -1589,8 +1589,10 @@ pub extern "C" fn collider_voxel_edit(
         // the dug cell's world-center from the collider grid (immutable borrow
         // first), then release that borrow before mutating soft bodies (the
         // two live in disjoint fields of `world.inner`).
-        if solid == 0 {
-            let world_center = if let Some(cache) = world.inner.voxel_grids.get(&handle) {
+        // Snapshot the dug cell's world centre before the mutable cache
+        // borrow below (Phase 5g pattern).
+        let dig_center = if solid == 0 {
+            if let Some(cache) = world.inner.voxel_grids.get(&handle) {
                 let g = &cache.grid;
                 Some(Vec3 {
                     x: g.origin.x + (x as f64 + 0.5) * g.voxel_size_x,
@@ -1599,10 +1601,14 @@ pub extern "C" fn collider_voxel_edit(
                 })
             } else {
                 None
-            };
-            if let Some(wc) = world_center {
-                crate::rapier::soft_body::propagate_dig_to_soft_bodies(world, wc);
             }
+        } else {
+            None
+        };
+        if solid == 0
+            && let Some(wc) = dig_center
+        {
+            crate::rapier::soft_body::propagate_dig_to_soft_bodies(world, wc);
         }
 
         let Some(cache) = world.inner.voxel_grids.get_mut(&handle) else {
@@ -1616,6 +1622,24 @@ pub extern "C" fn collider_voxel_edit(
         let changed = cache.grid.set_cell(x, y, z, solid != 0);
         if !changed {
             return Bool::TRUE;
+        }
+
+        // Phase 37: voxel-dig → grain spawn. After a real dig (changed=true),
+        // drop one grain at the dug cell's world centre into the linked
+        // granular body, if any. `dig_center` was snapshot before the mutable
+        // cache borrow; granular bodies live in a disjoint field of
+        // `world.inner`.
+        if solid == 0
+            && let Some(wc) = dig_center
+            && let Some((gid, gm, gr)) = world.inner.granular_dig_spawn
+            && let Some(body) = world.inner.granular_bodies.get_mut(gid as usize)
+        {
+            body.add_particle(
+                rapier3d::math::Vector::new(wc.x, wc.y, wc.z),
+                rapier3d::math::Vector::ZERO,
+                gm,
+                gr,
+            );
         }
 
         match cache.rebuild() {

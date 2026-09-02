@@ -215,3 +215,103 @@ pub extern "C" fn granular_step(world: *mut WorldHandle, id: u32, dt: f64) -> Bo
         Bool::TRUE
     })
 }
+
+/// Link voxel digging to grain spawning: from now on, digging a solid cell
+/// out of any voxel collider (`collider_voxel_edit` with `solid = 0`, or a
+/// `soft_body_voxel_dig` that propagates to the collider grid) spawns one
+/// grain of `grain_mass` / `grain_radius` at the cell's world centre into the
+/// granular body `dig_grain_body`. Pass `dig_grain_body = u32::MAX` to unlink.
+///
+/// Returns `Bool::FALSE` (and changes nothing) when `dig_grain_body` is not
+/// `u32::MAX` and does not name an existing granular body.
+///
+/// # Safety
+///
+/// `world` must be a valid world pointer or null.
+#[unsafe(no_mangle)]
+pub extern "C" fn granular_link_voxel_dig(
+    world: *mut WorldHandle,
+    dig_grain_body: u32,
+    grain_mass: f64,
+    grain_radius: f64,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "granular_link_voxel_dig: world is null");
+            return Bool::FALSE;
+        };
+        let unlink = dig_grain_body == u32::MAX;
+        if !unlink
+            && (!grain_mass.is_finite()
+                || grain_mass <= 0.0
+                || !grain_radius.is_finite()
+                || grain_radius <= 0.0)
+        {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "granular_link_voxel_dig: bad grain params",
+            );
+            return Bool::FALSE;
+        }
+        if !unlink
+            && world
+                .inner
+                .granular_bodies
+                .get(dig_grain_body as usize)
+                .is_none()
+        {
+            set_error(
+                ERR_NOT_FOUND,
+                "granular_link_voxel_dig: unknown dig_grain_body",
+            );
+            return Bool::FALSE;
+        }
+        world.inner.granular_dig_spawn = if unlink {
+            None
+        } else {
+            Some((dig_grain_body, grain_mass, grain_radius))
+        };
+        clear_error();
+        Bool::TRUE
+    })
+}
+
+/// Query the current voxel-dig → grain-spawn link. Returns `Bool::TRUE` when
+/// linked (writing the body id / mass / radius through the non-null out
+/// pointers), `Bool::FALSE` when unlinked or the world is null.
+///
+/// # Safety
+///
+/// All out pointers may be null; `world` must be a valid world pointer or null.
+#[unsafe(no_mangle)]
+pub extern "C" fn granular_get_voxel_dig_link(
+    world: *const WorldHandle,
+    out_body: *mut u32,
+    out_mass: *mut f64,
+    out_radius: *mut f64,
+) -> Bool {
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_ref() }) else {
+            set_error(
+                ERR_NULL_POINTER,
+                "granular_get_voxel_dig_link: world is null",
+            );
+            return Bool::FALSE;
+        };
+        let Some((id, mass, radius)) = world.inner.granular_dig_spawn else {
+            clear_error();
+            return Bool::FALSE;
+        };
+        if !out_body.is_null() {
+            unsafe { *out_body = id };
+        }
+        if !out_mass.is_null() {
+            unsafe { *out_mass = mass };
+        }
+        if !out_radius.is_null() {
+            unsafe { *out_radius = radius };
+        }
+        clear_error();
+        Bool::TRUE
+    })
+}

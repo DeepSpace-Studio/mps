@@ -108,6 +108,10 @@ pub struct PhysicsWorld {
     /// DEM granular bodies (Phase 36): particle clouds advanced independently
     /// after the rigid pipeline, mirroring `fluids`.
     pub granular_bodies: Vec<GranularWorld>,
+    /// Phase 37: voxel-dig → grain spawn link. When set, digging a solid cell
+    /// out of any voxel collider spawns one grain at the cell's world centre
+    /// into the linked granular body (`id, grain_mass, grain_radius`).
+    pub(crate) granular_dig_spawn: Option<(u32, f64, f64)>,
     /// Phase 2 (fluid SPH ↔ rigid): per-fluid collision proxies. When a fluid has
     /// collision coupling enabled (via `fluid_enable_collision`), each particle is
     /// backed by a dynamic `RigidBody` + `Ball` collider, parallel to
@@ -210,6 +214,7 @@ impl PhysicsWorld {
             soft_bodies: SoftBodySet::new(),
             fluids: Vec::new(),
             granular_bodies: Vec::new(),
+            granular_dig_spawn: None,
             fluid_proxies: std::collections::HashMap::new(),
             skin_bindings: std::collections::HashMap::new(),
             character_bodies: std::collections::HashMap::new(),
