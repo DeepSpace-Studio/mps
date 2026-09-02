@@ -14,11 +14,11 @@
 /// Workspace version (from root Cargo.toml), for the footer / brand.
 pub const VERSION: &str = "0.1.4";
 /// Total number of `#[test]` items in `mps-test`.
-pub const TEST_COUNT: &str = "1027";
+pub const TEST_COUNT: &str = "1029";
 /// Total number of `jni!(`/`jni_e_c!(` method entries in `mps-jni`.
-pub const JNI_METHOD_COUNT: &str = "568";
+pub const JNI_METHOD_COUNT: &str = "569";
 /// Total number of `pub extern "C" fn` declarations in `mps-core/rapier`.
-pub const CORE_FFI_COUNT: &str = "834";
+pub const CORE_FFI_COUNT: &str = "835";
 /// Number of `pub mod` formula submodules under mps-formula scientists+disciplines.
 pub const FORMULA_MODULE_COUNT: &str = "147";
 /// Number of `CelestialBodyId` variants (built-in celestial bodies).

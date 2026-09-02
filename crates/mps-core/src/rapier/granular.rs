@@ -315,3 +315,90 @@ pub extern "C" fn granular_get_voxel_dig_link(
         Bool::TRUE
     })
 }
+
+/// Enable/disable rigid-body collision coupling for a granular body (Phase 38,
+/// mirroring `fluid_enable_collision`): when enabled, every particle gets a
+/// dynamic proxy `RigidBody` (gravity_scale 0 — the DEM integrator applies
+/// gravity itself) plus a `Ball` collider of `particle_radius`. `world_step`
+/// then syncs particle poses into the proxies before the rigid step, reads the
+/// contacted poses back after it, and only then runs the DEM integrator — so
+/// grains pile up on voxel terrain / rigid bodies instead of falling through.
+///
+/// Enabling again re-syncs the proxy set to the current particle count (new
+/// particles get proxies). Disabling destroys the proxies; the particles keep
+/// their last synced poses.
+///
+/// # Safety
+///
+/// `world` must be a valid world pointer or null.
+#[unsafe(no_mangle)]
+pub extern "C" fn granular_enable_collision(
+    world: *mut WorldHandle,
+    id: u32,
+    particle_radius: f64,
+    enabled: Bool,
+) -> Bool {
+    use rapier3d::prelude::{ColliderBuilder, RigidBodyBuilder, RigidBodyType};
+    ffi_guard(Bool::FALSE, || {
+        let Some(world) = (unsafe { world.as_mut() }) else {
+            set_error(ERR_NULL_POINTER, "granular_enable_collision: world is null");
+            return Bool::FALSE;
+        };
+        let Some(g) = world.inner.granular_bodies.get(id as usize) else {
+            set_error(ERR_NOT_FOUND, "granular_enable_collision: unknown id");
+            return Bool::FALSE;
+        };
+        let body_len = g.len();
+        if particle_radius <= 0.0 || !particle_radius.is_finite() {
+            set_error(
+                ERR_INVALID_ARGUMENT,
+                "granular_enable_collision: bad radius",
+            );
+            return Bool::FALSE;
+        }
+        if enabled == Bool::FALSE {
+            if let Some(proxies) = world.inner.granular_proxies.remove(&id) {
+                for ph in proxies.into_iter().flatten() {
+                    world.inner.bodies.remove(
+                        ph,
+                        &mut world.inner.islands,
+                        &mut world.inner.colliders,
+                        &mut world.inner.impulse_joints,
+                        &mut world.inner.multibody_joints,
+                        false,
+                    );
+                }
+            }
+            clear_error();
+            return Bool::TRUE;
+        }
+        // (Re)build proxies for every particle. `world.inner.granular_bodies`
+        // borrow ends before `bodies` is mutated (snapshot the poses first).
+        let snapshot: Vec<(rapier3d::math::Vector, rapier3d::math::Vector, f64)> =
+            world.inner.granular_bodies[id as usize]
+                .particles
+                .iter()
+                .map(|p| (p.pos, p.vel, p.mass))
+                .collect();
+        let mut proxies: Vec<Option<rapier3d::prelude::RigidBodyHandle>> =
+            Vec::with_capacity(body_len);
+        for (pos, vel, mass) in snapshot {
+            let rb = RigidBodyBuilder::new(RigidBodyType::Dynamic)
+                .gravity_scale(0.0)
+                .additional_mass(mass)
+                .translation(pos)
+                .linvel(vel)
+                .build();
+            let h = world.inner.bodies.insert(rb);
+            let col = ColliderBuilder::ball(particle_radius).density(0.0).build();
+            world
+                .inner
+                .colliders
+                .insert_with_parent(col, h, &mut world.inner.bodies);
+            proxies.push(Some(h));
+        }
+        world.inner.granular_proxies.insert(id, proxies);
+        clear_error();
+        Bool::TRUE
+    })
+}

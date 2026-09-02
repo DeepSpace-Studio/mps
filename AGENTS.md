@@ -1,15 +1,16 @@
 # AGENTS.md — mps_rigid_body
 
-`mps_rigid_body` 是一个 Rust workspace,把 `rapier3d-f64`(f64 精度)封装成单一原生 `cdylib`,供外部项目通过 JNI(`mps-jni`)和 Foreign Function & Memory API(`mps-ffm`)调用。同时附带一个纯 Rust 物理/航天公式库(`mps-formula`,28 个模块)和一个 Dioxus 文档站(`mps-web`)。Workspace = 9 个 crate,edition 2024,版本 0.1.4。
+`mps_rigid_body` 是一个 Rust workspace,把 `rapier3d-f64`(f64 精度)封装成单一原生 `cdylib`,供外部项目通过 JNI(`mps-jni`)和 Foreign Function & Memory API(`mps-ffm`)调用。同时附带一个纯 Rust 物理/航天公式库(`mps-formula`)和一个 Dioxus 文档站(`mps-web`)。Workspace = 10 个 crate,edition 2024,版本 0.1.4。
 
 ## Crates
 
-- `mps-formula` — 纯计算,28 个模块,无 Rapier/WorldHandle 依赖。`rlib`。
+- `mps-formula` — 纯计算,无 Rapier/WorldHandle 依赖。`rlib`。
 - `mps-core` — 物理世界 + Rapier 封装 + C ABI(`src/rapier/ffi/`)。`cdylib`+`rlib`。通过 cbindgen 生成 `include/rigid_body.h`(`build.rs` → `mps-build-common`)。每个源文件的作用分析见 [docs/mps-core.md](docs/mps-core.md)(逐一链接到 [docs/mps-core/](docs/mps-core/))。
 - `mps-cosmos` — 在 `mps-formula` 之上的轨道/飞行动力学。`rlib`。通过 cbindgen 生成 `include/cosmos.h`。
+- 体家族:刚体(`rigid_body`)、软体(`soft_body`)、流体 SPH(`fluid_sph`)、布料(`cloth`)、缆绳(`rope`)、气囊(`balloon`)、颗粒 DEM(`granular`)各有独立模块/FFI;体素挖掘可联动颗粒生成(`granular_link_voxel_dig`)。
 - `mps-jni` — JNI 绑定;lib 名 `mps_rigid_body`。`cdylib`+`rlib`。Java 加载的就是这个。
 - `mps-ffm` — Java 25 FFM 元数据/类型。
-- `mps-test` — 所有集成测试(718 个 `#[test]`)都在这里,不在源 crate 中。
+- `mps-test` — 所有集成测试(1000+ 个 `#[test]`)都在这里,不在源 crate 中。
 - `mps-web` — Dioxus 0.7 文档站。`crates/mps-web/src/metrics.rs` 由 xtask 生成(见下)。
 - `mps-build-common` — `mps-core` + `mps-cosmos` 共用的 `run_cbindgen()` 辅助。
 - `xtask` — workspace 自动化;`dump-metrics` 重新生成 `mps-web/src/metrics.rs`。
@@ -46,4 +47,4 @@ Feature flags:`default = []`。`anvilkit-bridge`(依赖 `anvilkit`+`bevy_ecs`)�
 - **生成 metrics**:`crates/mps-web/src/metrics.rs` 是 xtask 输出(TEST_COUNT/JNI_METHOD_COUNT/CORE_FFI_COUNT)。文件头注明 "Do NOT edit by hand"——新增 test/jni/ffi 后跑 `cargo run -p xtask -- dump-metrics`。
 - **分层规则**:不要给 `mps-formula` 加 Rapier/WorldHandle 依赖——它必须保持纯净以便复用与测试;Rapier 交互一律放 `mps-core`。
 - **Windows 工具链**:本机必须用 `stable-x86_64-pc-windows-gnu`。Commit message 是纯日期戳(如 `2026.8.11.20.8`)或简短描述——无 Conventional Commits 前缀。
-- **测试很重**:718 个测试,冷启动 `cargo check --workspace` 约 2–3 分钟。跑单个用例用 `cargo test -p mps-test <名称>`。
+- **测试很重**:1000+ 个测试,冷启动 `cargo check --workspace` 约 2–3 分钟。跑单个用例用 `cargo test -p mps-test <名称>`。

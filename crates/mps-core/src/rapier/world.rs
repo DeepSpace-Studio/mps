@@ -112,6 +112,15 @@ pub struct PhysicsWorld {
     /// out of any voxel collider spawns one grain at the cell's world centre
     /// into the linked granular body (`id, grain_mass, grain_radius`).
     pub(crate) granular_dig_spawn: Option<(u32, f64, f64)>,
+    /// Phase 38 (granular DEM ↔ rigid): per-body collision proxies, mirroring
+    /// `fluid_proxies`. When enabled via `granular_enable_collision`, each
+    /// particle is backed by a dynamic `RigidBody` (gravity_scale 0 — the DEM
+    /// integrator applies gravity itself) + `Ball` collider. Poses sync into
+    /// the proxies before the rigid step; the contacted poses are read back
+    /// after it and before the DEM step, so collision response enters the
+    /// cloud and the DEM integrator runs on the corrected particles.
+    pub(crate) granular_proxies:
+        std::collections::HashMap<u32, Vec<Option<rapier3d::prelude::RigidBodyHandle>>>,
     /// Phase 2 (fluid SPH ↔ rigid): per-fluid collision proxies. When a fluid has
     /// collision coupling enabled (via `fluid_enable_collision`), each particle is
     /// backed by a dynamic `RigidBody` + `Ball` collider, parallel to
@@ -214,6 +223,7 @@ impl PhysicsWorld {
             soft_bodies: SoftBodySet::new(),
             fluids: Vec::new(),
             granular_bodies: Vec::new(),
+            granular_proxies: std::collections::HashMap::new(),
             granular_dig_spawn: None,
             fluid_proxies: std::collections::HashMap::new(),
             skin_bindings: std::collections::HashMap::new(),
@@ -626,6 +636,22 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
             }
         }
 
+        // Phase 38 (granular DEM ↔ rigid): sync each granular particle's pose
+        // into its collision proxy before the rigid step, mirroring fluids.
+        for (gi, proxies) in world.inner.granular_proxies.iter() {
+            if let Some(g) = world.inner.granular_bodies.get(*gi as usize) {
+                for (pi, ph) in proxies.iter().enumerate() {
+                    if let Some(p) = g.particles.get(pi)
+                        && let Some(h) = ph
+                        && let Some(rb) = world.inner.bodies.get_mut(*h)
+                    {
+                        rb.set_translation(p.pos, true);
+                        rb.set_linvel(p.vel, true);
+                    }
+                }
+            }
+        }
+
         world.inner.pipeline.step(
             world.inner.gravity,
             &world.inner.integration_parameters,
@@ -682,12 +708,6 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
         for fluid in &mut world.inner.fluids {
             fluid.step(dt);
         }
-        // Phase 36 (granular DEM): advance every granular particle cloud
-        // independently, after the rigid pipeline. No rigid coupling yet.
-        for granular in &mut world.inner.granular_bodies {
-            granular.step(dt);
-        }
-
         // Phase 2 (fluid SPH ↔ rigid): read the contacted proxy poses back into the
         // particles so collision response (against terrain/entities) propagates into
         // the fluid. Runs after `fluid.step` so the SPH integration happens first.
@@ -705,6 +725,27 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
                     }
                 }
             }
+        }
+
+        // Phase 38 (granular DEM ↔ rigid): read the contacted proxy poses back
+        // into the particles (collision response), then run the DEM integrator
+        // on the corrected cloud — gravity + inter-particle repulsion apply on
+        // top of the collision response, and nothing is overwritten.
+        for (gi, proxies) in world.inner.granular_proxies.iter() {
+            if let Some(g) = world.inner.granular_bodies.get_mut(*gi as usize) {
+                for (pi, ph) in proxies.iter().enumerate() {
+                    if let Some(p) = g.particles.get_mut(pi)
+                        && let Some(h) = ph
+                        && let Some(rb) = world.inner.bodies.get(*h)
+                    {
+                        p.pos = rb.translation();
+                        p.vel = rb.linvel();
+                    }
+                }
+            }
+        }
+        for granular in &mut world.inner.granular_bodies {
+            granular.step(dt);
         }
 
         // 4b. Clear the persistent user force/torque on every dynamic body.

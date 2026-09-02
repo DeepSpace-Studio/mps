@@ -2256,3 +2256,7 @@ jni!(boolean softGranularLinkVoxelDig(long world, int dig_grain_body, double gra
 jni!(boolean softGranularGetVoxelDigLink(long world, long out_body, long out_mass, long out_radius) {
     gr::granular_get_voxel_dig_link(cp::<WH>(world), pm::<u32>(out_body), pm::<f64>(out_mass), pm::<f64>(out_radius)).0 as jbyte
 });
+// Phase 38: 颗粒 ↔ 刚体碰撞耦合(每个粒子一个 gravity_scale=0 的 proxy 球)。
+jni!(boolean softGranularEnableCollision(long world, int id, double particle_radius, int enabled) {
+    gr::granular_enable_collision(m::<WH>(world), id as u32, particle_radius, jb(enabled)).0 as jbyte
+});

@@ -278,3 +278,106 @@ mod dig_link_tests {
         world_destroy(world);
     }
 }
+
+#[cfg(test)]
+mod proxy_tests {
+    use mps_core::rapier::collider::{collider_builder_build, world_insert_collider};
+    use mps_core::rapier::ffi::{Bool, Vec3, VoxelColliderMode, VoxelColliderOptions};
+    use mps_core::rapier::granular::{
+        granular_add_particle, granular_create, granular_enable_collision, granular_read_particles,
+    };
+    use mps_core::rapier::voxel::collider_builder_create_voxels;
+    use mps_core::rapier::world::{world_create, world_destroy, world_step};
+
+    fn v(x: f64, y: f64, z: f64) -> Vec3 {
+        Vec3 { x, y, z }
+    }
+
+    #[test]
+    fn granular_proxies_rest_on_terrain() {
+        let world = world_create(v(0.0, -9.81, 0.0));
+
+        // A single solid voxel cell as terrain: [0,0.5]^3, top surface y=0.5.
+        let voxels = [1u8; 1];
+        let cb = collider_builder_create_voxels(
+            voxels.as_ptr(),
+            1,
+            1,
+            1,
+            0.5,
+            0.5,
+            0.5,
+            v(0.0, 0.0, 0.0),
+            VoxelColliderOptions {
+                mode: VoxelColliderMode::Cuboids as u32,
+                dynamic_body: Bool::FALSE,
+                small_voxel_limit: 128,
+                mesh_voxel_limit: 20_000,
+            },
+        );
+        assert!(!cb.is_null());
+        let terrain = world_insert_collider(world, collider_builder_build(cb));
+        assert_ne!(terrain, 0u64);
+
+        // One grain above the slab, collision coupling on.
+        let gid = granular_create(world, v(0.0, -9.81, 0.0), 0.05, 800.0, 0.5, 0.6, 0.4);
+        assert_ne!(gid, u32::MAX);
+        granular_add_particle(world, gid, 0.25, 1.5, 0.25, 0.0, 0.0, 0.0, 1.0, 0.05);
+        assert_eq!(
+            granular_enable_collision(world, gid, 0.05, Bool::TRUE),
+            Bool::TRUE
+        );
+
+        for _ in 0..240 {
+            world_step(world, 1.0 / 60.0);
+        }
+        let mut pos = vec![Vec3::default(); 1];
+        let mut vel = vec![Vec3::default(); 1];
+        let n = granular_read_particles(world, gid, pos.as_mut_ptr(), vel.as_mut_ptr(), 1);
+        assert_eq!(n, 1);
+        // Rests on the cell (top y=0.5 + grain radius 0.05), not through it.
+        assert!(
+            pos[0].y > 0.49 && pos[0].y < 0.7,
+            "grain should rest on the voxel cell: y {}",
+            pos[0].y
+        );
+        assert!(
+            vel[0].y.abs() < 0.5,
+            "grain should have settled: vy {}",
+            vel[0].y
+        );
+
+        // Disabling destroys proxies; the particle keeps its last pose.
+        assert_eq!(
+            granular_enable_collision(world, gid, 0.05, Bool::FALSE),
+            Bool::TRUE
+        );
+        let mut pos2 = vec![Vec3::default(); 1];
+        granular_read_particles(world, gid, pos2.as_mut_ptr(), std::ptr::null_mut(), 1);
+        assert_eq!(
+            (pos2[0].x, pos2[0].y, pos2[0].z),
+            (pos[0].x, pos[0].y, pos[0].z)
+        );
+        world_destroy(world);
+    }
+
+    #[test]
+    fn granular_enable_collision_rejects_unknown_id_and_bad_radius() {
+        let world = world_create(v(0.0, 0.0, 0.0));
+        assert_eq!(
+            granular_enable_collision(world, 9, 0.05, Bool::TRUE),
+            Bool::FALSE
+        );
+        let gid = granular_create(world, v(0.0, 0.0, 0.0), 0.05, 800.0, 0.5, 0.6, 0.4);
+        assert_ne!(gid, u32::MAX);
+        assert_eq!(
+            granular_enable_collision(world, gid, 0.0, Bool::TRUE),
+            Bool::FALSE
+        );
+        assert_eq!(
+            granular_enable_collision(world, gid, -1.0, Bool::TRUE),
+            Bool::FALSE
+        );
+        world_destroy(world);
+    }
+}

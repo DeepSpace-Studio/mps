@@ -3916,6 +3916,28 @@ Bool granular_get_voxel_dig_link(const struct WorldHandle *world,
                                  double *out_radius);
 
 /**
+ * Enable/disable rigid-body collision coupling for a granular body (Phase 38,
+ * mirroring `fluid_enable_collision`): when enabled, every particle gets a
+ * dynamic proxy `RigidBody` (gravity_scale 0 — the DEM integrator applies
+ * gravity itself) plus a `Ball` collider of `particle_radius`. `world_step`
+ * then syncs particle poses into the proxies before the rigid step, reads the
+ * contacted poses back after it, and only then runs the DEM integrator — so
+ * grains pile up on voxel terrain / rigid bodies instead of falling through.
+ *
+ * Enabling again re-syncs the proxy set to the current particle count (new
+ * particles get proxies). Disabling destroys the proxies; the particles keep
+ * their last synced poses.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer or null.
+ */
+Bool granular_enable_collision(struct WorldHandle *world,
+                               uint32_t id,
+                               double particle_radius,
+                               Bool enabled);
+
+/**
  * Create a rope body along the straight span `start → end`.
  *
  * Returns the new `SoftBodyId` (as `u32`), or `u32::MAX` with the

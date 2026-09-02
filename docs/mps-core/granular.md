@@ -30,6 +30,11 @@ fork 侧 `rapier/src/dynamics/granular.rs` + mps-core FFI `crates/mps-core/src/r
 
 `granular_link_voxel_dig(world, dig_grain_body, grain_mass, grain_radius)` 建立链接后,`collider_voxel_edit(solid=0)` 真正挖掉一个格子(changed=true)时,会在格子世界中心向链接的颗粒体生成一颗颗粒(零初速);`dig_grain_body = u32::MAX` 解链;`granular_get_voxel_dig_link` 查询当前链接。已挖空/未链接不生成。这是"挖月壤"链路的最后一环:voxel 地形 + `collider_voxel_edit` 挖掘 + 颗粒体承接碎屑。
 
+## Phase 38:颗粒 ↔ 刚体碰撞耦合 + 空间哈希
+
+- **碰撞耦合**:`granular_enable_collision(world, id, particle_radius, enabled)`(照 `fluid_enable_collision` 模板)。开启后每个粒子挂一个 `gravity_scale=0` 的 proxy 刚体球(DEM 积分器自己施加重力,不让引擎重复施);`world_step` 顺序:粒子位姿 → proxy → 刚体管线(碰撞求解)→ 接触后位姿读回 → DEM 积分。颗粒在 voxel 地形 / 刚体上堆积而非穿透。重复开启按当前粒子数补建 proxy;关闭销毁 proxy,粒子保留最后位姿。
+- **空间哈希 broad-phase**(fork 侧 step):格子尺寸 = 2·r_max,每粒子扫 27 邻格;桶按粒子序填充、无序对只处理一次(j > i),确定性不变。邻居搜索从 O(n²) 降为 O(n)。
+
 ## 数值注意
 
 显式积分稳定性:`k_n / m · dt² < 1`。默认 `k_n=800` 配 `m≥0.05`、`dt=1/60` 安全;调参先加大 `normal_damping` 再加 `k_n`。
