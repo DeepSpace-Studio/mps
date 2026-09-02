@@ -39,7 +39,11 @@ wide = "1.6"
 panic = "unwind"
 
 [profile.release]
-panic = "abort"
+# Must stay "unwind": mps-core/mps-jni are cdylibs hosted inside a JVM, and
+# every FFI/JNI entry point relies on `catch_unwind` (ffi_guard) to convert
+# panics into error codes. With `panic = "abort"` catch_unwind cannot catch,
+# so any panic would kill the host process.
+panic = "unwind"
 lto = "thin"
 codegen-units = 1
 opt-level = 3

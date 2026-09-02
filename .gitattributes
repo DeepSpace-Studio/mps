@@ -1,0 +1,6 @@
+# Line-ending policy.
+#
+# The generated C headers (cbindgen output) are checked by CI on Linux with
+# `git diff --exit-code`. Pin them to LF so `core.autocrlf=true` on Windows
+# cannot produce phantom "modified" entries or spurious diffs.
+*.h text eol=lf

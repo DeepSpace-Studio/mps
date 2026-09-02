@@ -20,6 +20,7 @@ pub mod rapier {
     pub mod anvilkit;
     pub mod astrocalc;
     pub mod astrophysics;
+    pub mod balloon;
     pub mod batch;
     pub mod biomechanics;
     pub mod bounds;
@@ -27,6 +28,7 @@ pub mod rapier {
     pub mod celestial_data;
     pub mod chaos;
     pub mod character_body;
+    pub mod cloth;
     pub mod collider;
     pub mod continuum;
     pub mod control_theory;
@@ -70,6 +72,7 @@ pub mod rapier {
     pub mod rel;
     pub mod relativity;
     pub mod rigid_body;
+    pub mod rope;
     pub mod rtree;
     pub mod sensor;
     pub mod servo_body;

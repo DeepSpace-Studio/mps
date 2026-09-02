@@ -11,6 +11,16 @@
 #include <stdlib.h>
 
 /**
+ * Upper bound on balloon particles accepted in one creation call.
+ *
+ * The shell has `rings · segments + 2` particles and `add_triangle` dedups
+ * its edges with an O(existing-edges) scan, giving O(n²) build cost — 4k
+ * particles (~8k edges) keeps that well under a second while capping
+ * allocation on hostile inputs.
+ */
+#define BALLOON_MAX_PARTICLES 4096
+
+/**
  * Maximum number of requests a single batch can hold.  Prevents a runaway
  * caller from exhausting memory before [`ColliderBatch::execute`] runs.
  */
@@ -22,6 +32,14 @@
  * memory; we cap to keep broadphase insertion tractable.
  */
 #define MAX_COMPOUND_PARTS 50000
+
+/**
+ * Upper bound on cloth particles accepted in one creation call.
+ *
+ * 512 × 512 ≈ 262k particles ≈ 1M springs keeps a single cloth well inside
+ * interactive-step territory and caps allocation on hostile inputs.
+ */
+#define CLOTH_MAX_PARTICLES 262144
 
 #define ERR_OK 0
 
@@ -36,6 +54,24 @@
 #define ERR_UNSUPPORTED 5
 
 #define ERR_INTERNAL 6
+
+/**
+ * Upper bound on rope particles accepted in one creation call.
+ *
+ * Ropes are one-dimensional; 64k particles is far past any interactive
+ * tether use and caps allocation on hostile inputs.
+ */
+#define ROPE_MAX_PARTICLES 65536
+
+/**
+ * Compression compliance used in unilateral (cable) mode.
+ *
+ * With `dt = 1/60 s` the XPBD projection weight `α/dt²` reaches ~3.6e12,
+ * dwarfing typical inverse masses (~10), so the positional correction on the
+ * compression side is ~1e-12 of a normal constraint — i.e. shortening is
+ * free, which is exactly what a cable is.
+ */
+#define ROPE_CABLE_COMPRESSION_COMPLIANCE 1e9
 
 /**
  * Gravitational constant (N·m²/kg²).
@@ -148,6 +184,48 @@ typedef struct RigidBodyBuilderHandle RigidBodyBuilderHandle;
 typedef struct VoxelGrid VoxelGrid;
 
 typedef struct WorldHandle WorldHandle;
+
+/**
+ * Descriptor for [`soft_balloon_create`].
+ */
+typedef struct BalloonDesc {
+  /**
+   * Latitude rings between the poles. Must be ≥ 2. Shell particle count is
+   * `rings · segments + 2` (see [`BALLOON_MAX_PARTICLES`]).
+   */
+  uint32_t rings;
+  /**
+   * Longitude segments per ring. Must be ≥ 3.
+   */
+  uint32_t segments;
+  /**
+   * World position of the shell centre.
+   */
+  Vec3 center;
+  /**
+   * Shell radius. Must be > 0 and finite.
+   */
+  double radius;
+  /**
+   * Mass of each shell particle. Must be > 0 and finite.
+   */
+  double particle_mass;
+  /**
+   * XPBD compliance shared by every shell edge (tension side). `0` =
+   * inextensible skin; larger = stretchier balloon. Must be ≥ 0.
+   */
+  double edge_compliance;
+  /**
+   * Initial internal pressure `P` (see the module docs). `0` starts the
+   * balloon uninflated — pump it up later via `soft_body_set_pressure`.
+   * Must be ≥ 0 and finite.
+   */
+  double pressure;
+  /**
+   * Gauss-Seidel projection iterations per XPBD substep. Must be ≥ 1.
+   */
+  uint32_t iterations;
+} BalloonDesc;
 
 /**
  * A single collider creation request, designed for batch submission via the
@@ -266,6 +344,67 @@ typedef struct Box3DPreset {
 } Box3DPreset;
 
 /**
+ * Descriptor for [`soft_cloth_create`].
+ *
+ * The cloth is generated in the plane spanned by `u_axis` (columns) and
+ * `v_axis` (rows); the two axes must be finite, non-zero and not parallel.
+ * Both are normalised internally, so their lengths are irrelevant.
+ */
+typedef struct ClothDesc {
+  /**
+   * Particles along `u_axis` (columns). Must be ≥ 2.
+   */
+  uint32_t cols;
+  /**
+   * Particles along `v_axis` (rows). Must be ≥ 2.
+   */
+  uint32_t rows;
+  /**
+   * Rest length between adjacent grid particles. Must be > 0 and finite.
+   */
+  double spacing;
+  /**
+   * World position of grid particle `(0, 0)`.
+   */
+  Vec3 origin;
+  /**
+   * Column direction (normalised internally).
+   */
+  Vec3 u_axis;
+  /**
+   * Row direction (normalised internally, must not be parallel to `u_axis`).
+   */
+  Vec3 v_axis;
+  /**
+   * Mass of each *free* particle. Must be > 0 and finite. Pinned particles
+   * carry infinite mass regardless.
+   */
+  double particle_mass;
+  /**
+   * Structural spring stiffness (shear/bend are derived from it). ≥ 0.
+   */
+  double stiffness;
+  /**
+   * Spring damping, shared by all three spring families. ≥ 0.
+   */
+  double damping;
+  /**
+   * Shear stiffness = `stiffness · shear_ratio`, in `[0, 1]`. `0` disables
+   * shear springs.
+   */
+  double shear_ratio;
+  /**
+   * Bend stiffness = `stiffness · bend_ratio`, in `[0, 1]`. `0` disables
+   * bend springs.
+   */
+  double bend_ratio;
+  /**
+   * Border-pinning scheme, see [`ClothPinMode`].
+   */
+  uint32_t pin_mode;
+} ClothDesc;
+
+/**
  * Primary attractor descriptor used by every non-MOND line.
  */
 typedef struct CrossValidateAttractor {
@@ -359,6 +498,55 @@ typedef struct CrossValidateGravityConfig {
    */
   bool enabled;
 } CrossValidateGravityConfig;
+
+/**
+ * Descriptor for [`soft_rope_create`].
+ */
+typedef struct RopeDesc {
+  /**
+   * Number of rope *segments*; the rope has `segments + 1` particles.
+   * Must be ≥ 1 and ≤ [`ROPE_MAX_PARTICLES`] − 1.
+   */
+  uint32_t segments;
+  /**
+   * World position of the first particle.
+   */
+  Vec3 start;
+  /**
+   * World position of the last particle. Must be finite and farther than
+   * 1e-9 from `start` (the rope is laid out along the straight span).
+   */
+  Vec3 end;
+  /**
+   * Mass of each *free* particle. Must be > 0 and finite. Pinned endpoints
+   * carry infinite mass regardless.
+   */
+  double particle_mass;
+  /**
+   * XPBD stretch compliance `α_s` (tension side). `0` = inextensible;
+   * larger = more elastic. Must be ≥ 0 and finite.
+   */
+  double stretch_compliance;
+  /**
+   * Rest-length slack factor: each segment's rest length is
+   * `span/segments · (1 + slack)`. `0` = laid out exactly taut. Must be
+   * ≥ 0 and finite.
+   */
+  double slack;
+  /**
+   * Gauss-Seidel projection iterations per XPBD substep. Must be ≥ 1.
+   */
+  uint32_t iterations;
+  /**
+   * When [`Bool::TRUE`], the rope only resists stretching (cable); when
+   * [`Bool::FALSE`], it is a bilateral elastic cord.
+   */
+  Bool unilateral;
+  /**
+   * Endpoint pinning, see [`RopePinMode`].
+   */
+  uint32_t pin_mode;
+} RopeDesc;
 
 /**
  * A mass concentration (mascon) on the Moon's surface.
@@ -752,6 +940,22 @@ Bool material_hertz_contact_force(MaterialProperties material1,
                                   HertzContactReport *out_report);
 
 /**
+ * Create an inflated balloon: a closed, pressurized sphere shell.
+ *
+ * Returns the new `SoftBodyId` (as `u32`), or `u32::MAX` with the
+ * thread-local error slot set to an `ERR_*` code on failure. The balloon
+ * integrates automatically in `world_step` — no separate stepping call is
+ * needed.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer or null (null reports
+ * `ERR_NULL_POINTER` and returns `u32::MAX`). No other pointers are
+ * dereferenced; `desc` is passed by value.
+ */
+uint32_t soft_balloon_create(struct WorldHandle *world, struct BalloonDesc desc);
+
+/**
  * Batch-add colliders from a flat array of [`ColliderRequest`]s.
  *
  * Creates a [`ColliderBatch`] internally, pushes all requests, executes the
@@ -1090,6 +1294,21 @@ uint32_t query_intersect_spherical_shell_all(const struct WorldHandle *world,
                                              SphericalShell shell,
                                              ColliderHandleRaw *out_handles,
                                              uint32_t capacity);
+
+/**
+ * Create a cloth body as a rectangular mass-spring grid.
+ *
+ * Returns the new `SoftBodyId` (as `u32`), or `u32::MAX` with the thread-local
+ * error slot set to an `ERR_*` code on failure. The cloth integrates
+ * automatically in `world_step` — no separate stepping call is needed.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer or null (null reports
+ * `ERR_NULL_POINTER` and returns `u32::MAX`). No other pointers are
+ * dereferenced; `desc` is passed by value.
+ */
+uint32_t soft_cloth_create(struct WorldHandle *world, struct ClothDesc desc);
 
 /**
  * Creates a collider builder from a generic shape type and packed shape data.
@@ -3587,6 +3806,22 @@ Bool world_replace_body_with_fracture_fragments(struct WorldHandle *world,
                                                 ImpulseJointHandleRaw *out_joint_handles,
                                                 uint32_t capacity,
                                                 FractureReplaceReport *out_report);
+
+/**
+ * Create a rope body along the straight span `start → end`.
+ *
+ * Returns the new `SoftBodyId` (as `u32`), or `u32::MAX` with the
+ * thread-local error slot set to an `ERR_*` code on failure. The rope
+ * integrates automatically in `world_step` — no separate stepping call is
+ * needed.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer or null (null reports
+ * `ERR_NULL_POINTER` and returns `u32::MAX`). No other pointers are
+ * dereferenced; `desc` is passed by value.
+ */
+uint32_t soft_rope_create(struct WorldHandle *world, struct RopeDesc desc);
 
 /**
  * Creates a joint builder of the given type and returns an owned pointer to it.

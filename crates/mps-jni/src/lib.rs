@@ -26,11 +26,11 @@ use mps_core::rapier::ffi::{
     WorldHandle as WH, XrayIrradiationLaw, rigid_body_consume_force_queue,
 };
 use mps_core::rapier::{
-    bounds as bo, character_body as cb_, collider as col, compat as com, controller as cc,
-    crbtree as crt, dop, error as er, events as ev, fracture as fr, joints as jo, matmech as mm,
-    molecular as mol, neural as neu, query as qu, rigid_body as rb, rtree as rt, sensor as sz,
-    servo_body as sv, soft_body as sb, spaceflight as sf, thermo as th, vehicle as vc, voxel as vx,
-    world as wo,
+    balloon as bl, bounds as bo, character_body as cb_, cloth as cl, collider as col,
+    compat as com, controller as cc, crbtree as crt, dop, error as er, events as ev,
+    fracture as fr, joints as jo, matmech as mm, molecular as mol, neural as neu, query as qu,
+    rigid_body as rb, rope as rp, rtree as rt, sensor as sz, servo_body as sv, soft_body as sb,
+    spaceflight as sf, thermo as th, vehicle as vc, voxel as vx, world as wo,
 };
 use mps_core::rapier3d::prelude::{Collider as CB, RigidBody as RB};
 use mps_ffm as abi;
@@ -2174,4 +2174,61 @@ jni!(long softChainCreate(long world, int nodeCount, double spacing, double node
 });
 jni!(int softChainNodeHandles(long world, long outHandles, int capacity) {
     sb::soft_chain_node_handles(cp::<WH>(world), outHandles as *mut RRaw, capacity as u32) as jint
+});
+// 布料体（cloth.rs）：矩形网格 + 结构/剪切/弯曲三族弹簧，一次调用建整张布。
+// 风/撕裂/粒子读回等后续操作复用上方 softBody* 系列绑定（返回同一 SoftBodyId）。
+jni!(long softClothCreate(long world, int cols, int rows, double spacing, double origin_x, double origin_y, double origin_z, double ux, double uy, double uz, double vx, double vy, double vz, double particle_mass, double stiffness, double damping, double shear_ratio, double bend_ratio, int pin_mode) {
+    cl::soft_cloth_create(
+        m::<WH>(world),
+        cl::ClothDesc {
+            cols: cols as u32,
+            rows: rows as u32,
+            spacing,
+            origin: v3(origin_x, origin_y, origin_z),
+            u_axis: v3(ux, uy, uz),
+            v_axis: v3(vx, vy, vz),
+            particle_mass,
+            stiffness,
+            damping,
+            shear_ratio,
+            bend_ratio,
+            pin_mode: pin_mode as u32,
+        },
+    ) as jlong
+});
+// 绳索体（rope.rs）：start→end 直线布点的质点链 + XPBD 距离约束；unilateral 非 0
+// 时压缩侧 compliance 置 1e9（缆绳：只抗拉不抗压）。锚定/绞盘/读回复用
+// softBodyAttachParticle / softBodyScaleRestLength / softBodyReadParticles。
+jni!(long softRopeCreate(long world, int segments, double sx, double sy, double sz, double ex, double ey, double ez, double particle_mass, double stretch_compliance, double slack, int iterations, int unilateral, int pin_mode) {
+    rp::soft_rope_create(
+        m::<WH>(world),
+        rp::RopeDesc {
+            segments: segments as u32,
+            start: v3(sx, sy, sz),
+            end: v3(ex, ey, ez),
+            particle_mass,
+            stretch_compliance,
+            slack,
+            iterations: iterations as u32,
+            unilateral: jb(unilateral),
+            pin_mode: pin_mode as u32,
+        },
+    ) as jlong
+});
+// 气囊体（balloon.rs）：闭合 UV 球壳 + Phase 11 压力模型（XPBD predict 步生效）。
+// 充/放气复用 softBodySetPressure,风/锚定/读回复用 softBody* 系列。
+jni!(long softBalloonCreate(long world, int rings, int segments, double cx, double cy, double cz, double radius, double particle_mass, double edge_compliance, double pressure, int iterations) {
+    bl::soft_balloon_create(
+        m::<WH>(world),
+        bl::BalloonDesc {
+            rings: rings as u32,
+            segments: segments as u32,
+            center: v3(cx, cy, cz),
+            radius,
+            particle_mass,
+            edge_compliance,
+            pressure,
+            iterations: iterations as u32,
+        },
+    ) as jlong
 });
