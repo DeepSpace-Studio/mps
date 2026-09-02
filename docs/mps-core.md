@@ -42,19 +42,40 @@
 ## 物理域扩展
 
 - [aerodynamics.md](mps-core/aerodynamics.md) — `aerodynamics.rs`：气动面/体素网格施力 `aero_*` 入口。
+- [soft_body.md](mps-core/soft_body.md) — `soft_body.rs`：软体 FFI 主模块（骨骼链 + 点质量体 87 个入口、Phase 5f 碰撞代理、蒙皮、撕裂/细分/存档）。
+- [character_body.md](mps-core/character_body.md) — `character_body.rs`：角色体（第三种体，运动学 KCC 驱动，`character_body_*` 入口）。
 - [cloth.md](mps-core/cloth.md) — `cloth.rs`：布料体（矩形网格 + 结构/剪切/弯曲三族弹簧，`soft_cloth_*` 入口）。
 - [rope.md](mps-core/rope.md) — `rope.rs`：绳索/缆绳体（单向 cable 约束 + 绞盘，`soft_rope_create` 入口）。
 - [rope_knot.md](mps-core/rope_knot.md) — `rope_knot.rs`：绳结/编织系统（每股一软体 + 股间碰撞代理，`rope_knot_*` 入口）。
 - [hair.md](mps-core/hair.md) — `hair.rs`：毛发/皮毛系统（链式软体发丝 + 粒子锚定刚体，`hair_system_*` 入口）。
 - [tire_model.md](mps-core/tire_model.md) — `tire_model.rs`：Pacejka 简化轮胎模型（叠加车辆控制器，`tire_model_*` 入口）。
+- [vehicle.md](mps-core/vehicle.md) — `vehicle.rs`：射线悬架车辆（第五种体，`vehicle_controller_*` 入口）。
+- [sensor.md](mps-core/sensor.md) — `sensor.rs`：传感器触发区（第四种体，重叠集跟踪，`sensor_zone_*` 入口）。
+- [servo_body.md](mps-core/servo_body.md) — `servo_body.rs`：PD/PID 伺服体（第六种体，速度级驱动到目标位姿，`servo_body_*` 入口）。
 - [balloon.md](mps-core/balloon.md) — `balloon.rs`：气囊/充气体（闭合受压球壳 + Phase 11 压力模型，`soft_balloon_create` 入口）。
 - [granular.md](mps-core/granular.md) — `granular.rs`：颗粒体（DEM 接触模型 + Coulomb 摩擦，`granular_*` 入口）。
 - [fluid.md](mps-core/fluid.md) — `fluid.rs`：流体力学力（浮力/阻力/SPH 等）。
+- [fluid_sph.md](mps-core/fluid_sph.md) — `fluid_sph.rs`：SPH 流体体（fork `FluidWorld` 薄封装 + 碰撞代理，`fluid_*` 入口）。
 - [molecular.md](mps-core/molecular.md) — `molecular.rs`：分子力（Lennard-Jones/Coulomb）。
 - [fracture.md](mps-core/fracture.md) — `fracture.rs`：断裂力学与刚体碎裂 `fracture_*` 入口。
 - [fracture_mesh.md](mps-core/fracture_mesh.md) — `fracture_mesh.rs`：可碎裂复合刚体（触发器/疲劳/应力阈值，`fracture_mesh_body_*` 入口）。
 - [trajectory.md](mps-core/trajectory.md) — `trajectory.rs`：轨迹力估计/积分/施加 `trajectory_*` 入口。
 - [terrain_gravity.md](mps-core/terrain_gravity.md) — `terrain_gravity.rs`：不规则天体/地形重力（多面体/DEM/Mascon）。
+- [cross_validate.md](mps-core/cross_validate.md) — `cross_validate.rs`：多公式交叉验证引力（Newton 锚定/Mean/Median 聚合的 ForceLaw）。
+
+## 公式 FFI（纯计算器，无世界状态）
+
+以下模块都是 `mps-formula` 纯标量公式的 C ABI 薄封装：复用 `ffi_scalar`（null `out` 或 `None` → `Bool::FALSE`），不触碰 `WorldHandle`/Rapier 状态；逐函数显式写出（cbindgen 不展开声明宏）。
+
+- [acoustics_ffi.md](mps-core/acoustics_ffi.md) — `acoustics_ffi.rs`：声学标量公式（扩散/吸收/RT60/阻抗/Doppler/声呐，`acoustics_*` 前缀）。
+- [astrocalc.md](mps-core/astrocalc.md) — `astrocalc.rs`：天体物理（Hill/Roche/NFW/黑体/Jeans/双星/系外行星，`astrophysics_*` 前缀）。
+- [emag.md](mps-core/emag.md) — `emag.rs`：电磁学（平面波/天线/Friis/VSWR/Rayleigh/Faraday，`electromagnetism_*` 前缀）。
+- [matmech.md](mps-core/matmech.md) — `matmech.rs`：材料力学（屈服/断裂/疲劳/蠕变/梁柱，`material_mechanics_*` 前缀）。
+- [nucphys.md](mps-core/nucphys.md) — `nucphys.rs`：核物理（衰变/结合能/聚变裂变 Q 值/四因子，`nuclear_*` 前缀）。
+- [plasma_ffi.md](mps-core/plasma_ffi.md) — `plasma_ffi.rs`：等离子体磁流体（beta/回旋频率/拉莫尔半径/磁镜，`plasma_*` 前缀）。
+- [qphys.md](mps-core/qphys.md) — `qphys.rs`：量子力学（势阱/氢原子/康普顿/Landau/Rabi，`quantum_*` 前缀）。
+- [rel.md](mps-core/rel.md) — `rel.rs`：相对论（Kerr 黑洞/引力波/相对论运动学/透镜/宇宙学，`relativity_*` 前缀）。
+- [thermo.md](mps-core/thermo.md) — `thermo.rs`：热力学（理想气体/多方过程，`thermodynamics_*` 前缀）。
 
 ## 空间飞行子模块（src/rapier/spaceflight/）
 
