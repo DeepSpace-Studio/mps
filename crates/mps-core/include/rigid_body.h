@@ -500,6 +500,47 @@ typedef struct CrossValidateGravityConfig {
 } CrossValidateGravityConfig;
 
 /**
+ * Hair strand configuration.
+ *
+ * Passed as an array to `hair_system_create`; one strand becomes one soft
+ * body whose root particle is bound to the attached rigid body.
+ */
+typedef struct HairStrandDesc {
+  /**
+   * Root position (in local space of the attached body).
+   */
+  Vec3 root_local;
+  /**
+   * Strand direction (in local space, normalized internally).
+   */
+  Vec3 direction;
+  /**
+   * Number of segments in this strand.
+   */
+  uint32_t segment_count;
+  /**
+   * Total length of the strand.
+   */
+  double length;
+  /**
+   * Radius of each hair segment (for collision).
+   */
+  double segment_radius;
+  /**
+   * Linear stiffness (spring constant k; lower = softer hair).
+   */
+  double stiffness;
+  /**
+   * Damping coefficient for the chain springs (0-1).
+   */
+  double damping;
+  /**
+   * Density of hair material.
+   */
+  double density;
+} HairStrandDesc;
+
+/**
  * Descriptor for [`soft_rope_create`].
  */
 typedef struct RopeDesc {
@@ -3869,6 +3910,114 @@ Bool world_replace_body_with_fracture_fragments(struct WorldHandle *world,
                                                 FractureReplaceReport *out_report);
 
 /**
+ * Create a fracture mesh body from a rigid body and pre-defined fragments.
+ *
+ * The body is inserted into the world as a normal rigid body; the fragments
+ * are stored for later use when fracture is triggered. Returns a stable id,
+ * or `u32::MAX` on error.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer. `fragments` must point to
+ * `fragment_count` valid descriptors.
+ */
+uint32_t fracture_mesh_body_create(struct WorldHandle *world,
+                                   ShapeDesc shape,
+                                   Vec3 translation,
+                                   const FractureFragmentDesc *fragments,
+                                   uint32_t fragment_count,
+                                   FractureMaterial material,
+                                   Bool connect_fragments);
+
+/**
+ * Manually trigger fracture for a fracture mesh body.
+ *
+ * The original body is replaced by its pre-defined fragments. Returns `true`
+ * on success, `false` on error.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer.
+ */
+Bool fracture_mesh_body_trigger(struct WorldHandle *world, uint32_t id);
+
+/**
+ * Set the fracture trigger mode for a fracture mesh body.
+ *
+ * Trigger modes: `0` = manual (`fracture_mesh_body_trigger` only), `1` =
+ * stress intensity (auto-fractures when `fracture_mesh_body_set_stress`
+ * reports stress ≥ `threshold`), `2` = Griffith (energy criterion, same
+ * threshold form), `3` = fatigue (auto-fractures once accumulated fatigue
+ * damage reaches 1.0).
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer.
+ */
+Bool fracture_mesh_body_set_trigger(struct WorldHandle *world,
+                                    uint32_t id,
+                                    uint32_t mode,
+                                    double threshold);
+
+/**
+ * Set the fracture trigger mode to stress intensity (convenience wrapper
+ * around `fracture_mesh_body_set_trigger` with mode `1`).
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer.
+ */
+Bool fracture_mesh_body_set_trigger_stress(struct WorldHandle *world,
+                                           uint32_t id,
+                                           double threshold);
+
+/**
+ * Report the current stress intensity for a fracture mesh body.
+ *
+ * Stores the value (readable for diagnostics via the trigger state) and
+ * auto-fractures the body when the trigger mode is `StressIntensity` or
+ * `Griffith` and the reported stress reaches the configured threshold.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer.
+ */
+Bool fracture_mesh_body_set_stress(struct WorldHandle *world, uint32_t id, double stress);
+
+/**
+ * Update fatigue damage for a fracture mesh body.
+ *
+ * Accumulates fatigue damage; when damage reaches 1.0, the body fractures
+ * automatically if the trigger mode is `Fatigue`.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer.
+ */
+Bool fracture_mesh_body_add_fatigue_damage(struct WorldHandle *world, uint32_t id, double damage);
+
+/**
+ * Check if a fracture mesh body has fractured.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer.
+ */
+Bool fracture_mesh_body_is_fractured(struct WorldHandle *world, uint32_t id);
+
+/**
+ * Remove a fracture mesh body from the world.
+ *
+ * If the body has not yet fractured, removes the original rigid body.
+ * If already fractured, this is a no-op (fragments are independent bodies).
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer.
+ */
+Bool fracture_mesh_body_remove(struct WorldHandle *world, uint32_t id);
+
+/**
  * Create a DEM granular body and return its id (the `Vec` index in
  * `PhysicsWorld.granular_bodies`). Returns `u32::MAX` on error.
  *
@@ -3999,6 +4148,76 @@ Bool granular_enable_collision(struct WorldHandle *world,
                                Bool enabled);
 
 /**
+ * Create a hair system attached to a rigid body.
+ *
+ * Returns a stable id, or `u32::MAX` on error.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer. `strands` must point to
+ * `strand_count` valid descriptors.
+ */
+uint32_t hair_system_create(struct WorldHandle *world,
+                            RigidBodyHandleRaw attached_body,
+                            const struct HairStrandDesc *strands,
+                            uint32_t strand_count);
+
+/**
+ * Build the hair strands (creates the actual soft bodies).
+ *
+ * This is called after `hair_system_create` to instantiate the hair geometry.
+ * Returns `true` on success.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer.
+ */
+Bool hair_system_build(struct WorldHandle *world, uint32_t id);
+
+/**
+ * Set wind force for a hair system.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer.
+ */
+Bool hair_system_set_wind(struct WorldHandle *world, uint32_t id, Vec3 wind);
+
+/**
+ * Set gravity scale for a hair system.
+ *
+ * `scale = 0.0` disables gravity for hair (e.g., underwater hair).
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer.
+ */
+Bool hair_system_set_gravity_scale(struct WorldHandle *world, uint32_t id, double scale);
+
+/**
+ * Remove a hair system from the world.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer.
+ */
+Bool hair_system_remove(struct WorldHandle *world, uint32_t id);
+
+/**
+ * Query the soft-body id backing a hair strand (for particle read-out, e.g.
+ * rendering). Only valid after `hair_system_build`.
+ *
+ * Returns the `SoftBodyId.0`, or `u32::MAX` on error.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer.
+ */
+uint32_t hair_system_strand_soft_body(struct WorldHandle *world,
+                                      uint32_t id,
+                                      uint32_t strand_index);
+
+/**
  * Create a rope body along the straight span `start → end`.
  *
  * Returns the new `SoftBodyId` (as `u32`), or `u32::MAX` with the
@@ -4013,6 +4232,71 @@ Bool granular_enable_collision(struct WorldHandle *world,
  * dereferenced; `desc` is passed by value.
  */
 uint32_t soft_rope_create(struct WorldHandle *world, struct RopeDesc desc);
+
+/**
+ * Create a rope knot system.
+ *
+ * Returns a stable id, or `u32::MAX` on error.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer.
+ */
+uint32_t rope_knot_create(struct WorldHandle *world,
+                          uint32_t pattern,
+                          uint32_t strand_count,
+                          const Vec3 *control_points,
+                          uint32_t control_point_count,
+                          double radius,
+                          double stiffness,
+                          double self_friction,
+                          double density);
+
+/**
+ * Build the rope knot geometry (creates the per-strand soft bodies and their
+ * collision proxies).
+ *
+ * Returns `true` on success.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer.
+ */
+Bool rope_knot_build(struct WorldHandle *world, uint32_t id, Vec3 start, Vec3 end);
+
+/**
+ * Set wind force for a rope knot system.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer.
+ */
+Bool rope_knot_set_wind(struct WorldHandle *world, uint32_t id, Vec3 wind);
+
+/**
+ * Remove a rope knot system from the world.
+ *
+ * Tears down the per-strand collision proxies before removing the soft
+ * bodies themselves.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer.
+ */
+Bool rope_knot_remove(struct WorldHandle *world, uint32_t id);
+
+/**
+ * Query the soft-body id backing a knot strand (for particle read-out, e.g.
+ * rendering). Braids own one soft body per strand; knots and custom patterns
+ * own a single one. Only valid after `rope_knot_build`.
+ *
+ * Returns the `SoftBodyId.0`, or `u32::MAX` on error.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer.
+ */
+uint32_t rope_knot_strand_soft_body(struct WorldHandle *world, uint32_t id, uint32_t strand_index);
 
 /**
  * Creates a joint builder of the given type and returns an owned pointer to it.
@@ -7703,6 +7987,73 @@ uint32_t terrain_lunar_mascon_count(void);
  * `out_mascon` must be valid for a single `LunarMascon` write.
  */
 Bool terrain_lunar_mascon_get(uint32_t index, struct LunarMascon *out_mascon);
+
+/**
+ * Create a tire model for a vehicle controller.
+ *
+ * Returns a stable id, or `u32::MAX` on error.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer.
+ */
+uint32_t tire_model_create(struct WorldHandle *world, uint32_t vehicle_id, uint32_t wheel_count);
+
+/**
+ * Set tire parameters for a specific wheel.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer.
+ */
+Bool tire_model_set_params(struct WorldHandle *world,
+                           uint32_t id,
+                           uint32_t wheel_index,
+                           double peak_mu_long,
+                           double peak_mu_lat,
+                           double peak_slip_ratio,
+                           double peak_slip_angle,
+                           double load_sensitivity,
+                           double ellipse_factor);
+
+/**
+ * Compute tire forces based on current wheel state.
+ *
+ * This should be called each frame **after** `vehicle_controller_update` so
+ * the wheel transforms (steering, world-space axle, suspension force) are
+ * fresh. The computed forces are stored per wheel; read them with
+ * `tire_model_get_forces` and apply them to the chassis via the rigid-body
+ * impulse FFI.
+ *
+ * Returns `true` on success.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer.
+ */
+Bool tire_model_update(struct WorldHandle *world, uint32_t id, double dt);
+
+/**
+ * Get the computed tire forces for a specific wheel.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer. `out_fx` and `out_fy` must be valid pointers.
+ */
+Bool tire_model_get_forces(struct WorldHandle *world,
+                           uint32_t id,
+                           uint32_t wheel_index,
+                           double *out_fx,
+                           double *out_fy);
+
+/**
+ * Remove a tire model from the world.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer.
+ */
+Bool tire_model_remove(struct WorldHandle *world, uint32_t id);
 
 Bool acoustics_spherical_spreading_loss(double range, double *out);
 

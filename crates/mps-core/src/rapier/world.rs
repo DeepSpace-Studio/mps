@@ -159,11 +159,29 @@ pub struct PhysicsWorld {
     pub(crate) vehicle_controllers:
         std::collections::HashMap<u32, crate::rapier::vehicle::VehicleController>,
     pub(crate) vehicle_controller_next_id: u32,
+    /// Tire model controllers (Pacejka-style tire physics for vehicles).
+    /// Keyed by a stable id assigned at creation (`tire_model_next_id`).
+    pub(crate) tire_models: std::collections::HashMap<u32, crate::rapier::tire_model::TireModel>,
+    pub(crate) tire_model_next_id: u32,
     /// PD/PID servo bodies (dynamic rigid body + velocity-level servo
     /// controller). Keyed by a stable id assigned at creation
     /// (`servo_body_next_id`).
     pub(crate) servo_bodies: std::collections::HashMap<u32, crate::rapier::servo_body::ServoBody>,
     pub(crate) servo_body_next_id: u32,
+    /// Fracture mesh bodies (composite rigid bodies that can fracture).
+    /// Keyed by a stable id assigned at creation (`fracture_mesh_next_id`).
+    pub(crate) fracture_mesh_bodies:
+        std::collections::HashMap<u32, crate::rapier::fracture_mesh::FractureMeshBody>,
+    pub(crate) fracture_mesh_next_id: u32,
+    /// Hair/fur systems (hair strands attached to rigid bodies).
+    /// Keyed by a stable id assigned at creation (`hair_system_next_id`).
+    pub(crate) hair_systems: std::collections::HashMap<u32, crate::rapier::hair::HairSystem>,
+    pub(crate) hair_system_next_id: u32,
+    /// Rope knot/weaving systems (per-strand soft bodies with collision
+    /// proxies). Keyed by a stable id assigned at creation
+    /// (`rope_knot_next_id`).
+    pub(crate) rope_knots: std::collections::HashMap<u32, crate::rapier::rope_knot::RopeKnotSystem>,
+    pub(crate) rope_knot_next_id: u32,
     /// Phase 5d: per-soft-body voxel→particle mapping so a dug-out voxel cell can
     /// be mapped back to the exact particle index to remove via `soft_body_voxel_dig`.
     /// Keyed by `SoftBodyId.0`; populated only by `soft_body_voxel_build`.
@@ -241,8 +259,16 @@ impl PhysicsWorld {
             sensor_zone_next_id: 0,
             vehicle_controllers: std::collections::HashMap::new(),
             vehicle_controller_next_id: 0,
+            tire_models: std::collections::HashMap::new(),
+            tire_model_next_id: 0,
+            hair_systems: std::collections::HashMap::new(),
+            hair_system_next_id: 0,
+            rope_knots: std::collections::HashMap::new(),
+            rope_knot_next_id: 0,
             servo_bodies: std::collections::HashMap::new(),
             servo_body_next_id: 0,
+            fracture_mesh_bodies: std::collections::HashMap::new(),
+            fracture_mesh_next_id: 0,
             voxel_soft_meta: std::collections::HashMap::new(),
             soft_body_proxies: std::collections::HashMap::new(),
             hooks: crate::rapier::events::CallbackPhysicsHooks::new(events.clone()),

@@ -49,9 +49,11 @@ pub mod rapier {
     pub mod force_queue_integration;
     pub mod forces;
     pub mod fracture;
+    pub mod fracture_mesh;
     pub mod galactic_dynamics;
     pub mod granular;
     pub mod gravitational_models;
+    pub mod hair;
     pub mod heliophysics;
     pub mod high_energy_astro;
     pub mod integrators;
@@ -75,6 +77,7 @@ pub mod rapier {
     pub mod relativity;
     pub mod rigid_body;
     pub mod rope;
+    pub mod rope_knot;
     pub mod rtree;
     pub mod sensor;
     pub mod servo_body;
@@ -87,6 +90,7 @@ pub mod rapier {
     pub mod terrain_gravity;
     pub mod thermo;
     pub mod thermodynamics;
+    pub mod tire_model;
     pub mod topology;
     pub mod trajectory;
     pub mod transmission;

@@ -28,10 +28,10 @@ use mps_core::rapier::ffi::{
 use mps_core::rapier::{
     articulation as ar, balloon as bl, bounds as bo, character_body as cb_, cloth as cl,
     collider as col, compat as com, controller as cc, crbtree as crt, dop, error as er,
-    events as ev, fracture as fr, granular as gr, joints as jo, matmech as mm, molecular as mol,
-    neural as neu, query as qu, rigid_body as rb, rope as rp, rtree as rt, sensor as sz,
-    servo_body as sv, soft_body as sb, spaceflight as sf, thermo as th, vehicle as vc, voxel as vx,
-    world as wo,
+    events as ev, fracture as fr, fracture_mesh as fm, granular as gr, hair as hr, joints as jo,
+    matmech as mm, molecular as mol, neural as neu, query as qu, rigid_body as rb, rope as rp,
+    rope_knot as rk, rtree as rt, sensor as sz, servo_body as sv, soft_body as sb,
+    spaceflight as sf, thermo as th, tire_model as tm, vehicle as vc, voxel as vx, world as wo,
 };
 use mps_core::rapier3d::prelude::{Collider as CB, RigidBody as RB};
 use mps_ffm as abi;
@@ -1096,6 +1096,101 @@ jni!(long servoBodyGetRigidBodyHandle(long world, int id) {
 });
 jni!(boolean servoBodyDestroy(long world, int id) {
     sv::servo_body_destroy(m::<WH>(world), u32_from_jint(id)).0 as jbyte
+});
+
+// ---- Fracture mesh bodies (fracturable composite rigid bodies) ----
+// `fragments` is a `long` to an array of 96-byte FractureFragmentDesc entries
+// (local_center@0, half_extents@24, initial_velocity@48, density@72,
+// friction@80, restitution@88); `material` is a `long` to one 40-byte
+// FractureMaterial buffer.
+jni!(long fractureMeshBodyCreate(long world, int shape_type, double a, double b, double c, double d, double tx, double ty, double tz, long fragments, int fragment_count, long material, int connect_fragments) {
+    fm::fracture_mesh_body_create(m::<WH>(world), sd(shape_type,a,b,c,d), v3(tx,ty,tz),
+        p::<FractureFragmentDesc>(fragments), fragment_count as u32,
+        unsafe { *p::<FractureMaterial>(material) }, jb(connect_fragments)) as jlong
+});
+jni!(boolean fractureMeshBodyTrigger(long world, int id) {
+    fm::fracture_mesh_body_trigger(m::<WH>(world), u32_from_jint(id)).0 as jbyte
+});
+jni!(boolean fractureMeshBodySetTrigger(long world, int id, int mode, double threshold) {
+    fm::fracture_mesh_body_set_trigger(m::<WH>(world), u32_from_jint(id), mode as u32, threshold).0 as jbyte
+});
+jni!(boolean fractureMeshBodySetTriggerStress(long world, int id, double threshold) {
+    fm::fracture_mesh_body_set_trigger_stress(m::<WH>(world), u32_from_jint(id), threshold).0 as jbyte
+});
+jni!(boolean fractureMeshBodySetStress(long world, int id, double stress) {
+    fm::fracture_mesh_body_set_stress(m::<WH>(world), u32_from_jint(id), stress).0 as jbyte
+});
+jni!(boolean fractureMeshBodyAddFatigueDamage(long world, int id, double damage) {
+    fm::fracture_mesh_body_add_fatigue_damage(m::<WH>(world), u32_from_jint(id), damage).0 as jbyte
+});
+jni!(boolean fractureMeshBodyIsFractured(long world, int id) {
+    fm::fracture_mesh_body_is_fractured(m::<WH>(world), u32_from_jint(id)).0 as jbyte
+});
+jni!(boolean fractureMeshBodyRemove(long world, int id) {
+    fm::fracture_mesh_body_remove(m::<WH>(world), u32_from_jint(id)).0 as jbyte
+});
+
+// ---- Hair / fur systems ----
+// `strands` is a `long` to an array of 96-byte HairStrandDesc entries
+// (root_local@0, direction@24, segment_count@48, length@56, segment_radius@64,
+// stiffness@72, damping@80, density@88).
+jni!(long hairSystemCreate(long world, long attached_body, long strands, int strand_count) {
+    hr::hair_system_create(m::<WH>(world), attached_body as RRaw,
+        p::<hr::HairStrandDesc>(strands), strand_count as u32) as jlong
+});
+jni!(boolean hairSystemBuild(long world, int id) {
+    hr::hair_system_build(m::<WH>(world), u32_from_jint(id)).0 as jbyte
+});
+jni!(boolean hairSystemSetWind(long world, int id, double wx, double wy, double wz) {
+    hr::hair_system_set_wind(m::<WH>(world), u32_from_jint(id), v3(wx,wy,wz)).0 as jbyte
+});
+jni!(boolean hairSystemSetGravityScale(long world, int id, double scale) {
+    hr::hair_system_set_gravity_scale(m::<WH>(world), u32_from_jint(id), scale).0 as jbyte
+});
+jni!(int hairSystemStrandSoftBody(long world, int id, int strand_index) {
+    hr::hair_system_strand_soft_body(m::<WH>(world), u32_from_jint(id), u32_from_jint(strand_index)) as jint
+});
+jni!(boolean hairSystemRemove(long world, int id) {
+    hr::hair_system_remove(m::<WH>(world), u32_from_jint(id)).0 as jbyte
+});
+
+// ---- Rope knot / weaving systems ----
+// `control_points` is a `long` to an array of 24-byte Vec3 entries.
+jni!(long ropeKnotCreate(long world, int pattern, int strand_count, long control_points, int control_point_count, double radius, double stiffness, double self_friction, double density) {
+    rk::rope_knot_create(m::<WH>(world), pattern as u32, strand_count as u32,
+        p::<Vec3>(control_points), control_point_count as u32,
+        radius, stiffness, self_friction, density) as jlong
+});
+jni!(boolean ropeKnotBuild(long world, int id, double sx, double sy, double sz, double ex, double ey, double ez) {
+    rk::rope_knot_build(m::<WH>(world), u32_from_jint(id), v3(sx,sy,sz), v3(ex,ey,ez)).0 as jbyte
+});
+jni!(boolean ropeKnotSetWind(long world, int id, double wx, double wy, double wz) {
+    rk::rope_knot_set_wind(m::<WH>(world), u32_from_jint(id), v3(wx,wy,wz)).0 as jbyte
+});
+jni!(int ropeKnotStrandSoftBody(long world, int id, int strand_index) {
+    rk::rope_knot_strand_soft_body(m::<WH>(world), u32_from_jint(id), u32_from_jint(strand_index)) as jint
+});
+jni!(boolean ropeKnotRemove(long world, int id) {
+    rk::rope_knot_remove(m::<WH>(world), u32_from_jint(id)).0 as jbyte
+});
+
+// ---- Tire model (Pacejka-style layer over the vehicle controller) ----
+jni!(long tireModelCreate(long world, int vehicle_id, int wheel_count) {
+    tm::tire_model_create(m::<WH>(world), u32_from_jint(vehicle_id), wheel_count as u32) as jlong
+});
+jni!(boolean tireModelSetParams(long world, int id, int wheel_index, double peak_mu_long, double peak_mu_lat, double peak_slip_ratio, double peak_slip_angle, double load_sensitivity, double ellipse_factor) {
+    tm::tire_model_set_params(m::<WH>(world), u32_from_jint(id), u32_from_jint(wheel_index),
+        peak_mu_long, peak_mu_lat, peak_slip_ratio, peak_slip_angle, load_sensitivity, ellipse_factor).0 as jbyte
+});
+jni!(boolean tireModelUpdate(long world, int id, double dt) {
+    tm::tire_model_update(m::<WH>(world), u32_from_jint(id), dt).0 as jbyte
+});
+jni!(boolean tireModelGetForces(long world, int id, int wheel_index, long out_fx, long out_fy) {
+    tm::tire_model_get_forces(m::<WH>(world), u32_from_jint(id), u32_from_jint(wheel_index),
+        pm::<f64>(out_fx), pm::<f64>(out_fy)).0 as jbyte
+});
+jni!(boolean tireModelRemove(long world, int id) {
+    tm::tire_model_remove(m::<WH>(world), u32_from_jint(id)).0 as jbyte
 });
 
 jni!(void worldClearEvents(long world) { ev::world_clear_events(m::<WH>(world)); });

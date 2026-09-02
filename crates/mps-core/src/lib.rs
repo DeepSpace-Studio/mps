@@ -14,8 +14,8 @@ pub mod jni_api {
     pub use crate::rapier::ffi::{self, *};
     pub use crate::rapier::{
         aerodynamics as aero, bounds, bridge, collider, compat, controller, crbtree, dop, error,
-        events, fluid as fl, joints, molecular as mol, neural, query, rigid_body, rtree,
-        spaceflight, trajectory as traj, voxel, world,
+        events, fluid as fl, fracture_mesh, hair, joints, molecular as mol, neural, query,
+        rigid_body, rope_knot, rtree, spaceflight, tire_model, trajectory as traj, voxel, world,
     };
 }
 

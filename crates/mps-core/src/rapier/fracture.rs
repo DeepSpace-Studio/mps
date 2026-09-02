@@ -19,7 +19,7 @@ use crate::rapier::math::{finite_non_negative, finite_positive};
 const EPSILON: f64 = 1.0e-12;
 const MAX_FRAGMENTS: u32 = 4096;
 
-fn material_valid(material: FractureMaterial) -> bool {
+pub(crate) fn material_valid(material: FractureMaterial) -> bool {
     finite_positive(material.youngs_modulus)
         && material.poisson_ratio.is_finite()
         && material.poisson_ratio > -1.0
@@ -29,7 +29,7 @@ fn material_valid(material: FractureMaterial) -> bool {
         && finite_non_negative(material.density)
 }
 
-fn fragment_valid(fragment: FractureFragmentDesc) -> bool {
+pub(crate) fn fragment_valid(fragment: FractureFragmentDesc) -> bool {
     vec3_finite(fragment.local_center)
         && vec3_finite(fragment.half_extents)
         && vec3_finite(fragment.initial_velocity)
