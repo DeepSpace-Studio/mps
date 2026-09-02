@@ -96,6 +96,7 @@
 - [ffi-mod.md](mps-core/ffi-mod.md) — `ffi/mod.rs`：FFI 模块根。
 - [ffi-convert.md](mps-core/ffi-convert.md) — `ffi/convert.rs`：`Vec3`/`Quat` 与 Rapier `Vector`/`Rotation` 双向转换、pack/unpack 句柄。
 - [ffi-types.md](mps-core/ffi-types.md) — `ffi/types.rs`：所有 `#[repr(C)]` ABI 结构体与句柄类型别名（WorldHandle、ColliderHandleRaw 等）。
+- [ffi-force-queue.md](mps-core/ffi-force-queue.md) — `ffi/force_queue.rs`：共享内存力队列（SPSC 无锁、DirectByteBuffer 零拷贝施力，`rigid_body_consume_force_queue`）。
 
 ## 共享竞技场（src/rapier/shared_arena/）
 
