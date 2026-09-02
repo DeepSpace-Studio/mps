@@ -7,6 +7,7 @@ use rapier3d::prelude::{
     IntegrationParameters, IslandManager, MultibodyJointSet, NarrowPhase, PhysicsPipeline,
     RigidBodySet, Vector,
 };
+use std::collections::HashMap;
 use std::sync::Arc;
 
 #[cfg(feature = "relative-force")]
@@ -121,6 +122,11 @@ pub struct PhysicsWorld {
     /// cloud and the DEM integrator runs on the corrected particles.
     pub(crate) granular_proxies:
         std::collections::HashMap<u32, Vec<Option<rapier3d::prelude::RigidBodyHandle>>>,
+    /// Phase 39: articulated chains (revolute-motor serial arms), keyed by
+    /// articulation id. See `articulation.rs`.
+    pub(crate) articulations: HashMap<u32, crate::rapier::articulation::ArticulationBody>,
+    /// Next articulation id (monotonic; ids are never reused).
+    pub(crate) articulation_next_id: u32,
     /// Phase 2 (fluid SPH ↔ rigid): per-fluid collision proxies. When a fluid has
     /// collision coupling enabled (via `fluid_enable_collision`), each particle is
     /// backed by a dynamic `RigidBody` + `Ball` collider, parallel to
@@ -224,6 +230,8 @@ impl PhysicsWorld {
             fluids: Vec::new(),
             granular_bodies: Vec::new(),
             granular_proxies: std::collections::HashMap::new(),
+            articulations: HashMap::new(),
+            articulation_next_id: 0,
             granular_dig_spawn: None,
             fluid_proxies: std::collections::HashMap::new(),
             skin_bindings: std::collections::HashMap::new(),

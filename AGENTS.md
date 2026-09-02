@@ -7,7 +7,7 @@
 - `mps-formula` — 纯计算,无 Rapier/WorldHandle 依赖。`rlib`。
 - `mps-core` — 物理世界 + Rapier 封装 + C ABI(`src/rapier/ffi/`)。`cdylib`+`rlib`。通过 cbindgen 生成 `include/rigid_body.h`(`build.rs` → `mps-build-common`)。每个源文件的作用分析见 [docs/mps-core.md](docs/mps-core.md)(逐一链接到 [docs/mps-core/](docs/mps-core/))。
 - `mps-cosmos` — 在 `mps-formula` 之上的轨道/飞行动力学。`rlib`。通过 cbindgen 生成 `include/cosmos.h`。
-- 体家族:刚体(`rigid_body`)、软体(`soft_body`)、流体 SPH(`fluid_sph`)、布料(`cloth`)、缆绳(`rope`)、气囊(`balloon`)、颗粒 DEM(`granular`)各有独立模块/FFI;体素挖掘可联动颗粒生成(`granular_link_voxel_dig`)。
+- 体家族:刚体(`rigid_body`)、软体(`soft_body`)、流体 SPH(`fluid_sph`)、布料(`cloth`)、缆绳(`rope`)、气囊(`balloon`)、颗粒 DEM(`granular`)、铰接体(`articulation`)各有独立模块/FFI;体素挖掘可联动颗粒生成(`granular_link_voxel_dig`)。
 - `mps-jni` — JNI 绑定;lib 名 `mps_rigid_body`。`cdylib`+`rlib`。Java 加载的就是这个。
 - `mps-ffm` — Java 25 FFM 元数据/类型。
 - `mps-test` — 所有集成测试(1000+ 个 `#[test]`)都在这里,不在源 crate 中。

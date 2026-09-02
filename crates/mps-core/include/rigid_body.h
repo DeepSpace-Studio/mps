@@ -940,6 +940,67 @@ Bool material_hertz_contact_force(MaterialProperties material1,
                                   HertzContactReport *out_report);
 
 /**
+ * Create an articulated chain and return its id, or `u32::MAX` on error.
+ *
+ * `dir` is the chain direction (normalised internally), `joint_axis` the
+ * local-space rotation axis of every revolute joint (must not be parallel to
+ * `dir` — a perpendicular axis gives a planar arm). `target_angles` may be
+ * null or shorter than `link_count − 1`; missing targets default to `0`.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer or null; `target_angles` must be null
+ * or point to readable memory for `targets_len` doubles.
+ */
+uint32_t articulation_body_create(struct WorldHandle *world,
+                                  Vec3 base,
+                                  Vec3 dir,
+                                  Vec3 joint_axis,
+                                  uint32_t link_count,
+                                  double link_radius,
+                                  double link_mass,
+                                  const double *target_angles,
+                                  uint32_t targets_len,
+                                  double stiffness,
+                                  double damping);
+
+/**
+ * Rapier handle of chain link `index` (0 = base), for use with the existing
+ * `rigid_body_*` / force FFI. Returns `0` on error.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer or null.
+ */
+uint64_t articulation_body_link_handle(const struct WorldHandle *world,
+                                       uint32_t id,
+                                       uint32_t link_index);
+
+/**
+ * Number of links in an articulation. Returns `u32::MAX` for an unknown id.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer or null.
+ */
+uint32_t articulation_body_link_count(const struct WorldHandle *world, uint32_t id);
+
+/**
+ * Retarget joint `joint_index`'s position motor at runtime (0-based, joint `i`
+ * drives link `i` relative to link `i-1`). Reuses the gains stored at
+ * creation. The whole chain is woken up so the new target takes effect
+ * immediately. Returns `Bool::TRUE` on success.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer or null.
+ */
+Bool articulation_body_set_joint_target(struct WorldHandle *world,
+                                        uint32_t id,
+                                        uint32_t joint_index,
+                                        double target_angle);
+
+/**
  * Create an inflated balloon: a closed, pressurized sphere shell.
  *
  * Returns the new `SoftBodyId` (as `u32`), or `u32::MAX` with the

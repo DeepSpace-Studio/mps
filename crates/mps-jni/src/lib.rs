@@ -26,11 +26,12 @@ use mps_core::rapier::ffi::{
     WorldHandle as WH, XrayIrradiationLaw, rigid_body_consume_force_queue,
 };
 use mps_core::rapier::{
-    balloon as bl, bounds as bo, character_body as cb_, cloth as cl, collider as col,
-    compat as com, controller as cc, crbtree as crt, dop, error as er, events as ev,
-    fracture as fr, granular as gr, joints as jo, matmech as mm, molecular as mol, neural as neu,
-    query as qu, rigid_body as rb, rope as rp, rtree as rt, sensor as sz, servo_body as sv,
-    soft_body as sb, spaceflight as sf, thermo as th, vehicle as vc, voxel as vx, world as wo,
+    articulation as ar, balloon as bl, bounds as bo, character_body as cb_, cloth as cl,
+    collider as col, compat as com, controller as cc, crbtree as crt, dop, error as er,
+    events as ev, fracture as fr, granular as gr, joints as jo, matmech as mm, molecular as mol,
+    neural as neu, query as qu, rigid_body as rb, rope as rp, rtree as rt, sensor as sz,
+    servo_body as sv, soft_body as sb, spaceflight as sf, thermo as th, vehicle as vc, voxel as vx,
+    world as wo,
 };
 use mps_core::rapier3d::prelude::{Collider as CB, RigidBody as RB};
 use mps_ffm as abi;
@@ -2259,4 +2260,31 @@ jni!(boolean softGranularGetVoxelDigLink(long world, long out_body, long out_mas
 // Phase 38: 颗粒 ↔ 刚体碰撞耦合(每个粒子一个 gravity_scale=0 的 proxy 球)。
 jni!(boolean softGranularEnableCollision(long world, int id, double particle_radius, int enabled) {
     gr::granular_enable_collision(m::<WH>(world), id as u32, particle_radius, jb(enabled)).0 as jbyte
+});
+
+// 铰接体（articulation.rs）：球链刚体 + multibody revolute 隐式弹簧伺服关节。
+// 链接句柄可与既有 rigid_body_*/force FFI 互操作;运行时改目标即重定位弹簧 rest。
+jni!(long softArticulationCreate(long world, double bx, double by, double bz, double dx, double dy, double dz, double ax, double ay, double az, int link_count, double link_radius, double link_mass, long target_angles, int targets_len, double stiffness) {
+    ar::articulation_body_create(
+        m::<WH>(world),
+        v3(bx, by, bz),
+        v3(dx, dy, dz),
+        v3(ax, ay, az),
+        link_count as u32,
+        link_radius,
+        link_mass,
+        p::<f64>(target_angles),
+        targets_len as u32,
+        stiffness,
+        0.0,
+    ) as jlong
+});
+jni!(long softArticulationLinkHandle(long world, int id, int link_index) {
+    ar::articulation_body_link_handle(cp::<WH>(world), id as u32, link_index as u32) as jlong
+});
+jni!(long softArticulationLinkCount(long world, int id) {
+    ar::articulation_body_link_count(cp::<WH>(world), id as u32) as jlong
+});
+jni!(boolean softArticulationSetJointTarget(long world, int id, int joint_index, double target_angle) {
+    ar::articulation_body_set_joint_target(m::<WH>(world), id as u32, joint_index as u32, target_angle).0 as jbyte
 });

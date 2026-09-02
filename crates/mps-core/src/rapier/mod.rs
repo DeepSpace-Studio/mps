@@ -2,6 +2,7 @@ pub use mps_formula::acoustics;
 pub mod aerodynamics;
 #[cfg(feature = "anvilkit-bridge")]
 pub mod anvilkit;
+pub mod articulation;
 pub mod balloon;
 pub use mps_formula::astrophysics;
 pub use mps_formula::biomechanics;

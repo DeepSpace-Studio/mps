@@ -18,6 +18,7 @@ pub mod rapier {
     pub mod acoustics_ffi;
     pub mod aerodynamics;
     pub mod anvilkit;
+    pub mod articulation;
     pub mod astrocalc;
     pub mod astrophysics;
     pub mod balloon;
