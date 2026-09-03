@@ -120,8 +120,8 @@ pub fn elements_to_state(elements: OrbitalElements, mu: f64) -> Option<StateVect
     let (so, co) = raan.sin_cos();
     let (si, ci) = i.sin_cos();
     let (sw, cw) = argp.sin_cos();
-    let rotate = |v: rapier3d::prelude::Vector| -> rapier3d::prelude::Vector {
-        rapier3d::prelude::Vector::new(
+    let rotate = |v: nalgebra::Vector3<f64>| -> nalgebra::Vector3<f64> {
+        nalgebra::Vector3::<f64>::new(
             (co * cw - so * sw * ci) * v.x + (-co * sw - so * cw * ci) * v.y,
             (so * cw + co * sw * ci) * v.x + (-so * sw + co * cw * ci) * v.y,
             (sw * si) * v.x + (cw * si) * v.y,
@@ -331,7 +331,7 @@ pub fn state_to_elements(state: StateVector, mu: f64) -> Option<OrbitalElements>
     if h <= EPS {
         return None;
     }
-    let n_vec = rapier3d::prelude::Vector::Z.cross(h_vec);
+    let n_vec = nalgebra::Vector3::<f64>::new(0.0, 0.0, 1.0).cross(h_vec);
     let n = n_vec.length();
     let e_vec = v_vec.cross(h_vec) / mu - r_vec / r;
     let e = e_vec.length();

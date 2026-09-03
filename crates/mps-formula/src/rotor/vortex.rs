@@ -119,7 +119,7 @@ pub fn rotor_wake_induced_velocity(
     segments: &[(Vec3, Vec3)],
     point: Vec3,
 ) -> Vec3 {
-    let mut acc = rapier3d::prelude::Vector::ZERO;
+    let mut acc = nalgebra::Vector3::<f64>::zeros();
     if !finite(circulation) || !vec3_finite(point) {
         return Vec3::default();
     }

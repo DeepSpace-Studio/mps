@@ -4,7 +4,7 @@
 //! All functions are FFI-exported with C-compatible types, following the
 //! error-handling conventions of the mps_rigid_body physics engine.
 
-use rapier3d::prelude::Vector;
+use nalgebra::Vector3;
 
 use crate::error::{
     ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, ERR_UNSUPPORTED, clear_error, set_error,

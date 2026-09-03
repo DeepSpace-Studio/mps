@@ -1,8 +1,6 @@
 use std::f64::consts::PI;
 use std::slice;
 
-use rapier3d::prelude::Vector;
-
 use crate::error::{ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error};
 use crate::ffi::{
     Bool, ElectromagneticField, FaradayInductionReport, FdtdYeeReport, LorentzForceReport,

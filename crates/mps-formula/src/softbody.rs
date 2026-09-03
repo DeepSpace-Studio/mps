@@ -1,6 +1,6 @@
 use std::slice;
 
-use rapier3d::prelude::Vector;
+use nalgebra::Vector3;
 
 use crate::error::{ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error};
 use crate::ffi::{
@@ -451,7 +451,7 @@ pub extern "C" fn softbody_solve_sphere_collision_constraints(
                 let normal = if distance > EPSILON {
                     delta / distance
                 } else {
-                    Vector::Y
+                    nalgebra::Vector3::<f64>::y()
                 };
                 let corrected = center + normal * sphere.radius;
                 let correction = (corrected - pos).length();
@@ -474,7 +474,7 @@ pub extern "C" fn softbody_solve_sphere_collision_constraints(
     Bool::TRUE
 }
 
-pub fn tetra_volume(a: Vector, b: Vector, c: Vector, d: Vector) -> f64 {
+pub fn tetra_volume(a: Vector3<f64>, b: Vector3<f64>, c: Vector3<f64>, d: Vector3<f64>) -> f64 {
     (b - a).dot((c - a).cross(d - a)) / 6.0
 }
 

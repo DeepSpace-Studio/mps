@@ -3,7 +3,6 @@
 // pattern as mps-core.
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
-pub extern crate rapier3d;
 pub mod acoustics;
 pub mod astrophysics;
 pub mod biomechanics;

@@ -230,15 +230,15 @@ impl KahanVec3 {
         self.sum
     }
 
-    /// Return the current compensated sum as a rapier Vector.
+    /// Return the current compensated sum as a nalgebra Vector3.
     #[inline]
-    pub fn value_vec(&self) -> rapier3d::prelude::Vector {
-        rapier3d::prelude::Vector::new(self.sum.x, self.sum.y, self.sum.z)
+    pub fn value_vec(&self) -> nalgebra::Vector3<f64> {
+        nalgebra::Vector3::new(self.sum.x, self.sum.y, self.sum.z)
     }
 
-    /// Add a rapier Vector using Kahan compensation.
+    /// Add a nalgebra Vector3 using Kahan compensation.
     #[inline]
-    pub fn add_vec(&mut self, value: rapier3d::prelude::Vector) {
+    pub fn add_vec(&mut self, value: nalgebra::Vector3<f64>) {
         self.add(Vec3 {
             x: value.x,
             y: value.y,

@@ -7,7 +7,7 @@ edition.workspace = true
 crate-type = ["rlib"]
 
 [dependencies]
-rapier3d = { workspace = true }
+nalgebra = { version = "0.35", default-features = false, features = ["macros"] }
 mps-bindgen-macro = { path = "../mps-bindgen-macro" }
 
 [features]

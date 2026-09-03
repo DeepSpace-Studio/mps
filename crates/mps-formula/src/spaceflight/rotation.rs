@@ -123,7 +123,7 @@ pub fn gravity_gradient_torque(position: Vec3, inertia_diag: Vec3, mu: f64) -> O
         return None;
     }
     let n = r / rn;
-    let in_vec = rapier3d::prelude::Vector::new(
+    let in_vec = nalgebra::Vector3::<f64>::new(
         inertia_diag.x * n.x,
         inertia_diag.y * n.y,
         inertia_diag.z * n.z,
@@ -210,7 +210,7 @@ pub fn rigid_body_euler_derivative(
         return None;
     }
     let omega = vec3_to_rapier(angular_velocity);
-    let h = rapier3d::prelude::Vector::new(
+    let h = nalgebra::Vector3::<f64>::new(
         inertia_diag.x * omega.x,
         inertia_diag.y * omega.y,
         inertia_diag.z * omega.z,
@@ -240,9 +240,9 @@ pub fn triad_attitude(
     let make_basis = |a: Vec3,
                       b: Vec3|
      -> Option<(
-        rapier3d::prelude::Vector,
-        rapier3d::prelude::Vector,
-        rapier3d::prelude::Vector,
+        nalgebra::Vector3<f64>,
+        nalgebra::Vector3<f64>,
+        nalgebra::Vector3<f64>,
     )> {
         let t1 = vec3_to_rapier(a).try_normalize()?;
         let t2 = t1.cross(vec3_to_rapier(b)).try_normalize()?;

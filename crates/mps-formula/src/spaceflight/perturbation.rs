@@ -53,7 +53,7 @@ pub fn atmospheric_drag_acceleration(
     let acc = if speed > EPS {
         -rel * (0.5 * density * speed * drag_coefficient * area / mass)
     } else {
-        rapier3d::prelude::Vector::ZERO
+        nalgebra::Vector3::<f64>::zeros()
     };
     Some(vec3_from_rapier(acc))
 }
@@ -133,7 +133,7 @@ pub fn igrf_tilted_dipole(position_ecef: Vec3, epoch_year: f64) -> Option<Vec3> 
     let g11 = -1450.7e-9 + 7.7e-9 * (epoch_year - 2020.0);
     let h11 = 4652.9e-9 + (-25.1e-9) * (epoch_year - 2020.0);
     let a_e3 = 6_371_200.0_f64.powi(3);
-    let m = rapier3d::prelude::Vector::new(g11 * a_e3, h11 * a_e3, g10 * a_e3);
+    let m = nalgebra::Vector3::<f64>::new(g11 * a_e3, h11 * a_e3, g10 * a_e3);
     let r_hat = r / r_mag;
     let m_dot_r = m.dot(r_hat);
     let b = (r_hat * (3.0 * m_dot_r) - m) / (r_mag * r_mag * r_mag);
