@@ -458,3 +458,50 @@ fn arena_ffi_create_get_address_size_roundtrip() {
     cosmos_world_destroy_shared_arena(&mut world as *mut _);
     assert_eq!(cosmos_world_get_shared_arena_address(&world as *const _), 0);
 }
+
+/// P2（2026-09 多线程适配）——并行快照分支（≥ 128 体走 rayon 保序并行计算）
+/// 与世界状态逐值一致：handle 可回解、位置与 `body.translation()` 逐位相同，
+/// 动态体计数一致（fixed 体被排除）。
+#[test]
+fn snapshot_parallel_branch_matches_world_state() {
+    const N: usize = 300; // ≥ SNAPSHOT_PARALLEL_MIN(128) → rayon 并行分支
+    let mut world = empty_world();
+    for i in 0..N {
+        let pos = Vector::new(i as f64 * 1.5, -(i as f64) * 0.75, i as f64 * 3.25);
+        let vel = Vector::new(i as f64 * 0.1, i as f64, -(i as f64) * 0.2);
+        world.insert_body(satellite_builder(1000.0, pos, vel, 0.1));
+    }
+    // 一个 fixed 体：动态快照必须排除它。
+    let _ = world.insert_body(mps_cosmos::bodies::fixed_body_builder(Vector::new(
+        9999.0, 0.0, 0.0,
+    )));
+
+    assert_eq!(cosmos_world_dynamic_body_snapshot_count(&world), N as u32);
+
+    let mut handles = vec![0u64; N];
+    let mut values = vec![0f64; N * 7];
+    let written = cosmos_world_dynamic_body_snapshot(
+        &world,
+        handles.as_mut_ptr(),
+        values.as_mut_ptr(),
+        N as u32,
+    );
+    assert_eq!(written as usize, N);
+
+    for (i, handle_raw) in handles.iter().enumerate() {
+        let (idx, generation) = unpack_handle(*handle_raw);
+        let h = rapier3d::prelude::RigidBodyHandle::from_raw_parts(idx, generation);
+        let body = world.bodies().get(h).expect("handle must resolve");
+        assert!(body.is_dynamic(), "fixed body leaked into dynamic snapshot");
+        let t = body.translation();
+        assert_eq!(values[i * 7], t.x, "tx mismatch at {i}");
+        assert_eq!(values[i * 7 + 1], t.y, "ty mismatch at {i}");
+        assert_eq!(values[i * 7 + 2], t.z, "tz mismatch at {i}");
+        // 四元数 w 分量逐位一致（快照只读位姿，不引入任何换算）。
+        assert_eq!(
+            values[i * 7 + 6],
+            body.rotation().w,
+            "quat w mismatch at {i}"
+        );
+    }
+}

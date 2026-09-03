@@ -62,7 +62,7 @@ fn verlet_circle_orbit_closes_tight() {
         sun_position: Vector::ZERO,
         relativistic: mps_cosmos::world::RelativisticCorrection::None,
         has_irregular_sources: true,
-        nb_parallel: mps_cosmos::integrator::nb_parallel_enabled(),
+        nb_parallel: false, // 串行主路径对照(路由等价由 nb_parallel_routing_bit_identical 单测覆盖)
         ff_simd: mps_cosmos::integrator::ff_simd_enabled(),
     };
 
@@ -186,7 +186,7 @@ fn inner_m_loop_ordered_parallel_bit_identical() {
             sun_position: Vector::ZERO,
             relativistic: mps_cosmos::world::RelativisticCorrection::None,
             has_irregular_sources: false,
-            nb_parallel: mps_cosmos::integrator::nb_parallel_enabled(),
+            nb_parallel: false, // 串行主路径对照(路由等价由 nb_parallel_routing_bit_identical 单测覆盖)
             ff_simd: mps_cosmos::integrator::ff_simd_enabled(),
         };
         for &pos in &probe_positions {
@@ -234,7 +234,7 @@ fn inner_m_loop_ordered_parallel_bit_identical() {
                 sun_position: Vector::ZERO,
                 relativistic: mps_cosmos::world::RelativisticCorrection::None,
                 has_irregular_sources: true,
-                nb_parallel: mps_cosmos::integrator::nb_parallel_enabled(),
+                nb_parallel: false, // 串行主路径对照(路由等价由 nb_parallel_routing_bit_identical 单测覆盖)
                 ff_simd: mps_cosmos::integrator::ff_simd_enabled(),
             };
             // 卫星放在 near_src 近场阈值内（dist < 8e4），触发 points 求和分支。
@@ -317,7 +317,7 @@ fn far_field_simd_bit_identical_with_serial_scalar_loop() {
             sun_position: Vector::ZERO,
             relativistic: mps_cosmos::world::RelativisticCorrection::None,
             has_irregular_sources: false,
-            nb_parallel: mps_cosmos::integrator::nb_parallel_enabled(),
+            nb_parallel: false, // 串行主路径对照(路由等价由 nb_parallel_routing_bit_identical 单测覆盖)
             ff_simd: mps_cosmos::integrator::ff_simd_enabled(),
         };
         for &pos in &probe_positions {
@@ -363,7 +363,7 @@ fn far_field_simd_bit_identical_with_serial_scalar_loop() {
                 sun_position: Vector::ZERO,
                 relativistic: mps_cosmos::world::RelativisticCorrection::None,
                 has_irregular_sources: true,
-                nb_parallel: mps_cosmos::integrator::nb_parallel_enabled(),
+                nb_parallel: false, // 串行主路径对照(路由等价由 nb_parallel_routing_bit_identical 单测覆盖)
                 ff_simd: mps_cosmos::integrator::ff_simd_enabled(),
             };
             let probe_irr = near_pos + Vector::new(1.0e3, 0.0, 0.0);
@@ -614,4 +614,140 @@ fn bench_far_field_simd_speedup_ignore() {
             ns_c / ns_s,
         );
     }
+}
+
+/// P2（2026-09 多线程适配）——内层 M 并行路由 lock-down：`accel_routable` 的
+/// 三段并行组合（`celestial_segment` → 一次 `n_body_acceleration_reduce` 和 →
+/// `add_perturbation_segment` 逐项）必须与串行 `total_acceleration` **逐位一致**
+/// ——含「天体引力 + n-body + 大气阻力扰动」全部开启的最坏情况（历史上
+/// accel_routable 的旧组合顺序在有扰动时只是 ulp 级等价，本测试是翻转默认
+/// 路由前的正确性闸门）。
+///
+/// 经 pub 的 `verlet_step`（内部走 `accel_routable`）做端到端对比：两个仅
+/// `nb_parallel` 不同的 ctx 把同初态刚体各推一步，终态位置/速度 **f64 逐位相等**。
+#[test]
+fn nb_parallel_routing_bit_identical() {
+    use mps_cosmos::gravity::CelestialSource;
+    use mps_cosmos::integrator::verlet_step;
+    use mps_cosmos::world::PerturbationConfig;
+
+    let earth = get_celestial_body(CelestialBodyId::Earth);
+    // 天体源：完整球谐分支（2-10 R_eq），最贵也最考验路由。
+    let celestials = [CelestialSource::new(earth, 2)];
+
+    // n-body 源：M=16（≥ NB_PARALLEL_MIN_SOURCES=8，触发内层并行归约）。
+    const M: usize = 16;
+    let probe_hdl = RigidBodyHandle::from_raw_parts(500, 0); // 不与任何源重合
+    let mut sources: Vec<NBodySource> = Vec::with_capacity(M);
+    let mut positions = vec![Vector::ZERO; 1000 + M];
+    let rots = vec![Rotation::IDENTITY; 1000 + M];
+    let mut pos_gm: Vec<(Vector, f64)> = Vec::with_capacity(M);
+    let mut rng = 0x9e3779b97f4a7c15u64;
+    for i in 0..M {
+        rng = rng
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        let a = (rng & 0xffff) as f64 * 2.0 * std::f64::consts::PI / 65535.0;
+        rng = rng
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        let b = ((rng >> 16) & 0xffff) as f64 * std::f64::consts::PI / 65535.0;
+        let rad = 1.2e7 + ((rng >> 32) & 0xffff) as f64 * 1.5e7;
+        let p = Vector::new(
+            rad * b.sin() * a.cos(),
+            rad * b.cos(),
+            rad * b.sin() * a.sin(),
+        );
+        let h = RigidBodyHandle::from_raw_parts(1000 + i as u32, 0);
+        let gm = 6.0e20 + (i as f64) * 1.0e19;
+        sources.push(NBodySource::monopole(h, gm));
+        positions[1000 + i] = p;
+        pos_gm.push((p, gm));
+    }
+
+    // 扰动：大气阻力（依赖速度 → 走扰动段；central_body 供大气模型）。
+    let cfg = PerturbationConfig {
+        enable_drag: true,
+        drag_coefficient: 0.04,
+        area: 2.5,
+        ..Default::default()
+    };
+
+    let make_ctx = |nb_parallel: bool| AccelContext {
+        celestials: &celestials,
+        n_body_sources: &sources,
+        source_positions: &positions,
+        source_rotations: &rots,
+        source_pos_gm: &pos_gm,
+        softening_sq: 0.0,
+        central_body: Some(earth),
+        sun_position: Vector::ZERO,
+        relativistic: mps_cosmos::world::RelativisticCorrection::None,
+        has_irregular_sources: false,
+        nb_parallel,
+        ff_simd: mps_cosmos::integrator::ff_simd_enabled(),
+    };
+    let ctx_serial = make_ctx(false);
+    let ctx_parallel = make_ctx(true);
+
+    // 两个探针位置：低轨（< 2 R_eq 椭球分支 + 明显大气阻力）与中轨
+    // （2-10 R_eq 完整球谐分支，大气近零但仍有速度项判定）。
+    let probes = [
+        (Vector::new(7.5e6, 0.0, 0.0), Vector::new(0.0, 7.3e3, 1.2e3)),
+        (
+            Vector::new(2.4e7, 3.0e6, -1.0e6),
+            Vector::new(-2.0e3, 3.8e3, 0.0),
+        ),
+    ];
+    let mass = 1000.0;
+    let dt = 30.0;
+    for (pos0, vel0) in probes {
+        let mut body_serial = satellite_builder(mass, pos0, vel0, 1.0).build();
+        let mut body_parallel = satellite_builder(mass, pos0, vel0, 1.0).build();
+        let a0 = total_acceleration(pos0, vel0, mass, probe_hdl, &ctx_serial, Some(&cfg));
+        verlet_step(
+            &mut body_serial,
+            a0,
+            &ctx_serial,
+            mass,
+            probe_hdl,
+            Some(cfg),
+            dt,
+        );
+        verlet_step(
+            &mut body_parallel,
+            a0,
+            &ctx_parallel,
+            mass,
+            probe_hdl,
+            Some(cfg),
+            dt,
+        );
+        assert_eq!(
+            body_serial.translation(),
+            body_parallel.translation(),
+            "并行路由与串行位置不逐位一致 pos0={pos0:?}"
+        );
+        assert_eq!(
+            body_serial.linvel(),
+            body_parallel.linvel(),
+            "并行路由与串行速度不逐位一致 pos0={pos0:?}"
+        );
+    }
+}
+
+/// P2（2026-09 多线程适配）——内层 M 并行的负载感知默认路由启发式：
+/// M ≥ 8 且 N ≤ 64（外层按体并行吃不饱）时开启；其余保持串行。
+/// 显式设 `COSMOS_NB_PARALLEL`（强制开/关）时跳过——env 是进程级全局。
+#[test]
+fn nb_parallel_workload_routing_heuristic() {
+    if std::env::var("COSMOS_NB_PARALLEL").is_ok() {
+        return; // 显式覆盖时默认路由不生效，无从校验
+    }
+    let f = mps_cosmos::integrator::nb_parallel_for_workload;
+    assert!(f(10, 16), "N 小 M 大：内层并行应开启");
+    assert!(f(1, 8), "M=8 阈值边界：应开启");
+    assert!(!f(10, 7), "M 低于下限：应串行");
+    assert!(!f(65, 16), "外层按体并行已饱和：内层不开避免过度订阅");
+    assert!(!f(1000, 512), "大 N：外层并行足够");
 }

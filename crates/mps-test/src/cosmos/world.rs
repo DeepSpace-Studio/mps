@@ -107,6 +107,7 @@ fn circular_leo_orbit_period_matches_kepler() {
     }
 
     let pos = world.body_translation(sat).expect("sat exists");
+    println!("LEO PROBE: v_after_590_steps={:?}", world.body_linvel(sat));
     let r_final = pos.length();
     // semi-implicit Euler 在近圆轨道会有小幅能量增长（v 提前更新），半径随
     // 之小幅上漂。1s 步长 / 1/10 周期下，半径相对偏离应 < 1%。
@@ -493,7 +494,7 @@ fn default_softening_bounds_close_encounter() {
         sun_position: Vector::ZERO,
         relativistic: mps_cosmos::world::RelativisticCorrection::None,
         has_irregular_sources: true,
-        nb_parallel: mps_cosmos::integrator::nb_parallel_enabled(),
+        nb_parallel: false, // 串行主路径对照(路由等价由 nb_parallel_routing_bit_identical 覆盖)
         ff_simd: mps_cosmos::integrator::ff_simd_enabled(),
     };
     let acc = total_acceleration(
@@ -1060,7 +1061,7 @@ fn n_body_optimized_matches_serial_reference_bit_identical() {
         sun_position: Vector::ZERO,
         relativistic: mps_cosmos::world::RelativisticCorrection::None,
         has_irregular_sources: true,
-        nb_parallel: mps_cosmos::integrator::nb_parallel_enabled(),
+        nb_parallel: false, // 串行主路径对照(路由等价由 nb_parallel_routing_bit_identical 覆盖)
         ff_simd: mps_cosmos::integrator::ff_simd_enabled(),
     };
 
@@ -1161,7 +1162,7 @@ fn highorder_bit_identical_helper(mode: OrbitIntegration) {
         sun_position: Vector::ZERO,
         relativistic: mps_cosmos::world::RelativisticCorrection::None,
         has_irregular_sources: true,
-        nb_parallel: mps_cosmos::integrator::nb_parallel_enabled(),
+        nb_parallel: false, // 串行主路径对照(路由等价由 nb_parallel_routing_bit_identical 覆盖)
         ff_simd: mps_cosmos::integrator::ff_simd_enabled(),
     };
 
@@ -1337,7 +1338,7 @@ fn irregular_source_flag_shortcut_matches_full_near_field() {
         sun_position: Vector::ZERO,
         relativistic: mps_cosmos::world::RelativisticCorrection::None,
         has_irregular_sources: true,
-        nb_parallel: mps_cosmos::integrator::nb_parallel_enabled(),
+        nb_parallel: false, // 串行主路径对照(路由等价由 nb_parallel_routing_bit_identical 覆盖)
         ff_simd: mps_cosmos::integrator::ff_simd_enabled(),
     };
     let mut reference = Vec::new();
@@ -1438,7 +1439,7 @@ fn parallel_writeback_matches_serial_reference_bit_identical() {
         sun_position: Vector::ZERO,
         relativistic: mps_cosmos::world::RelativisticCorrection::None,
         has_irregular_sources: true,
-        nb_parallel: mps_cosmos::integrator::nb_parallel_enabled(),
+        nb_parallel: false, // 串行主路径对照(路由等价由 nb_parallel_routing_bit_identical 覆盖)
         ff_simd: mps_cosmos::integrator::ff_simd_enabled(),
     };
     let mut reference = Vec::new();
@@ -1687,4 +1688,184 @@ fn cosmos_ffi_add_moon_roundtrip() {
     assert!(idx >= 0, "FFI add_moon must return valid index");
     let bad = mps_cosmos::ffi::cosmos_world_add_moon(raw, 999_999);
     assert_eq!(bad, -1, "FFI out-of-range must return -1");
+}
+
+/// P2（2026-09 多线程适配）——RapierForce 路径（FFI 默认模式）并行力注入的
+/// 正确性：N=64 动态体（≥ 外层并行 min_len 16 的多核分片规模）+ n-body 源 +
+/// 大气阻力扰动，`world.step` 后逐体速度与 `total_acceleration` 独立参考
+/// 对照（并行注入只改调度不改每体计算序列；此处对照覆盖「快照冻结 → 并行
+/// 求值 → 并发写回」全链路，力→加速度换算存在 ulp 差 → 相对容差 1e-9）。
+///
+/// **注意速度上限**：rapier 0.35 的 staged island solver 每步把刚体速度钳到
+/// `IntegrationParameters::normalized_max_linear_velocity`（默认 **400 m/s**，
+/// 见 worker.rs 的 integrate-positions 阶段）。本测试刻意用 |v| ≈ 100 m/s 的
+/// 慢速场景（低轨非轨道速度 + dt=1s），确保全程不触发钳制，semi-implicit
+/// 参考才可直接对照；`circular_leo_*` 系列虽用 7546 m/s 的轨道速度，但走的是
+/// 显式积子路径（不经过 rapier solver），故不受钳制影响。
+#[test]
+fn rapier_force_parallel_inject_matches_analytic_reference() {
+    use mps_cosmos::world::PerturbationConfig;
+
+    let earth = get_celestial_body(CelestialBodyId::Earth);
+    let cfg_world = CosmosWorldConfig {
+        gravity: Vector::ZERO,
+        dt: 1.0,
+        solver_iterations: 8,
+        ccd_substeps: 0,
+        n_body_softening_sq: 1.0e3,
+        central_body: None,
+        orbit_integration: OrbitIntegration::RapierForce,
+        verlet_substeps: 1,
+        adaptive_substeps: false,
+        adaptive_tolerance: 1e-9,
+        relativistic_correction: mps_cosmos::world::RelativisticCorrection::None,
+    };
+    let mut world = CosmosWorld::new(cfg_world);
+    // 中心恒星（锁定原点）作为 n-body 源提供轨道引力。
+    // 注意 add_n_body 的参数是**质量 kg**（内部 gm_from_mass），不是 GM。
+    let m_star = 5.972e24;
+    let star_h = world.insert_body(
+        satellite_builder(m_star, Vector::ZERO, Vector::ZERO, 1.0).lock_translations(),
+    );
+    world.add_n_body(star_h, m_star);
+    world.set_central_body(Some(earth));
+
+    // 64 颗慢速卫星：黄金角散布在 ~1 km 高度（大气密度非零 → 阻力生效），
+    // 初速 ~100 m/s（≪ 400 m/s 钳制），确定性方向。
+    const N: usize = 64;
+    let cfg_pert = PerturbationConfig {
+        enable_drag: true,
+        drag_coefficient: 0.02,
+        area: 2.0,
+        ..Default::default()
+    };
+    let mut sat_states: Vec<(RigidBodyHandle, Vector, Vector)> = Vec::with_capacity(N);
+    for i in 0..N {
+        let theta = i as f64 * 2.399963229728653; // 黄金角
+        let r = 6.379e6;
+        let pos = Vector::new(
+            r * theta.cos(),
+            r * theta.sin(),
+            ((i % 5) as f64 - 2.0) * 1.0e4,
+        );
+        let mut dir = Vector::new(
+            (i % 7) as f64 - 3.0,
+            (i % 5) as f64 - 2.0,
+            (i % 3) as f64 - 1.0,
+        );
+        if dir.length_squared() == 0.0 {
+            dir = Vector::new(1.0, 0.0, 0.0); // i=52 时三个余数同时归零，避免 NaN
+        }
+        let vel = dir * (100.0 / dir.length());
+        let h = world.insert_body(
+            satellite_builder(1000.0, pos, vel, 1.0)
+                .linear_damping(0.0)
+                .angular_damping(0.0),
+        );
+        world.set_perturbation(h, cfg_pert);
+        sat_states.push((h, pos, vel));
+    }
+
+    // 冻结 pre-step 状态构造独立参考 ctx（与 refresh_n_body_sources 同款 SOA 表）。
+    let source_pos_gm = snapshot_source_pos_gm(&world);
+    let source_positions: Vec<Vector> = source_pos_gm.iter().map(|(p, _)| *p).collect::<Vec<_>>();
+    let celestials: Vec<mps_cosmos::gravity::CelestialSource> = Vec::new();
+    let src_rot: Vec<Rotation> = world.bodies().iter().map(|_| Rotation::IDENTITY).collect();
+    // n-body 源快照（拷贝 handle+gm，避免 ctx 借用 world 与 step 的 &mut 冲突）。
+    let n_body_sources_ref: Vec<mps_cosmos::gravity::NBodySource> =
+        vec![mps_cosmos::gravity::NBodySource::monopole(
+            star_h,
+            mps_cosmos::gravity::gm_from_mass(m_star),
+        )];
+    let ctx = AccelContext {
+        celestials: &celestials,
+        n_body_sources: &n_body_sources_ref,
+        source_positions: &source_positions,
+        source_rotations: &src_rot,
+        source_pos_gm: &source_pos_gm,
+        softening_sq: 1.0e3,
+        central_body: Some(earth),
+        sun_position: Vector::ZERO,
+        relativistic: mps_cosmos::world::RelativisticCorrection::None,
+        has_irregular_sources: false,
+        nb_parallel: false,
+        ff_simd: mps_cosmos::integrator::ff_simd_enabled(),
+    };
+
+    let dt = 1.0;
+    world.step(dt);
+
+    for (h, pos0, vel0) in &sat_states {
+        let mass = world.bodies().get(*h).expect("sat").mass();
+        let a_ref = total_acceleration(*pos0, *vel0, mass, *h, &ctx, Some(&cfg_pert));
+        let expected = *vel0 + a_ref * dt;
+        let actual = world.body_linvel(*h).expect("linvel");
+        let diff = (actual - expected).length();
+        let scale = expected.length().max(1.0e-6);
+        assert!(
+            diff <= 1.0e-9 * scale + 1.0e-9,
+            "body {h:?}: got {actual:?}, expected {expected:?} (|Δ|={diff})"
+        );
+    }
+}
+
+/// P2（2026-09 多线程适配）——并行力注入的确定性：两个同构 world 各推 20 步，
+/// 终态位置/速度 **f64 逐位相等**（并行注入的求值/写回序列与 rayon 调度无关；
+/// 无 collider 时 rapier pipeline 内部亦无并行分叉）。
+#[test]
+fn rapier_force_parallel_inject_is_deterministic_across_runs() {
+    let build = || {
+        let mut world = CosmosWorld::new(CosmosWorldConfig {
+            gravity: Vector::ZERO,
+            dt: 5.0,
+            solver_iterations: 8,
+            ccd_substeps: 0,
+            n_body_softening_sq: 1.0e3,
+            central_body: None,
+            orbit_integration: OrbitIntegration::RapierForce,
+            verlet_substeps: 1,
+            adaptive_substeps: false,
+            adaptive_tolerance: 1e-9,
+            relativistic_correction: mps_cosmos::world::RelativisticCorrection::None,
+        });
+        let gm = get_celestial_body(CelestialBodyId::Earth).gm;
+        let star_h = world.insert_body(
+            satellite_builder(gm, Vector::ZERO, Vector::ZERO, 1.0).lock_translations(),
+        );
+        world.add_n_body(star_h, gm);
+        for i in 0..64 {
+            let theta = i as f64 * 2.399963229728653;
+            let r = 7.0e6 + (i % 8) as f64 * 8.0e4;
+            let pos = Vector::new(r * theta.cos(), r * theta.sin(), 0.0);
+            let speed = (gm / r).sqrt() * 0.999;
+            let vel = Vector::new(-pos.y, pos.x, 0.0) * (speed / r);
+            world.insert_body(
+                satellite_builder(1000.0, pos, vel, 1.0)
+                    .linear_damping(0.0)
+                    .angular_damping(0.0)
+                    .gravity_scale(0.0),
+            );
+        }
+        world
+    };
+    let mut world_a = build();
+    let mut world_b = build();
+    for _ in 0..20 {
+        world_a.step(5.0);
+        world_b.step(5.0);
+    }
+    // 同构构建下 handle 一一对应（插入序一致），逐体位/速逐位比对。
+    let handles: Vec<RigidBodyHandle> = world_a.bodies().iter().map(|(h, _)| h).collect::<Vec<_>>();
+    for h in handles {
+        assert_eq!(
+            world_a.body_translation(h),
+            world_b.body_translation(h),
+            "translation mismatch for {h:?}"
+        );
+        assert_eq!(
+            world_a.body_linvel(h),
+            world_b.body_linvel(h),
+            "linvel mismatch for {h:?}"
+        );
+    }
 }

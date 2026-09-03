@@ -696,30 +696,52 @@ pub extern "C" fn cosmos_world_dynamic_body_snapshot(
             set_error(ERR_CAPACITY, "snapshot capacity overflow");
             return 0;
         };
-        let handles = unsafe { std::slice::from_raw_parts_mut(out_handles, capacity) };
+        let handles_out = unsafe { std::slice::from_raw_parts_mut(out_handles, capacity) };
         let values = unsafe { std::slice::from_raw_parts_mut(out_values, value_capacity) };
 
-        let mut written = 0usize;
-        for (handle, body) in w.bodies().iter() {
-            if !body.is_dynamic() {
-                continue;
+        // 两段式快照（与显式积子路径的 collect/advance 同款并行模式）：先按
+        // 插入序收集动态体 handle，≥ SNAPSHOT_PARALLEL_MIN 个时把每体 7-f64
+        // 位姿放到 rayon 池上保序计算（只读 bodies），最后串行回写调用方缓冲
+        // ——输出与串行循环逐位一致（每体计算不变，槽互不重叠）。
+        const SNAPSHOT_PARALLEL_MIN: usize = 128;
+        // 闭包只捕获 `&RigidBodySet`（Sync）——`&CosmosWorld` 含非 Sync 的
+        // `AlignedPosGm`（NonNull 对齐缓冲），不能整体跨线程共享。
+        let bodies_set = w.bodies();
+        let handles: Vec<RigidBodyHandle> = bodies_set
+            .iter()
+            .filter(|(_, body)| body.is_dynamic())
+            .take(capacity)
+            .map(|(h, _)| h)
+            .collect();
+        let poses: Vec<[f64; 7]> = if handles.len() >= SNAPSHOT_PARALLEL_MIN {
+            {
+                use rayon::prelude::*;
+                handles
+                    .par_iter()
+                    .map(|&h| {
+                        let body = &bodies_set[h];
+                        let pos = body.translation();
+                        let rot = body.rotation();
+                        [pos.x, pos.y, pos.z, rot.x, rot.y, rot.z, rot.w]
+                    })
+                    .collect()
             }
-            if written >= capacity {
-                break;
-            }
+        } else {
+            handles
+                .iter()
+                .map(|&h| {
+                    let body = &bodies_set[h];
+                    let pos = body.translation();
+                    let rot = body.rotation();
+                    [pos.x, pos.y, pos.z, rot.x, rot.y, rot.z, rot.w]
+                })
+                .collect()
+        };
 
-            let pos = body.translation();
-            let rot = body.rotation();
-            handles[written] = pack_handle(handle);
-            let off = written * 7;
-            values[off] = pos.x;
-            values[off + 1] = pos.y;
-            values[off + 2] = pos.z;
-            values[off + 3] = rot.x; // i
-            values[off + 4] = rot.y; // j
-            values[off + 5] = rot.z; // k
-            values[off + 6] = rot.w; // w
-            written += 1;
+        let written = poses.len();
+        for (i, pose) in poses.iter().enumerate() {
+            handles_out[i] = pack_handle(handles[i]);
+            values[i * 7..i * 7 + 7].copy_from_slice(pose);
         }
 
         written as u32

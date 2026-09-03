@@ -1261,7 +1261,10 @@ impl CosmosWorld {
             sun_position: self.sun_position,
             relativistic: self.relativistic_correction,
             has_irregular_sources: self.has_irregular_sources,
-            nb_parallel: crate::integrator::nb_parallel_enabled(),
+            nb_parallel: crate::integrator::nb_parallel_for_workload(
+                self.scratch_tasks.len(),
+                self.n_body_sources.len(),
+            ),
             ff_simd: crate::integrator::ff_simd_enabled(),
         };
 
@@ -1633,195 +1636,266 @@ impl CosmosWorld {
     /// P1.12 / L3：原 `apply_forces` 的 force 注入主体；保留为独立方法以让
     /// `step_via_rapier_force` 在 reset_forces 与力注入之间插入"按 scratch_tasks
     /// 精准 reset dynamic bodies"步骤而无需重复 collect_dynamic_tasks。
+    ///
+    /// 多线程：逐体合力求值只读冻结快照（`scratch_tasks`、源位姿快照、
+    /// `celestials` / `n_body_sources` / `central_body` / `sun_position`），写回
+    /// 只落在本体的 force / torque 累加槽——按体并行（`with_min_len(16)`，与
+    /// 显式路径的 advance / 写回段同款）与串行**逐位一致**：每体的计算序列一个
+    /// 浮点运算都不变，跨体的 `add_force` 写入槽互不重叠、顺序无关。唯一需要
+    /// 读 `bodies` 的潮汐自旋采样被提前到串行预备段（潮汐默认关闭，常见配置
+    /// 下整段退化为一次 `any()` 判定）。
     fn inject_forces_from_collected_tasks(&mut self, dt: f64) {
         let n_tasks = self.scratch_tasks.len();
-        for i in 0..n_tasks {
-            let (handle, pos, vel, mass, perturbation) = self.scratch_tasks[i];
-            let mut total_force = Vector::ZERO;
-            // 潮汐自旋力矩累加（Hut 1981），在扰动块内计算、于下方与力一并施加。
-            let mut tidal_torque_vec = Vector::ZERO;
+        if n_tasks == 0 {
+            return;
+        }
 
-            // 天体引力：加速度 × 质量
-            for src in &self.celestials {
-                let accel = celestial_acceleration(pos, src);
-                total_force += accel * mass;
-            }
-
-            // n-body 互引力：直接 slice 索引取源位置/姿态，跳过空源快路径与闭包虚调用。
-            // 不规则质量分布分支：近场（dist ≤ src.near_field_threshold()）且源带 points
-            // 时按 Σ G·mᵢ·dᵢ/|dᵢ|³ 求和，由源姿态把 local_offset 变到世界坐标——这是
-            // 非球星体方向性拉扯的物理路径。远场/无 points → 单 monopole。
-            if !self.n_body_sources.is_empty() {
-                let exclude = handle.into_raw_parts().0 as usize;
-                let mut acc_nb = Vector::ZERO;
-                // 与 `integrator::total_acceleration` 同款优化：源快照按 `bodies.len()`
-                // 建好、索引必在界内，用 `get_unchecked` 省掉每源每体的 `Option` +
-                // `unwrap_or` 分支；近场不规则分支（带 `points` 的源）从主 monopole
-                // 循环里摘出，主路径不再判 `!src.points.is_empty()`。
-                debug_assert!(self.scratch_source_positions.len() >= self.n_body_sources.len());
-                for src in &self.n_body_sources {
-                    let src_idx = src.handle.into_raw_parts().0 as usize;
-                    if src_idx == exclude || src.gm <= 0.0 {
-                        continue;
-                    }
-                    let r_j = unsafe { *self.scratch_source_positions.get_unchecked(src_idx) };
-                    let d = r_j - pos;
-                    let dist_sq = d.length_squared() + self.n_body_softening_sq;
-                    if dist_sq < 1.0 {
-                        continue;
-                    }
-                    let dist = dist_sq.sqrt();
-                    let near_threshold = src.near_field_threshold();
-                    if !src.points.is_empty() && near_threshold > 0.0 && dist <= near_threshold {
-                        let rot = unsafe { *self.scratch_source_rotations.get_unchecked(src_idx) };
-                        for mp in &src.points {
-                            if mp.gm <= 0.0 {
-                                continue;
-                            }
-                            let world = r_j + rot * mp.local_offset;
-                            let d_i = world - pos;
-                            let dist_sq_i = d_i.length_squared() + self.n_body_softening_sq;
-                            if dist_sq_i < 1.0 {
-                                continue;
-                            }
-                            let dist_i = dist_sq_i.sqrt();
-                            acc_nb += d_i * (mp.gm / (dist_sq_i * dist_i));
-                        }
-                    } else {
-                        acc_nb += d * (src.gm / (dist_sq * dist));
-                    }
-                }
-                total_force += acc_nb * mass;
-            }
-
-            // 环境扰动
-            if let Some(cfg) = perturbation {
-                if cfg.enable_drag
-                    && let Some(central) = self.central_body
-                {
-                    let altitude = pos.length() - central.equatorial_radius;
-                    let density = crate::perturbation::atmosphere_density_at(central, altitude);
-                    if density > 0.0 {
-                        let atmosphere_vel = angular_velocity_of(central).cross3(pos);
-                        if let Some(f) = atmospheric_drag_force(
-                            vel,
-                            atmosphere_vel,
-                            density,
-                            cfg.drag_coefficient,
-                            cfg.area,
-                            mass,
-                        ) {
-                            total_force += f;
-                        }
-                    }
-                }
-                if cfg.enable_solar && cfg.optical_area > 0.0 {
-                    let sun_to_body = pos - self.sun_position;
-                    let r = sun_to_body.length();
-                    let sun_dir = if r > 1e-9 {
-                        -sun_to_body / r
-                    } else {
-                        Vector::ZERO
-                    };
-                    let mut f = solar_pressure_force(
-                        sun_to_body,
-                        sun_dir,
-                        cfg.optical_area,
-                        cfg.reflectivity,
-                        AU,
-                    );
-                    // 日食（阴影锥）衰减：仅当显式开启且设有 center_body 时生效，
-                    // 默认关闭 → 不影响现有光压输出（原方法不变）。
-                    if cfg.enable_eclipse
-                        && let Some(central) = self.central_body
-                        && central.equatorial_radius > 0.0
-                    {
-                        let att = crate::perturbation::eclipse_attenuation(
-                            pos,
-                            self.sun_position,
-                            central.equatorial_radius,
-                            mps_formula::celestial_data::SUN_EQ_RADIUS,
-                        );
-                        f *= att;
-                    }
-                    total_force += f;
-                }
-                // 太阳风动压：沿用与光压相同的「太阳→物体」几何方向。
-                if cfg.enable_solar_wind && cfg.solar_wind_area > 0.0 {
-                    let sun_to_body = pos - self.sun_position;
-                    if let Some(f) = solar_wind_pressure_force(
-                        sun_to_body,
-                        vel,
-                        cfg.solar_wind_proton_density,
-                        cfg.solar_wind_speed,
-                        cfg.solar_wind_area,
-                    ) {
-                        let mut f = f;
-                        // 日食（阴影锥）衰减：与光压共用同一几何（中心体在原点、太阳
-                        // 在 `sun_position`）。默认关闭 → 不影响现有太阳风输出。
-                        if cfg.enable_eclipse
-                            && let Some(central) = self.central_body
-                            && central.equatorial_radius > 0.0
-                        {
-                            let att = crate::perturbation::eclipse_attenuation(
-                                pos,
-                                self.sun_position,
-                                central.equatorial_radius,
-                                mps_formula::celestial_data::SUN_EQ_RADIUS,
-                            );
-                            f *= att;
-                        }
-                        total_force += f;
-                    }
-                }
-                // Chandrasekhar 动力学摩擦：背景介质的引力拖尾，反速度方向。
-                if cfg.enable_dynamical_friction
-                    && cfg.friction_background_density > 0.0
-                    && let Some(f) = dynamical_friction_force(
-                        mass,
-                        cfg.friction_background_density,
-                        vel,
-                        cfg.friction_coulomb_log,
-                    )
-                {
-                    total_force += f;
-                }
-                // Hut (1981) 平衡潮自旋同步力矩：默认关闭 → 现有输出逐位不变。
-                // 仅当开启且设有 central_body 作潮汐伴星时计算；力矩施加于下方与力一并注入。
-                if cfg.enable_tidal
-                    && cfg.tidal_radius > 0.0
-                    && let Some(central) = self.central_body
-                {
-                    let spin = self
-                        .bodies
+        // 潮汐（Hut 1981）需要每个体的角速度。并行阶段对 `bodies` 只做
+        // `get_mut` 写回（裸指针模式，见下），不能与共享读并发——把「需要潮汐」
+        // 配置下的 spin 采样提前到串行预备段。仅当存在 enable_tidal 扰动时才
+        // 真正遍历 bodies；默认关闭 → 这里是一次 O(N) `any()` 判定。
+        let need_tidal = self.central_body.is_some()
+            && self.scratch_tasks.iter().any(|(_, _, _, _, pt)| {
+                pt.as_ref()
+                    .is_some_and(|c| c.enable_tidal && c.tidal_radius > 0.0)
+            });
+        let tidal_spins: Vec<Vector> = if need_tidal {
+            self.scratch_tasks
+                .iter()
+                .map(|&(handle, _, _, _, _)| {
+                    self.bodies
                         .get(handle)
                         .map(|b| {
                             let av = b.angvel();
                             Vector::new(av.x, av.y, av.z)
                         })
-                        .unwrap_or(Vector::ZERO);
-                    tidal_torque_vec = crate::perturbation::tidal_torque(
-                        pos,
-                        vel,
-                        spin,
-                        central.gm,
-                        central.equatorial_radius,
-                        cfg.tidal_radius,
-                        cfg.love_number_k2,
-                        cfg.tidal_q,
-                    );
-                }
-            }
+                        .unwrap_or(Vector::ZERO)
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
 
-            if let Some(body) = self.bodies.get_mut(handle) {
-                if total_force != Vector::ZERO {
-                    body.add_force(total_force, true);
-                }
-                // 潮汐力矩（Hut 1981）：apply_torque_impulse 直接施加角冲量 = 力矩 × dt。
-                if tidal_torque_vec != Vector::ZERO {
-                    body.apply_torque_impulse(tidal_torque_vec * dt, true);
-                }
-            }
+        {
+            let CosmosWorld {
+                celestials,
+                n_body_sources,
+                scratch_source_positions,
+                scratch_source_rotations,
+                n_body_softening_sq,
+                central_body,
+                sun_position,
+                bodies,
+                scratch_tasks,
+                ..
+            } = self;
+            // 只读字段降为共享引用 / Copy 标量（跨线程共享安全：显式路径的
+            // advance 段已按同样形状把 `AccelContext` 共享给 rayon worker）。
+            let celestials: &[crate::gravity::CelestialSource] = celestials;
+            let n_body_sources: &[crate::gravity::NBodySource] = n_body_sources;
+            let scratch_source_positions: &[Vector] = scratch_source_positions;
+            let scratch_source_rotations: &[Rotation] = scratch_source_rotations;
+            let softening_sq = *n_body_softening_sq;
+            let sun_position = *sun_position;
+            let central_body = *central_body;
+            // 把唯一可变字段降级为裸指针地址（usize，可 `Send`/`Sync`），在闭包内
+            // 按需重借为 `&mut`。槽不重叠，故并发解引用写不同内存是安全的。
+            let bodies_addr = std::ptr::from_mut(&mut *bodies) as usize;
+            scratch_tasks
+                .par_iter()
+                .enumerate()
+                .with_min_len(16)
+                .for_each(|(i, &(handle, pos, vel, mass, perturbation))| {
+                    let mut total_force = Vector::ZERO;
+                    // 潮汐自旋力矩累加（Hut 1981），在扰动块内计算、于下方与力一并施加。
+                    let mut tidal_torque_vec = Vector::ZERO;
+
+                    // 天体引力：加速度 × 质量
+                    for src in celestials {
+                        let accel = celestial_acceleration(pos, src);
+                        total_force += accel * mass;
+                    }
+
+                    // n-body 互引力：直接 slice 索引取源位置/姿态，跳过空源快路径与闭包虚调用。
+                    // 不规则质量分布分支：近场（dist ≤ src.near_field_threshold()）且源带 points
+                    // 时按 Σ G·mᵢ·dᵢ/|dᵢ|³ 求和，由源姿态把 local_offset 变到世界坐标——这是
+                    // 非球星体方向性拉扯的物理路径。远场/无 points → 单 monopole。
+                    if !n_body_sources.is_empty() {
+                        let exclude = handle.into_raw_parts().0 as usize;
+                        let mut acc_nb = Vector::ZERO;
+                        // 与 `integrator::total_acceleration` 同款优化：源快照按 `bodies.len()`
+                        // 建好、索引必在界内，用 `get_unchecked` 省掉每源每体的 `Option` +
+                        // `unwrap_or` 分支；近场不规则分支（带 `points` 的源）从主 monopole
+                        // 循环里摘出，主路径不再判 `!src.points.is_empty()`。
+                        debug_assert!(scratch_source_positions.len() >= n_body_sources.len());
+                        for src in n_body_sources {
+                            let src_idx = src.handle.into_raw_parts().0 as usize;
+                            if src_idx == exclude || src.gm <= 0.0 {
+                                continue;
+                            }
+                            let r_j = unsafe { *scratch_source_positions.get_unchecked(src_idx) };
+                            let d = r_j - pos;
+                            let dist_sq = d.length_squared() + softening_sq;
+                            if dist_sq < 1.0 {
+                                continue;
+                            }
+                            let dist = dist_sq.sqrt();
+                            let near_threshold = src.near_field_threshold();
+                            if !src.points.is_empty()
+                                && near_threshold > 0.0
+                                && dist <= near_threshold
+                            {
+                                let rot =
+                                    unsafe { *scratch_source_rotations.get_unchecked(src_idx) };
+                                for mp in &src.points {
+                                    if mp.gm <= 0.0 {
+                                        continue;
+                                    }
+                                    let world = r_j + rot * mp.local_offset;
+                                    let d_i = world - pos;
+                                    let dist_sq_i = d_i.length_squared() + softening_sq;
+                                    if dist_sq_i < 1.0 {
+                                        continue;
+                                    }
+                                    let dist_i = dist_sq_i.sqrt();
+                                    acc_nb += d_i * (mp.gm / (dist_sq_i * dist_i));
+                                }
+                            } else {
+                                acc_nb += d * (src.gm / (dist_sq * dist));
+                            }
+                        }
+                        total_force += acc_nb * mass;
+                    }
+
+                    // 环境扰动
+                    if let Some(cfg) = perturbation {
+                        if cfg.enable_drag
+                            && let Some(central) = central_body
+                        {
+                            let altitude = pos.length() - central.equatorial_radius;
+                            let density =
+                                crate::perturbation::atmosphere_density_at(central, altitude);
+                            if density > 0.0 {
+                                let atmosphere_vel = angular_velocity_of(central).cross3(pos);
+                                if let Some(f) = atmospheric_drag_force(
+                                    vel,
+                                    atmosphere_vel,
+                                    density,
+                                    cfg.drag_coefficient,
+                                    cfg.area,
+                                    mass,
+                                ) {
+                                    total_force += f;
+                                }
+                            }
+                        }
+                        if cfg.enable_solar && cfg.optical_area > 0.0 {
+                            let sun_to_body = pos - sun_position;
+                            let r = sun_to_body.length();
+                            let sun_dir = if r > 1e-9 {
+                                -sun_to_body / r
+                            } else {
+                                Vector::ZERO
+                            };
+                            let mut f = solar_pressure_force(
+                                sun_to_body,
+                                sun_dir,
+                                cfg.optical_area,
+                                cfg.reflectivity,
+                                AU,
+                            );
+                            // 日食（阴影锥）衰减：仅当显式开启且设有 center_body 时生效，
+                            // 默认关闭 → 不影响现有光压输出（原方法不变）。
+                            if cfg.enable_eclipse
+                                && let Some(central) = central_body
+                                && central.equatorial_radius > 0.0
+                            {
+                                let att = crate::perturbation::eclipse_attenuation(
+                                    pos,
+                                    sun_position,
+                                    central.equatorial_radius,
+                                    mps_formula::celestial_data::SUN_EQ_RADIUS,
+                                );
+                                f *= att;
+                            }
+                            total_force += f;
+                        }
+                        // 太阳风动压：沿用与光压相同的「太阳→物体」几何方向。
+                        if cfg.enable_solar_wind && cfg.solar_wind_area > 0.0 {
+                            let sun_to_body = pos - sun_position;
+                            if let Some(f) = solar_wind_pressure_force(
+                                sun_to_body,
+                                vel,
+                                cfg.solar_wind_proton_density,
+                                cfg.solar_wind_speed,
+                                cfg.solar_wind_area,
+                            ) {
+                                let mut f = f;
+                                // 日食（阴影锥）衰减：与光压共用同一几何（中心体在原点、太阳
+                                // 在 `sun_position`）。默认关闭 → 不影响现有太阳风输出。
+                                if cfg.enable_eclipse
+                                    && let Some(central) = central_body
+                                    && central.equatorial_radius > 0.0
+                                {
+                                    let att = crate::perturbation::eclipse_attenuation(
+                                        pos,
+                                        sun_position,
+                                        central.equatorial_radius,
+                                        mps_formula::celestial_data::SUN_EQ_RADIUS,
+                                    );
+                                    f *= att;
+                                }
+                                total_force += f;
+                            }
+                        }
+                        // Chandrasekhar 动力学摩擦：背景介质的引力拖尾，反速度方向。
+                        if cfg.enable_dynamical_friction
+                            && cfg.friction_background_density > 0.0
+                            && let Some(f) = dynamical_friction_force(
+                                mass,
+                                cfg.friction_background_density,
+                                vel,
+                                cfg.friction_coulomb_log,
+                            )
+                        {
+                            total_force += f;
+                        }
+                        // Hut (1981) 平衡潮自旋同步力矩：默认关闭 → 现有输出逐位不变。
+                        // 仅当开启且设有 central_body 作潮汐伴星时计算；力矩施加于下方与力一并注入。
+                        // 自旋在并行阶段前已串行采样（见 `tidal_spins`）。
+                        if cfg.enable_tidal
+                            && cfg.tidal_radius > 0.0
+                            && let Some(central) = central_body
+                        {
+                            let spin = tidal_spins.get(i).copied().unwrap_or(Vector::ZERO);
+                            tidal_torque_vec = crate::perturbation::tidal_torque(
+                                pos,
+                                vel,
+                                spin,
+                                central.gm,
+                                central.equatorial_radius,
+                                cfg.tidal_radius,
+                                cfg.love_number_k2,
+                                cfg.tidal_q,
+                            );
+                        }
+                    }
+
+                    // SAFETY: 见上。`bodies_addr` 是 `self` 字段的地址，本闭包运行期间
+                    // `self` 的其它字段仅共享读；每个 task 只 `get_mut` 自己的 handle
+                    // → 写入槽完全不重叠。
+                    let bodies =
+                        unsafe { &mut *(bodies_addr as *mut rapier3d::dynamics::RigidBodySet) };
+                    if let Some(body) = bodies.get_mut(handle) {
+                        if total_force != Vector::ZERO {
+                            body.add_force(total_force, true);
+                        }
+                        // 潮汐力矩（Hut 1981）：apply_torque_impulse 直接施加角冲量 = 力矩 × dt。
+                        if tidal_torque_vec != Vector::ZERO {
+                            body.apply_torque_impulse(tidal_torque_vec * dt, true);
+                        }
+                    }
+                });
         }
     }
 

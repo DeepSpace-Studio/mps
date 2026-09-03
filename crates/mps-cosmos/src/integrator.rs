@@ -69,10 +69,10 @@ pub struct AccelContext<'a> {
     /// 分支的判定（全 monopole 的常见路径）；数值惰性——该分支在 `false`
     /// 下本就不会触发。
     pub has_irregular_sources: bool,
-    /// 互引力内层 M 并行归约开关（COSMOS_NB_PARALLEL=1，D 路由）。在
-    /// `AccelContext` 构造期一次性求值（每子步/每次构造一次），而非
-    /// `total_acceleration` 每次调用都读 env——默认路径零行为变化，且省去
-    /// 每体每调用的 syscall 级 env::var 开销（见 plan §11 附带发现）。
+    /// 互引力内层 M 并行归约开关（D 路由）。生产路径在 `AccelContext`
+    /// 构造期经 [`nb_parallel_for_workload`] 按负载路由 + `COSMOS_NB_PARALLEL`
+    /// env 覆盖求值（每子步/每次构造一次，而非 `total_acceleration` 每次调用
+    /// 都读 env）。路由只影响性能：并行归约与串行主路径逐位一致。
     pub nb_parallel: bool,
     /// 4 路 bit-identical SIMD 远场开关（F 路由）。**P1（2026-08-20）起默认 true**：
     /// 不设 `COSMOS_FARFIELD_SIMD` 即走 SIMD 远场（与串行主路径逐位一致，已 lock-down
@@ -81,13 +81,35 @@ pub struct AccelContext<'a> {
     pub ff_simd: bool,
 }
 
-/// 互引力内层 M 并行归约开关（COSMOS_NB_PARALLEL=1，D 路由）的一次性求值。
+/// 互引力内层 M 并行归约开关（`COSMOS_NB_PARALLEL`，D 路由）的 env 覆盖求值。
 /// 在 `AccelContext` 构造期调用（每子步一次），避免 `total_acceleration` 每次调用都
-/// 做 syscall 级 env::var。默认关闭（零行为变化）。
+/// 做 syscall 级 env::var。
+///
+/// **P2（2026-09）起默认走负载感知路由**（见 [`nb_parallel_for_workload`]）：
+/// 不设 `COSMOS_NB_PARALLEL` 时按 (N 体数, M 源数) 决定是否开启内层并行；
+/// `COSMOS_NB_PARALLEL=1` 强制开（调试/基准）、`=0` 强制关（调试）。
+/// 路由只影响性能——内层归约与串行主路径逐位一致（严格按源序左折叠），
+/// 任何路由组合都不改变数值。历史上该开关是 env-gated 默认关。
 #[inline]
-pub fn nb_parallel_enabled() -> bool {
-    std::env::var("COSMOS_NB_PARALLEL").as_deref() == Ok("1")
+pub fn nb_parallel_for_workload(n_bodies: usize, n_sources: usize) -> bool {
+    match std::env::var("COSMOS_NB_PARALLEL").as_deref() {
+        Ok("1") => true,  // 强制开（调试 / 基准）
+        Ok("0") => false, // 强制关（调试）
+        // 负载感知默认路由：外层「按体并行」（advance 段 `with_min_len(16)`）在
+        // N ≤ OUTER_SATURATION 时吃不满核——此时若 M ≥ 8，内层 M 有序归约补足
+        // 并行度（方案 §H CASE 1：少量大质量体 + 海量源）；N 大时外层已把
+        // 核心占满，内层并行只会过度订阅 rayon 池，保持串行。
+        _ => n_sources >= NB_PARALLEL_MIN_SOURCES && n_bodies <= NB_PARALLEL_MAX_OUTER_BODIES,
+    }
 }
+
+// 内层 M 并行归约的源数下限（与 `n_body_acceleration_reduce` 内的
+// `M_PARALLEL_MIN` 一致：低于它 rayon 启动开销不划算）。保持私有：纯路由
+// 启发式参数，不必进 cbindgen 导出的 cosmos.h。
+const NB_PARALLEL_MIN_SOURCES: usize = 8;
+// 外层按体并行视为已饱和的体数上限：N 超过它时外层 `par_iter` 足够喂饱
+// 线程池，内层 M 归约不再开启（避免嵌套并行过度订阅）。
+const NB_PARALLEL_MAX_OUTER_BODIES: usize = 64;
 
 /// 4 路 bit-identical SIMD 远场开关（F 路由）的一次性求值。构造期求值；lock-down
 /// 测试直接构造两个独立 ctx（仅 `ff_simd` 字段不同）对比，不再中途 flip env。
@@ -123,36 +145,17 @@ pub fn total_acceleration(
     perturbation: Option<&crate::world::PerturbationConfig>,
 ) -> Vector {
     let AccelContext {
-        celestials,
         n_body_sources,
         source_positions,
         source_rotations,
         source_pos_gm,
         softening_sq,
-        central_body,
-        sun_position,
-        relativistic,
         has_irregular_sources,
         ..
     } = *ctx;
-    let mut acc = Vector::ZERO;
-
-    // 天体引力（纯位置函数）。空请求是常见配置（只挂中心天体一项），加早退；
-    // 中心天体另叠加相对论后牛顿修正。
-    if celestials.is_empty() {
-        // 无天体源：跳过整个循环，含相对论修正也无处叠加。
-    } else {
-        let has_relativistic = !matches!(relativistic, crate::world::RelativisticCorrection::None);
-        for src in celestials {
-            acc += celestial_acceleration(position, src);
-            if has_relativistic
-                && let Some(central) = central_body
-                && std::ptr::eq(src.body as *const _, central as *const _)
-            {
-                acc += relativistic_acceleration(position, velocity, central.gm, relativistic);
-            }
-        }
-    }
+    // 天体引力段（含相对论后牛顿修正）——从 ZERO 起的逐项累加序列与历史串行
+    // 版本完全一致（段函数只是把同一段封出来供 `accel_routable` 的并行组合复用）。
+    let mut acc = celestial_segment(position, velocity, ctx);
 
     // n-body 互引力（位置函数，跳过自身）
     // 抽成 `contrib(src_seq, src)` 闭包：单个源对 `acc_nb` 的增量贡献，与
@@ -161,7 +164,8 @@ pub fn total_acceleration(
     // 仍是单条严格按源序的左折叠 `((a+b)+c)+…`，故结果与 rayon 调度无关。
     if !n_body_sources.is_empty() {
         // D（B3）内层 M 并行归约 / F（C2 复活，bit-identical 版 SIMD）：
-        //   - D：`COSMOS_NB_PARALLEL=1` → 并行独立求每源贡献 + 单线程按源序左折叠（env-gated）。
+        //   - D：`ctx.nb_parallel=true` → 并行独立求每源贡献 + 单线程按源序左折叠
+        //    （负载感知默认路由 + env 覆盖，见 `nb_parallel_for_workload`）。
         //   - F：4 路 SIMD 远场，**默认开启**（设 `COSMOS_FARFIELD_SIMD=0` 回退串行，
         //     P1 2026-08-20），与串行主路径逐位一致（lock-down 已证）。
         // 二者独立可叠加（同时设则外层并行、内层 SIMD）；单设其一便于 A/B 对比。
@@ -255,7 +259,69 @@ pub fn total_acceleration(
         acc += acc_nb;
     }
 
-    // 环境扰动（阻力依赖速度，光压依赖位置）；力 → 加速度
+    // 环境扰动（阻力依赖速度，光压依赖位置）；力 → 加速度。逐项加进 `acc`
+    // （不做块内预求和），保持与串行主路径完全相同的累加序列。
+    add_perturbation_segment(&mut acc, position, velocity, mass, ctx, perturbation);
+
+    acc
+}
+
+/// `total_acceleration` 的「天体引力段」（含中心天体相对论后牛顿修正）。
+///
+/// 从 `Vector::ZERO` 起按源序逐项累加——与 `total_acceleration` 历史串行版本的
+/// 天体段加法序列逐字一致。抽出为独立段函数，供 `accel_routable` 的并行组合
+/// 按「天体段 → 一次 n-body 和 → 扰动段」的顺序重组（与串行逐位一致）。
+#[inline]
+fn celestial_segment(position: Vector, velocity: Vector, ctx: &AccelContext<'_>) -> Vector {
+    let AccelContext {
+        celestials,
+        central_body,
+        relativistic,
+        ..
+    } = *ctx;
+    let mut acc = Vector::ZERO;
+    // 天体引力（纯位置函数）。空请求是常见配置（只挂中心天体一项），加早退；
+    // 中心天体另叠加相对论后牛顿修正。
+    if celestials.is_empty() {
+        // 无天体源：跳过整个循环，含相对论修正也无处叠加。
+    } else {
+        let has_relativistic = !matches!(relativistic, crate::world::RelativisticCorrection::None);
+        for src in celestials {
+            acc += celestial_acceleration(position, src);
+            if has_relativistic
+                && let Some(central) = central_body
+                && std::ptr::eq(src.body as *const _, central as *const _)
+            {
+                acc += relativistic_acceleration(position, velocity, central.gm, relativistic);
+            }
+        }
+    }
+    acc
+}
+
+/// `total_acceleration` 的「环境扰动段」（阻力 + 光压；太阳风/动力学摩擦仅在
+/// RapierForce 注入路径接入）。把各扰动项**逐项**加进调用方的 `acc`——不做事先
+/// 块内求和（f64 加法不结合，预求和会改变与串行主路径的累加序列）。
+///
+/// 抽出为独立段函数，供 `accel_routable` 的并行组合复用：串行主路径的顺序是
+/// 「天体逐项 → 一次 n-body 局部和 → 扰动逐项」，并行组合
+/// `celestial_segment + n_body_acceleration_reduce + add_perturbation_segment`
+/// 复现完全相同的序列（`n_body_acceleration_reduce` 与串行 n-body 局部和
+/// 逐位一致），故含扰动时两条路由也逐位一致。
+#[inline]
+fn add_perturbation_segment(
+    acc: &mut Vector,
+    position: Vector,
+    velocity: Vector,
+    mass: f64,
+    ctx: &AccelContext<'_>,
+    perturbation: Option<&crate::world::PerturbationConfig>,
+) {
+    let AccelContext {
+        central_body,
+        sun_position,
+        ..
+    } = *ctx;
     if let Some(cfg) = perturbation
         && mass > 0.0
     {
@@ -274,7 +340,7 @@ pub fn total_acceleration(
                     cfg.area,
                     mass,
                 ) {
-                    acc += f / mass;
+                    *acc += f / mass;
                 }
             }
         }
@@ -293,11 +359,9 @@ pub fn total_acceleration(
                 cfg.reflectivity,
                 mps_formula::celestial_data::AU,
             );
-            acc += f / mass;
+            *acc += f / mass;
         }
     }
-
-    acc
 }
 
 /// D（B3）——n-body 互引力「内层 M 有序并行归约」。
@@ -636,90 +700,18 @@ pub(crate) fn accel_routable(
     perturbation: Option<&crate::world::PerturbationConfig>,
 ) -> Vector {
     if ctx.nb_parallel {
-        // n-body 段走并行归约；天体/扰动段仍由 `total_acceleration` 计算
-        // （它们本就串行且占比低，无需并行，且保证与串行路径完全一致）。
-        let mut acc = total_acceleration_no_nbody(position, velocity, mass, ctx, perturbation);
+        // n-body 段走并行归约；天体/扰动段仍串行计算（占比低）。三段按串行
+        // 主路径的组合顺序重组——「天体段(逐项) → 一次 n-body 和 → 扰动段(逐项)」
+        // ——与 `total_acceleration` **逐位一致**（`n_body_acceleration_reduce`
+        // 与串行 n-body 局部和逐位一致；`add_perturbation_segment` 逐项加进
+        // `acc`，不做块内预求和）。
+        let mut acc = celestial_segment(position, velocity, ctx);
         acc += n_body_acceleration_reduce(position, handle, ctx);
+        add_perturbation_segment(&mut acc, position, velocity, mass, ctx, perturbation);
         acc
     } else {
         total_acceleration(position, velocity, mass, handle, ctx, perturbation)
     }
-}
-
-/// `total_acceleration` 的「不含 n-body 段」版本，供 `accel_routable` 在并行
-/// 模式下组合使用（n-body 由 `n_body_acceleration_reduce` 单独算）。与
-/// `total_acceleration` 的天体/扰动部分逐字一致，保证数值等价。
-#[inline]
-fn total_acceleration_no_nbody(
-    position: Vector,
-    velocity: Vector,
-    mass: f64,
-    ctx: &AccelContext,
-    perturbation: Option<&crate::world::PerturbationConfig>,
-) -> Vector {
-    let AccelContext {
-        celestials,
-        central_body,
-        sun_position,
-        relativistic,
-        ..
-    } = *ctx;
-    let mut acc = Vector::ZERO;
-    if celestials.is_empty() {
-        // 无天体源：跳过整个循环。
-    } else {
-        let has_relativistic = !matches!(relativistic, crate::world::RelativisticCorrection::None);
-        for src in celestials {
-            acc += celestial_acceleration(position, src);
-            if has_relativistic
-                && let Some(central) = central_body
-                && std::ptr::eq(src.body as *const _, central as *const _)
-            {
-                acc += relativistic_acceleration(position, velocity, central.gm, relativistic);
-            }
-        }
-    }
-    if let Some(cfg) = perturbation
-        && mass > 0.0
-    {
-        if cfg.enable_drag
-            && let Some(central) = central_body
-        {
-            let altitude = position.length() - central.equatorial_radius;
-            let density = crate::perturbation::atmosphere_density_at(central, altitude);
-            if density > 0.0 {
-                let atmosphere_vel = angular_velocity_of(central).cross(position);
-                if let Some(f) = crate::perturbation::atmospheric_drag_force(
-                    velocity,
-                    atmosphere_vel,
-                    density,
-                    cfg.drag_coefficient,
-                    cfg.area,
-                    mass,
-                ) {
-                    acc += f / mass;
-                }
-            }
-        }
-        if cfg.enable_solar && cfg.optical_area > 0.0 {
-            let sun_to_body = position - sun_position;
-            let r = sun_to_body.length();
-            let sun_dir = if r > 1e-9 {
-                -sun_to_body / r
-            } else {
-                Vector::ZERO
-            };
-            let f = crate::perturbation::solar_pressure_force(
-                sun_to_body,
-                sun_dir,
-                cfg.optical_area,
-                cfg.reflectivity,
-                mps_formula::celestial_data::AU,
-            );
-            acc += f / mass;
-        }
-    }
-    acc
 }
 
 /// 对单个动态刚体执行一步 velocity-Verlet。

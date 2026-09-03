@@ -272,38 +272,78 @@ impl SharedArena {
     /// Flush all body state to the arena (after `step`).  Maps arena index →
     /// body (in insertion order, matching `arena_idx_map`), writes the body
     /// slot, and tail-clears only the `[curr .. prev]` region (M3-style).
+    ///
+    /// 多线程：体数 ≥ [`FLUSH_PARALLEL_MIN`] 时槽写入阶段按 rayon 并行——每个
+    /// body 槽（96B seqlock 域 + handle map 项）互不重叠，逐槽写序列与串行完全
+    /// 相同（seqlock 协议按槽独立，Java 读侧语义不变）；header 活跃数与尾部
+    /// 清零仍在所有槽写入完成后**串行**执行（顺序依赖：header 是「已写槽数」
+    /// 的发布点）。低于阈值走原串行循环（零分配、行为逐位不变）。
     pub fn flush_all_bodies(&self, bodies: &rapier3d::prelude::RigidBodySet) {
-        let mut index = 0u32;
-        for (handle, body) in bodies.iter() {
-            if index >= self.max_bodies {
-                break;
+        use rayon::prelude::*;
+
+        // 并行 flush 的体数下限：低于它 seqlock 槽写本身足够便宜，rayon 分片
+        // 调度开销不划算。
+        const FLUSH_PARALLEL_MIN: usize = 512;
+
+        let total = bodies.len().min(self.max_bodies as usize);
+        if total >= FLUSH_PARALLEL_MIN {
+            // 先按插入序收集 (arena index, handle)，再并行写各自槽。
+            let pairs: Vec<(u32, rapier3d::prelude::RigidBodyHandle)> = bodies
+                .iter()
+                .take(total)
+                .enumerate()
+                .map(|(i, hb)| (i as u32, hb.0))
+                .collect();
+            pairs.par_iter().for_each(|&(index, handle)| {
+                self.flush_one_body(bodies, index, handle);
+            });
+        } else {
+            for (index, (handle, _)) in bodies.iter().take(total).enumerate() {
+                self.flush_one_body(bodies, index as u32, handle);
             }
-            self.write_body_handle(index, handle.into_raw_parts().0 as u64);
-            let pos = body.translation();
-            let vel = body.linvel();
-            let angvel = body.angvel();
-            let body_type = match body.body_type() {
-                rapier3d::prelude::RigidBodyType::Dynamic => 0u32,
-                rapier3d::prelude::RigidBodyType::Fixed => 1u32,
-                rapier3d::prelude::RigidBodyType::KinematicVelocityBased => 2u32,
-                rapier3d::prelude::RigidBodyType::KinematicPositionBased => 3u32,
-            };
-            let sleeping = if body.is_sleeping() { 1u32 } else { 0u32 };
-            let user_data = (body.user_data & 0xFFFF_FFFF_FFFF_FFFF) as u64;
-            self.flush_body(
-                index, pos.x, pos.y, pos.z, vel.x, vel.y, vel.z, angvel.x, angvel.y, angvel.z,
-                body_type, sleeping, user_data,
-            );
-            index += 1;
         }
-        self.set_header_u32(32, index);
+
+        // 槽全部写完后才发布 header 活跃数 + 尾部清零（与串行版的收尾一致；
+        // header 是「已写槽数」的发布点，必须在所有槽写入之后）。
+        let total_u32 = total as u32;
+        self.set_header_u32(32, total_u32);
         let prev = self.prev_body_active_count.load(Ordering::Relaxed);
-        if index < prev {
-            for i in index..prev {
+        if total_u32 < prev {
+            for i in total_u32..prev {
                 self.clear_body_slot(i);
             }
         }
-        self.prev_body_active_count.store(index, Ordering::Relaxed);
+        self.prev_body_active_count
+            .store(total_u32, Ordering::Relaxed);
+    }
+
+    /// 把单个 body 的状态写进它的 arena 槽（`flush_all_bodies` 的每体主体，
+    /// 串行/并行共用同一段写序列）。
+    fn flush_one_body(
+        &self,
+        bodies: &rapier3d::prelude::RigidBodySet,
+        index: u32,
+        handle: rapier3d::prelude::RigidBodyHandle,
+    ) {
+        self.write_body_handle(index, handle.into_raw_parts().0 as u64);
+        let Some(body) = bodies.get(handle) else {
+            return;
+        };
+        let pos = body.translation();
+        let vel = body.linvel();
+        let angvel = body.angvel();
+        let body_type = match body.body_type() {
+            rapier3d::prelude::RigidBodyType::Dynamic => 0u32,
+            rapier3d::prelude::RigidBodyType::Fixed => 1u32,
+            rapier3d::prelude::RigidBodyType::KinematicVelocityBased => 2u32,
+            rapier3d::prelude::RigidBodyType::KinematicPositionBased => 3u32,
+        };
+        let sleeping = if body.is_sleeping() { 1u32 } else { 0u32 };
+        let user_data = (body.user_data & 0xFFFF_FFFF_FFFF_FFFF) as u64;
+        self.flush_body(
+            index, pos.x, pos.y, pos.z, vel.x, vel.y, vel.z, angvel.x, angvel.y, angvel.z,
+            body_type, sleeping, user_data,
+        );
     }
 
     // -----------------------------------------------------------------------

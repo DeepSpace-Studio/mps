@@ -63,3 +63,53 @@ fn arena_ring_base_follows_body_slots_contiguously() {
         assert_eq!(cmd_ring_base, expected, "cmd ring base offset");
     }
 }
+
+/// P2（2026-09 多线程适配）——`flush_all_bodies` 并行分支（≥ 512 体）与串行
+/// 语义一致：600 个刚体 flush 后逐槽回读，位置/速度/handle-map/header 活跃数
+/// 必须与刚体状态逐值一致（槽互不重叠，并行写与串行写逐位相同）。
+#[test]
+fn flush_all_bodies_parallel_matches_body_state() {
+    use mps_cosmos::arena::SharedArena;
+    use rapier3d::prelude::{RigidBodyBuilder, RigidBodySet, Vector};
+
+    const N: usize = 600; // ≥ FLUSH_PARALLEL_MIN(512) → rayon 并行分支
+    let arena = SharedArena::new(N as u32, 4).expect("arena alloc");
+    let mut bodies = RigidBodySet::new();
+    let mut expect = Vec::with_capacity(N);
+    for i in 0..N {
+        let pos = Vector::new(i as f64 * 1.5, -(i as f64) * 0.5, i as f64 * 2.25);
+        let vel = Vector::new(i as f64 * 0.25, -(i as f64) * 2.0, i as f64);
+        let h = bodies.insert(
+            RigidBodyBuilder::dynamic()
+                .translation(pos)
+                .linvel(vel)
+                .build(),
+        );
+        expect.push((h, pos, vel));
+    }
+
+    arena.flush_all_bodies(&bodies);
+
+    let base = arena.address() as *const u8;
+    unsafe {
+        // header 活跃数（OFF_BODY_COUNT = 32）。
+        let count = base.add(OFF_BODY_COUNT).cast::<u32>().read_unaligned();
+        assert_eq!(count as usize, N, "header body count");
+
+        // handle-map（body_slots 之后，8B/体）+ 逐槽 pos/vel 回读。
+        let handle_map = base.add(HEADER_SIZE + N * BODY_SLOT_STRIDE as usize);
+        for (i, (h, pos, vel)) in expect.iter().enumerate() {
+            let slot = base.add(HEADER_SIZE + i * BODY_SLOT_STRIDE as usize);
+            let px = slot.add(8).cast::<f64>().read_unaligned();
+            let py = slot.add(16).cast::<f64>().read_unaligned();
+            let pz = slot.add(24).cast::<f64>().read_unaligned();
+            let vx = slot.add(32).cast::<f64>().read_unaligned();
+            let vy = slot.add(40).cast::<f64>().read_unaligned();
+            let vz = slot.add(48).cast::<f64>().read_unaligned();
+            assert_eq!((px, py, pz), (pos.x, pos.y, pos.z), "pos slot {i}");
+            assert_eq!((vx, vy, vz), (vel.x, vel.y, vel.z), "vel slot {i}");
+            let raw = handle_map.add(i * 8).cast::<u64>().read_unaligned();
+            assert_eq!(raw, h.into_raw_parts().0 as u64, "handle map slot {i}");
+        }
+    }
+}
