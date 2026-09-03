@@ -66,6 +66,7 @@ pub mod rapier {
     pub mod neural;
     pub mod nuclear;
     pub mod nucphys;
+    pub mod parallel;
     pub mod physchem;
     pub mod planetary_science;
     pub mod plasma;

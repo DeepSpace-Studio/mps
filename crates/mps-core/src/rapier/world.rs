@@ -5,7 +5,7 @@ use rapier3d::prelude::soft_body::{SoftBodyId, SoftBodySet};
 use rapier3d::prelude::{
     ActiveHooks, BroadPhaseBvh, CCDSolver, ColliderHandle, ColliderSet, ImpulseJointSet,
     IntegrationParameters, IslandManager, MultibodyJointSet, NarrowPhase, PhysicsPipeline,
-    RigidBodySet, Vector,
+    RigidBodyHandle, RigidBodySet, Vector,
 };
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -20,8 +20,7 @@ use crate::rapier::error::{
 use crate::rapier::ffi::{
     Bool, ColliderHandleRaw, MAX_OUTPUT_CAPACITY, Quat, RigidBodyHandleRaw, Vec3, WorldHandle,
     force_law_type_from_u32, isometry_from_parts, pack_rigid_body_handle, quat_finite,
-    quat_from_rapier, unpack_collider_handle, unpack_rigid_body_handle, vec3_finite,
-    vec3_from_rapier, vec3_to_rapier,
+    unpack_collider_handle, unpack_rigid_body_handle, vec3_finite, vec3_to_rapier,
 };
 use crate::rapier::forces::{BodyForceLog, ForceFacade, ForceRegistry};
 use crate::rapier::terrain_gravity::TerrainGravitySource;
@@ -1021,30 +1020,28 @@ pub extern "C" fn world_dynamic_body_snapshot(
         let Some(value_capacity) = capacity.checked_mul(7) else {
             return 0;
         };
-        let handles = unsafe { std::slice::from_raw_parts_mut(out_handles, capacity) };
+        let handles_out = unsafe { std::slice::from_raw_parts_mut(out_handles, capacity) };
         let values = unsafe { std::slice::from_raw_parts_mut(out_values, value_capacity) };
-        let mut written = 0usize;
 
-        for (handle, body) in world.inner.bodies.iter() {
-            if !body.is_dynamic() {
-                continue;
-            }
-            if written >= capacity {
-                break;
-            }
+        // Two-phase snapshot (see the `parallel` module docs): collect the
+        // dynamic handles, compute each body's 7-lane pose in parallel above
+        // `PAR_MIN_ITEMS` handles (read-only), then replay into the caller's
+        // buffer in handle order — same output as the serial loop.
+        let handles: Vec<RigidBodyHandle> = world
+            .inner
+            .bodies
+            .iter()
+            .filter(|(_, body)| body.is_dynamic())
+            .take(capacity)
+            .map(|(handle, _)| handle)
+            .collect();
+        let snaps =
+            crate::rapier::parallel::body_pose_snapshots(&handles, &world.inner.bodies, false);
 
-            let translation = vec3_from_rapier(body.translation());
-            let rotation = quat_from_rapier(*body.rotation());
-            handles[written] = pack_rigid_body_handle(handle);
-            let offset = written * 7;
-            values[offset] = translation.x;
-            values[offset + 1] = translation.y;
-            values[offset + 2] = translation.z;
-            values[offset + 3] = rotation.i;
-            values[offset + 4] = rotation.j;
-            values[offset + 5] = rotation.k;
-            values[offset + 6] = rotation.w;
-            written += 1;
+        let written = snaps.len();
+        for (i, snap) in snaps.iter().enumerate() {
+            handles_out[i] = pack_rigid_body_handle(handles[i]);
+            values[i * 7..i * 7 + 7].copy_from_slice(&snap[..7]);
         }
 
         written as u32
@@ -1099,35 +1096,26 @@ pub extern "C" fn world_body_snapshot(
             set_error(ERR_CAPACITY, "body snapshot output capacity overflow");
             return 0;
         };
-        let handles = unsafe { std::slice::from_raw_parts_mut(out_handles, capacity) };
+        let handles_out = unsafe { std::slice::from_raw_parts_mut(out_handles, capacity) };
         let values = unsafe { std::slice::from_raw_parts_mut(out_values, value_capacity) };
-        let mut written = 0usize;
 
-        for (handle, body) in world.inner.bodies.iter() {
-            if written >= capacity {
-                break;
-            }
+        // Two-phase snapshot (see the `parallel` module docs): parallel
+        // per-body 13-lane computation above `PAR_MIN_ITEMS` handles, then a
+        // serial replay into the caller's buffer in handle order.
+        let handles: Vec<RigidBodyHandle> = world
+            .inner
+            .bodies
+            .iter()
+            .take(capacity)
+            .map(|(handle, _)| handle)
+            .collect();
+        let snaps =
+            crate::rapier::parallel::body_pose_snapshots(&handles, &world.inner.bodies, true);
 
-            let translation = vec3_from_rapier(body.translation());
-            let rotation = quat_from_rapier(*body.rotation());
-            let linvel = vec3_from_rapier(body.linvel());
-            let angvel = vec3_from_rapier(body.angvel());
-            handles[written] = pack_rigid_body_handle(handle);
-            let offset = written * 13;
-            values[offset] = translation.x;
-            values[offset + 1] = translation.y;
-            values[offset + 2] = translation.z;
-            values[offset + 3] = rotation.i;
-            values[offset + 4] = rotation.j;
-            values[offset + 5] = rotation.k;
-            values[offset + 6] = rotation.w;
-            values[offset + 7] = linvel.x;
-            values[offset + 8] = linvel.y;
-            values[offset + 9] = linvel.z;
-            values[offset + 10] = angvel.x;
-            values[offset + 11] = angvel.y;
-            values[offset + 12] = angvel.z;
-            written += 1;
+        let written = snaps.len();
+        for (i, snap) in snaps.iter().enumerate() {
+            handles_out[i] = pack_rigid_body_handle(handles[i]);
+            values[i * 13..i * 13 + 13].copy_from_slice(snap);
         }
 
         clear_error();

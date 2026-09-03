@@ -17,6 +17,7 @@
 - `pub extern "C" fn terrain_gravity_dem(...)` / `terrain_gravity_dem_fft(...)` — DEM 地形重力的 C ABI 入口。
 - `pub extern "C" fn terrain_lunar_mascon_gravity / _count / _get(...)` — 月球 mascon 的 C ABI 入口。
 - 常量:`MAX_VERTICES = 100_000`、`MAX_FACES = 200_000`。
+- `TerrainGravityLaw`(crate 级,`impl ForceLaw`)— 注册进 ForceRegistry 的地形引力法则;每体采样为两段式并行(见 [parallel.md](parallel.md)):≥ `TERRAIN_GRAVITY_MIN_ITEMS`(32)体时在 rayon 池上保序逐体采样,施加段串行回放,与串行位一致。
 
 ## 依赖
 - `rapier3d::prelude::Vector` — 向量与引力计算。

@@ -47,6 +47,7 @@ pub mod joints;
 pub use mps_formula::math;
 pub mod molecular;
 pub mod neural;
+pub mod parallel;
 pub use mps_formula::physchem;
 pub use mps_formula::planetary_science;
 pub use mps_formula::plasma;

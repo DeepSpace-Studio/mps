@@ -18,6 +18,7 @@
 - [collider.md](mps-core/collider.md) — `collider.rs`：碰撞体 builder/创建/材质/分组/事件/钩子等 `collider_*` 入口。
 - [events.md](mps-core/events.md) — `events.rs`：碰撞/接触力事件队列 + hooks 回调。
 - [forces.md](mps-core/forces.md) — `forces.rs`：力法则注册表、BodyForceLog、ForceFacade。
+- [parallel.md](mps-core/parallel.md) — `parallel.rs`：每帧工作的多线程执行（两段式逐体力填充、chunk-pair 成对引力、并行快照、线程池 FFI）。
 
 ## 查询与交互
 

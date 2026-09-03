@@ -742,55 +742,72 @@ pub(crate) fn apply_custom_external_forces_with_facade(
         .ne(&0)
         .then_some(external_force.gravitational_parameter);
 
-    // Phase 1: compute forces (immutable body read) — use persistent buffer (P5)
-    let pending = &mut facade.pending_forces;
-    pending.clear();
-
-    for (handle, body) in facade.bodies.iter() {
-        if !body.is_dynamic() {
-            continue;
-        }
-
-        if let Some(bf) = buoyancy_force_vec {
-            pending.push(PendingForce {
-                handle,
-                force: bf,
-                source: ForceLawType::Buoyancy,
-            });
-        }
-        if let (Some(ef), Some(bf), Some(q)) = (em_electric_vec, em_magnetic_vec, em_charge) {
-            let magnetic = body.linvel().cross(bf);
-            pending.push(PendingForce {
-                handle,
-                force: ef + magnetic * q,
-                source: ForceLawType::Electromagnetic,
-            });
-        }
-        if let (Some(anchor), Some(k), Some(d)) = (spring_anchor, spring_k, spring_d) {
-            let displacement = body.translation() - anchor;
-            let damping = body.linvel() * d;
-            pending.push(PendingForce {
-                handle,
-                force: -displacement * k - damping,
-                source: ForceLawType::ElasticSpring,
-            });
-        }
-        if let (Some(src), Some(gp)) = (gravity_source, grav_param) {
-            let offset = src - body.translation();
-            let distance_squared = offset.length_squared();
-            if distance_squared > 1.0e-12 {
-                let mass = body.mass();
-                if mass > 0.0 {
-                    let f = offset / distance_squared.sqrt() * (gp * mass / distance_squared);
-                    pending.push(PendingForce {
+    // Phase 1: compute forces (immutable body read) — use persistent buffer (P5).
+    // Two-phase fill on the rayon pool above `PAR_MIN_ITEMS` bodies: each body's
+    // pending-force list is a pure read of body state; the per-body results are
+    // flattened in handle order so `pending` matches the serial fill sequence
+    // exactly (see the `parallel` module docs).
+    let handles: Vec<rapier3d::prelude::RigidBodyHandle> = facade
+        .bodies
+        .iter()
+        .filter(|(_, body)| body.is_dynamic())
+        .map(|(handle, _)| handle)
+        .collect();
+    let per_body: Vec<smallvec::SmallVec<[PendingForce; 4]>> =
+        crate::rapier::parallel::par_map_bodies(
+            &handles,
+            &*facade.bodies,
+            crate::rapier::parallel::PAR_MIN_ITEMS,
+            |handle, body| {
+                let mut out = smallvec::SmallVec::new();
+                if let Some(bf) = buoyancy_force_vec {
+                    out.push(PendingForce {
                         handle,
-                        force: f,
-                        source: ForceLawType::PointGravity,
+                        force: bf,
+                        source: ForceLawType::Buoyancy,
                     });
                 }
-            }
-        }
-    }
+                if let (Some(ef), Some(bf), Some(q)) = (em_electric_vec, em_magnetic_vec, em_charge)
+                {
+                    let magnetic = body.linvel().cross(bf);
+                    out.push(PendingForce {
+                        handle,
+                        force: ef + magnetic * q,
+                        source: ForceLawType::Electromagnetic,
+                    });
+                }
+                if let (Some(anchor), Some(k), Some(d)) = (spring_anchor, spring_k, spring_d) {
+                    let displacement = body.translation() - anchor;
+                    let damping = body.linvel() * d;
+                    out.push(PendingForce {
+                        handle,
+                        force: -displacement * k - damping,
+                        source: ForceLawType::ElasticSpring,
+                    });
+                }
+                if let (Some(src), Some(gp)) = (gravity_source, grav_param) {
+                    let offset = src - body.translation();
+                    let distance_squared = offset.length_squared();
+                    if distance_squared > 1.0e-12 {
+                        let mass = body.mass();
+                        if mass > 0.0 {
+                            let f =
+                                offset / distance_squared.sqrt() * (gp * mass / distance_squared);
+                            out.push(PendingForce {
+                                handle,
+                                force: f,
+                                source: ForceLawType::PointGravity,
+                            });
+                        }
+                    }
+                }
+                out
+            },
+        );
+
+    let pending = &mut facade.pending_forces;
+    pending.clear();
+    pending.extend(per_body.into_iter().flatten());
 
     // Phase 2: apply forces (mutable body write)
     // Collect pending forces into local SmallVec to release &mut on facade.pending_forces.

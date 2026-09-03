@@ -4587,6 +4587,28 @@ uint32_t query_intersect_neural_bounds_all(const struct WorldHandle *world,
                                            uint32_t capacity);
 
 /**
+ * Number of worker threads in the shared rayon pool used by mps-core's
+ * parallel force fills, pairwise gravity, snapshot export, and rapier's own
+ * parallel solver stages.
+ *
+ * Defaults to the machine's logical core count; see the `parallel` module
+ * docs for the configuration knobs.
+ */
+uint32_t parallel_thread_count(void);
+
+/**
+ * Resize the shared rayon pool. Returns `true` on success; `false` when
+ * `threads == 0` (`ERR_INVALID_ARGUMENT`) or the pool is already running
+ * (`ERR_UNSUPPORTED` — set the count before the first parallel operation, or
+ * via `RAYON_NUM_THREADS` at process start).
+ *
+ * # Safety
+ *
+ * No pointer parameters; safe to call from any thread.
+ */
+Bool parallel_set_thread_count(uint32_t threads);
+
+/**
  * # Safety
  *
  * `world` must be a valid world handle.

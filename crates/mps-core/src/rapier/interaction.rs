@@ -439,20 +439,37 @@ impl ForceLaw for NewtonianGravityForceLaw {
             forces.push((*h, Vector::ZERO));
         }
 
-        for i in 0..n {
-            let (_hi, mi, pi) = (body_data[i].0, body_data[i].1, body_data[i].2);
-            for j in (i + 1)..n {
-                let (_hj, mj, pj) = (body_data[j].0, body_data[j].1, body_data[j].2);
-                let offset = pj - pi;
-                let dist_sq = offset.length_squared();
-                if dist_sq > max_dist_sq {
-                    continue;
+        if n >= crate::rapier::parallel::GRAVITY_PAR_MIN_BODIES {
+            // Chunked parallel decomposition (Newton III, per-chunk-pair
+            // buffers + ordered merge — see `parallel::pairwise_gravity_accumulate`).
+            // The per-body sums are reassociated relative to the serial loop
+            // (last-ulp differences only); the merge order is deterministic and
+            // independent of the thread count.
+            let net = crate::rapier::parallel::pairwise_gravity_accumulate(
+                &*body_data,
+                g,
+                min_dist,
+                max_dist_sq,
+            );
+            for (i, f) in net.into_iter().enumerate() {
+                forces[i].1 = f;
+            }
+        } else {
+            for i in 0..n {
+                let (_hi, mi, pi) = (body_data[i].0, body_data[i].1, body_data[i].2);
+                for j in (i + 1)..n {
+                    let (_hj, mj, pj) = (body_data[j].0, body_data[j].1, body_data[j].2);
+                    let offset = pj - pi;
+                    let dist_sq = offset.length_squared();
+                    if dist_sq > max_dist_sq {
+                        continue;
+                    }
+                    let dist = dist_sq.sqrt().max(min_dist);
+                    let force_mag = g * mi * mj / (dist_sq * dist);
+                    let f_ij = offset * force_mag;
+                    forces[i].1 += f_ij;
+                    forces[j].1 -= f_ij;
                 }
-                let dist = dist_sq.sqrt().max(min_dist);
-                let force_mag = g * mi * mj / (dist_sq * dist);
-                let f_ij = offset * force_mag;
-                forces[i].1 += f_ij;
-                forces[j].1 -= f_ij;
             }
         }
 
@@ -502,45 +519,54 @@ impl ForceLaw for AirDragForceLaw {
     fn apply(&self, facade: &mut ForceFacade<'_>) {
         let source = self.law_type();
 
-        // P0.3 fix: reuse persistent scratch_force_pairs across frames (was SmallVec::new()).
-        // Fill phase: disjoint field borrows (facade.bodies immutably, scratch_force_pairs mutably).
-        facade.scratch_force_pairs.clear();
-        let mut max_re = 0.0f64;
-        for (handle, body) in facade.bodies.iter() {
-            if !body.is_dynamic() {
-                continue;
-            }
+        // Two-phase fill (see the `parallel` module docs): per-body drag is a
+        // pure read of body state, so the computation maps over the
+        // dynamic-body handles on the rayon pool above `PAR_MIN_ITEMS` bodies,
+        // preserving order. The apply phase replays the identical force
+        // sequence on the calling thread, so results are bit-identical to the
+        // serial path.
+        let handles: Vec<RigidBodyHandle> = facade
+            .bodies
+            .iter()
+            .filter(|(_, b)| b.is_dynamic())
+            .map(|(h, _)| h)
+            .collect();
+        let computed: Vec<Option<(Vector, f64)>> = crate::rapier::parallel::par_map_bodies(
+            &handles,
+            &*facade.bodies,
+            crate::rapier::parallel::PAR_MIN_ITEMS,
+            |_, body| {
+                let relative_velocity = body.linvel() - self.fluid_velocity;
+                let speed = relative_velocity.length();
+                if speed <= 1.0e-12 {
+                    return None;
+                }
+                let reynolds =
+                    self.density * speed * self.characteristic_length / self.dynamic_viscosity;
+                let drag_magnitude = if reynolds <= self.reynolds_stokes_limit {
+                    3.0 * std::f64::consts::PI
+                        * self.dynamic_viscosity
+                        * self.characteristic_length
+                        * speed
+                } else {
+                    0.5 * self.density * speed * speed * self.drag_coefficient * self.reference_area
+                };
+                Some((-relative_velocity / speed * drag_magnitude, reynolds))
+            },
+        );
 
-            let relative_velocity = body.linvel() - self.fluid_velocity;
-            let speed = relative_velocity.length();
-            if speed <= 1.0e-12 {
-                continue;
-            }
-
-            let reynolds =
-                self.density * speed * self.characteristic_length / self.dynamic_viscosity;
-            max_re = max_re.max(reynolds);
-
-            let drag_magnitude = if reynolds <= self.reynolds_stokes_limit {
-                3.0 * std::f64::consts::PI
-                    * self.dynamic_viscosity
-                    * self.characteristic_length
-                    * speed
-            } else {
-                0.5 * self.density * speed * speed * self.drag_coefficient * self.reference_area
-            };
-
-            let force = -relative_velocity / speed * drag_magnitude;
-            facade.scratch_force_pairs.push((handle, force));
-        }
-
-        // Apply phase: direct index access so each immutable borrow of
-        // scratch_force_pairs ends before the mut borrow that add_force needs.
+        // Exact max-reduction (f64::max is associative and exact), so the
+        // parallel fold matches the serial running-max bit for bit.
+        let max_re = computed
+            .iter()
+            .flatten()
+            .map(|(_, re)| *re)
+            .fold(0.0_f64, f64::max);
         facade.update_reynolds(max_re);
-        let n = facade.scratch_force_pairs.len();
-        for i in 0..n {
-            let (handle, force) = facade.scratch_force_pairs[i];
-            facade.add_force(handle, force, source);
+        for (handle, entry) in handles.iter().zip(&computed) {
+            if let Some((force, _)) = entry {
+                facade.add_force(*handle, *force, source);
+            }
         }
     }
 
@@ -618,39 +644,47 @@ impl ForceLaw for SolarWindPressureForceLaw {
         }
         let dir_unit = dir / dir_norm_sq.sqrt();
 
-        // P0.3 fix: reuse persistent scratch_force_pairs across frames (was SmallVec::new()).
-        facade.scratch_force_pairs.clear();
-        for (handle, body) in facade.bodies.iter() {
-            if !body.is_dynamic() {
-                continue;
-            }
-            // Relative wind speed along the propagation direction (m/s).
-            let v_rel = self.v_sw_mps - body.linvel().dot(dir_unit);
-            if v_rel <= 0.0 || v_rel.is_nan() {
-                continue;
-            }
-            // Formula expects km/s.
-            let v_rel_kms = v_rel * 1.0e-3;
-            // `solar_wind_dynamic_pressure` returns nPa (1e-9 Pa); convert to
-            // SI Pascals before multiplying by area so the resulting force is
-            // in Newtons.
-            let pressure_pa = match hph::solar_wind_dynamic_pressure(self.proton_density, v_rel_kms)
-            {
-                Some(p) => p * 1.0e-9, // nPa → Pa
-                None => continue,
-            };
-            // F = P · A_eff, push is along +dir_unit (downwind).
-            let force = dir_unit * (pressure_pa * self.effective_area_m2);
-            if force != Vector::ZERO {
-                facade.scratch_force_pairs.push((handle, force));
-            }
-        }
+        // Two-phase fill on the rayon pool above `PAR_MIN_ITEMS` bodies
+        // (order-preserving; see the `parallel` module docs).
+        let handles: Vec<RigidBodyHandle> = facade
+            .bodies
+            .iter()
+            .filter(|(_, b)| b.is_dynamic())
+            .map(|(h, _)| h)
+            .collect();
+        let computed: Vec<Option<Vector>> = crate::rapier::parallel::par_map_bodies(
+            &handles,
+            &*facade.bodies,
+            crate::rapier::parallel::PAR_MIN_ITEMS,
+            |_, body| {
+                // Relative wind speed along the propagation direction (m/s).
+                let v_rel = self.v_sw_mps - body.linvel().dot(dir_unit);
+                if v_rel <= 0.0 || v_rel.is_nan() {
+                    return None;
+                }
+                // Formula expects km/s.
+                let v_rel_kms = v_rel * 1.0e-3;
+                // `solar_wind_dynamic_pressure` returns nPa (1e-9 Pa); convert to
+                // SI Pascals before multiplying by area so the resulting force is
+                // in Newtons.
+                let pressure_pa =
+                    match hph::solar_wind_dynamic_pressure(self.proton_density, v_rel_kms) {
+                        Some(p) => p * 1.0e-9, // nPa → Pa
+                        None => return None,
+                    };
+                // F = P · A_eff, push is along +dir_unit (downwind).
+                let force = dir_unit * (pressure_pa * self.effective_area_m2);
+                (force != Vector::ZERO).then_some(force)
+            },
+        );
 
-        // Apply (direct index access so each immutable borrow ends before add_force).
-        let n = facade.scratch_force_pairs.len();
-        for i in 0..n {
-            let (handle, force) = facade.scratch_force_pairs[i];
-            facade.add_force(handle, force, source);
+        // Apply (parallel results replay in handle order).
+        for (handle, force) in handles
+            .iter()
+            .zip(&computed)
+            .filter_map(|(h, f)| f.map(|f| (h, f)))
+        {
+            facade.add_force(*handle, force, source);
         }
     }
 
@@ -695,34 +729,42 @@ impl ForceLaw for DynamicalFrictionForceLaw {
             return;
         }
 
-        // P0.3 fix: reuse persistent scratch_force_pairs across frames (was SmallVec::new()).
-        facade.scratch_force_pairs.clear();
-        for (handle, body) in facade.bodies.iter() {
-            if !body.is_dynamic() {
-                continue;
-            }
-            let mass = body.mass().max(1.0); // Rapier 0.34: additional_mass returns 0 until collider propagation; use fallback 1.0.
-            let v = body.linvel();
-            let speed = v.length();
-            if !speed.is_finite() || speed <= 1.0e-9 {
-                continue;
-            }
-            let a_mag = match gd::chandrasekhar_dynamical_friction(mass, rho, speed, ln_l) {
-                Some(a) => a, // m/s² acceleration
-                None => continue,
-            };
-            // F = m · a, direction opposes v.
-            let force = -v / speed * (a_mag * mass);
-            if force != Vector::ZERO {
-                facade.scratch_force_pairs.push((handle, force));
-            }
-        }
+        // Two-phase fill on the rayon pool above `PAR_MIN_ITEMS` bodies
+        // (order-preserving; see the `parallel` module docs).
+        let handles: Vec<RigidBodyHandle> = facade
+            .bodies
+            .iter()
+            .filter(|(_, b)| b.is_dynamic())
+            .map(|(h, _)| h)
+            .collect();
+        let computed: Vec<Option<Vector>> = crate::rapier::parallel::par_map_bodies(
+            &handles,
+            &*facade.bodies,
+            crate::rapier::parallel::PAR_MIN_ITEMS,
+            |_, body| {
+                let mass = body.mass().max(1.0); // Rapier 0.34: additional_mass returns 0 until collider propagation; use fallback 1.0.
+                let v = body.linvel();
+                let speed = v.length();
+                if !speed.is_finite() || speed <= 1.0e-9 {
+                    return None;
+                }
+                let a_mag = match gd::chandrasekhar_dynamical_friction(mass, rho, speed, ln_l) {
+                    Some(a) => a, // m/s² acceleration
+                    None => return None,
+                };
+                // F = m · a, direction opposes v.
+                let force = -v / speed * (a_mag * mass);
+                (force != Vector::ZERO).then_some(force)
+            },
+        );
 
-        // Apply (direct index access so each immutable borrow ends before add_force).
-        let n = facade.scratch_force_pairs.len();
-        for i in 0..n {
-            let (handle, force) = facade.scratch_force_pairs[i];
-            facade.add_force(handle, force, source);
+        // Apply (parallel results replay in handle order).
+        for (handle, force) in handles
+            .iter()
+            .zip(&computed)
+            .filter_map(|(h, f)| f.map(|f| (h, f)))
+        {
+            facade.add_force(*handle, force, source);
         }
     }
 
@@ -784,28 +826,36 @@ impl ForceLaw for MonDGravityForceLaw {
         let dir_unit = self.direction / dir_norm_sq.sqrt();
         let accel = dir_unit * a_mag;
 
-        // P0.3 fix: reuse persistent scratch_force_pairs across frames (was SmallVec::new()).
-        facade.scratch_force_pairs.clear();
-        for (handle, body) in facade.bodies.iter() {
-            if !body.is_dynamic() {
-                continue;
-            }
-            // Rapier 0.34 returns mass=0 until collider propagation on bodies
-            // that haven't been touched by a collider this frame; fall back to
-            // 1 kg so the law is still observable on collider-less test bodies
-            // (matches the DynamicalFriction force law's mitigation).
-            let mass = body.mass().max(1.0);
-            let force = accel * mass;
-            if force != Vector::ZERO {
-                facade.scratch_force_pairs.push((handle, force));
-            }
-        }
+        // Two-phase fill on the rayon pool above `PAR_MIN_ITEMS` bodies
+        // (order-preserving; see the `parallel` module docs).
+        let handles: Vec<RigidBodyHandle> = facade
+            .bodies
+            .iter()
+            .filter(|(_, b)| b.is_dynamic())
+            .map(|(h, _)| h)
+            .collect();
+        let computed: Vec<Option<Vector>> = crate::rapier::parallel::par_map_bodies(
+            &handles,
+            &*facade.bodies,
+            crate::rapier::parallel::PAR_MIN_ITEMS,
+            |_, body| {
+                // Rapier 0.34 returns mass=0 until collider propagation on bodies
+                // that haven't been touched by a collider this frame; fall back to
+                // 1 kg so the law is still observable on collider-less test bodies
+                // (matches the DynamicalFriction force law's mitigation).
+                let mass = body.mass().max(1.0);
+                let force = accel * mass;
+                (force != Vector::ZERO).then_some(force)
+            },
+        );
 
-        // Apply (direct index access so each immutable borrow ends before add_force).
-        let n = facade.scratch_force_pairs.len();
-        for i in 0..n {
-            let (handle, force) = facade.scratch_force_pairs[i];
-            facade.add_force(handle, force, source);
+        // Apply (parallel results replay in handle order).
+        for (handle, force) in handles
+            .iter()
+            .zip(&computed)
+            .filter_map(|(h, f)| f.map(|f| (h, f)))
+        {
+            facade.add_force(*handle, force, source);
         }
     }
 
@@ -878,31 +928,39 @@ impl ForceLaw for EddingtonRadiationPressureForceLaw {
         // F = L_Edd / (c · 4π · r²) · A_eff; pre-factor per r² unit.
         let prefactor = luminosity * self.effective_area_m2 / (C * 4.0 * std::f64::consts::PI);
 
-        // P0.3 fix: reuse persistent scratch_force_pairs across frames (was SmallVec::new()).
-        facade.scratch_force_pairs.clear();
-        for (handle, body) in facade.bodies.iter() {
-            if !body.is_dynamic() {
-                continue;
-            }
-            let r_vec = body.translation() - self.source_position;
-            let r_sq = r_vec.length_squared();
-            if !r_sq.is_finite() || r_sq <= 1.0e-6 {
-                // Source-body coincidence: skip to avoid infinite force.
-                continue;
-            }
-            // Outward push (away from source).
-            let r_hat = r_vec / r_sq.sqrt();
-            let force = r_hat * (prefactor / r_sq);
-            if force != Vector::ZERO {
-                facade.scratch_force_pairs.push((handle, force));
-            }
-        }
+        // Two-phase fill on the rayon pool above `PAR_MIN_ITEMS` bodies
+        // (order-preserving; see the `parallel` module docs).
+        let handles: Vec<RigidBodyHandle> = facade
+            .bodies
+            .iter()
+            .filter(|(_, b)| b.is_dynamic())
+            .map(|(h, _)| h)
+            .collect();
+        let computed: Vec<Option<Vector>> = crate::rapier::parallel::par_map_bodies(
+            &handles,
+            &*facade.bodies,
+            crate::rapier::parallel::PAR_MIN_ITEMS,
+            |_, body| {
+                let r_vec = body.translation() - self.source_position;
+                let r_sq = r_vec.length_squared();
+                if !r_sq.is_finite() || r_sq <= 1.0e-6 {
+                    // Source-body coincidence: skip to avoid infinite force.
+                    return None;
+                }
+                // Outward push (away from source).
+                let r_hat = r_vec / r_sq.sqrt();
+                let force = r_hat * (prefactor / r_sq);
+                (force != Vector::ZERO).then_some(force)
+            },
+        );
 
-        // Apply (direct index access so each immutable borrow ends before add_force).
-        let n = facade.scratch_force_pairs.len();
-        for i in 0..n {
-            let (handle, force) = facade.scratch_force_pairs[i];
-            facade.add_force(handle, force, source);
+        // Apply (parallel results replay in handle order).
+        for (handle, force) in handles
+            .iter()
+            .zip(&computed)
+            .filter_map(|(h, f)| f.map(|f| (h, f)))
+        {
+            facade.add_force(*handle, force, source);
         }
     }
 
@@ -985,29 +1043,37 @@ impl ForceLaw for XrayIrradiationForceLaw {
         let luminosity_w = l_solar * L_SUN;
         let prefactor = luminosity_w * self.effective_area_m2 / (C * 4.0 * std::f64::consts::PI);
 
-        // P0.3 fix: reuse persistent scratch_force_pairs across frames (was SmallVec::new()).
-        facade.scratch_force_pairs.clear();
-        for (handle, body) in facade.bodies.iter() {
-            if !body.is_dynamic() {
-                continue;
-            }
-            let r_vec = body.translation() - self.source_position;
-            let r_sq = r_vec.length_squared();
-            if !r_sq.is_finite() || r_sq <= 1.0e-6 {
-                continue;
-            }
-            let r_hat = r_vec / r_sq.sqrt();
-            let force = r_hat * (prefactor / r_sq);
-            if force != Vector::ZERO {
-                facade.scratch_force_pairs.push((handle, force));
-            }
-        }
+        // Two-phase fill on the rayon pool above `PAR_MIN_ITEMS` bodies
+        // (order-preserving; see the `parallel` module docs).
+        let handles: Vec<RigidBodyHandle> = facade
+            .bodies
+            .iter()
+            .filter(|(_, b)| b.is_dynamic())
+            .map(|(h, _)| h)
+            .collect();
+        let computed: Vec<Option<Vector>> = crate::rapier::parallel::par_map_bodies(
+            &handles,
+            &*facade.bodies,
+            crate::rapier::parallel::PAR_MIN_ITEMS,
+            |_, body| {
+                let r_vec = body.translation() - self.source_position;
+                let r_sq = r_vec.length_squared();
+                if !r_sq.is_finite() || r_sq <= 1.0e-6 {
+                    return None;
+                }
+                let r_hat = r_vec / r_sq.sqrt();
+                let force = r_hat * (prefactor / r_sq);
+                (force != Vector::ZERO).then_some(force)
+            },
+        );
 
-        // Apply (direct index access so each immutable borrow ends before add_force).
-        let n = facade.scratch_force_pairs.len();
-        for i in 0..n {
-            let (handle, force) = facade.scratch_force_pairs[i];
-            facade.add_force(handle, force, source);
+        // Apply (parallel results replay in handle order).
+        for (handle, force) in handles
+            .iter()
+            .zip(&computed)
+            .filter_map(|(h, f)| f.map(|f| (h, f)))
+        {
+            facade.add_force(*handle, force, source);
         }
     }
 
@@ -1108,59 +1174,63 @@ impl ForceLaw for PulsarMagneticDipoleForceLaw {
             None => return,
         };
 
-        // P0.3 fix: reuse persistent scratch_force_pairs (work) and
-        // scratch_force_pairs_alt (fallback) across frames (were both SmallVec::new()).
-        // Fill phase: disjoint field borrows. The push targets are the two
-        // scratch scratch_force_pairs scratch_force_pairs_alt (mut); the iter
-        // is on facade.bodies (immut) — different fields so disjoint borrows stay ok.
-        facade.scratch_force_pairs.clear();
-        facade.scratch_force_pairs_alt.clear();
+        // Two-phase fill on the rayon pool above `PAR_MIN_ITEMS` bodies
+        // (order-preserving; see the `parallel` module docs). Each body
+        // produces at most one torque routed to either the normal
+        // `add_torque` path or the collider-less angvel fallback.
         let r_ns = self.ns_radius_m;
         let mu_vec = self.body_dipole_moment;
+        let handles: Vec<RigidBodyHandle> = facade
+            .bodies
+            .iter()
+            .filter(|(_, b)| b.is_dynamic())
+            .map(|(h, _)| h)
+            .collect();
+        let computed: Vec<(Option<Vector>, Option<Vector>)> =
+            crate::rapier::parallel::par_map_bodies(
+                &handles,
+                &*facade.bodies,
+                crate::rapier::parallel::PAR_MIN_ITEMS,
+                |_, body| {
+                    let r_vec = body.translation() - self.pulsar_position;
+                    let r_sq = r_vec.length_squared();
+                    if !r_sq.is_finite() || r_sq <= 1.0e-6 {
+                        return (None, None);
+                    }
+                    let r = r_sq.sqrt();
+                    if r <= r_ns {
+                        // Inside the NS surface — skip (B not defined by 1/r³ here).
+                        return (None, None);
+                    }
+                    // Dipole fall-off: B(r) = B_surf · (R_ns / r)³
+                    let b_mag = b_surf * (r_ns / r).powi(3);
+                    let b_vec = spin_unit * b_mag;
+                    // τ = μ × B
+                    let torque = mu_vec.cross(b_vec);
+                    if torque == Vector::ZERO {
+                        return (None, None);
+                    }
+                    // Rapier 0.34: a collider-less dynamic body has mass=0 and
+                    // inverse_inertia=0 until collider propagation, so add_torque's
+                    // net angular impulse is zero and torque silently no-ops.  When
+                    // the body has zero mass — i.e. is collider-less — fall back to
+                    // directly incrementing angvel by τ·dt against unit rotational
+                    // inertia, so the torque is at least observable in tests.
+                    // (Mass/inertia propagation re-enable normal add_torque with a
+                    // collider attached.)
+                    if body.mass() <= 0.0 {
+                        (None, Some(torque))
+                    } else {
+                        (Some(torque), None)
+                    }
+                },
+            );
 
-        for (handle, body) in facade.bodies.iter() {
-            if !body.is_dynamic() {
-                continue;
+        // Apply normal torque path (parallel results replay in handle order).
+        for (handle, (normal, _)) in handles.iter().zip(&computed) {
+            if let Some(torque) = normal {
+                facade.add_torque(*handle, *torque, source);
             }
-            let r_vec = body.translation() - self.pulsar_position;
-            let r_sq = r_vec.length_squared();
-            if !r_sq.is_finite() || r_sq <= 1.0e-6 {
-                continue;
-            }
-            let r = r_sq.sqrt();
-            if r <= r_ns {
-                // Inside the NS surface — skip (B not defined by 1/r³ here).
-                continue;
-            }
-            // Dipole fall-off: B(r) = B_surf · (R_ns / r)³
-            let b_mag = b_surf * (r_ns / r).powi(3);
-            let b_vec = spin_unit * b_mag;
-            // τ = μ × B
-            let torque = mu_vec.cross(b_vec);
-            if torque == Vector::ZERO {
-                continue;
-            }
-            // Rapier 0.34: a collider-less dynamic body has mass=0 and
-            // inverse_inertia=0 until collider propagation, so add_torque's
-            // net angular impulse is zero and torque silently no-ops.  When
-            // the body has zero mass — i.e. is collider-less — fall back to
-            // directly incrementing angvel by τ·dt against unit rotational
-            // inertia, so the torque is at least observable in tests.
-            // (Mass/inertia propagation re-enable normal add_torque with a
-            // collider attached.)
-            if body.mass() <= 0.0 {
-                facade.scratch_force_pairs_alt.push((handle, torque));
-            } else {
-                facade.scratch_force_pairs.push((handle, torque));
-            }
-        }
-
-        // Apply normal torque path (direct index access so each immutable
-        // borrow of scratch_force_pairs ends before the mut add_torque).
-        let n = facade.scratch_force_pairs.len();
-        for i in 0..n {
-            let (handle, torque) = facade.scratch_force_pairs[i];
-            facade.add_torque(handle, torque, source);
         }
         // Collider-less fallback: collider-less dynamic bodies in Rapier 0.34
         // have inverse_inertia = 0, so add_torque's integration silently
@@ -1172,10 +1242,11 @@ impl ForceLaw for PulsarMagneticDipoleForceLaw {
         // add_torque path takes over, producing the correct τ/I·dt angular
         // acceleration.
         let unit_rotational_inertia = 1.0; // kg·m² assumed for collider-less bodies
-        let nfb = facade.scratch_force_pairs_alt.len();
-        for i in 0..nfb {
-            let (handle, torque) = facade.scratch_force_pairs_alt[i];
-            let Some(body) = facade.bodies.get_mut(handle) else {
+        for (handle, (_, fallback)) in handles.iter().zip(&computed) {
+            let Some(torque) = fallback else {
+                continue;
+            };
+            let Some(body) = facade.bodies.get_mut(*handle) else {
                 continue;
             };
             let domega = body.angvel() + torque * (facade.dt / unit_rotational_inertia);
@@ -1290,31 +1361,39 @@ impl ForceLaw for JeansEscapeDragForceLaw {
             return;
         }
 
-        // P0.3 fix: reuse persistent scratch_force_pairs across frames (was SmallVec::new()).
-        facade.scratch_force_pairs.clear();
-        for (handle, body) in facade.bodies.iter() {
-            if !body.is_dynamic() {
-                continue;
-            }
-            // Drag-style gate: the efflux force is the momentum flux the body
-            // intercepts.  A body moving along the efflux faster than the
-            // thermal speed has negative relative flow and feels no push.
-            let v_rel_along = v_thermal - body.linvel().dot(dir_unit);
-            if v_rel_along <= 0.0 || v_rel_along.is_nan() {
-                continue;
-            }
-            // F = p · A_eff · ê (push along +escape_direction).
-            let force = dir_unit * (pressure_pa * self.effective_area_m2);
-            if force != Vector::ZERO {
-                facade.scratch_force_pairs.push((handle, force));
-            }
-        }
+        // Two-phase fill on the rayon pool above `PAR_MIN_ITEMS` bodies
+        // (order-preserving; see the `parallel` module docs).
+        let handles: Vec<RigidBodyHandle> = facade
+            .bodies
+            .iter()
+            .filter(|(_, b)| b.is_dynamic())
+            .map(|(h, _)| h)
+            .collect();
+        let computed: Vec<Option<Vector>> = crate::rapier::parallel::par_map_bodies(
+            &handles,
+            &*facade.bodies,
+            crate::rapier::parallel::PAR_MIN_ITEMS,
+            |_, body| {
+                // Drag-style gate: the efflux force is the momentum flux the body
+                // intercepts.  A body moving along the efflux faster than the
+                // thermal speed has negative relative flow and feels no push.
+                let v_rel_along = v_thermal - body.linvel().dot(dir_unit);
+                if v_rel_along <= 0.0 || v_rel_along.is_nan() {
+                    return None;
+                }
+                // F = p · A_eff · ê (push along +escape_direction).
+                let force = dir_unit * (pressure_pa * self.effective_area_m2);
+                (force != Vector::ZERO).then_some(force)
+            },
+        );
 
-        // Apply (direct index access so each immutable borrow ends before add_force).
-        let n = facade.scratch_force_pairs.len();
-        for i in 0..n {
-            let (handle, force) = facade.scratch_force_pairs[i];
-            facade.add_force(handle, force, source);
+        // Apply (parallel results replay in handle order).
+        for (handle, force) in handles
+            .iter()
+            .zip(&computed)
+            .filter_map(|(h, f)| f.map(|f| (h, f)))
+        {
+            facade.add_force(*handle, force, source);
         }
     }
 

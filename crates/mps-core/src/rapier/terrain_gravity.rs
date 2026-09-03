@@ -837,30 +837,35 @@ impl ForceLaw for TerrainGravityLaw {
 
     fn apply(&self, facade: &mut ForceFacade<'_>) {
         // Skip cleanly if the world has no dynamic bodies (avoids allocating).
-        if facade.bodies.iter().filter(|(_, b)| b.is_dynamic()).count() == 0 {
+        // Two-phase evaluation (see the `parallel` module docs): the
+        // per-body terrain sample is a pure read of the gravity source and the
+        // body translation — O(faces) or O(grid) **per body** — so it maps
+        // over the dynamic-body handles on the rayon pool above
+        // `TERRAIN_GRAVITY_MIN_ITEMS` bodies, in order. The serial replay
+        // below applies the identical force sequence.
+        let handles: Vec<RigidBodyHandle> = facade
+            .bodies
+            .iter()
+            .filter(|(_, b)| b.is_dynamic() && b.mass() > 0.0)
+            .map(|(h, _)| h)
+            .collect();
+        if handles.is_empty() {
             return;
         }
-
-        // Collect (handle, mass, position) for every non-trivial dynamic body.
-        // Positions are converted to the ffi `Vec3` type expected by the
-        // `terrain_gravity` pure functions.  A local vec (not the shared
-        // `scratch_body_data`, which stores rapier's `DVec3`) avoids borrow
-        // conflicts with `add_force` below.
-        let mut collected: Vec<(RigidBodyHandle, f64, Vec3)> =
-            Vec::with_capacity(facade.bodies.len());
-        for (h, b) in facade.bodies.iter() {
-            let mass = b.mass();
-            if b.is_dynamic() && mass > 0.0 {
-                collected.push((h, mass, vec3_from_rapier(b.translation())));
-            }
-        }
+        let forces: Vec<rapier3d::prelude::Vector> = crate::rapier::parallel::par_map_bodies(
+            &handles,
+            &*facade.bodies,
+            crate::rapier::parallel::TERRAIN_GRAVITY_MIN_ITEMS,
+            |_, body| {
+                let pos = vec3_from_rapier(body.translation());
+                // F = m · a
+                vec3_to_rapier(terrain_gravity_acceleration(&self.source, pos)) * body.mass()
+            },
+        );
 
         let source = self.law_type();
-        for (h, mass, pos) in collected {
-            let accel = terrain_gravity_acceleration(&self.source, pos);
-            // F = m · a
-            let force = vec3_to_rapier(accel) * mass;
-            facade.add_force(h, force, source);
+        for (h, force) in handles.iter().zip(forces) {
+            facade.add_force(*h, force, source);
         }
     }
 

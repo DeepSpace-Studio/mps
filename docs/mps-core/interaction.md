@@ -10,6 +10,7 @@
 - `fn apply_body_interactions_with_facade`(crate 级)— `world_step` 内驱动的体间相互作用总分发器(含 pairwise 引力、库仑摩擦、各 ForceLaw 调用)。
 - `struct CoulombFrictionParams`(crate 级)— 库仑摩擦参数集。
 - `struct NewtonianGravityForceLaw / AirDragForceLaw / SolarWindPressureForceLaw / DynamicalFrictionForceLaw / MonDGravityForceLaw / EddingtonRadiationPressureForceLaw / XrayIrradiationForceLaw / PulsarMagneticDipoleForceLaw / JeansEscapeDragForceLaw`(均 crate 级,`impl ForceLaw`)— 实际注册进 registry 的力法结构体。
+- 多线程:除 NewtonianGravity 外的全部逐体法则填充循环已改造为两段式并行(见 [parallel.md](parallel.md))——`parallel::par_map_bodies` 在 rayon 池上保序计算每体力(阈值 `PAR_MIN_ITEMS` = 128,以下串行、位一致),施加段串行回放;NewtonianGravity 的 O(n²) 双循环在 ≥ `GRAVITY_PAR_MIN_BODIES`(256)体时切换到 `parallel::pairwise_gravity_accumulate` chunk-pair 并行分解。
 
 ## 依赖
 - 外部 crate:`rapier3d::prelude::{Vector, NarrowPhase, RigidBodyHandle}`、`smallvec::SmallVec`、`mps_formula::galactic_dynamics as gd`、`mps_formula::heliophysics as hph`、`mps_formula::high_energy_astro as hea`。
