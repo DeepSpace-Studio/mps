@@ -182,7 +182,7 @@ pub mod formulas {
                 let lift_dir = axis.cross(flow_dir);
                 lift_dir * (dynamic_pressure * effective_area * surface.lift_coefficient)
             })
-            .unwrap_or(nalgebra::Vector3::<f64>::zeros());
+            .unwrap_or(crate::math::Vector3f64::zeros());
         let force = drag + lift;
 
         Some((vec3_from_rapier(force), vec3_from_rapier(arm.cross(force))))

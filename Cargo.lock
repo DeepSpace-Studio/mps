@@ -3766,7 +3766,6 @@ name = "mps-formula"
 version = "0.1.4"
 dependencies = [
  "mps-bindgen-macro",
- "nalgebra 0.35.0",
 ]
 
 [[package]]

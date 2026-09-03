@@ -193,7 +193,7 @@ pub mod formulas {
         let inc = (h_vec.z / h).acos();
 
         // Node vector: n = k̂ × h
-        let n_vec = nalgebra::Vector3::<f64>::new(-h_vec.y, h_vec.x, 0.0);
+        let n_vec = crate::math::Vector3f64::new(-h_vec.y, h_vec.x, 0.0);
         let n = n_vec.length();
 
         // RAAN
@@ -616,11 +616,11 @@ pub mod formulas {
         let point_mass = -gm / (r2 * radius);
         let quad = -0.5 * gm / r5;
 
-        Vec3::new(
-            point_mass * r.x + quad * (2.0 * qr[0] * r2 - 5.0 * r_q_r * r.x / r2),
-            point_mass * r.y + quad * (2.0 * qr[1] * r2 - 5.0 * r_q_r * r.y / r2),
-            point_mass * r.z + quad * (2.0 * qr[2] * r2 - 5.0 * r_q_r * r.z / r2),
-        )
+        Vec3 {
+            x: point_mass * r.x + quad * (2.0 * qr[0] * r2 - 5.0 * r_q_r * r.x / r2),
+            y: point_mass * r.y + quad * (2.0 * qr[1] * r2 - 5.0 * r_q_r * r.y / r2),
+            z: point_mass * r.z + quad * (2.0 * qr[2] * r2 - 5.0 * r_q_r * r.z / r2),
+        }
     }
 
     /// Compute the quadrupole tensor from J2 and J22 coefficients.

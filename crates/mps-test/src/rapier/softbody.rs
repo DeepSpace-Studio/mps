@@ -110,11 +110,12 @@ mod tests {
             ),
             Bool::TRUE
         );
+        let v3f = |p: Vec3| mps_formula::math::Vector3f64::new(p.x, p.y, p.z);
         let volume = tetra_volume(
-            vec3_to_rapier(positions[0]),
-            vec3_to_rapier(positions[1]),
-            vec3_to_rapier(positions[2]),
-            vec3_to_rapier(positions[3]),
+            v3f(positions[0]),
+            v3f(positions[1]),
+            v3f(positions[2]),
+            v3f(positions[3]),
         );
         assert!((volume - 1.0 / 6.0).abs() < 1.0e-4);
 

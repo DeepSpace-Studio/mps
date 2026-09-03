@@ -425,11 +425,11 @@ pub fn quadrupole_tensor_acceleration(position: Vec3, gm: f64, quadrupole: &[f64
     let point_mass = -gm / (r2 * radius);
     let quad = -0.5 * gm / r5;
 
-    Vec3::new(
-        point_mass * r.x + quad * (2.0 * qr[0] * r2 - 5.0 * r_q_r * r.x / r2),
-        point_mass * r.y + quad * (2.0 * qr[1] * r2 - 5.0 * r_q_r * r.y / r2),
-        point_mass * r.z + quad * (2.0 * qr[2] * r2 - 5.0 * r_q_r * r.z / r2),
-    )
+    Vec3 {
+        x: point_mass * r.x + quad * (2.0 * qr[0] * r2 - 5.0 * r_q_r * r.x / r2),
+        y: point_mass * r.y + quad * (2.0 * qr[1] * r2 - 5.0 * r_q_r * r.y / r2),
+        z: point_mass * r.z + quad * (2.0 * qr[2] * r2 - 5.0 * r_q_r * r.z / r2),
+    }
 }
 
 /// Compute the quadrupole tensor from J2 and J22 coefficients.

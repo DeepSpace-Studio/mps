@@ -1,7 +1,7 @@
 use crate::math::EPS_GENERAL as EPSILON;
 use std::slice;
 
-use nalgebra::{Matrix3, Vector3};
+use crate::math::{Matrix3f64, Vector3f64};
 
 use crate::error::{ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error};
 use crate::ffi::{
@@ -24,11 +24,11 @@ fn tetra_valid(tetra: FemTetrahedron) -> bool {
     vec3_finite(tetra.a) && vec3_finite(tetra.b) && vec3_finite(tetra.c) && vec3_finite(tetra.d)
 }
 
-fn signed_tetra_volume(a: Vector3<f64>, b: Vector3<f64>, c: Vector3<f64>, d: Vector3<f64>) -> f64 {
+fn signed_tetra_volume(a: Vector3f64, b: Vector3f64, c: Vector3f64, d: Vector3f64) -> f64 {
     (b - a).dot((c - a).cross(d - a)) / 6.0
 }
 
-fn tetra_gradients(tetra: FemTetrahedron) -> Option<([Vector3<f64>; 4], f64)> {
+fn tetra_gradients(tetra: FemTetrahedron) -> Option<([Vector3f64; 4], f64)> {
     if !tetra_valid(tetra) {
         return None;
     }
@@ -562,12 +562,12 @@ pub extern "C" fn continuum_deformation_gradient(
     let y1 = vec3_to_rapier(deformed_tetra.b);
     let y2 = vec3_to_rapier(deformed_tetra.c);
     let y3 = vec3_to_rapier(deformed_tetra.d);
-    let dm = Matrix3::<f64>::from_cols(x1 - x0, x2 - x0, x3 - x0);
+    let dm = Matrix3f64::from_cols(x1 - x0, x2 - x0, x3 - x0);
     let Some(dm_inv) = dm.try_inverse() else {
         set_error(ERR_INVALID_ARGUMENT, "reference tetrahedron is degenerate");
         return Bool::FALSE;
     };
-    let ds = Matrix3::<f64>::from_cols(y1 - y0, y2 - y0, y3 - y0);
+    let ds = Matrix3f64::from_cols(y1 - y0, y2 - y0, y3 - y0);
     let f = ds * dm_inv;
     let out = unsafe { slice::from_raw_parts_mut(out_matrix, capacity as usize) };
     let cols = f.to_cols_array();

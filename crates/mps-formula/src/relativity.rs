@@ -4,8 +4,6 @@
 //! All functions are FFI-exported with C-compatible types, following the
 //! error-handling conventions of the mps_rigid_body physics engine.
 
-use nalgebra::Vector3;
-
 use crate::error::{
     ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, ERR_UNSUPPORTED, clear_error, set_error,
 };
@@ -670,7 +668,7 @@ pub extern "C" fn rel_particle_properties(
     let momentum = if speed_sq > EPSILON {
         v_vec / speed * momentum_mag
     } else {
-        Vector::ZERO
+        crate::math::Vector3f64::zeros()
     };
     let rapidity = 0.5 * ((1.0 + beta) / (1.0 - beta)).ln();
 

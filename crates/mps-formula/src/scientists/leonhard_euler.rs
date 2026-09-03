@@ -99,7 +99,7 @@ pub mod formulas {
                 * (fluid.linear_drag * speed + fluid.quadratic_drag * speed * speed);
             relative_velocity / speed * drag_scale
         } else {
-            nalgebra::Vector3::<f64>::zeros()
+            crate::math::Vector3f64::zeros()
         };
         let buoyancy_force = -gravity * (fluid.density * displaced_volume);
         let angular_damping_torque =
@@ -182,7 +182,7 @@ pub mod formulas {
         let r = vec3_to_rapier(offset);
         let distance = r.length();
         let gradient = if distance <= EPSILON || distance >= smoothing_radius {
-            nalgebra::Vector3::<f64>::zeros()
+            crate::math::Vector3f64::zeros()
         } else {
             let diff = mul_add(-1.0_f64, distance, smoothing_radius);
             -r / distance * (45.0 / (PI * smoothing_radius.powi(6)) * diff * diff)
@@ -318,7 +318,7 @@ pub mod formulas {
                 * surface_tension
                 * color_gradient_vec.length()
         } else {
-            nalgebra::Vector3::<f64>::zeros()
+            crate::math::Vector3f64::zeros()
         };
         let total_force = vec3_to_rapier(pressure_force.value())
             + vec3_to_rapier(viscosity_force.value())

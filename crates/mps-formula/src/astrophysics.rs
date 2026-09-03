@@ -1,6 +1,6 @@
 use std::slice;
 
-use nalgebra::Vector3;
+use crate::math::Vector3f64;
 use std::f64::consts::PI;
 
 use crate::error::{ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NULL_POINTER, clear_error, set_error};
@@ -17,7 +17,7 @@ const SPEED_OF_LIGHT: f64 = 299_792_458.0;
 
 #[derive(Clone, Copy)]
 struct Bounds {
-    center: Vector3<f64>,
+    center: Vector3f64,
     half_size: f64,
 }
 
@@ -25,7 +25,7 @@ struct Bounds {
 struct QuadNode {
     bounds: Bounds,
     mass: f64,
-    center_of_mass: Vector3<f64>,
+    center_of_mass: Vector3f64,
     particle: Option<usize>,
     children: [Option<usize>; 4],
 }
@@ -42,14 +42,14 @@ fn particle_valid(particle: NBodyParticle) -> bool {
         && finite_non_negative(particle.mass)
 }
 
-fn child_index(bounds: Bounds, position: Vector3<f64>) -> usize {
+fn child_index(bounds: Bounds, position: Vector3f64) -> usize {
     usize::from(position.x >= bounds.center.x) + 2 * usize::from(position.y >= bounds.center.y)
 }
 
 fn child_bounds(bounds: Bounds, index: usize) -> Bounds {
     let quarter = bounds.half_size * 0.5;
     Bounds {
-        center: Vector3::<f64>::new(
+        center: Vector3f64::new(
             bounds.center.x + if index & 1 == 0 { -quarter } else { quarter },
             bounds.center.y + if index & 2 == 0 { -quarter } else { quarter },
             0.0,
@@ -95,7 +95,7 @@ fn insert_particle(
         nodes.push(QuadNode {
             bounds: child_bounds(nodes[node_index].bounds, child),
             mass: 0.0,
-            center_of_mass: Vector3::<f64>::zeros(),
+            center_of_mass: Vector3f64::zeros(),
             particle: None,
             children: [None; 4],
         });
@@ -113,7 +113,7 @@ fn insert_particle(
         nodes.push(QuadNode {
             bounds: child_bounds(nodes[node_index].bounds, child),
             mass: 0.0,
-            center_of_mass: Vector3::<f64>::zeros(),
+            center_of_mass: Vector3f64::zeros(),
             particle: None,
             children: [None; 4],
         });
@@ -123,15 +123,20 @@ fn insert_particle(
     insert_particle(nodes, child_node, particle_index, particles);
 }
 
-fn acceleration_from_mass(position: Vector3<f64>, center: Vector3<f64>, gm: f64, softening: f64) -> Vector3<f64> {
+fn acceleration_from_mass(
+    position: Vector3f64,
+    center: Vector3f64,
+    gm: f64,
+    softening: f64,
+) -> Vector3f64 {
     if gm <= 0.0 {
-        return Vector3::<f64>::zeros();
+        return Vector3f64::zeros();
     }
     let offset = center - position;
     // Use mul_add for softened distance: r² + ε² with single rounding
     let r2 = mul_add(softening, softening, offset.length_squared());
     if r2 <= EPSILON {
-        return Vector3::<f64>::zeros();
+        return Vector3f64::zeros();
     }
     // r2 * sqrt(r2) = r³; compute as r2.sqrt() * r2 to avoid overflow
     let r3 = r2.sqrt() * r2;
@@ -146,13 +151,13 @@ fn bh_acceleration(
     params: NBodySolverParams,
     approximate_count: &mut u32,
     direct_count: &mut u32,
-) -> Vector3<f64> {
+) -> Vector3f64 {
     let node = &nodes[node_index];
     if node.mass <= 0.0 {
-        return Vector3::<f64>::zeros();
+        return Vector3f64::zeros();
     }
     if node.particle == Some(particle_index) && node.children.iter().all(Option::is_none) {
-        return Vector3::<f64>::zeros();
+        return Vector3f64::zeros();
     }
     let position = vec3_to_rapier(particles[particle_index].position);
     let distance = (node.center_of_mass - position).length();
@@ -168,7 +173,7 @@ fn bh_acceleration(
             params.softening,
         );
     }
-    let mut acceleration = Vector3::<f64>::zeros();
+    let mut acceleration = Vector3f64::zeros();
     for child in node.children.into_iter().flatten() {
         if nodes[child].children.iter().all(Option::is_none) {
             *direct_count += 1;
@@ -197,7 +202,7 @@ fn root_bounds(particles: &[NBodyParticle]) -> Bounds {
         min_y = f64::min(min_y, particle.position.y);
         max_y = f64::max(max_y, particle.position.y);
     }
-    let center = Vector3::<f64>::new(0.5 * (min_x + max_x), 0.5 * (min_y + max_y), 0.0);
+    let center = Vector3f64::new(0.5 * (min_x + max_x), 0.5 * (min_y + max_y), 0.0);
     let half_size = (0.5 * f64::max(max_x - min_x, max_y - min_y)).max(1.0);
     Bounds { center, half_size }
 }
@@ -249,7 +254,7 @@ pub extern "C" fn astro_nbody_direct_accelerations(
         ..NBodyForceReport::default()
     };
     for i in 0..particles.len() {
-        let mut acceleration = Vector3::<f64>::zeros();
+        let mut acceleration = Vector3f64::zeros();
         for j in 0..particles.len() {
             if i == j {
                 continue;
@@ -308,7 +313,7 @@ pub unsafe extern "C" fn astro_nbody_direct_accelerations_bare(
         .collect();
 
     for i in 0..particles.len() {
-        let mut acceleration = Vector3::<f64>::zeros();
+        let mut acceleration = Vector3f64::zeros();
         let pi = vec3_to_rapier(particles[i].position);
         for j in 0..particles.len() {
             if i == j {
@@ -362,7 +367,7 @@ pub extern "C" fn astro_nbody_barnes_hut_accelerations(
     let mut nodes = vec![QuadNode {
         bounds: root_bounds(particles),
         mass: 0.0,
-        center_of_mass: Vector::ZERO,
+        center_of_mass: Vector3f64::zeros(),
         particle: None,
         children: [None; 4],
     }];

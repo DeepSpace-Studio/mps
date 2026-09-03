@@ -447,7 +447,7 @@ pub fn keplerian_elements(
     let inc = (h_vec.z / h).acos();
 
     // Node vector: n = k̂ × h
-    let n_vec = nalgebra::Vector3::<f64>::new(-h_vec.y, h_vec.x, 0.0);
+    let n_vec = crate::math::Vector3f64::new(-h_vec.y, h_vec.x, 0.0);
     let n = n_vec.length();
 
     // RAAN

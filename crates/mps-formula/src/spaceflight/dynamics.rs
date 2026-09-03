@@ -62,7 +62,7 @@ pub fn artificial_potential_guidance(
     let repulsive = if d > EPS && d < influence_radius {
         away / d * repulsive_gain * (1.0 / d - 1.0 / influence_radius) / (d * d)
     } else {
-        nalgebra::Vector3::<f64>::zeros()
+        crate::math::Vector3f64::zeros()
     };
     Some(vec3_from_rapier(attractive + repulsive))
 }
@@ -260,7 +260,7 @@ pub fn mass_properties_two_body(
     let p2 = vec3_to_rapier(position2);
     let total = mass1 + mass2;
     let com = (p1 * mass1 + p2 * mass2) / total;
-    let parallel = |m: f64, p: nalgebra::Vector3<f64>, i: Vec3| -> Vec3 {
+    let parallel = |m: f64, p: crate::math::Vector3f64, i: Vec3| -> Vec3 {
         let d = p - com;
         Vec3 {
             x: i.x + m * (d.y * d.y + d.z * d.z),

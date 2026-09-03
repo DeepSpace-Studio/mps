@@ -17,6 +17,279 @@
 use crate::ffi::{Bool, Vec3};
 
 // ---------------------------------------------------------------------------
+// 3D vector type (Vector3f64)
+// ---------------------------------------------------------------------------
+
+/// 3D vector with f64 components - lightweight replacement for nalgebra::Vector3<f64>
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Vector3f64 {
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+}
+
+impl Vector3f64 {
+    /// Create a new vector from components
+    #[inline]
+    pub fn new(x: f64, y: f64, z: f64) -> Self {
+        Self { x, y, z }
+    }
+
+    /// Zero vector
+    #[inline]
+    pub fn zeros() -> Self {
+        Self::new(0.0, 0.0, 0.0)
+    }
+
+    /// Unit vector along X axis
+    #[inline]
+    pub fn x() -> Self {
+        Self::new(1.0, 0.0, 0.0)
+    }
+
+    /// Unit vector along Y axis
+    #[inline]
+    pub fn y() -> Self {
+        Self::new(0.0, 1.0, 0.0)
+    }
+
+    /// Unit vector along Z axis
+    #[inline]
+    pub fn z() -> Self {
+        Self::new(0.0, 0.0, 1.0)
+    }
+
+    /// Dot product
+    #[inline]
+    pub fn dot(&self, other: Self) -> f64 {
+        self.x * other.x + self.y * other.y + self.z * other.z
+    }
+
+    /// Cross product
+    #[inline]
+    pub fn cross(&self, other: Self) -> Self {
+        Self::new(
+            self.y * other.z - self.z * other.y,
+            self.z * other.x - self.x * other.z,
+            self.x * other.y - self.y * other.x,
+        )
+    }
+
+    /// Squared length
+    #[inline]
+    pub fn length_squared(&self) -> f64 {
+        self.dot(*self)
+    }
+
+    /// Length
+    #[inline]
+    pub fn length(&self) -> f64 {
+        self.length_squared().sqrt()
+    }
+
+    /// Try to normalize, returning None if the vector is zero
+    #[inline]
+    pub fn try_normalize(&self) -> Option<Self> {
+        let len = self.length();
+        if len > f64::EPSILON {
+            Some(Self::new(self.x / len, self.y / len, self.z / len))
+        } else {
+            None
+        }
+    }
+
+    /// Add two vectors
+    #[inline]
+    pub fn add(&self, other: Self) -> Self {
+        Self::new(self.x + other.x, self.y + other.y, self.z + other.z)
+    }
+
+    /// Subtract two vectors
+    #[inline]
+    pub fn sub(&self, other: Self) -> Self {
+        Self::new(self.x - other.x, self.y - other.y, self.z - other.z)
+    }
+
+    /// Scale by scalar
+    #[inline]
+    pub fn scale(&self, s: f64) -> Self {
+        Self::new(self.x * s, self.y * s, self.z * s)
+    }
+}
+
+impl std::ops::Add for Vector3f64 {
+    type Output = Self;
+
+    #[inline]
+    fn add(self, other: Self) -> Self {
+        Self::new(self.x + other.x, self.y + other.y, self.z + other.z)
+    }
+}
+
+impl std::ops::AddAssign for Vector3f64 {
+    #[inline]
+    fn add_assign(&mut self, other: Self) {
+        *self = Self::new(self.x + other.x, self.y + other.y, self.z + other.z);
+    }
+}
+
+impl std::ops::Sub for Vector3f64 {
+    type Output = Self;
+
+    #[inline]
+    fn sub(self, other: Self) -> Self {
+        Self::new(self.x - other.x, self.y - other.y, self.z - other.z)
+    }
+}
+
+impl std::ops::SubAssign for Vector3f64 {
+    #[inline]
+    fn sub_assign(&mut self, other: Self) {
+        *self = Self::new(self.x - other.x, self.y - other.y, self.z - other.z);
+    }
+}
+
+impl std::ops::Neg for Vector3f64 {
+    type Output = Self;
+
+    #[inline]
+    fn neg(self) -> Self {
+        Self::new(-self.x, -self.y, -self.z)
+    }
+}
+
+impl std::ops::Mul<f64> for Vector3f64 {
+    type Output = Self;
+
+    #[inline]
+    fn mul(self, s: f64) -> Self {
+        Self::new(self.x * s, self.y * s, self.z * s)
+    }
+}
+
+impl std::ops::MulAssign<f64> for Vector3f64 {
+    #[inline]
+    fn mul_assign(&mut self, s: f64) {
+        *self = Self::new(self.x * s, self.y * s, self.z * s);
+    }
+}
+
+impl std::ops::Mul<Vector3f64> for f64 {
+    type Output = Vector3f64;
+
+    #[inline]
+    fn mul(self, v: Vector3f64) -> Vector3f64 {
+        Vector3f64::new(self * v.x, self * v.y, self * v.z)
+    }
+}
+
+impl std::ops::Div<f64> for Vector3f64 {
+    type Output = Self;
+
+    #[inline]
+    fn div(self, s: f64) -> Self {
+        Self::new(self.x / s, self.y / s, self.z / s)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 3x3 matrix type (Matrix3f64)
+// ---------------------------------------------------------------------------
+
+/// 3x3 matrix with f64 components - lightweight replacement for nalgebra::Matrix3<f64>
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Matrix3f64 {
+    pub cols: [Vector3f64; 3],
+}
+
+impl Matrix3f64 {
+    /// Create matrix from column vectors
+    #[inline]
+    pub fn from_cols(c0: Vector3f64, c1: Vector3f64, c2: Vector3f64) -> Self {
+        Self { cols: [c0, c1, c2] }
+    }
+
+    /// Try to compute the inverse matrix via the closed-form adjugate method.
+    /// Returns None if the matrix is singular (determinant too close to zero).
+    pub fn try_inverse(&self) -> Option<Self> {
+        let (c0, c1, c2) = (self.cols[0], self.cols[1], self.cols[2]);
+        let det = c0.dot(c1.cross(c2));
+        if det.abs() < f64::EPSILON {
+            return None; // Singular matrix
+        }
+        let inv_det = 1.0 / det;
+        Some(Self::from_cols(
+            c1.cross(c2) * inv_det,
+            c2.cross(c0) * inv_det,
+            c0.cross(c1) * inv_det,
+        ))
+    }
+
+    /// Identity matrix
+    #[inline]
+    pub fn identity() -> Self {
+        Self::from_cols(Vector3f64::x(), Vector3f64::y(), Vector3f64::z())
+    }
+
+    /// Matrix multiplication
+    #[inline]
+    pub fn mul(&self, other: &Self) -> Self {
+        let c0 = other.cols[0];
+        let c1 = other.cols[1];
+        let c2 = other.cols[2];
+
+        Self::from_cols(
+            self.mul_vector(c0),
+            self.mul_vector(c1),
+            self.mul_vector(c2),
+        )
+    }
+
+    /// Multiply matrix by vector
+    #[inline]
+    pub fn mul_vector(&self, v: Vector3f64) -> Vector3f64 {
+        Vector3f64::new(
+            self.cols[0].x * v.x + self.cols[1].x * v.y + self.cols[2].x * v.z,
+            self.cols[0].y * v.x + self.cols[1].y * v.y + self.cols[2].y * v.z,
+            self.cols[0].z * v.x + self.cols[1].z * v.y + self.cols[2].z * v.z,
+        )
+    }
+
+    /// Convert to column-major array
+    pub fn to_cols_array(&self) -> [f64; 9] {
+        [
+            self.cols[0].x,
+            self.cols[0].y,
+            self.cols[0].z,
+            self.cols[1].x,
+            self.cols[1].y,
+            self.cols[1].z,
+            self.cols[2].x,
+            self.cols[2].y,
+            self.cols[2].z,
+        ]
+    }
+}
+
+impl std::ops::Mul for Matrix3f64 {
+    type Output = Self;
+
+    #[inline]
+    fn mul(self, other: Self) -> Self {
+        Matrix3f64::mul(&self, &other)
+    }
+}
+
+impl std::ops::Mul<Vector3f64> for Matrix3f64 {
+    type Output = Vector3f64;
+
+    #[inline]
+    fn mul(self, v: Vector3f64) -> Vector3f64 {
+        Matrix3f64::mul_vector(&self, v)
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Epsilon constants (project-wide — prefer relative comparison)
 // ---------------------------------------------------------------------------
 
@@ -230,15 +503,15 @@ impl KahanVec3 {
         self.sum
     }
 
-    /// Return the current compensated sum as a nalgebra Vector3.
+    /// Return the current compensated sum as a Vector3f64.
     #[inline]
-    pub fn value_vec(&self) -> nalgebra::Vector3<f64> {
-        nalgebra::Vector3::new(self.sum.x, self.sum.y, self.sum.z)
+    pub fn value_vec(&self) -> Vector3f64 {
+        Vector3f64::new(self.sum.x, self.sum.y, self.sum.z)
     }
 
-    /// Add a nalgebra Vector3 using Kahan compensation.
+    /// Add a Vector3f64 using Kahan compensation.
     #[inline]
-    pub fn add_vec(&mut self, value: nalgebra::Vector3<f64>) {
+    pub fn add_vec(&mut self, value: Vector3f64) {
         self.add(Vec3 {
             x: value.x,
             y: value.y,

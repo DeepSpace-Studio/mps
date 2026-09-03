@@ -55,20 +55,20 @@ pub fn compute_forces(
             let lift_force = if env.lift_coefficient > 0.0 {
                 let lift_dir = vec3_to_rapier(env.lift_direction)
                     .try_normalize()
-                    .unwrap_or(nalgebra::Vector3::<f64>::zeros());
+                    .unwrap_or(crate::math::Vector3f64::zeros());
                 if lift_dir.length_squared() > 0.0 {
                     lift_dir * (dynamic_pressure * env.reference_area * env.lift_coefficient)
                 } else {
-                    nalgebra::Vector3::<f64>::zeros()
+                    crate::math::Vector3f64::zeros()
                 }
             } else {
-                nalgebra::Vector3::zeros()
+                crate::math::Vector3f64::zeros()
             };
             (drag_force, lift_force)
         } else {
             (
-                nalgebra::Vector3::zeros(),
-                nalgebra::Vector3::zeros(),
+                crate::math::Vector3f64::zeros(),
+                crate::math::Vector3f64::zeros(),
             )
         };
 
@@ -96,12 +96,12 @@ pub fn integrate_step(
     let report = compute_forces(state, env)?;
 
     let acceleration = vec3_to_rapier(report.acceleration);
-    let velocity = nalgebra::Vector3::<f64>::new(
+    let velocity = crate::math::Vector3f64::new(
         mul_add(acceleration.x, dt, vec3_to_rapier(state.velocity).x),
         mul_add(acceleration.y, dt, vec3_to_rapier(state.velocity).y),
         mul_add(acceleration.z, dt, vec3_to_rapier(state.velocity).z),
     );
-    let position = nalgebra::Vector3::<f64>::new(
+    let position = crate::math::Vector3f64::new(
         mul_add(velocity.x, dt, vec3_to_rapier(state.position).x),
         mul_add(velocity.y, dt, vec3_to_rapier(state.position).y),
         mul_add(velocity.z, dt, vec3_to_rapier(state.position).z),

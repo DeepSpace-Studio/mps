@@ -48,7 +48,7 @@ pub extern "C" fn em_lorentz_force(
     let acceleration = if mass > EPSILON {
         force / mass
     } else {
-        Vector::ZERO
+        crate::math::Vector3f64::zeros()
     };
     let Some(out_report) = (unsafe { out_report.as_mut() }) else {
         set_error(ERR_NULL_POINTER, "Lorentz force output is null");
