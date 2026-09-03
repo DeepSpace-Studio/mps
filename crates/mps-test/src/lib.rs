@@ -96,6 +96,7 @@ pub mod rapier {
     pub mod trajectory;
     pub mod transmission;
     pub mod vehicle;
+    pub mod voronoi;
     pub mod voxel;
     pub mod wave_optics;
     pub mod world;

@@ -59,7 +59,7 @@
 - [fluid_sph.md](mps-core/fluid_sph.md) — `fluid_sph.rs`：SPH 流体体（fork `FluidWorld` 薄封装 + 碰撞代理，`fluid_*` 入口）。
 - [molecular.md](mps-core/molecular.md) — `molecular.rs`：分子力（Lennard-Jones/Coulomb）。
 - [fracture.md](mps-core/fracture.md) — `fracture.rs`：断裂力学与刚体碎裂 `fracture_*` 入口。
-- [fracture_mesh.md](mps-core/fracture_mesh.md) — `fracture_mesh.rs`：可碎裂复合刚体（触发器/疲劳/应力阈值，`fracture_mesh_body_*` 入口）。
+- [fracture_mesh.md](mps-core/fracture_mesh.md) — `fracture_mesh.rs`：可碎裂复合刚体（触发器/疲劳/应力阈值/Voronoi 预切割，`fracture_mesh_body_*` 入口）。
 - [trajectory.md](mps-core/trajectory.md) — `trajectory.rs`：轨迹力估计/积分/施加 `trajectory_*` 入口。
 - [terrain_gravity.md](mps-core/terrain_gravity.md) — `terrain_gravity.rs`：不规则天体/地形重力（多面体/DEM/Mascon）。
 - [cross_validate.md](mps-core/cross_validate.md) — `cross_validate.rs`：多公式交叉验证引力（Newton 锚定/Mean/Median 聚合的 ForceLaw）。

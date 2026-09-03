@@ -40,4 +40,5 @@ pub mod thermodynamics;
 pub mod topology;
 pub mod trajectory;
 pub mod transmission;
+pub mod voronoi;
 pub mod wave_optics;

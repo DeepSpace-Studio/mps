@@ -10,9 +10,9 @@ mod tests {
     use mps_core::rapier::ffi::*;
     use mps_core::rapier::fracture_mesh::{
         fracture_mesh_body_add_fatigue_damage, fracture_mesh_body_create,
-        fracture_mesh_body_is_fractured, fracture_mesh_body_remove, fracture_mesh_body_set_stress,
-        fracture_mesh_body_set_trigger, fracture_mesh_body_set_trigger_stress,
-        fracture_mesh_body_trigger,
+        fracture_mesh_body_create_with_voronoi, fracture_mesh_body_is_fractured,
+        fracture_mesh_body_remove, fracture_mesh_body_set_stress, fracture_mesh_body_set_trigger,
+        fracture_mesh_body_set_trigger_stress, fracture_mesh_body_trigger,
     };
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
 
@@ -309,5 +309,154 @@ mod tests {
             Bool::FALSE
         );
         assert_eq!(last_error_code(), ERR_NULL_POINTER);
+    }
+
+    #[test]
+    fn create_with_voronoi_and_trigger_fractures_into_seeds() {
+        let world = make_world();
+        let seeds = [v3(-0.5, 0.0, 0.0), v3(0.5, 0.0, 0.0)];
+        let id = fracture_mesh_body_create_with_voronoi(
+            world,
+            cuboid_shape(),
+            v3(0.0, 10.0, 0.0),
+            v3(-1.0, -1.0, -1.0),
+            v3(1.0, 1.0, 1.0),
+            seeds.as_ptr(),
+            seeds.len() as u32,
+            valid_material(),
+            Bool::FALSE,
+            0.0,
+        );
+        assert_ne!(id, u32::MAX);
+        assert_eq!(last_error_code(), ERR_OK);
+        assert_eq!(fracture_mesh_body_is_fractured(world, id), Bool::FALSE);
+
+        // Triggering replaces the source with one fragment per seed cell.
+        assert_eq!(fracture_mesh_body_trigger(world, id), Bool::TRUE);
+        assert_eq!(fracture_mesh_body_is_fractured(world, id), Bool::TRUE);
+        // One-shot semantics still hold for generated fragment sets.
+        assert_eq!(fracture_mesh_body_trigger(world, id), Bool::FALSE);
+        assert_eq!(last_error_code(), ERR_UNSUPPORTED);
+
+        assert_eq!(fracture_mesh_body_remove(world, id), Bool::TRUE);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn create_with_voronoi_rejects_bad_input() {
+        let world = make_world();
+        let seeds = [v3(-0.5, 0.0, 0.0), v3(0.5, 0.0, 0.0)];
+
+        // Null seed pointer.
+        assert_eq!(
+            fracture_mesh_body_create_with_voronoi(
+                world,
+                cuboid_shape(),
+                v3(0.0, 10.0, 0.0),
+                v3(-1.0, -1.0, -1.0),
+                v3(1.0, 1.0, 1.0),
+                std::ptr::null(),
+                2,
+                valid_material(),
+                Bool::FALSE,
+                0.0
+            ),
+            u32::MAX
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+
+        // Zero seed count.
+        assert_eq!(
+            fracture_mesh_body_create_with_voronoi(
+                world,
+                cuboid_shape(),
+                v3(0.0, 10.0, 0.0),
+                v3(-1.0, -1.0, -1.0),
+                v3(1.0, 1.0, 1.0),
+                seeds.as_ptr(),
+                0,
+                valid_material(),
+                Bool::FALSE,
+                0.0
+            ),
+            u32::MAX
+        );
+        assert_eq!(last_error_code(), ERR_CAPACITY);
+
+        // Inverted AABB.
+        assert_eq!(
+            fracture_mesh_body_create_with_voronoi(
+                world,
+                cuboid_shape(),
+                v3(0.0, 10.0, 0.0),
+                v3(1.0, 1.0, 1.0),
+                v3(-1.0, -1.0, -1.0),
+                seeds.as_ptr(),
+                seeds.len() as u32,
+                valid_material(),
+                Bool::FALSE,
+                0.0
+            ),
+            u32::MAX
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+
+        // Out-of-range shrink.
+        assert_eq!(
+            fracture_mesh_body_create_with_voronoi(
+                world,
+                cuboid_shape(),
+                v3(0.0, 10.0, 0.0),
+                v3(-1.0, -1.0, -1.0),
+                v3(1.0, 1.0, 1.0),
+                seeds.as_ptr(),
+                seeds.len() as u32,
+                valid_material(),
+                Bool::FALSE,
+                0.6
+            ),
+            u32::MAX
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+
+        // Invalid material.
+        let mut bad_material = valid_material();
+        bad_material.poisson_ratio = 0.9;
+        assert_eq!(
+            fracture_mesh_body_create_with_voronoi(
+                world,
+                cuboid_shape(),
+                v3(0.0, 10.0, 0.0),
+                v3(-1.0, -1.0, -1.0),
+                v3(1.0, 1.0, 1.0),
+                seeds.as_ptr(),
+                seeds.len() as u32,
+                bad_material,
+                Bool::FALSE,
+                0.0
+            ),
+            u32::MAX
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+
+        // Null world.
+        assert_eq!(
+            fracture_mesh_body_create_with_voronoi(
+                std::ptr::null_mut(),
+                cuboid_shape(),
+                v3(0.0, 0.0, 0.0),
+                v3(-1.0, -1.0, -1.0),
+                v3(1.0, 1.0, 1.0),
+                seeds.as_ptr(),
+                seeds.len() as u32,
+                valid_material(),
+                Bool::FALSE,
+                0.0
+            ),
+            u32::MAX
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+
+        world_destroy(world);
     }
 }
