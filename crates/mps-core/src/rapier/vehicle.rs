@@ -64,13 +64,10 @@ pub extern "C" fn vehicle_controller_create(
             .colliders
             .insert_with_parent(collider, body, &mut world.inner.bodies);
         let controller = DynamicRayCastVehicleController::new(body);
-        let id = world.inner.vehicle_controller_next_id;
-        world.inner.vehicle_controller_next_id += 1;
         world
             .inner
             .vehicle_controllers
-            .insert(id, VehicleController { controller, body });
-        id
+            .insert(VehicleController { controller, body })
     })
 }
 
@@ -100,7 +97,7 @@ pub extern "C" fn vehicle_controller_set_shape(
             );
             return Bool::FALSE;
         }
-        let body = match world.inner.vehicle_controllers.get(&id) {
+        let body = match world.inner.vehicle_controllers.get(id) {
             Some(v) => v.body,
             None => {
                 set_error(ERR_NOT_FOUND, "vehicle_controller_set_shape: unknown id");
@@ -197,7 +194,7 @@ pub extern "C" fn vehicle_controller_add_wheel(
             );
             return u32::MAX;
         }
-        let Some(zone) = world.inner.vehicle_controllers.get_mut(&id) else {
+        let Some(zone) = world.inner.vehicle_controllers.get_mut(id) else {
             set_error(ERR_NOT_FOUND, "vehicle_controller_add_wheel: unknown id");
             return u32::MAX;
         };
@@ -277,7 +274,7 @@ fn set_wheel_field(
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        let Some(vehicle) = world.inner.vehicle_controllers.get_mut(&id) else {
+        let Some(vehicle) = world.inner.vehicle_controllers.get_mut(id) else {
             set_error(ERR_NOT_FOUND, "vehicle controller: unknown id");
             return Bool::FALSE;
         };
@@ -307,7 +304,7 @@ pub extern "C" fn vehicle_controller_update(world: *mut WorldHandle, id: u32, dt
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        let Some(vehicle) = world.inner.vehicle_controllers.get_mut(&id) else {
+        let Some(vehicle) = world.inner.vehicle_controllers.get_mut(id) else {
             set_error(ERR_NOT_FOUND, "vehicle_controller_update: unknown id");
             return Bool::FALSE;
         };
@@ -337,7 +334,7 @@ pub extern "C" fn vehicle_controller_get_translation(
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        let Some(vehicle) = world.inner.vehicle_controllers.get(&id) else {
+        let Some(vehicle) = world.inner.vehicle_controllers.get(id) else {
             set_error(
                 ERR_NOT_FOUND,
                 "vehicle_controller_get_translation: unknown id",
@@ -373,7 +370,7 @@ pub extern "C" fn vehicle_controller_get_velocity(
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        let Some(vehicle) = world.inner.vehicle_controllers.get(&id) else {
+        let Some(vehicle) = world.inner.vehicle_controllers.get(id) else {
             set_error(ERR_NOT_FOUND, "vehicle_controller_get_velocity: unknown id");
             return Bool::FALSE;
         };
@@ -406,7 +403,7 @@ pub extern "C" fn vehicle_controller_wheel_on_ground(
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        let Some(vehicle) = world.inner.vehicle_controllers.get(&id) else {
+        let Some(vehicle) = world.inner.vehicle_controllers.get(id) else {
             set_error(
                 ERR_NOT_FOUND,
                 "vehicle_controller_wheel_on_ground: unknown id",
@@ -442,7 +439,7 @@ pub extern "C" fn vehicle_controller_wheel_contact_normal(
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        let Some(vehicle) = world.inner.vehicle_controllers.get(&id) else {
+        let Some(vehicle) = world.inner.vehicle_controllers.get(id) else {
             set_error(
                 ERR_NOT_FOUND,
                 "vehicle_controller_wheel_contact_normal: unknown id",
@@ -481,7 +478,7 @@ pub extern "C" fn vehicle_controller_destroy(world: *mut WorldHandle, id: u32) -
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        match world.inner.vehicle_controllers.remove(&id) {
+        match world.inner.vehicle_controllers.remove(id) {
             Some(vehicle) => {
                 world.inner.bodies.remove(
                     vehicle.body,

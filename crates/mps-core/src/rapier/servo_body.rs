@@ -147,9 +147,7 @@ pub extern "C" fn servo_body_create(
             target_linvel: Vector::ZERO,
             target_angvel: rapier3d::math::AngVector::ZERO,
         };
-        let id = world.inner.servo_body_next_id;
-        world.inner.servo_body_next_id += 1;
-        world.inner.servo_bodies.insert(id, servo);
+        let id = world.inner.servo_bodies.insert(servo);
         clear_error();
         id
     })
@@ -177,7 +175,7 @@ pub extern "C" fn servo_body_set_target_position(
             );
             return Bool::FALSE;
         }
-        let Some(servo) = world.inner.servo_bodies.get_mut(&id) else {
+        let Some(servo) = world.inner.servo_bodies.get_mut(id) else {
             set_error(ERR_NOT_FOUND, "servo_body_set_target_position: unknown id");
             return Bool::FALSE;
         };
@@ -210,7 +208,7 @@ pub extern "C" fn servo_body_set_target_rotation(
             );
             return Bool::FALSE;
         }
-        let Some(servo) = world.inner.servo_bodies.get_mut(&id) else {
+        let Some(servo) = world.inner.servo_bodies.get_mut(id) else {
             set_error(ERR_NOT_FOUND, "servo_body_set_target_rotation: unknown id");
             return Bool::FALSE;
         };
@@ -254,7 +252,7 @@ pub extern "C" fn servo_body_set_target_velocity(
             );
             return Bool::FALSE;
         }
-        let Some(servo) = world.inner.servo_bodies.get_mut(&id) else {
+        let Some(servo) = world.inner.servo_bodies.get_mut(id) else {
             set_error(ERR_NOT_FOUND, "servo_body_set_target_velocity: unknown id");
             return Bool::FALSE;
         };
@@ -286,7 +284,7 @@ pub extern "C" fn servo_body_set_target_angular_velocity(
             );
             return Bool::FALSE;
         }
-        let Some(servo) = world.inner.servo_bodies.get_mut(&id) else {
+        let Some(servo) = world.inner.servo_bodies.get_mut(id) else {
             set_error(
                 ERR_NOT_FOUND,
                 "servo_body_set_target_angular_velocity: unknown id",
@@ -316,7 +314,7 @@ pub extern "C" fn servo_body_update(world: *mut WorldHandle, id: u32, dt: f64) -
             set_error(ERR_INVALID_ARGUMENT, "servo_body_update: invalid dt");
             return Bool::FALSE;
         }
-        let Some(servo) = world.inner.servo_bodies.get_mut(&id) else {
+        let Some(servo) = world.inner.servo_bodies.get_mut(id) else {
             set_error(ERR_NOT_FOUND, "servo_body_update: unknown id");
             return Bool::FALSE;
         };
@@ -361,7 +359,7 @@ pub extern "C" fn servo_body_get_translation(
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        let Some(servo) = world.inner.servo_bodies.get(&id) else {
+        let Some(servo) = world.inner.servo_bodies.get(id) else {
             set_error(ERR_NOT_FOUND, "servo_body_get_translation: unknown id");
             return Bool::FALSE;
         };
@@ -392,7 +390,7 @@ pub extern "C" fn servo_body_get_velocity(
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        let Some(servo) = world.inner.servo_bodies.get(&id) else {
+        let Some(servo) = world.inner.servo_bodies.get(id) else {
             set_error(ERR_NOT_FOUND, "servo_body_get_velocity: unknown id");
             return Bool::FALSE;
         };
@@ -424,7 +422,7 @@ pub extern "C" fn servo_body_get_rigid_body_handle(
             set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
-        let Some(servo) = world.inner.servo_bodies.get(&id) else {
+        let Some(servo) = world.inner.servo_bodies.get(id) else {
             set_error(
                 ERR_NOT_FOUND,
                 "servo_body_get_rigid_body_handle: unknown id",
@@ -448,7 +446,7 @@ pub extern "C" fn servo_body_destroy(world: *mut WorldHandle, id: u32) -> Bool {
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        match world.inner.servo_bodies.remove(&id) {
+        match world.inner.servo_bodies.remove(id) {
             Some(servo) => {
                 world.inner.bodies.remove(
                     servo.body,

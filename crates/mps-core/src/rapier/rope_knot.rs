@@ -164,29 +164,23 @@ pub extern "C" fn rope_knot_create(
             }
         }
 
-        let id = world.inner.rope_knot_next_id;
-        world.inner.rope_knot_next_id = id.wrapping_add(1);
-
-        world.inner.rope_knots.insert(
-            id,
-            RopeKnotSystem {
-                desc: RopeKnotDesc {
-                    pattern: knot_pattern,
-                    strand_count,
-                    control_points: control_points_vec,
-                    radius,
-                    stiffness,
-                    self_friction,
-                    density,
-                },
-                soft_bodies: Vec::new(),
-                wind: Vec3 {
-                    x: 0.0,
-                    y: 0.0,
-                    z: 0.0,
-                },
+        let id = world.inner.rope_knots.insert(RopeKnotSystem {
+            desc: RopeKnotDesc {
+                pattern: knot_pattern,
+                strand_count,
+                control_points: control_points_vec,
+                radius,
+                stiffness,
+                self_friction,
+                density,
             },
-        );
+            soft_bodies: Vec::new(),
+            wind: Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+        });
 
         clear_error();
         id
@@ -221,7 +215,7 @@ pub extern "C" fn rope_knot_build(
 
         // Snapshot the descriptor + wind so the mutation pass can run without
         // holding the `rope_knots` borrow.
-        let (desc, wind, already_built) = match world.inner.rope_knots.get(&id) {
+        let (desc, wind, already_built) = match world.inner.rope_knots.get(id) {
             Some(knot) => (knot.desc.clone(), knot.wind, !knot.soft_bodies.is_empty()),
             None => {
                 set_error(ERR_NOT_FOUND, "rope knot system not found");
@@ -347,7 +341,7 @@ pub extern "C" fn rope_knot_build(
         // particle gets a proxy ball (same-body particles don't collide with
         // each other; different strands and terrain do — with the
         // caller-supplied rope-on-rope friction).
-        if let Some(knot) = world.inner.rope_knots.get_mut(&id) {
+        if let Some(knot) = world.inner.rope_knots.get_mut(id) {
             knot.soft_bodies = strand_ids
                 .iter()
                 .map(|&sid| rapier3d::prelude::soft_body::SoftBodyId(sid))
@@ -364,7 +358,7 @@ pub extern "C" fn rope_knot_build(
 
         // `self_friction` is applied on the proxy colliders; patch them in
         // place (enable_collision builds them with the collider default).
-        set_proxy_friction(world, &id, desc.self_friction);
+        set_proxy_friction(world, id, desc.self_friction);
 
         clear_error();
         Bool::TRUE
@@ -373,7 +367,7 @@ pub extern "C" fn rope_knot_build(
 
 /// Patches the friction coefficient on every proxy collider of a knot's
 /// strands (the enable-collision path builds them with the default friction).
-fn set_proxy_friction(world: &mut WorldHandle, id: &u32, friction: f64) {
+fn set_proxy_friction(world: &mut WorldHandle, id: u32, friction: f64) {
     let strand_ids: Vec<u32> = world
         .inner
         .rope_knots
@@ -408,7 +402,7 @@ pub extern "C" fn rope_knot_set_wind(world: *mut WorldHandle, id: u32, wind: Vec
             return Bool::FALSE;
         };
 
-        let Some(knot_system) = world.inner.rope_knots.get_mut(&id) else {
+        let Some(knot_system) = world.inner.rope_knots.get_mut(id) else {
             set_error(ERR_NOT_FOUND, "rope knot system not found");
             return Bool::FALSE;
         };
@@ -450,7 +444,7 @@ pub extern "C" fn rope_knot_remove(world: *mut WorldHandle, id: u32) -> Bool {
             return Bool::FALSE;
         };
 
-        let Some(knot_system) = world.inner.rope_knots.remove(&id) else {
+        let Some(knot_system) = world.inner.rope_knots.remove(id) else {
             set_error(ERR_NOT_FOUND, "rope knot system not found");
             return Bool::FALSE;
         };
@@ -498,7 +492,7 @@ pub extern "C" fn rope_knot_strand_soft_body(
             set_error(ERR_NULL_POINTER, "world is null");
             return u32::MAX;
         };
-        let Some(knot) = world.inner.rope_knots.get(&id) else {
+        let Some(knot) = world.inner.rope_knots.get(id) else {
             set_error(ERR_NOT_FOUND, "rope knot system not found");
             return u32::MAX;
         };

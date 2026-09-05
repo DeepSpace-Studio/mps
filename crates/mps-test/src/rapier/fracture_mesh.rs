@@ -3,6 +3,9 @@
 
 #[cfg(test)]
 mod tests {
+    use mps_core::rapier::collider::{
+        collider_builder_build, collider_builder_create_ex, world_insert_collider_with_parent,
+    };
     use mps_core::rapier::error::{
         ERR_CAPACITY, ERR_INVALID_ARGUMENT, ERR_NOT_FOUND, ERR_NULL_POINTER, ERR_OK,
         ERR_UNSUPPORTED, last_error_code,
@@ -13,6 +16,15 @@ mod tests {
         fracture_mesh_body_create_with_voronoi, fracture_mesh_body_is_fractured,
         fracture_mesh_body_remove, fracture_mesh_body_set_stress, fracture_mesh_body_set_trigger,
         fracture_mesh_body_set_trigger_stress, fracture_mesh_body_trigger,
+    };
+    use mps_core::rapier::fracture_mesh::{
+        fracture_mesh_body_enable_impact_damage, fracture_mesh_body_get_impact_damage,
+        fracture_mesh_body_link_granular_debris,
+    };
+    use mps_core::rapier::granular::{granular_create, granular_particle_count};
+    use mps_core::rapier::rigid_body::{
+        rigid_body_builder_build, rigid_body_builder_create, rigid_body_builder_set_translation,
+        world_insert_rigid_body,
     };
     use mps_core::rapier::world::{world_create, world_destroy, world_step};
 
@@ -456,6 +468,267 @@ mod tests {
             u32::MAX
         );
         assert_eq!(last_error_code(), ERR_NULL_POINTER);
+
+        world_destroy(world);
+    }
+
+    /// Fixed floor cuboid whose top surface sits at y = 0.
+    fn make_floor(world: *mut WorldHandle) -> RigidBodyHandleRaw {
+        let builder = rigid_body_builder_create(BodyStatus::Fixed as u32);
+        rigid_body_builder_set_translation(builder, v3(0.0, -0.5, 0.0));
+        let body = world_insert_rigid_body(world, rigid_body_builder_build(builder));
+        let shape = ShapeDesc {
+            shape_type: ShapeType::Cuboid as u32,
+            a: 20.0,
+            b: 0.5,
+            c: 20.0,
+            ..Default::default()
+        };
+        world_insert_collider_with_parent(
+            world,
+            collider_builder_build(collider_builder_create_ex(shape)),
+            body,
+        );
+        body
+    }
+
+    #[test]
+    fn impact_damage_accumulates_and_auto_fractures() {
+        let world = make_world();
+        make_floor(world);
+
+        // 2-seed voronoi box dropped onto the floor.
+        let seeds = [v3(-0.5, 0.0, 0.0), v3(0.5, 0.0, 0.0)];
+        let id = fracture_mesh_body_create_with_voronoi(
+            world,
+            cuboid_shape(),
+            v3(0.0, 1.5, 0.0),
+            v3(-1.0, -1.0, -1.0),
+            v3(1.0, 1.0, 1.0),
+            seeds.as_ptr(),
+            seeds.len() as u32,
+            valid_material(),
+            Bool::FALSE,
+            0.0,
+        );
+        assert_ne!(id, u32::MAX);
+
+        // Scale 1.0 + threshold 1e-9: any landing impulse must fracture.
+        assert_eq!(
+            fracture_mesh_body_enable_impact_damage(world, id, 1.0, 1.0e-9),
+            Bool::TRUE
+        );
+        let mut damage = 1.0;
+        assert_eq!(
+            fracture_mesh_body_get_impact_damage(world, id, &mut damage),
+            Bool::TRUE
+        );
+        assert_eq!(damage, 0.0);
+
+        let mut fractured = false;
+        for _ in 0..120 {
+            world_step(world, 1.0 / 60.0);
+            if fracture_mesh_body_is_fractured(world, id) == Bool::TRUE {
+                fractured = true;
+                break;
+            }
+        }
+        assert!(fractured, "mesh body did not auto-fracture on landing");
+        world_destroy(world);
+    }
+
+    #[test]
+    fn impact_damage_disabled_by_default_and_rejects_bad_input() {
+        let world = make_world();
+        make_floor(world);
+
+        let seeds = [v3(-0.5, 0.0, 0.0), v3(0.5, 0.0, 0.0)];
+        let id = fracture_mesh_body_create_with_voronoi(
+            world,
+            cuboid_shape(),
+            v3(0.0, 1.5, 0.0),
+            v3(-1.0, -1.0, -1.0),
+            v3(1.0, 1.0, 1.0),
+            seeds.as_ptr(),
+            seeds.len() as u32,
+            valid_material(),
+            Bool::FALSE,
+            0.0,
+        );
+        assert_ne!(id, u32::MAX);
+
+        // Without enabling, landing must not fracture; damage stays 0.
+        for _ in 0..90 {
+            world_step(world, 1.0 / 60.0);
+        }
+        assert_eq!(fracture_mesh_body_is_fractured(world, id), Bool::FALSE);
+        let mut damage = 1.0;
+        assert_eq!(
+            fracture_mesh_body_get_impact_damage(world, id, &mut damage),
+            Bool::TRUE
+        );
+        assert_eq!(damage, 0.0);
+
+        // Validation: bad scale / threshold.
+        assert_eq!(
+            fracture_mesh_body_enable_impact_damage(world, id, 0.0, 1.0),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        assert_eq!(
+            fracture_mesh_body_enable_impact_damage(world, id, 1.0, 0.0),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        // Unknown id.
+        assert_eq!(
+            fracture_mesh_body_enable_impact_damage(world, 987654, 1.0, 1.0),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NOT_FOUND);
+        assert_eq!(
+            fracture_mesh_body_get_impact_damage(world, 987654, &mut damage),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NOT_FOUND);
+        // Null out pointer.
+        assert_eq!(
+            fracture_mesh_body_get_impact_damage(world, id, std::ptr::null_mut()),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+        // Null world.
+        assert_eq!(
+            fracture_mesh_body_enable_impact_damage(std::ptr::null_mut(), id, 1.0, 1.0),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+
+        world_destroy(world);
+    }
+
+    #[test]
+    fn granular_debris_link_routes_small_fragments_to_grains() {
+        let world = make_world();
+        let granular_id = granular_create(world, v3(0.0, -9.81, 0.0), 0.05, 800.0, 0.5, 0.6, 0.4);
+        assert_ne!(granular_id, u32::MAX);
+
+        // One large fragment (half 0.5) and one small one (half 0.1).
+        let fragments = [
+            FractureFragmentDesc {
+                local_center: v3(-0.5, 0.0, 0.0),
+                half_extents: v3(0.5, 0.5, 0.5),
+                initial_velocity: v3(0.0, 0.0, 0.0),
+                density: 1.0,
+                friction: 0.5,
+                restitution: 0.1,
+            },
+            FractureFragmentDesc {
+                local_center: v3(0.5, 0.0, 0.0),
+                half_extents: v3(0.1, 0.1, 0.1),
+                initial_velocity: v3(0.0, 0.0, 0.0),
+                density: 1.0,
+                friction: 0.5,
+                restitution: 0.1,
+            },
+        ];
+        let id = fracture_mesh_body_create(
+            world,
+            cuboid_shape(),
+            v3(0.0, 5.0, 0.0),
+            fragments.as_ptr(),
+            fragments.len() as u32,
+            valid_material(),
+            Bool::FALSE,
+        );
+        assert_ne!(id, u32::MAX);
+
+        // Threshold 0.2: the small fragment becomes a grain, the large one
+        // stays a rigid fragment.
+        assert_eq!(
+            fracture_mesh_body_link_granular_debris(world, id, granular_id, 0.2, 0.4, 0.05),
+            Bool::TRUE
+        );
+        assert_eq!(fracture_mesh_body_trigger(world, id), Bool::TRUE);
+        assert_eq!(fracture_mesh_body_is_fractured(world, id), Bool::TRUE);
+        assert_eq!(granular_particle_count(world, granular_id), 1);
+        assert_eq!(fracture_mesh_body_remove(world, id), Bool::TRUE);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn granular_debris_all_fragments_become_grains() {
+        let world = make_world();
+        let granular_id = granular_create(world, v3(0.0, -9.81, 0.0), 0.05, 800.0, 0.5, 0.6, 0.4);
+        assert_ne!(granular_id, u32::MAX);
+
+        let id = make_mesh(world);
+        // Threshold above every half-extent: the whole body turns to grains,
+        // exercising the "no rigid fragments" direct-removal path.
+        assert_eq!(
+            fracture_mesh_body_link_granular_debris(world, id, granular_id, 10.0, 0.2, 0.04),
+            Bool::TRUE
+        );
+        assert_eq!(fracture_mesh_body_trigger(world, id), Bool::TRUE);
+        assert_eq!(fracture_mesh_body_is_fractured(world, id), Bool::TRUE);
+        assert_eq!(granular_particle_count(world, granular_id), 2);
+        // Double trigger stays rejected after the all-debris path too.
+        assert_eq!(fracture_mesh_body_trigger(world, id), Bool::FALSE);
+        world_destroy(world);
+    }
+
+    #[test]
+    fn granular_debris_link_rejects_bad_input() {
+        let world = make_world();
+        let id = make_mesh(world);
+
+        // Unknown granular body.
+        assert_eq!(
+            fracture_mesh_body_link_granular_debris(world, id, 987654, 0.2, 0.4, 0.05),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NOT_FOUND);
+        // Bad threshold / mass / radius.
+        assert_eq!(
+            fracture_mesh_body_link_granular_debris(world, id, 0, 0.0, 0.4, 0.05),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        assert_eq!(
+            fracture_mesh_body_link_granular_debris(world, id, 0, 0.2, 0.0, 0.05),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        assert_eq!(
+            fracture_mesh_body_link_granular_debris(world, id, 0, 0.2, 0.4, -0.05),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_INVALID_ARGUMENT);
+        // Unknown mesh id / null world.
+        assert_eq!(
+            fracture_mesh_body_link_granular_debris(world, 987654, 0, 0.2, 0.4, 0.05),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NOT_FOUND);
+        assert_eq!(
+            fracture_mesh_body_link_granular_debris(std::ptr::null_mut(), id, 0, 0.2, 0.4, 0.05),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_NULL_POINTER);
+
+        // Unlink (u32::MAX) succeeds even with placeholder params.
+        assert_eq!(
+            fracture_mesh_body_link_granular_debris(world, id, u32::MAX, 0.0, 0.0, 0.0),
+            Bool::TRUE
+        );
+
+        // After fracture the link is refused.
+        assert_eq!(fracture_mesh_body_trigger(world, id), Bool::TRUE);
+        assert_eq!(
+            fracture_mesh_body_link_granular_debris(world, id, 0, 0.2, 0.4, 0.05),
+            Bool::FALSE
+        );
+        assert_eq!(last_error_code(), ERR_UNSUPPORTED);
 
         world_destroy(world);
     }

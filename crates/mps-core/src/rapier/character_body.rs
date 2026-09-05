@@ -97,20 +97,15 @@ pub extern "C" fn character_body_create(
             &mut world.inner.bodies,
         );
 
-        let id = world.inner.character_body_next_id;
-        world.inner.character_body_next_id += 1;
-        world.inner.character_bodies.insert(
-            id,
-            CharacterBody {
-                controller: KinematicCharacterController::default(),
-                body,
-                collider,
-                shape,
-                apply_impulses_to_dynamic_bodies: true,
-                last_movement: EffectiveCharacterMovement::default(),
-                collisions: Vec::new(),
-            },
-        );
+        let id = world.inner.character_bodies.insert(CharacterBody {
+            controller: KinematicCharacterController::default(),
+            body,
+            collider,
+            shape,
+            apply_impulses_to_dynamic_bodies: true,
+            last_movement: EffectiveCharacterMovement::default(),
+            collisions: Vec::new(),
+        });
         clear_error();
         id
     })
@@ -143,7 +138,7 @@ pub extern "C" fn character_body_set_shape(
             );
             return Bool::FALSE;
         }
-        match world.inner.character_bodies.get_mut(&id) {
+        match world.inner.character_bodies.get_mut(id) {
             Some(cb) => {
                 cb.shape = shape;
                 // Update the parented world collider in place so the new hitbox is
@@ -181,7 +176,7 @@ pub extern "C" fn character_body_move(
             set_error(ERR_NULL_POINTER, "world is null");
             return EffectiveCharacterMovement::default();
         };
-        if !world.inner.character_bodies.contains_key(&id) {
+        if !world.inner.character_bodies.contains_key(id) {
             set_error(ERR_NOT_FOUND, "character_body_move: unknown id");
             return EffectiveCharacterMovement::default();
         }
@@ -195,12 +190,12 @@ pub extern "C" fn character_body_move(
 
         // Resolve the desired movement against the world (read-only query). Exclude
         // the character's own collider so its shape-cast never catches itself.
-        let body = world.inner.character_bodies.get(&id).unwrap().body;
-        let self_collider = world.inner.character_bodies.get(&id).unwrap().collider;
+        let body = world.inner.character_bodies.get(id).unwrap().body;
+        let self_collider = world.inner.character_bodies.get(id).unwrap().collider;
         let current = world.inner.bodies.get(body).unwrap().translation();
         let mut collected: Vec<CharacterCollision> = Vec::new();
         let movement = {
-            let cb = world.inner.character_bodies.get(&id).unwrap();
+            let cb = world.inner.character_bodies.get(id).unwrap();
             let shape = shape_from_desc(cb.shape);
             let query = world.inner.broad_phase.as_query_pipeline(
                 world.inner.narrow_phase.query_dispatcher(),
@@ -218,12 +213,7 @@ pub extern "C" fn character_body_move(
             )
         };
         // Store this step's collisions for read-back / impulse solving.
-        world
-            .inner
-            .character_bodies
-            .get_mut(&id)
-            .unwrap()
-            .collisions = collected;
+        world.inner.character_bodies.get_mut(id).unwrap().collisions = collected;
 
         // `movement.translation` is the *delta* to apply this step; add it to the
         // current pose and queue it as the next kinematic translation so the
@@ -241,7 +231,7 @@ pub extern "C" fn character_body_move(
         world
             .inner
             .character_bodies
-            .get_mut(&id)
+            .get_mut(id)
             .unwrap()
             .last_movement = result;
         clear_error();
@@ -261,7 +251,7 @@ pub extern "C" fn character_body_set_up(world: *mut WorldHandle, id: u32, up: Ve
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        if !world.inner.character_bodies.contains_key(&id) {
+        if !world.inner.character_bodies.contains_key(id) {
             set_error(ERR_NOT_FOUND, "character_body_set_up: unknown id");
             return Bool::FALSE;
         }
@@ -272,7 +262,7 @@ pub extern "C" fn character_body_set_up(world: *mut WorldHandle, id: u32, up: Ve
         world
             .inner
             .character_bodies
-            .get_mut(&id)
+            .get_mut(id)
             .unwrap()
             .controller
             .up = vec3_to_rapier(up);
@@ -293,7 +283,7 @@ pub extern "C" fn character_body_set_offset_absolute(
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        if !world.inner.character_bodies.contains_key(&id) {
+        if !world.inner.character_bodies.contains_key(id) {
             set_error(
                 ERR_NOT_FOUND,
                 "character_body_set_offset_absolute: unknown id",
@@ -310,7 +300,7 @@ pub extern "C" fn character_body_set_offset_absolute(
         world
             .inner
             .character_bodies
-            .get_mut(&id)
+            .get_mut(id)
             .unwrap()
             .controller
             .offset = CharacterLength::Absolute(offset);
@@ -332,7 +322,7 @@ pub extern "C" fn character_body_set_offset_relative(
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        if !world.inner.character_bodies.contains_key(&id) {
+        if !world.inner.character_bodies.contains_key(id) {
             set_error(
                 ERR_NOT_FOUND,
                 "character_body_set_offset_relative: unknown id",
@@ -349,7 +339,7 @@ pub extern "C" fn character_body_set_offset_relative(
         world
             .inner
             .character_bodies
-            .get_mut(&id)
+            .get_mut(id)
             .unwrap()
             .controller
             .offset = CharacterLength::Relative(offset);
@@ -375,7 +365,7 @@ pub extern "C" fn character_body_set_autostep(
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        if !world.inner.character_bodies.contains_key(&id) {
+        if !world.inner.character_bodies.contains_key(id) {
             set_error(ERR_NOT_FOUND, "character_body_set_autostep: unknown id");
             return Bool::FALSE;
         }
@@ -394,7 +384,7 @@ pub extern "C" fn character_body_set_autostep(
         world
             .inner
             .character_bodies
-            .get_mut(&id)
+            .get_mut(id)
             .unwrap()
             .controller
             .autostep = if enabled.0 != 0 {
@@ -425,7 +415,7 @@ pub extern "C" fn character_body_set_snap_to_ground(
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        if !world.inner.character_bodies.contains_key(&id) {
+        if !world.inner.character_bodies.contains_key(id) {
             set_error(
                 ERR_NOT_FOUND,
                 "character_body_set_snap_to_ground: unknown id",
@@ -442,7 +432,7 @@ pub extern "C" fn character_body_set_snap_to_ground(
         world
             .inner
             .character_bodies
-            .get_mut(&id)
+            .get_mut(id)
             .unwrap()
             .controller
             .snap_to_ground = if enabled.0 != 0 {
@@ -469,7 +459,7 @@ pub extern "C" fn character_body_set_slope_angles(
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        if !world.inner.character_bodies.contains_key(&id) {
+        if !world.inner.character_bodies.contains_key(id) {
             set_error(ERR_NOT_FOUND, "character_body_set_slope_angles: unknown id");
             return Bool::FALSE;
         }
@@ -477,7 +467,7 @@ pub extern "C" fn character_body_set_slope_angles(
             set_error(ERR_INVALID_ARGUMENT, "slope angles must be finite");
             return Bool::FALSE;
         }
-        let cb = world.inner.character_bodies.get_mut(&id).unwrap();
+        let cb = world.inner.character_bodies.get_mut(id).unwrap();
         cb.controller.max_slope_climb_angle = max_climb_angle;
         cb.controller.min_slope_slide_angle = min_slide_angle;
         clear_error();
@@ -495,14 +485,14 @@ pub extern "C" fn character_body_set_slide(world: *mut WorldHandle, id: u32, sli
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        if !world.inner.character_bodies.contains_key(&id) {
+        if !world.inner.character_bodies.contains_key(id) {
             set_error(ERR_NOT_FOUND, "character_body_set_slide: unknown id");
             return Bool::FALSE;
         }
         world
             .inner
             .character_bodies
-            .get_mut(&id)
+            .get_mut(id)
             .unwrap()
             .controller
             .slide = slide.0 != 0;
@@ -520,7 +510,7 @@ pub extern "C" fn character_body_is_grounded(world: *const WorldHandle, id: u32)
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        match world.inner.character_bodies.get(&id) {
+        match world.inner.character_bodies.get(id) {
             Some(cb) => cb.last_movement.grounded,
             None => {
                 set_error(ERR_NOT_FOUND, "character_body_is_grounded: unknown id");
@@ -539,7 +529,7 @@ pub extern "C" fn character_body_is_sliding_down_slope(world: *const WorldHandle
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        match world.inner.character_bodies.get(&id) {
+        match world.inner.character_bodies.get(id) {
             Some(cb) => cb.last_movement.is_sliding_down_slope,
             None => {
                 set_error(
@@ -566,7 +556,7 @@ pub extern "C" fn character_body_is_on_ground(world: *const WorldHandle, id: u32
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        match world.inner.character_bodies.get(&id) {
+        match world.inner.character_bodies.get(id) {
             Some(cb) => {
                 let touching = cb.last_movement.grounded.0 != 0
                     || cb.last_movement.is_sliding_down_slope.0 != 0;
@@ -595,7 +585,7 @@ pub extern "C" fn character_body_collision_count(world: *const WorldHandle, id: 
             set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
-        match world.inner.character_bodies.get(&id) {
+        match world.inner.character_bodies.get(id) {
             Some(cb) => cb.collisions.len() as u32,
             None => {
                 set_error(ERR_NOT_FOUND, "character_body_collision_count: unknown id");
@@ -621,7 +611,7 @@ pub extern "C" fn character_body_get_collision(
             set_error(ERR_NULL_POINTER, "world is null");
             return crate::rapier::ffi::CharacterCollision::default();
         };
-        let Some(cb) = world.inner.character_bodies.get(&id) else {
+        let Some(cb) = world.inner.character_bodies.get(id) else {
             set_error(ERR_NOT_FOUND, "character_body_get_collision: unknown id");
             return crate::rapier::ffi::CharacterCollision::default();
         };
@@ -672,7 +662,7 @@ pub extern "C" fn character_body_solve_impulses(
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        if !world.inner.character_bodies.contains_key(&id) {
+        if !world.inner.character_bodies.contains_key(id) {
             set_error(ERR_NOT_FOUND, "character_body_solve_impulses: unknown id");
             return Bool::FALSE;
         }
@@ -692,7 +682,7 @@ pub extern "C" fn character_body_solve_impulses(
         // — the displacement the character *wanted* but was blocked from taking — as the
         // push vector, and apply `mass * v` (v = remaining/dt) to the contacted dynamic
         // body. This is the "character pushes crates" behaviour, with no fork changes.
-        let cb = world.inner.character_bodies.get(&id).unwrap();
+        let cb = world.inner.character_bodies.get(id).unwrap();
         if !cb.apply_impulses_to_dynamic_bodies {
             clear_error();
             return Bool::TRUE;
@@ -740,7 +730,7 @@ pub extern "C" fn character_body_set_apply_impulses_to_dynamic_bodies(
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        let Some(cb) = world.inner.character_bodies.get_mut(&id) else {
+        let Some(cb) = world.inner.character_bodies.get_mut(id) else {
             set_error(
                 ERR_NOT_FOUND,
                 "character_body_set_apply_impulses: unknown id",
@@ -774,7 +764,7 @@ pub extern "C" fn character_body_move_with_terrain(
             set_error(ERR_NULL_POINTER, "world is null");
             return EffectiveCharacterMovement::default();
         };
-        if !world.inner.character_bodies.contains_key(&id) {
+        if !world.inner.character_bodies.contains_key(id) {
             set_error(
                 ERR_NOT_FOUND,
                 "character_body_move_with_terrain: unknown id",
@@ -793,18 +783,18 @@ pub extern "C" fn character_body_move_with_terrain(
         let mut desired = vec3_to_rapier(desired);
         if let Some(source) = &world.inner.terrain_gravity_source {
             let accel = crate::rapier::terrain_gravity::terrain_gravity_acceleration(source, {
-                let body = world.inner.character_bodies.get(&id).unwrap().body;
+                let body = world.inner.character_bodies.get(id).unwrap().body;
                 vec3_from_rapier(world.inner.bodies.get(body).unwrap().translation())
             });
             desired += vec3_to_rapier(accel) * (0.5 * dt * dt);
         }
 
         // Delegate the resolve + kinematic write-back to the shared move path.
-        let body = world.inner.character_bodies.get(&id).unwrap().body;
+        let body = world.inner.character_bodies.get(id).unwrap().body;
         let current = world.inner.bodies.get(body).unwrap().translation();
         let mut collected: Vec<CharacterCollision> = Vec::new();
         let movement = {
-            let cb = world.inner.character_bodies.get(&id).unwrap();
+            let cb = world.inner.character_bodies.get(id).unwrap();
             let shape = shape_from_desc(cb.shape);
             let query = world.inner.broad_phase.as_query_pipeline(
                 world.inner.narrow_phase.query_dispatcher(),
@@ -821,12 +811,7 @@ pub extern "C" fn character_body_move_with_terrain(
                 |collision| collected.push(collision),
             )
         };
-        world
-            .inner
-            .character_bodies
-            .get_mut(&id)
-            .unwrap()
-            .collisions = collected;
+        world.inner.character_bodies.get_mut(id).unwrap().collisions = collected;
 
         let new_pos = current + movement.translation;
         if let Some(rb) = world.inner.bodies.get_mut(body) {
@@ -841,7 +826,7 @@ pub extern "C" fn character_body_move_with_terrain(
         world
             .inner
             .character_bodies
-            .get_mut(&id)
+            .get_mut(id)
             .unwrap()
             .last_movement = result;
         clear_error();
@@ -861,7 +846,7 @@ pub extern "C" fn character_body_destroy(world: *mut WorldHandle, id: u32) -> Bo
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        match world.inner.character_bodies.remove(&id) {
+        match world.inner.character_bodies.remove(id) {
             Some(cb) => {
                 // Removing the rigid body also frees its parented collider.
                 world.inner.bodies.remove(
@@ -899,7 +884,7 @@ pub extern "C" fn character_body_get_translation(
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        match world.inner.character_bodies.get(&id) {
+        match world.inner.character_bodies.get(id) {
             Some(cb) => {
                 let t = world.inner.bodies.get(cb.body).unwrap().translation();
                 if !out.is_null() {

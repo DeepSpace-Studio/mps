@@ -54,6 +54,7 @@ pub use mps_formula::plasma;
 pub use mps_formula::quantum;
 pub mod query;
 pub use mps_formula::relativity;
+pub mod registry;
 pub mod rigid_body;
 pub mod rtree;
 pub use mps_formula::rotor;
