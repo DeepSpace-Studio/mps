@@ -121,24 +121,18 @@ pub extern "C" fn hair_system_create(
             }
         }
 
-        let id = world.inner.hair_system_next_id;
-        world.inner.hair_system_next_id = id.wrapping_add(1);
-
         // Initialize hair system (strand soft bodies are created lazily)
-        world.inner.hair_systems.insert(
-            id,
-            HairSystem {
-                attached_body: attached_handle,
-                strands: strands_slice.to_vec(),
-                strand_soft_bodies: Vec::new(),
-                wind: Vec3 {
-                    x: 0.0,
-                    y: 0.0,
-                    z: 0.0,
-                },
-                gravity_scale: 1.0,
+        let id = world.inner.hair_systems.insert(HairSystem {
+            attached_body: attached_handle,
+            strands: strands_slice.to_vec(),
+            strand_soft_bodies: Vec::new(),
+            wind: Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
             },
-        );
+            gravity_scale: 1.0,
+        });
 
         clear_error();
         id
@@ -161,14 +155,14 @@ pub extern "C" fn hair_system_build(world: *mut WorldHandle, id: u32) -> Bool {
             return Bool::FALSE;
         };
 
-        if !world.inner.hair_systems.contains_key(&id) {
+        if !world.inner.hair_systems.contains_key(id) {
             set_error(ERR_NOT_FOUND, "hair system not found");
             return Bool::FALSE;
         }
         if world
             .inner
             .hair_systems
-            .get(&id)
+            .get(id)
             .is_some_and(|h| !h.strand_soft_bodies.is_empty())
         {
             set_error(ERR_UNSUPPORTED, "hair system already built");
@@ -178,7 +172,10 @@ pub extern "C" fn hair_system_build(world: *mut WorldHandle, id: u32) -> Bool {
         // Snapshot the attachment pose, world gravity and stored wind so the
         // per-strand loop borrows only what it needs.
         let (attached_body, attached_pose, gravity, wind, gravity_scale, strands) = {
-            let hair_system = &world.inner.hair_systems[&id];
+            let Some(hair_system) = world.inner.hair_systems.get(id) else {
+                set_error(ERR_NOT_FOUND, "hair system not found");
+                return Bool::FALSE;
+            };
             let Some(attached_body) = world.inner.bodies.get(hair_system.attached_body) else {
                 set_error(ERR_NOT_FOUND, "attached body not found");
                 return Bool::FALSE;
@@ -239,7 +236,7 @@ pub extern "C" fn hair_system_build(world: *mut WorldHandle, id: u32) -> Bool {
             world
                 .inner
                 .hair_systems
-                .get_mut(&id)
+                .get_mut(id)
                 .expect("checked above")
                 .strand_soft_bodies
                 .push(soft_id);
@@ -263,7 +260,7 @@ pub extern "C" fn hair_system_set_wind(world: *mut WorldHandle, id: u32, wind: V
             return Bool::FALSE;
         };
 
-        let Some(hair_system) = world.inner.hair_systems.get_mut(&id) else {
+        let Some(hair_system) = world.inner.hair_systems.get_mut(id) else {
             set_error(ERR_NOT_FOUND, "hair system not found");
             return Bool::FALSE;
         };
@@ -308,7 +305,7 @@ pub extern "C" fn hair_system_set_gravity_scale(
             return Bool::FALSE;
         };
 
-        let Some(hair_system) = world.inner.hair_systems.get_mut(&id) else {
+        let Some(hair_system) = world.inner.hair_systems.get_mut(id) else {
             set_error(ERR_NOT_FOUND, "hair system not found");
             return Bool::FALSE;
         };
@@ -346,7 +343,7 @@ pub extern "C" fn hair_system_remove(world: *mut WorldHandle, id: u32) -> Bool {
             return Bool::FALSE;
         };
 
-        let Some(hair_system) = world.inner.hair_systems.remove(&id) else {
+        let Some(hair_system) = world.inner.hair_systems.remove(id) else {
             set_error(ERR_NOT_FOUND, "hair system not found");
             return Bool::FALSE;
         };
@@ -381,7 +378,7 @@ pub extern "C" fn hair_system_strand_soft_body(
             set_error(ERR_NULL_POINTER, "world is null");
             return u32::MAX;
         };
-        let Some(hair_system) = world.inner.hair_systems.get(&id) else {
+        let Some(hair_system) = world.inner.hair_systems.get(id) else {
             set_error(ERR_NOT_FOUND, "hair system not found");
             return u32::MAX;
         };

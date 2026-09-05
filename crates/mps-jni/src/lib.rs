@@ -1147,6 +1147,15 @@ jni!(long fractureMeshBodyCreate(long world, int shape_type, double a, double b,
         p::<FractureFragmentDesc>(fragments), fragment_count as u32,
         unsafe { *p::<FractureMaterial>(material) }, jb(connect_fragments)) as jlong
 });
+// `seeds` is a `long` to an array of 24-byte Vec3 entries (x@0, y@8, z@16) in
+// the body's local space; `edge_shrink` is a fraction in [0.0, 0.5) removed
+// from each side of every fragment's half-extents (0.0 keeps exact cells).
+jni!(long fractureMeshBodyCreateWithVoronoi(long world, int shape_type, double a, double b, double c, double d, double tx, double ty, double tz, double min_x, double min_y, double min_z, double max_x, double max_y, double max_z, long seeds, int seed_count, long material, int connect_fragments, double edge_shrink) {
+    fm::fracture_mesh_body_create_with_voronoi(m::<WH>(world), sd(shape_type,a,b,c,d), v3(tx,ty,tz),
+        v3(min_x,min_y,min_z), v3(max_x,max_y,max_z),
+        p::<Vec3>(seeds), seed_count as u32,
+        unsafe { *p::<FractureMaterial>(material) }, jb(connect_fragments), edge_shrink) as jlong
+});
 jni!(boolean fractureMeshBodyTrigger(long world, int id) {
     fm::fracture_mesh_body_trigger(m::<WH>(world), u32_from_jint(id)).0 as jbyte
 });
@@ -1167,6 +1176,17 @@ jni!(boolean fractureMeshBodyIsFractured(long world, int id) {
 });
 jni!(boolean fractureMeshBodyRemove(long world, int id) {
     fm::fracture_mesh_body_remove(m::<WH>(world), u32_from_jint(id)).0 as jbyte
+});
+jni!(boolean fractureMeshBodyEnableImpactDamage(long world, int id, double scale, double threshold) {
+    fm::fracture_mesh_body_enable_impact_damage(m::<WH>(world), u32_from_jint(id), scale, threshold).0 as jbyte
+});
+jni!(boolean fractureMeshBodyGetImpactDamage(long world, int id, long out_damage) {
+    fm::fracture_mesh_body_get_impact_damage(m::<WH>(world), u32_from_jint(id), pm::<f64>(out_damage)).0 as jbyte
+});
+// `granular_id == u32::MAX` unlinks the debris routing; the remaining
+// parameters are ignored in that case.
+jni!(boolean fractureMeshBodyLinkGranularDebris(long world, int id, int granular_id, double size_threshold, double grain_mass, double grain_radius) {
+    fm::fracture_mesh_body_link_granular_debris(m::<WH>(world), u32_from_jint(id), granular_id as u32, size_threshold, grain_mass, grain_radius).0 as jbyte
 });
 
 // ---- Hair / fur systems ----

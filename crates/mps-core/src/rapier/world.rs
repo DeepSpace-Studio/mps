@@ -7,7 +7,6 @@ use rapier3d::prelude::{
     IntegrationParameters, IslandManager, MultibodyJointSet, NarrowPhase, PhysicsPipeline,
     RigidBodyHandle, RigidBodySet, Vector,
 };
-use std::collections::HashMap;
 use std::sync::Arc;
 
 #[cfg(feature = "relative-force")]
@@ -23,6 +22,7 @@ use crate::rapier::ffi::{
     unpack_collider_handle, unpack_rigid_body_handle, vec3_finite, vec3_to_rapier,
 };
 use crate::rapier::forces::{BodyForceLog, ForceFacade, ForceRegistry};
+use crate::rapier::registry::IdRegistry;
 use crate::rapier::terrain_gravity::TerrainGravitySource;
 
 const MAX_STEP_SECONDS: f64 = 1.0;
@@ -123,9 +123,7 @@ pub struct PhysicsWorld {
         std::collections::HashMap<u32, Vec<Option<rapier3d::prelude::RigidBodyHandle>>>,
     /// Phase 39: articulated chains (revolute-motor serial arms), keyed by
     /// articulation id. See `articulation.rs`.
-    pub(crate) articulations: HashMap<u32, crate::rapier::articulation::ArticulationBody>,
-    /// Next articulation id (monotonic; ids are never reused).
-    pub(crate) articulation_next_id: u32,
+    pub(crate) articulations: IdRegistry<crate::rapier::articulation::ArticulationBody>,
     /// Phase 2 (fluid SPH ↔ rigid): per-fluid collision proxies. When a fluid has
     /// collision coupling enabled (via `fluid_enable_collision`), each particle is
     /// backed by a dynamic `RigidBody` + `Ball` collider, parallel to
@@ -145,42 +143,29 @@ pub struct PhysicsWorld {
     pub(crate) skin_bindings:
         std::collections::HashMap<u32, crate::rapier::soft_body::SkeletonBinding>,
     /// Character bodies (kinematic rigid body + `KinematicCharacterController`).
-    /// Keyed by a stable id assigned at creation (`character_body_next_id`).
-    pub(crate) character_bodies:
-        std::collections::HashMap<u32, crate::rapier::character_body::CharacterBody>,
-    pub(crate) character_body_next_id: u32,
-    /// Sensor trigger zones (sensor collider + overlap tracking). Keyed by a stable
-    /// id assigned at creation (`sensor_zone_next_id`).
-    pub(crate) sensor_zones: std::collections::HashMap<u32, crate::rapier::sensor::SensorZone>,
-    pub(crate) sensor_zone_next_id: u32,
-    /// Ray-cast vehicle controllers. Keyed by a stable id assigned at creation
-    /// (`vehicle_controller_next_id`).
-    pub(crate) vehicle_controllers:
-        std::collections::HashMap<u32, crate::rapier::vehicle::VehicleController>,
-    pub(crate) vehicle_controller_next_id: u32,
+    /// Keyed by a stable id assigned at creation.
+    pub(crate) character_bodies: IdRegistry<crate::rapier::character_body::CharacterBody>,
+    /// Sensor trigger zones (sensor collider + overlap tracking). Keyed by a
+    /// stable id assigned at creation.
+    pub(crate) sensor_zones: IdRegistry<crate::rapier::sensor::SensorZone>,
+    /// Ray-cast vehicle controllers. Keyed by a stable id assigned at
+    /// creation.
+    pub(crate) vehicle_controllers: IdRegistry<crate::rapier::vehicle::VehicleController>,
     /// Tire model controllers (Pacejka-style tire physics for vehicles).
-    /// Keyed by a stable id assigned at creation (`tire_model_next_id`).
-    pub(crate) tire_models: std::collections::HashMap<u32, crate::rapier::tire_model::TireModel>,
-    pub(crate) tire_model_next_id: u32,
+    /// Keyed by a stable id assigned at creation.
+    pub(crate) tire_models: IdRegistry<crate::rapier::tire_model::TireModel>,
     /// PD/PID servo bodies (dynamic rigid body + velocity-level servo
-    /// controller). Keyed by a stable id assigned at creation
-    /// (`servo_body_next_id`).
-    pub(crate) servo_bodies: std::collections::HashMap<u32, crate::rapier::servo_body::ServoBody>,
-    pub(crate) servo_body_next_id: u32,
+    /// controller). Keyed by a stable id assigned at creation.
+    pub(crate) servo_bodies: IdRegistry<crate::rapier::servo_body::ServoBody>,
     /// Fracture mesh bodies (composite rigid bodies that can fracture).
-    /// Keyed by a stable id assigned at creation (`fracture_mesh_next_id`).
-    pub(crate) fracture_mesh_bodies:
-        std::collections::HashMap<u32, crate::rapier::fracture_mesh::FractureMeshBody>,
-    pub(crate) fracture_mesh_next_id: u32,
-    /// Hair/fur systems (hair strands attached to rigid bodies).
-    /// Keyed by a stable id assigned at creation (`hair_system_next_id`).
-    pub(crate) hair_systems: std::collections::HashMap<u32, crate::rapier::hair::HairSystem>,
-    pub(crate) hair_system_next_id: u32,
+    /// Keyed by a stable id assigned at creation.
+    pub(crate) fracture_mesh_bodies: IdRegistry<crate::rapier::fracture_mesh::FractureMeshBody>,
+    /// Hair/fur systems (hair strands attached to rigid bodies). Keyed by a
+    /// stable id assigned at creation.
+    pub(crate) hair_systems: IdRegistry<crate::rapier::hair::HairSystem>,
     /// Rope knot/weaving systems (per-strand soft bodies with collision
-    /// proxies). Keyed by a stable id assigned at creation
-    /// (`rope_knot_next_id`).
-    pub(crate) rope_knots: std::collections::HashMap<u32, crate::rapier::rope_knot::RopeKnotSystem>,
-    pub(crate) rope_knot_next_id: u32,
+    /// proxies). Keyed by a stable id assigned at creation.
+    pub(crate) rope_knots: IdRegistry<crate::rapier::rope_knot::RopeKnotSystem>,
     /// Phase 5d: per-soft-body voxel→particle mapping so a dug-out voxel cell can
     /// be mapped back to the exact particle index to remove via `soft_body_voxel_dig`.
     /// Keyed by `SoftBodyId.0`; populated only by `soft_body_voxel_build`.
@@ -251,27 +236,18 @@ impl PhysicsWorld {
             fluids: Vec::new(),
             granular_bodies: Vec::new(),
             granular_proxies: std::collections::HashMap::new(),
-            articulations: HashMap::new(),
-            articulation_next_id: 0,
+            articulations: IdRegistry::new(),
             granular_dig_spawn: None,
             fluid_proxies: std::collections::HashMap::new(),
             skin_bindings: std::collections::HashMap::new(),
-            character_bodies: std::collections::HashMap::new(),
-            character_body_next_id: 0,
-            sensor_zones: std::collections::HashMap::new(),
-            sensor_zone_next_id: 0,
-            vehicle_controllers: std::collections::HashMap::new(),
-            vehicle_controller_next_id: 0,
-            tire_models: std::collections::HashMap::new(),
-            tire_model_next_id: 0,
-            hair_systems: std::collections::HashMap::new(),
-            hair_system_next_id: 0,
-            rope_knots: std::collections::HashMap::new(),
-            rope_knot_next_id: 0,
-            servo_bodies: std::collections::HashMap::new(),
-            servo_body_next_id: 0,
-            fracture_mesh_bodies: std::collections::HashMap::new(),
-            fracture_mesh_next_id: 0,
+            character_bodies: IdRegistry::new(),
+            sensor_zones: IdRegistry::new(),
+            vehicle_controllers: IdRegistry::new(),
+            tire_models: IdRegistry::new(),
+            hair_systems: IdRegistry::new(),
+            rope_knots: IdRegistry::new(),
+            servo_bodies: IdRegistry::new(),
+            fracture_mesh_bodies: IdRegistry::new(),
             voxel_soft_meta: std::collections::HashMap::new(),
             soft_body_proxies: std::collections::HashMap::new(),
             hooks: crate::rapier::events::CallbackPhysicsHooks::new(events.clone()),
@@ -360,8 +336,11 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
 
         // Thread-contract guard (see the `events` module docs): refuse to step
         // while an init-time event call holds the producer cache — stepping
-        // would race its exclusive access.
-        let Some(_step_guard) = world.inner.events.step_guard() else {
+        // would race its exclusive access. The Arc is cloned to a local so the
+        // guard does not pin a borrow of `world` for the whole step body
+        // (fracture-mesh auto-fracturing below needs `&mut WorldHandle`).
+        let events = std::sync::Arc::clone(&world.inner.events);
+        let Some(_step_guard) = events.step_guard() else {
             set_error(
                 ERR_UNSUPPORTED,
                 "world_step during event ring/callback init",
@@ -738,6 +717,11 @@ pub extern "C" fn world_step(world: *mut WorldHandle, delta_seconds: f64) {
             .inner
             .soft_bodies
             .follow_rigid_bodies(&world.inner.bodies);
+
+        // Fracture mesh auto impact damage: accumulate this step's solver
+        // contact impulses into every enabled fracture mesh body and
+        // auto-fracture the ones past threshold. O(1) when none enabled.
+        crate::rapier::fracture_mesh::accumulate_impact_damage(world);
 
         // Phase 0 (fluid SPH): advance every fluid particle cloud independently,
         // after the rigid-body pipeline. No rigid coupling yet.

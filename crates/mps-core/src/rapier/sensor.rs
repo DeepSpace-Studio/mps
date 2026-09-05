@@ -74,21 +74,15 @@ pub extern "C" fn sensor_zone_create(
             .translation(vec3_to_rapier(translation));
         let collider = builder.build();
         let handle = world.inner.colliders.insert(collider);
-        let id = world.inner.sensor_zone_next_id;
-        world.inner.sensor_zone_next_id += 1;
-        world.inner.sensor_zones.insert(
-            id,
-            SensorZone {
-                collider: crate::rapier::ffi::pack_collider_handle(handle),
-                current: std::collections::HashSet::new(),
-                ever_triggered: false,
-                enabled: true,
-                edge_mode: false,
-                edge_triggered: false,
-                triggered_latch: false,
-            },
-        );
-        id
+        world.inner.sensor_zones.insert(SensorZone {
+            collider: crate::rapier::ffi::pack_collider_handle(handle),
+            current: std::collections::HashSet::new(),
+            ever_triggered: false,
+            enabled: true,
+            edge_mode: false,
+            edge_triggered: false,
+            triggered_latch: false,
+        })
     })
 }
 
@@ -117,7 +111,7 @@ pub extern "C" fn sensor_zone_set_shape(
         }
         // Mutate the existing sensor collider's shape in place (same handle, same
         // pose). This keeps `zone.collider` valid and avoids rebuilding the body.
-        let zone = match world.inner.sensor_zones.get_mut(&id) {
+        let zone = match world.inner.sensor_zones.get_mut(id) {
             Some(z) => z,
             None => {
                 set_error(ERR_NOT_FOUND, "sensor_zone_set_shape: unknown id");
@@ -151,7 +145,7 @@ pub extern "C" fn sensor_zone_set_enabled(world: *mut WorldHandle, id: u32, enab
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        match world.inner.sensor_zones.get_mut(&id) {
+        match world.inner.sensor_zones.get_mut(id) {
             Some(zone) => {
                 zone.enabled = enabled == Bool::TRUE;
                 Bool::TRUE
@@ -179,7 +173,7 @@ pub extern "C" fn sensor_zone_set_edge(world: *mut WorldHandle, id: u32, edge: B
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        match world.inner.sensor_zones.get_mut(&id) {
+        match world.inner.sensor_zones.get_mut(id) {
             Some(zone) => {
                 zone.edge_mode = edge == Bool::TRUE;
                 Bool::TRUE
@@ -207,7 +201,7 @@ pub extern "C" fn sensor_zone_poll(world: *mut WorldHandle, id: u32) -> Bool {
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        let Some(zone) = world.inner.sensor_zones.get(&id) else {
+        let Some(zone) = world.inner.sensor_zones.get(id) else {
             set_error(ERR_NOT_FOUND, "sensor_zone_poll: unknown id");
             return Bool::FALSE;
         };
@@ -242,7 +236,7 @@ pub extern "C" fn sensor_zone_poll(world: *mut WorldHandle, id: u32) -> Bool {
             set
         };
         // `query` is dropped above, so we can now mutably borrow the zone map.
-        let zone = world.inner.sensor_zones.get_mut(&id).unwrap();
+        let zone = world.inner.sensor_zones.get_mut(id).unwrap();
         let was_empty = zone.current.is_empty();
         if !overlaps.is_empty() {
             zone.ever_triggered = true;
@@ -267,7 +261,7 @@ pub extern "C" fn sensor_zone_contact_count(world: *const WorldHandle, id: u32) 
             set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
-        match world.inner.sensor_zones.get(&id) {
+        match world.inner.sensor_zones.get(id) {
             Some(zone) => zone.current.len() as u32,
             None => {
                 set_error(ERR_NOT_FOUND, "sensor_zone_contact_count: unknown id");
@@ -295,7 +289,7 @@ pub extern "C" fn sensor_zone_get_contacts(
             set_error(ERR_NULL_POINTER, "world is null");
             return 0;
         };
-        let Some(zone) = world.inner.sensor_zones.get(&id) else {
+        let Some(zone) = world.inner.sensor_zones.get(id) else {
             set_error(ERR_NOT_FOUND, "sensor_zone_get_contacts: unknown id");
             return 0;
         };
@@ -323,7 +317,7 @@ pub extern "C" fn sensor_zone_is_triggered(world: *const WorldHandle, id: u32) -
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        match world.inner.sensor_zones.get(&id) {
+        match world.inner.sensor_zones.get(id) {
             Some(zone) => {
                 if zone.edge_mode {
                     Bool::from(zone.edge_triggered)
@@ -354,7 +348,7 @@ pub extern "C" fn sensor_zone_consume(world: *mut WorldHandle, id: u32) -> Bool 
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        let Some(zone) = world.inner.sensor_zones.get_mut(&id) else {
+        let Some(zone) = world.inner.sensor_zones.get_mut(id) else {
             set_error(ERR_NOT_FOUND, "sensor_zone_consume: unknown id");
             return Bool::FALSE;
         };
@@ -379,7 +373,7 @@ pub extern "C" fn sensor_zone_clear(world: *mut WorldHandle, id: u32) -> Bool {
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        let Some(zone) = world.inner.sensor_zones.get_mut(&id) else {
+        let Some(zone) = world.inner.sensor_zones.get_mut(id) else {
             set_error(ERR_NOT_FOUND, "sensor_zone_clear: unknown id");
             return Bool::FALSE;
         };
@@ -405,7 +399,7 @@ pub extern "C" fn sensor_zone_get_translation(
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        let Some(zone) = world.inner.sensor_zones.get(&id) else {
+        let Some(zone) = world.inner.sensor_zones.get(id) else {
             set_error(ERR_NOT_FOUND, "sensor_zone_get_translation: unknown id");
             return Bool::FALSE;
         };
@@ -447,7 +441,7 @@ pub extern "C" fn sensor_zone_set_translation(
             );
             return Bool::FALSE;
         }
-        let Some(zone) = world.inner.sensor_zones.get(&id) else {
+        let Some(zone) = world.inner.sensor_zones.get(id) else {
             set_error(ERR_NOT_FOUND, "sensor_zone_set_translation: unknown id");
             return Bool::FALSE;
         };
@@ -479,7 +473,7 @@ pub extern "C" fn sensor_zone_destroy(world: *mut WorldHandle, id: u32) -> Bool 
             set_error(ERR_NULL_POINTER, "world is null");
             return Bool::FALSE;
         };
-        match world.inner.sensor_zones.remove(&id) {
+        match world.inner.sensor_zones.remove(id) {
             Some(zone) => {
                 let handle = crate::rapier::ffi::unpack_collider_handle(zone.collider);
                 world.inner.colliders.remove(

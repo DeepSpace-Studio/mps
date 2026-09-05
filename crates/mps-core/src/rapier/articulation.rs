@@ -195,13 +195,10 @@ pub extern "C" fn articulation_body_create(
         }
 
         clear_error();
-        let id = world.inner.articulation_next_id;
-        world.inner.articulation_next_id += 1;
         world
             .inner
             .articulations
-            .insert(id, ArticulationBody { links, joints });
-        id
+            .insert(ArticulationBody { links, joints })
     })
 }
 
@@ -225,7 +222,7 @@ pub extern "C" fn articulation_body_link_handle(
             );
             return 0;
         };
-        let Some(body) = world.inner.articulations.get(&id) else {
+        let Some(body) = world.inner.articulations.get(id) else {
             set_error(ERR_NOT_FOUND, "articulation_body_link_handle: unknown id");
             return 0;
         };
@@ -260,7 +257,7 @@ pub extern "C" fn articulation_body_link_count(world: *const WorldHandle, id: u3
             );
             return u32::MAX;
         };
-        let Some(body) = world.inner.articulations.get(&id) else {
+        let Some(body) = world.inner.articulations.get(id) else {
             set_error(ERR_NOT_FOUND, "articulation_body_link_count: unknown id");
             return u32::MAX;
         };
@@ -299,7 +296,7 @@ pub extern "C" fn articulation_body_set_joint_target(
             );
             return Bool::FALSE;
         }
-        let Some(body) = world.inner.articulations.get_mut(&id) else {
+        let Some(body) = world.inner.articulations.get_mut(id) else {
             set_error(
                 ERR_NOT_FOUND,
                 "articulation_body_set_joint_target: unknown id",

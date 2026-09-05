@@ -114,7 +114,7 @@ pub extern "C" fn tire_model_create(
             set_error(ERR_CAPACITY, "invalid wheel count");
             return u32::MAX;
         }
-        if !world.inner.vehicle_controllers.contains_key(&vehicle_id) {
+        if !world.inner.vehicle_controllers.contains_key(vehicle_id) {
             set_error(ERR_NOT_FOUND, "vehicle controller not found");
             return u32::MAX;
         }
@@ -133,13 +133,10 @@ pub extern "C" fn tire_model_create(
             });
         }
 
-        let id = world.inner.tire_model_next_id;
-        world.inner.tire_model_next_id = id.wrapping_add(1);
-
-        world
+        let id = world
             .inner
             .tire_models
-            .insert(id, TireModel { vehicle_id, tires });
+            .insert(TireModel { vehicle_id, tires });
 
         clear_error();
         id
@@ -169,7 +166,7 @@ pub extern "C" fn tire_model_set_params(
             return Bool::FALSE;
         };
 
-        let Some(tire_model) = world.inner.tire_models.get_mut(&id) else {
+        let Some(tire_model) = world.inner.tire_models.get_mut(id) else {
             set_error(ERR_NOT_FOUND, "tire model not found");
             return Bool::FALSE;
         };
@@ -236,7 +233,7 @@ pub extern "C" fn tire_model_update(world: *mut WorldHandle, id: u32, dt: f64) -
             return Bool::FALSE;
         }
 
-        let vehicle_id = match world.inner.tire_models.get(&id) {
+        let vehicle_id = match world.inner.tire_models.get(id) {
             Some(tire_model) => tire_model.vehicle_id,
             None => {
                 set_error(ERR_NOT_FOUND, "tire model not found");
@@ -244,7 +241,7 @@ pub extern "C" fn tire_model_update(world: *mut WorldHandle, id: u32, dt: f64) -
             }
         };
 
-        let Some(vehicle) = world.inner.vehicle_controllers.get(&vehicle_id) else {
+        let Some(vehicle) = world.inner.vehicle_controllers.get(vehicle_id) else {
             set_error(ERR_NOT_FOUND, "vehicle controller not found");
             return Bool::FALSE;
         };
@@ -258,7 +255,7 @@ pub extern "C" fn tire_model_update(world: *mut WorldHandle, id: u32, dt: f64) -
         let gravity_len = world.inner.gravity.length();
         let wheels = vehicle.controller.wheels();
 
-        let Some(tire_model) = world.inner.tire_models.get_mut(&id) else {
+        let Some(tire_model) = world.inner.tire_models.get_mut(id) else {
             set_error(ERR_NOT_FOUND, "tire model not found");
             return Bool::FALSE;
         };
@@ -369,7 +366,7 @@ pub extern "C" fn tire_model_get_forces(
             return Bool::FALSE;
         };
 
-        let Some(tire_model) = world.inner.tire_models.get(&id) else {
+        let Some(tire_model) = world.inner.tire_models.get(id) else {
             set_error(ERR_NOT_FOUND, "tire model not found");
             return Bool::FALSE;
         };
@@ -408,7 +405,7 @@ pub extern "C" fn tire_model_remove(world: *mut WorldHandle, id: u32) -> Bool {
             return Bool::FALSE;
         };
 
-        world.inner.tire_models.remove(&id);
+        world.inner.tire_models.remove(id);
         clear_error();
         Bool::TRUE
     })

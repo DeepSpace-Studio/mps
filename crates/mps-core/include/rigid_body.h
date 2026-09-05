@@ -4087,6 +4087,66 @@ Bool fracture_mesh_body_is_fractured(struct WorldHandle *world, uint32_t id);
 Bool fracture_mesh_body_remove(struct WorldHandle *world, uint32_t id);
 
 /**
+ * Enable automatic impact damage for a fracture mesh body.
+ *
+ * From then on, every `world_step` accumulates the solver contact impulse
+ * (N·s) this body exchanges through any of its colliders, scaled by
+ * `scale`, into the body's impact damage; once the accumulated damage
+ * reaches `threshold` the body auto-fractures (same path as the manual
+ * trigger: source body replaced by its fragment set). Disabling after the
+ * fact is not supported — pass a huge `threshold` to effectively neutralize.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer.
+ */
+Bool fracture_mesh_body_enable_impact_damage(struct WorldHandle *world,
+                                             uint32_t id,
+                                             double scale,
+                                             double threshold);
+
+/**
+ * Read the accumulated impact damage of a fracture mesh body.
+ *
+ * Writes the current value to `out_damage` (always allowed, even after the
+ * body has fractured — the value then stays at its trigger-time level).
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer; `out_damage` must point to
+ * writable memory for one `f64`.
+ */
+Bool fracture_mesh_body_get_impact_damage(struct WorldHandle *world,
+                                          uint32_t id,
+                                          double *out_damage);
+
+/**
+ * Link (or unlink) a fracture mesh body's debris routing to a granular body.
+ *
+ * Once linked, triggering the fracture (manually or via any auto trigger)
+ * turns every fragment whose largest half-extent is below
+ * `size_threshold` into one DEM grain spawned at the fragment's world
+ * centre with the source body's linear velocity; fragments at or above the
+ * threshold keep becoming rigid fragment bodies. Pass `granular_id ==
+ * u32::MAX` to unlink (the remaining parameters are ignored).
+ *
+ * Grain mass/radius are caller-chosen (the link does not derive them from
+ * the fragment volume); grain spawn is best-effort — a link naming a
+ * granular body destroyed before the trigger silently falls back to rigid
+ * fragments for those pieces.
+ *
+ * # Safety
+ *
+ * `world` must be a valid world pointer.
+ */
+Bool fracture_mesh_body_link_granular_debris(struct WorldHandle *world,
+                                             uint32_t id,
+                                             uint32_t granular_id,
+                                             double size_threshold,
+                                             double grain_mass,
+                                             double grain_radius);
+
+/**
  * Create a DEM granular body and return its id (the `Vec` index in
  * `PhysicsWorld.granular_bodies`). Returns `u32::MAX` on error.
  *
