@@ -71,6 +71,7 @@ use crate::pages::cosmos_gravity::CosmosGravity;
 use crate::pages::cosmos_integrator::CosmosIntegrator;
 use crate::pages::cosmos_orbit::CosmosOrbit;
 use crate::pages::cosmos_world::CosmosWorld;
+use crate::pages::disasters::Disasters;
 use crate::pages::events::Events;
 use crate::pages::ffm::Ffm;
 use crate::pages::force_queue::ForceQueue;
@@ -83,6 +84,7 @@ use crate::pages::quickstart::Quickstart;
 use crate::pages::sensor_zone::SensorZone;
 use crate::pages::soft_body::SoftBody;
 use crate::pages::vehicle_controller::VehicleController;
+use crate::pages::volcano::Volcano;
 use crate::pages::voxel::Voxel;
 
 /// The whole documentation, rendered as one inline page. A sticky TOC provides
@@ -148,6 +150,8 @@ pub fn Home() -> Element {
             CharacterBody {}
             SensorZone {}
             VehicleController {}
+            Disasters {}
+            Volcano {}
             Changelog {}
             Moons {}
             Events {}

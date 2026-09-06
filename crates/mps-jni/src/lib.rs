@@ -27,11 +27,12 @@ use mps_core::rapier::ffi::{
 };
 use mps_core::rapier::{
     articulation as ar, balloon as bl, bounds as bo, character_body as cb_, cloth as cl,
-    collider as col, compat as com, controller as cc, crbtree as crt, dop, error as er,
-    events as ev, fracture as fr, fracture_mesh as fm, granular as gr, hair as hr, joints as jo,
-    matmech as mm, molecular as mol, neural as neu, query as qu, rigid_body as rb, rope as rp,
-    rope_knot as rk, rtree as rt, sensor as sz, servo_body as sv, soft_body as sb,
-    spaceflight as sf, thermo as th, tire_model as tm, vehicle as vc, voxel as vx, world as wo,
+    collider as col, compat as com, controller as cc, crbtree as crt, disasters as dis, dop,
+    error as er, events as ev, fracture as fr, fracture_mesh as fm, granular as gr, hair as hr,
+    joints as jo, matmech as mm, molecular as mol, neural as neu, query as qu, rigid_body as rb,
+    rope as rp, rope_knot as rk, rtree as rt, sensor as sz, servo_body as sv, soft_body as sb,
+    spaceflight as sf, thermo as th, tire_model as tm, vehicle as vc, volcano as vol, voxel as vx,
+    world as wo,
 };
 use mps_core::rapier3d::prelude::{Collider as CB, RigidBody as RB};
 use mps_ffm as abi;
@@ -237,7 +238,7 @@ macro_rules! jni {
             "Java_org_polaris2023_mps_rapier_RapierNative_",
             stringify!($method)
         ))]
-        #[allow(non_snake_case)]
+        #[allow(non_snake_case, clippy::too_many_arguments)]
         pub extern "system" fn $method(_env: JNIEnv, _class: jclass, $($arg: jni!(@ty $kind)),*) -> jni!(@ty $ret) {
             match catch_unwind(AssertUnwindSafe(|| $body)) {
                 Ok(value) => value,
@@ -263,7 +264,7 @@ macro_rules! jni_e_c {
             "Java_org_polaris2023_mps_rapier_RapierNative_",
             stringify!($method)
         ))]
-        #[allow(non_snake_case)]
+        #[allow(non_snake_case, clippy::too_many_arguments)]
         pub extern "system" fn $method( $($arg: jni_e_c!(@ty $kind)),*) -> jni_e_c!(@ty $ret) {
             match catch_unwind(AssertUnwindSafe(|| $body)) {
                 Ok(value) => value,
@@ -288,7 +289,7 @@ macro_rules! jni_space {
             "Java_org_cn_1grass_1block_kelvin_physical_SpaceNative_",
             stringify!($method)
         ))]
-        #[allow(non_snake_case)]
+        #[allow(non_snake_case, clippy::too_many_arguments)]
         pub extern "system" fn $method(_env: JNIEnv, _class: jclass, $($arg: jni_space!(@ty $kind)),*) -> jni_space!(@ty $ret) {
             match catch_unwind(AssertUnwindSafe(|| $body)) {
                 Ok(value) => value,
@@ -2571,3 +2572,169 @@ jni!(boolean softArticulationSetJointTarget(long world, int id, int joint_index,
 #[unsafe(export_name = "Java_org_polaris2023_mps_rapier_RapierConnect_RustMemoryFree")]
 #[allow(non_snake_case)]
 pub extern "system" fn RustMemoryFree(_env: JNIEnv, _class: jclass, _handle: jlong) {}
+
+// =========================================================================
+// Natural Disasters — 台风 / 龙卷风 / 冰雹（挂接在 mps-core WorldHandle 上）
+//
+// 纯场公式在 `mps_formula::disasters`，世界侧 C ABI 为 `disaster_*`（与
+// `crates/mps-core/include/rigid_body.h` 一致）。Vec3 参数按 JNI 惯例拆成
+// 三个 double；`out_*` 是 Java 端分配的 native 缓冲指针（direct memory），
+// 由 Rust 侧写入。`disasterApplyForces` 的两个计数器是"本次调用"语义。
+// =========================================================================
+
+// 注册台风（飓风同一模型，`spin` = -1 表示南半球顺时针）。
+// inflow / exponent / ref_height 传 0 使用默认（0.15 / 0.11 / 10 m）。
+// `out_id` 写入稳定源 id；返回 0 = ERR_OK。
+jni!(int disasterAddTyphoon(long world, double cx, double cy, double cz, double max_wind, double radius_max_wind, double tx, double ty, double tz, double spin, double inflow, double exponent, double ref_height, long out_id) {
+    dis::disaster_add_typhoon(
+        m::<WH>(world),
+        v3(cx, cy, cz),
+        max_wind,
+        radius_max_wind,
+        v3(tx, ty, tz),
+        spin,
+        inflow,
+        exponent,
+        ref_height,
+        pm::<u32>(out_id),
+    ) as jint
+});
+
+// 注册龙卷风（垂直轴过 base）。
+jni!(int disasterAddTornado(long world, double bx, double by, double bz, double max_wind, double core_radius, double top_height, double tx, double ty, double tz, double spin, double updraft_fraction, long out_id) {
+    dis::disaster_add_tornado(
+        m::<WH>(world),
+        v3(bx, by, bz),
+        max_wind,
+        core_radius,
+        top_height,
+        v3(tx, ty, tz),
+        spin,
+        updraft_fraction,
+        pm::<u32>(out_id),
+    ) as jint
+});
+
+// 注册冰雹云团（水平圆盘落区，intensity = 每平方米参考面积每秒期望冲击数）。
+jni!(int disasterAddHail(long world, double cx, double cy, double cz, double radius, double intensity, double hail_radius, long out_id) {
+    dis::disaster_add_hail(
+        m::<WH>(world),
+        v3(cx, cy, cz),
+        radius,
+        intensity,
+        hail_radius,
+        pm::<u32>(out_id),
+    ) as jint
+});
+
+jni!(int disasterRemove(long world, int id) {
+    dis::disaster_remove(m::<WH>(world), u32_from_jint(id)) as jint
+});
+
+jni!(int disasterClear(long world) {
+    dis::disaster_clear(m::<WH>(world)) as jint
+});
+
+// 推进所有灾害源（风暴中心平移、冰雹 RNG 走格），每帧在 apply 之前调用。
+jni!(int disasterAdvance(long world, double dt) {
+    dis::disaster_advance(m::<WH>(world), dt) as jint
+});
+
+// 采样合成风场（台风 + 龙卷风求和）到 `out_wind`（3 个 f64）。
+jni!(int disasterSampleWind(long world, double px, double py, double pz, long out_wind) {
+    dis::disaster_sample_wind(m::<WH>(world), v3(px, py, pz), pm::<Vec3>(out_wind)) as jint
+});
+
+// 采样气旋式压降（Pa）到 `out_drop`。
+jni!(int disasterSamplePressureDrop(long world, double px, double py, double pz, double air_density, long out_drop) {
+    dis::disaster_sample_pressure_drop(m::<WH>(world), v3(px, py, pz), air_density, pm::<f64>(out_drop)) as jint
+});
+
+// 施加风阻力 + 冰雹冲击。air_density 传 0 取 ISA 海平面默认 1.225 kg/m³。
+// 计数器为"本次调用"语义。
+jni!(int disasterApplyForces(long world, double air_density, double drag_coefficient, double reference_area, double dt, int wake_up, long out_body_count, long out_impact_count) {
+    dis::disaster_apply_forces(
+        m::<WH>(world),
+        air_density,
+        drag_coefficient,
+        reference_area,
+        dt,
+        jb(wake_up),
+        pm::<u32>(out_body_count),
+        pm::<u32>(out_impact_count),
+    ) as jint
+});
+
+// =========================================================================
+// Volcano — 火山喷发（烟柱流场 / 火山弹 / 加热与刚体渐进熔化）
+//
+// 纯场公式在 `mps_formula::volcano`，世界侧 C ABI 为 `volcano_*`。逐刚体
+// 热状态以打包句柄为键存在世界里；熔化的刚体被原地禁用并通过
+// `out_melted`（capacity 个打包句柄槽）上报。两个计数器均为"本次调用"。
+// =========================================================================
+
+// 注册火山。lava_temperature 传 0 取玄武岩默认 1473.15 K；ejecta_rate 为
+// 每秒火山弹数（0 关闭弹射）；max_updraft 可为 0（熔岩湖：无风全热暴露）。
+jni!(int volcanoAdd(long world, double vx, double vy, double vz, double plume_radius, double plume_height, double max_updraft, double lava_temperature, double ejecta_rate, long out_id) {
+    vol::volcano_add(
+        m::<WH>(world),
+        v3(vx, vy, vz),
+        plume_radius,
+        plume_height,
+        max_updraft,
+        lava_temperature,
+        ejecta_rate,
+        pm::<u32>(out_id),
+    ) as jint
+});
+
+jni!(int volcanoRemove(long world, int id) {
+    vol::volcano_remove(m::<WH>(world), u32_from_jint(id)) as jint
+});
+
+// 移除全部火山源并重置逐体热/熔化状态（已熔化的刚体保持禁用）。
+jni!(int volcanoClear(long world) {
+    vol::volcano_clear(m::<WH>(world)) as jint
+});
+
+jni!(int volcanoAdvance(long world, double dt) {
+    vol::volcano_advance(m::<WH>(world), dt) as jint
+});
+
+// 采样烟柱流场（m/s）到 `out_flow`（3 个 f64）。
+jni!(int volcanoSampleFlow(long world, double px, double py, double pz, long out_flow) {
+    vol::volcano_sample_flow(m::<WH>(world), v3(px, py, pz), pm::<Vec3>(out_flow)) as jint
+});
+
+// 采样烟柱暴露温度（K，不低于环境温度）到 `out_temp`。
+jni!(int volcanoSampleTemperature(long world, double px, double py, double pz, long out_temp) {
+    vol::volcano_sample_temperature(m::<WH>(world), v3(px, py, pz), pm::<f64>(out_temp)) as jint
+});
+
+// 查询刚体温度（K）。未被追踪过的刚体返回 ERR_NOT_FOUND（3）。
+jni!(int volcanoBodyTemperature(long world, long body, long out_temp) {
+    vol::volcano_body_temperature(m::<WH>(world), body as RRaw, pm::<f64>(out_temp)) as jint
+});
+
+// 脚本化覆盖刚体温度（K），不存在则创建热状态。
+jni!(int volcanoSetBodyTemperature(long world, long body, double temperature) {
+    vol::volcano_set_body_temperature(m::<WH>(world), body as RRaw, temperature) as jint
+});
+
+// 施加烟柱拖拽 + 火山弹 + 加热/熔化。melt_point（K）、melt_rate（2 倍超热时
+// 每秒损失比例）、heat_exchange_rate（1/s）。熔化完成的刚体被原地禁用并写
+// 入 `out_melted`（最多 capacity 个打包句柄）。计数器为"本次调用"语义。
+jni!(int volcanoApply(long world, double dt, double melt_point, double melt_rate, double heat_exchange_rate, int wake_up, long out_bomb_count, long out_melted, int melted_capacity, long out_melted_count) {
+    vol::volcano_apply(
+        m::<WH>(world),
+        dt,
+        melt_point,
+        melt_rate,
+        heat_exchange_rate,
+        jb(wake_up),
+        pm::<u32>(out_bomb_count),
+        pm::<u64>(out_melted),
+        u32_from_jint(melted_capacity),
+        pm::<u32>(out_melted_count),
+    ) as jint
+});

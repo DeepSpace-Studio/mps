@@ -121,6 +121,14 @@ jni_e_c!(void collisionEventInstall(long world, long callbackPtr) {{
                     h3 { { t!("jni-group-spaceflight-title") } }
                     p { { t!("jni-group-spaceflight-desc") } }
                 }
+                div { class: "feature-card",
+                    h3 { { t!("jni-group-disaster-title") } }
+                    p { { t!("jni-group-disaster-desc") } }
+                }
+                div { class: "feature-card",
+                    h3 { { t!("jni-group-volcano-title") } }
+                    p { { t!("jni-group-volcano-desc") } }
+                }
             }
         }
 

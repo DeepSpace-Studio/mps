@@ -77,6 +77,8 @@ pub fn Sidebar() -> Element {
                     a { class: "nav-link", href: "#sec-character-body", { t!("nav-character-body") } }
                     a { class: "nav-link", href: "#sec-sensor-zone", { t!("nav-sensor-zone") } }
                     a { class: "nav-link", href: "#sec-vehicle-controller", { t!("nav-vehicle-controller") } }
+                    a { class: "nav-link", href: "#sec-disasters", { t!("nav-disasters") } }
+                    a { class: "nav-link", href: "#sec-volcano", { t!("nav-volcano") } }
                     a { class: "nav-link", href: "#sec-force-queue", { t!("nav-force-queue") } }
                     a { class: "nav-link", href: "#sec-api", { t!("nav-api") } }
                     a { class: "nav-link", href: "#sec-changelog", { t!("nav-changelog") } }

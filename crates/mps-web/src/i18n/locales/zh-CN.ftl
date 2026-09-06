@@ -501,6 +501,10 @@ jni-group-cosmos-title = cosmos_*
 jni-group-cosmos-desc = CosmosWorld 创建 / 天体注册 / n-body 互引力 / Verlet 推进 / step_n 批量。
 jni-group-spaceflight-title = spaceflight_*
 jni-group-spaceflight-desc = 轨道摄动 / 比冲 / 推进剂预算 / 出加速结果到 native 缓冲（out_accel）。
+jni-group-disaster-title = disaster_*
+disaster_add_typhoon / disaster_add_tornado / disaster_add_hail / disaster_apply_forces：台风、龙卷风、冰雹场驱动刚体。
+jni-group-volcano-title = volcano_*
+volcano_add / volcano_apply：火山烟柱流场、火山弹弹射与刚体加热/渐进熔化。
 jni-handle-title = 句柄打包
 jni-handle-lead = RigidBodyHandle 折成单个 jlong：高 32 位存 index，低 32 位存 generation，对应 Rapier 的 into_raw_parts() 顺序。
 jni-handle-note = 不拆成两个 jint 是为了与 RigidBodyHandleRaw 的 ABI（单 u64）对齐，避免 JNI 端两次读之间的 generation race。
@@ -1046,3 +1050,54 @@ force-queue-perf-li-1 = 每帧单次 world_step 调用 — 力热路径零 JNI
 force-queue-perf-li-2 = 批量 N 个力 → 1 次 FFI 调用；将 FFI 开销分摊到成千上万个体
 force-queue-perf-li-3 = 缓存行对齐头部 + bitmap；伪共享最小化
 force-queue-perf-li-4 = Capacity 为 2 的幂 → 位掩码快速取模（无除法）
+
+# ---- Natural Disasters ----
+nav-disasters = 自然灾害
+dis-tag = 物理域扩展
+dis-title = 自然灾害模拟
+dis-desc = 台风 / 龙卷风 / 冰雹三种灾害源挂接在 WorldHandle 上：Rankine 涡风场、冰雹冲击与气旋式压降，逐帧驱动全部动态刚体。
+dis-model-title = 三种灾害模型
+dis-model-lead = 纯场公式在 mps_formula::disasters（无 Rapier 状态），世界侧 disaster_* C ABI 把场转成力。
+dis-model-typhoon-title = 台风 / 飓风（热带气旋）
+dis-model-typhoon-desc = Rankine 型涡旋：最大风半径内线性增长、外侧 (Rm/r)^0.6 衰减；径向入流 + 风暴平移 + 边界层幂律高度剖面。spin = ±1 区分南北半球。
+dis-model-tornado-title = 龙卷风
+dis-model-tornado-desc = 垂直轴 Rankine 组合涡，核心上升气流按正弦剖面集中，漏斗顶以上线性衰减；气旋式压降 Δp = ½ρv² 可采样。
+dis-model-hail-title = 冰雹
+dis-model-hail-desc = 水平圆盘落区：二次阻力终端速度落下的冰雹对落区内动态刚体施加确定性捕获冲量，intensity 控制每 m² 每秒期望冲击数。
+dis-model-note = 台风与飓风是同一模型的不同区域称呼 —— 西北太平洋叫台风，大西洋叫飓风，用 spin 符号区分半球。
+dis-frame-title = 每帧调用顺序
+dis-frame-lead = 灾害源是"场 → 力"管线：先推进风暴，再把场施加为力，最后物理 step。
+dis-frame-note = disasterApplyForces 的 airDensity 传 0 取 ISA 海平面默认 1.225 kg/m³；两个计数器是"本次调用"语义。
+dis-api-title = C ABI 一览
+dis-api-note = 全部入口返回 u8 状态码（ERR_OK = 0），ffi_guard 包裹防 panic 跨界。Vec3 在 JNI 层拆成三个 double。
+dis-java-title = Java 示例
+dis-java-lead = mps-jni 在 RapierNative 上导出 disasterAddTyphoon / disasterApplyForces 等方法；out 参数为 Java 分配的 native 缓冲指针。
+dis-java-note = out 缓冲用 ByteBuffer.allocateDirect 或 Unsafe.allocateMemory 分配，按 f64 原生字节序写入。
+dis-det-title = 确定性回放
+dis-det-lead = 冰雹冲击数与横向散布由 splitmix64 以（源 id + 刚体句柄）混种确定性生成。
+dis-det-body = 同一世界状态 + 同一调用序列 = 逐位一致的结果，利于录像回放与测试。风场本身是纯函数采样，天然确定。
+
+# ---- Volcano ----
+nav-volcano = 火山喷发
+vol-tag = 物理域扩展
+vol-title = 火山喷发模拟
+vol-desc = 喷发烟柱流场 + 火山弹弹射 + 热暴露：对烟柱内/喷口附近的刚体施加上升气流拖拽与冲击，并按温度渐进熔化（质量流失直至原地禁用）。
+vol-model-title = 三个子模型
+vol-model-lead = 纯场公式在 mps_formula::volcano；世界侧 volcano_* C ABI 持有火山源与逐刚体热/熔化状态。
+vol-model-plume-title = 喷发烟柱
+vol-model-plume-desc = 随高度线性展宽的高斯柱：核心上升气流在 1.2 倍柱高处衰减为零，柱顶蘑菇帽径向外流；温度按同剖面从熔岩温度降到环境温度。
+vol-model-bomb-title = 火山弹
+vol-model-bomb-desc = 近喷口区确定性弹射（splitmix64）：上抛为主 + 径向外偏 + 抖动的捕获冲量，以"总冲量/dt"的等效力走 add_force 管线。
+vol-model-melt-title = 渐进熔化
+vol-model-melt-desc = 牛顿热交换趋向暴露温度；超过熔点后按超热线性损失质量（set_additional_mass 逐步收缩）；剩 5% 时原地禁用并上报句柄。
+vol-melt-title = 熔化管线
+vol-melt-lead = 温度与质量缩放是显式欧拉逐帧积分，全部参数（熔点/熔化速率/交换率）按 apply 调用传入 —— 同一火山对不同材质给不同熔点。
+vol-melt-note = massScale ≤ 5% 即视为完全熔化；末帧过冲可能使最终质量略低于阈值。熔化的刚体保持禁用，volcanoClear 会重置热状态但不会复活它。
+vol-api-title = C ABI 一览
+vol-api-note = lava_temperature 传 0 取玄武岩默认 1473.15 K；max_updraft 可为 0（熔岩湖：无风全热暴露）；ejecta_rate = 0 关闭火山弹。
+vol-java-title = Java 示例
+vol-java-lead = mps-jni 在 RapierNative 上导出 volcanoAdd / volcanoApply 等方法；逐体热状态以打包句柄为键存在世界里。
+vol-java-note = volcanoBodyTemperature 适合做 UI 血条/冒烟特效；volcanoSetBodyTemperature 可脚本化预热（或点燃可燃物）。
+vol-det-title = 延迟刷新的坑
+vol-det-lead = 与灾害模块同源的实现注意：刚体质量属性在首次 step 前是延迟计算的。
+vol-det-body = body.mass() 首帧报 0 → 质量基准惰性捕获；world_com 首帧是过期原点 → 采样用 translation()；apply_impulse 直改速度会丢首帧 → 冲量走 add_force 管线。volcano_apply 内部已全部处理，Java 侧无需关心。

@@ -501,6 +501,10 @@ jni-group-cosmos-title = cosmos_*
 jni-group-cosmos-desc = CosmosWorld create / celestial registration / n-body mutual gravity / Verlet advance / step_n batch.
 jni-group-spaceflight-title = spaceflight_*
 jni-group-spaceflight-desc = orbital perturbation / specific impulse / propellant budget / write acceleration output to a native buffer (out_accel).
+jni-group-disaster-title = disaster_*
+disaster_add_typhoon / disaster_add_tornado / disaster_add_hail / disaster_apply_forces: typhoon, tornado and hailstorm fields driving rigid bodies.
+jni-group-volcano-title = volcano_*
+volcano_add / volcano_apply: eruptive plume flow, lava-bomb ejecta and progressive rigid-body melting.
 jni-handle-title = Handle packing
 jni-handle-lead = RigidBodyHandle folds into a single jlong: high 32 bits store the index, low 32 bits the generation, matching Rapier's into_raw_parts() order.
 jni-handle-note = Not splitting into two jints keeps ABI alignment with RigidBodyHandleRaw (a single u64) and avoids a generation race between two JNI reads.
@@ -1049,3 +1053,54 @@ force-queue-perf-li-1 = Single world_step call per frame — zero JNI on force h
 force-queue-perf-li-2 = Batch N forces → 1 FFI call; amortizes FFI overhead over thousands of bodies
 force-queue-perf-li-3 = Cache-line aligned header + bitmap; false-sharing minimized
 force-queue-perf-li-4 = Capacity power-of-2 → fast modulo via bitmask (no division)
+
+# ---- Natural Disasters ----
+nav-disasters = Disasters
+dis-tag = Physics extension
+dis-title = Natural Disaster Simulation
+dis-desc = Typhoon / tornado / hailstorm sources attached to a WorldHandle: Rankine-vortex wind fields, hail impacts and cycrostrophic pressure drops, driving every dynamic rigid body per frame.
+dis-model-title = Three disaster models
+dis-model-lead = Pure field math lives in mps_formula::disasters (no Rapier state); the world-side disaster_* C ABI turns fields into forces.
+dis-model-typhoon-title = Typhoon / hurricane (tropical cyclone)
+dis-model-typhoon-desc = Rankine-like vortex: linear growth inside the radius of maximum wind, (Rm/r)^0.6 decay outside; radial inflow + storm translation + power-law boundary-layer height profile. spin = ±1 selects the hemisphere.
+dis-model-tornado-title = Tornado
+dis-model-tornado-desc = Rankine combined vortex on a vertical axis with a sinusoidal core-concentrated updraft, linear fade above the funnel top; cycrostrophic pressure drop Δp = ½ρv² is sampleable.
+dis-model-hail-title = Hailstorm
+dis-model-hail-desc = A horizontal disc fallout zone: hailstones falling at quadratic-drag terminal velocity apply deterministic capture impulses to dynamic bodies inside; intensity controls expected impacts per m² per second.
+dis-model-note = Typhoon and hurricane are the same model under regional names — the NW Pacific calls it a typhoon, the Atlantic a hurricane; the spin sign selects the hemisphere.
+dis-frame-title = Per-frame call order
+dis-frame-lead = Disasters are a "field → force" pipeline: advance the storms, apply the field as forces, then run the physics step.
+dis-frame-note = Pass airDensity = 0 to disasterApplyForces for the ISA sea-level default 1.225 kg/m³; both counters are per-call.
+dis-api-title = C ABI overview
+dis-api-note = Every entry point returns a u8 status code (ERR_OK = 0), wrapped in ffi_guard so panics never cross the FFI boundary. Vec3 splits into three doubles at the JNI layer.
+dis-java-title = Java example
+dis-java-lead = mps-jni exports disasterAddTyphoon / disasterApplyForces and friends on RapierNative; out parameters are native buffer pointers allocated by Java.
+dis-java-note = Allocate out buffers with ByteBuffer.allocateDirect or Unsafe.allocateMemory, written in native f64 byte order.
+dis-det-title = Deterministic replay
+dis-det-lead = Hail impact counts and lateral scatter are generated deterministically by splitmix64 seeded from (source id + body handle).
+dis-det-body = Same world state + same call sequence = bit-identical results — ideal for replay and testing. The wind field itself is a pure-function sample, deterministic by construction.
+
+# ---- Volcano ----
+nav-volcano = Volcano
+vol-tag = Physics extension
+vol-title = Volcanic Eruption Simulation
+vol-desc = Eruptive plume flow + lava-bomb ejecta + thermal exposure: updraft drag and impacts on bodies inside the plume or near the vent, plus progressive melting by temperature (mass loss until the body is disabled in place).
+vol-model-title = Three sub-models
+vol-model-lead = Pure field math lives in mps_formula::volcano; the world-side volcano_* C ABI holds the volcano sources and per-body thermal / melt state.
+vol-model-plume-title = Eruptive plume
+vol-model-plume-desc = A linearly widening Gaussian column: core updraft decays to zero at 1.2 column heights, mushroom-cap radial outflow at the top; temperature falls from lava temperature to ambient along the same profile.
+vol-model-bomb-title = Lava bombs
+vol-model-bomb-desc = Deterministic near-vent ejecta (splitmix64): up-dominant capture impulses tilted radially outward with jitter, delivered as an equivalent force through the add_force pipeline.
+vol-model-melt-title = Progressive melting
+vol-model-melt-desc = Newton exchange towards the exposure temperature; above the melt point mass is lost linearly in superheat (set_additional_mass shrinks step by step); at 5% remaining the body is disabled in place and reported.
+vol-melt-title = Melt pipeline
+vol-melt-lead = Temperature and mass scale integrate explicitly per frame; all parameters (melt point / melt rate / exchange rate) are passed per apply call — give different materials different melt points under the same volcano.
+vol-melt-note = massScale ≤ 5% counts as fully melted; the final frame can overshoot slightly below the threshold. Melted bodies stay disabled; volcanoClear resets thermal state but does not revive them.
+vol-api-title = C ABI overview
+vol-api-note = Pass lava_temperature = 0 for the basaltic default 1473.15 K; max_updraft may be 0 (lava lake: no wind, full thermal exposure); ejecta_rate = 0 disables lava bombs.
+vol-java-title = Java example
+vol-java-lead = mps-jni exports volcanoAdd / volcanoApply and friends on RapierNative; per-body thermal state is keyed by the packed body handle inside the world.
+vol-java-note = volcanoBodyTemperature suits UI health bars / smoke effects; volcanoSetBodyTemperature enables scripted pre-heating (or igniting flammables).
+vol-det-title = Lazy-refresh pitfalls
+vol-det-lead = Same implementation notes as the disaster module: rigid-body mass properties are lazily computed until the first step.
+vol-det-body = body.mass() reports 0 on the first frame → the mass reference is captured lazily; world_com is a stale origin on the first frame → sampling uses translation(); apply_impulse would lose the first frame → impulses flow through the add_force pipeline. volcano_apply handles all of this internally — Java code needs to know nothing about it.
