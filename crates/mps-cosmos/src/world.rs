@@ -1051,8 +1051,11 @@ impl CosmosWorld {
         };
 
         // 先取出反射体句柄/半径，避免与下方 radio.step(&mut self) 借用冲突
-        let reflector_desc: Vec<(RigidBodyHandle, f64)> =
-            radio.reflectors().iter().map(|r| (r.handle, r.radius)).collect();
+        let reflector_desc: Vec<(RigidBodyHandle, f64)> = radio
+            .reflectors()
+            .iter()
+            .map(|r| (r.handle, r.radius))
+            .collect();
 
         let now_ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

@@ -257,13 +257,8 @@ impl RadioWorld {
             });
 
         // 1) 尝试直射（跳过源/目标所在天体）；记录首个挡路天体
-        let direct_blocker = first_blocker_idx(
-            signal.origin,
-            rx.pos,
-            bodies,
-            source_body,
-            target_body,
-        );
+        let direct_blocker =
+            first_blocker_idx(signal.origin, rx.pos, bodies, source_body, target_body);
         if direct_blocker.is_none() {
             let path_len = signal.origin.distance(rx.pos);
             return self.finish(signal, rx, path_len, 1.0);
@@ -277,14 +272,9 @@ impl RadioWorld {
             if source_body == Some(i) || target_body == Some(i) || direct_blocker == Some(i) {
                 continue; // 源/目标所在天体 + 挡路天体 不当作反射面
             }
-            if let Some((p_len, att)) = sphere_reflect_path(
-                signal.origin,
-                rx.pos,
-                r.pos,
-                r.radius,
-                bodies,
-                i,
-            ) {
+            if let Some((p_len, att)) =
+                sphere_reflect_path(signal.origin, rx.pos, r.pos, r.radius, bodies, i)
+            {
                 if best.map_or(true, |(bl, _)| p_len < bl) {
                     best = Some((p_len, att));
                 }
@@ -356,9 +346,7 @@ fn first_blocker_idx(
         .iter()
         .enumerate()
         .filter(|(i, _)| Some(*i) != skip_source && Some(*i) != skip_target)
-        .filter_map(|(i, r)| {
-            ray_sphere_hit(a, dir, max_dist, r.pos, r.radius).map(|t| (i, t))
-        })
+        .filter_map(|(i, r)| ray_sphere_hit(a, dir, max_dist, r.pos, r.radius).map(|t| (i, t)))
         .min_by(|(_, x), (_, y)| x.partial_cmp(y).unwrap())
         .map(|(i, _)| i)
 }
@@ -427,7 +415,9 @@ fn sphere_reflect_path(
     let g = |theta: f64| -> f64 {
         let p = center + (e1 * theta.cos() + e2 * theta.sin()) * radius;
         let normal = (p - center).try_normalize();
-        let Some(normal) = normal else { return f64::MAX; };
+        let Some(normal) = normal else {
+            return f64::MAX;
+        };
         let in_dir = (a - p).try_normalize();
         let out_dir = (b - p).try_normalize();
         let (Some(in_dir), Some(out_dir)) = (in_dir, out_dir) else {
@@ -446,7 +436,8 @@ fn sphere_reflect_path(
     let mut prev_theta = -std::f64::consts::PI;
     let mut prev_g = g(prev_theta);
     for i in 1..=samples {
-        let theta = -std::f64::consts::PI + 2.0 * std::f64::consts::PI * (i as f64) / (samples as f64);
+        let theta =
+            -std::f64::consts::PI + 2.0 * std::f64::consts::PI * (i as f64) / (samples as f64);
         let cur_g = g(theta);
         if prev_g.is_finite() && cur_g.is_finite() && prev_g * cur_g <= 0.0 {
             // 区间 [prev_theta, theta] 内二分
@@ -655,7 +646,10 @@ mod tests {
         radio.submit_signal(signal(1, Vector::ZERO));
 
         radio.step(&[], 1000);
-        assert!(radio.take_results().is_empty(), "weak signal must be filtered");
+        assert!(
+            radio.take_results().is_empty(),
+            "weak signal must be filtered"
+        );
     }
 
     #[test]
@@ -673,7 +667,10 @@ mod tests {
         radio.submit_signal(s);
 
         radio.step(&[], 1000);
-        assert!(radio.take_results().is_empty(), "out-of-cone must not reach");
+        assert!(
+            radio.take_results().is_empty(),
+            "out-of-cone must not reach"
+        );
     }
 
     #[test]

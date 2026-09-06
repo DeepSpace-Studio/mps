@@ -768,7 +768,9 @@ pub extern "C" fn cosmos_world_enable_radio(world: *mut CosmosWorld) -> u8 {
 /// 查询无线电子世界是否已启用。
 #[unsafe(no_mangle)]
 pub extern "C" fn cosmos_world_radio_enabled(world: *const CosmosWorld) -> u8 {
-    ffi_guard(0, || unsafe { world.as_ref() }.map_or(0, |w| w.radio_enabled() as u8))
+    ffi_guard(0, || {
+        unsafe { world.as_ref() }.map_or(0, |w| w.radio_enabled() as u8)
+    })
 }
 
 /// 注册一个反射天体：`body` 是打包的刚体句柄（`pack_handle`），`radius` 米。
@@ -804,7 +806,10 @@ pub extern "C" fn cosmos_world_radio_remove_reflector(world: *mut CosmosWorld, b
 ///  rx_gain, tx_gain, beam_angle, owner_body`。
 /// `owner_body`：节点所属刚体句柄（飞船），0 表示无（用于跳过源自身反射）。
 #[unsafe(no_mangle)]
-pub extern "C" fn cosmos_world_radio_register_node(world: *mut CosmosWorld, values: *const f64) -> u8 {
+pub extern "C" fn cosmos_world_radio_register_node(
+    world: *mut CosmosWorld,
+    values: *const f64,
+) -> u8 {
     ffi_guard(0, || {
         let Some(w) = (unsafe { world.as_mut() }) else {
             set_error(ERR_NULL_POINTER, "cosmos world is null");
@@ -819,7 +824,9 @@ pub extern "C" fn cosmos_world_radio_register_node(world: *mut CosmosWorld, valu
             id: v[0] as u64,
             pos: Vector::new(v[1], v[2], v[3]),
             vel: Vector::new(v[4], v[5], v[6]),
-            dir: Vector::new(v[7], v[8], v[9]).try_normalize().unwrap_or(Vector::Z),
+            dir: Vector::new(v[7], v[8], v[9])
+                .try_normalize()
+                .unwrap_or(Vector::Z),
             frequency: v[10],
             power: v[11],
             sensitivity: v[12],
