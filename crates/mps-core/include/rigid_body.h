@@ -8357,6 +8357,146 @@ Bool tire_model_get_forces(struct WorldHandle *world,
  */
 Bool tire_model_remove(struct WorldHandle *world, uint32_t id);
 
+/**
+ * Register a volcanic-eruption source: a vertical eruptive plume rising
+ * from `vent`, plus optional lava-bomb ejecta (`ejecta_rate` bombs per
+ * second; 0 disables ejecta). `lava_temperature` may be 0 to use the
+ * basaltic default (1473.15 K). Returns `ERR_OK` and writes the stable
+ * source id to `out_id` (when non-null).
+ *
+ * # Safety
+ *
+ * `world` must be a valid, live world pointer; `out_id`, when non-null,
+ * must be valid for a single `u32` write.
+ */
+uint8_t volcano_add(struct WorldHandle *world,
+                    Vec3 vent,
+                    double plume_radius,
+                    double plume_height,
+                    double max_updraft,
+                    double lava_temperature,
+                    double ejecta_rate,
+                    uint32_t *out_id);
+
+/**
+ * Remove a volcano source by id (returns `ERR_NOT_FOUND` for a stale id).
+ * Per-body thermal state is kept so a re-registered volcano resumes where
+ * the field left off; use [`volcano_clear`] to reset it.
+ *
+ * # Safety
+ *
+ * `world` must be a valid, live world pointer.
+ */
+uint8_t volcano_remove(struct WorldHandle *world, uint32_t id);
+
+/**
+ * Remove every volcano source and reset all per-body thermal / melt state
+ * (bodies melted earlier stay disabled).
+ *
+ * # Safety
+ *
+ * `world` must be a valid, live world pointer.
+ */
+uint8_t volcano_clear(struct WorldHandle *world);
+
+/**
+ * Advance every volcano by `dt` seconds (clocks / ejecta RNG). Call once
+ * per frame before [`volcano_apply`].
+ *
+ * # Safety
+ *
+ * `world` must be a valid, live world pointer.
+ */
+uint8_t volcano_advance(struct WorldHandle *world, double dt);
+
+/**
+ * Sample the combined plume flow velocity (m/s) of every registered volcano
+ * at `point`.
+ *
+ * # Safety
+ *
+ * `world` must be a valid, live world pointer; `out_flow` must be valid for
+ * a single `Vec3` write.
+ */
+uint8_t volcano_sample_flow(struct WorldHandle *world, Vec3 point, Vec3 *out_flow);
+
+/**
+ * Sample the exposure temperature (K) of every registered volcano at
+ * `point` — the highest in-plume air temperature (never below ambient).
+ *
+ * # Safety
+ *
+ * `world` must be a valid, live world pointer; `out_temp` must be valid for
+ * a single `f64` write.
+ */
+uint8_t volcano_sample_temperature(struct WorldHandle *world, Vec3 point, double *out_temp);
+
+/**
+ * Query a body's tracked temperature (K). Bodies the module has never seen
+ * report `ERR_NOT_FOUND`.
+ *
+ * # Safety
+ *
+ * `world` must be a valid, live world pointer; `out_temp` must be valid for
+ * a single `f64` write.
+ */
+uint8_t volcano_body_temperature(struct WorldHandle *world,
+                                 RigidBodyHandleRaw body_handle,
+                                 double *out_temp);
+
+/**
+ * Override a body's tracked temperature (K), creating the thermal state if
+ * needed. Useful for scripted pre-heating.
+ *
+ * # Safety
+ *
+ * `world` must be a valid, live world pointer.
+ */
+uint8_t volcano_set_body_temperature(struct WorldHandle *world,
+                                     RigidBodyHandleRaw body_handle,
+                                     double temperature);
+
+/**
+ * Apply the combined volcanic field to every dynamic rigid body:
+ *
+ * * **plume drag** — `F = ½ ρ |v_rel| v_rel` (C_d·A folded to 1 m²) from
+ *   the plume flow sampled at the body origin;
+ * * **lava-bomb ejecta** — for bodies in the near-vent zone of a volcano
+ *   with `ejecta_rate > 0`, a deterministic (splitmix64) number of
+ *   upward-outward capture impulses delivered as an equivalent frame force;
+ * * **heating & melting** — the body temperature moves towards the local
+ *   exposure temperature at `heat_exchange_rate` (1/s); above `melt_point`
+ *   (K) the body loses mass at `melt_rate · (T − T_melt) / T_melt` of its
+ *   remaining mass per second; at ≤ 5 % remaining mass the body is fully
+ *   melted: it is disabled in place and its raw handle is reported.
+ *
+ * `melt_rate` is a fraction per second at 2× superheat (i.e. the rate
+ * formula divides the superheat by the melt point). Melting rescales the
+ * body's additional-mass slot so the total mass lands on
+ * `scale · original_total_mass`.
+ *
+ * Both counters report **this call only** (a body that melted in an earlier
+ * frame is not counted again). Writes up to `melted_capacity` melted body
+ * handles into `out_melted` and the delivered bomb count to `out_bomb_count`
+ * (both optional).
+ *
+ * # Safety
+ *
+ * `world` must be a valid, live world pointer; `out_melted`, when non-null,
+ * must be valid for `melted_capacity` `u64` writes; the counter pointers,
+ * when non-null, must be valid for a single `u32` write each.
+ */
+uint8_t volcano_apply(struct WorldHandle *world,
+                      double dt,
+                      double melt_point,
+                      double melt_rate,
+                      double heat_exchange_rate,
+                      Bool wake_up,
+                      uint32_t *out_bomb_count,
+                      uint64_t *out_melted,
+                      uint32_t melted_capacity,
+                      uint32_t *out_melted_count);
+
 Bool acoustics_spherical_spreading_loss(double range, double *out);
 
 Bool acoustics_cylindrical_spreading_loss(double range, double *out);

@@ -68,6 +68,7 @@ pub use mps_formula::stellar;
 pub use mps_formula::superfluidity;
 pub mod terrain_gravity;
 pub mod tire_model;
+pub mod volcano;
 pub use mps_formula::thermodynamics;
 pub use mps_formula::topology;
 pub mod acoustics_ffi;

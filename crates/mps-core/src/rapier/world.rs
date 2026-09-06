@@ -194,6 +194,13 @@ pub struct PhysicsWorld {
     /// Natural-disaster sources (typhoon / tornado / hailstorm) driving the
     /// `disaster_*` FFI. Keyed by a stable id assigned at creation.
     pub(crate) disasters: IdRegistry<crate::rapier::disasters::Disaster>,
+    /// Volcanic-eruption sources driving the `volcano_*` FFI. Keyed by a
+    /// stable id assigned at creation.
+    pub(crate) volcanoes: IdRegistry<crate::rapier::volcano::Volcano>,
+    /// Per-body thermal / melt state for the volcano module, keyed by the
+    /// `RigidBodyHandleRaw`. Entries for removed bodies are pruned lazily.
+    pub(crate) volcano_bodies:
+        std::collections::HashMap<RigidBodyHandleRaw, crate::rapier::volcano::VolcanoBody>,
     pub(crate) shared_arena: Option<Box<crate::rapier::shared_arena::SharedPhysicsArena>>,
     /// Per-collider voxel source grid for in-place voxel edits. Keyed by the
     /// `ColliderHandleRaw` returned at insert time; populated only for
@@ -259,6 +266,8 @@ impl PhysicsWorld {
             force_registry: ForceRegistry::new(),
             terrain_gravity_source: None,
             disasters: IdRegistry::new(),
+            volcanoes: IdRegistry::new(),
+            volcano_bodies: std::collections::HashMap::new(),
             shared_arena: None,
             voxel_grids: std::collections::HashMap::new(),
             buffers: FrameWorkBuffers::default(),
