@@ -2119,17 +2119,17 @@ jni_space!(int cosmosWorldDynamicBodySnapshot(
 // 每个 `cosmosWorldStep` 尾部自动推进一轮无线电。
 // =========================================================================
 
-/// 启用无线电子世界（幂等）。
+// 启用无线电子世界（幂等）。
 jni_space!(boolean cosmosWorldEnableRadio(long world) {
     mps_cosmos::ffi::cosmos_world_enable_radio(world as isize as *mut CosmosWorld) as jbyte
 });
 
-/// 查询是否已启用。
+// 查询是否已启用。
 jni_space!(boolean cosmosWorldRadioEnabled(long world) {
     mps_cosmos::ffi::cosmos_world_radio_enabled(world as isize as *const CosmosWorld) as jbyte
 });
 
-/// 注册反射天体（行星/恒星）：`body` 为打包刚体句柄，`radius` 米。
+// 注册反射天体（行星/恒星）：`body` 为打包刚体句柄，`radius` 米。
 jni_space!(boolean cosmosWorldRadioAddReflector(long world, long body, double radius) {
     mps_cosmos::ffi::cosmos_world_radio_add_reflector(
         world as isize as *mut CosmosWorld,
@@ -2138,7 +2138,7 @@ jni_space!(boolean cosmosWorldRadioAddReflector(long world, long body, double ra
     ) as jbyte
 });
 
-/// 移除反射天体。
+// 移除反射天体。
 jni_space!(void cosmosWorldRadioRemoveReflector(long world, long body) {
     mps_cosmos::ffi::cosmos_world_radio_remove_reflector(
         world as isize as *mut CosmosWorld,
@@ -2146,12 +2146,12 @@ jni_space!(void cosmosWorldRadioRemoveReflector(long world, long body) {
     );
 });
 
-/// 批量提交收发器节点：`values` 指向 `count * 18` 个 f64（native 直接内存）。
-/// 每节点布局（f64 顺序）：
-/// `id, px,py,pz, vx,vy,vz, dx,dy,dz, frequency, power, sensitivity,
-///  rx_gain, tx_gain, beam_angle, owner_body`
-/// id/owner_body 以 `f64::from_bits(u64)` 编码（Java 用 `Double.longBitsToDouble`）。
-/// 整表覆盖语义：传入的节点集合即本帧全部在线收发器。
+// 批量提交收发器节点：`values` 指向 `count * 18` 个 f64（native 直接内存）。
+// 每节点布局（f64 顺序）：
+// `id, px,py,pz, vx,vy,vz, dx,dy,dz, frequency, power, sensitivity,
+//  rx_gain, tx_gain, beam_angle, owner_body`
+// id/owner_body 以 `f64::from_bits(u64)` 编码（Java 用 `Double.longBitsToDouble`）。
+// 整表覆盖语义：传入的节点集合即本帧全部在线收发器。
 jni_space!(int cosmosWorldRadioSubmitNodes(long world, long values, int count) {
     let w = unsafe { (world as isize as *mut CosmosWorld).as_mut() };
     let Some(w) = w else { return 0; };
@@ -2182,11 +2182,11 @@ jni_space!(int cosmosWorldRadioSubmitNodes(long world, long values, int count) {
     n as jint
 });
 
-/// 批量提交活跃信号：`values` 指向 `count * 18` 个 f64（native 直接内存）。
-/// 每信号布局：
-/// `id, tx_node_id, birth_ms, ox,oy,oz, ovx,ovy,ovz, odx,ody,odz,
-///  frequency, energy, tx_gain, beam_angle, owner_body`
-/// id/owner_body 同上用 `f64::from_bits(u64)` 编码。
+// 批量提交活跃信号：`values` 指向 `count * 18` 个 f64（native 直接内存）。
+// 每信号布局：
+// `id, tx_node_id, birth_ms, ox,oy,oz, ovx,ovy,ovz, odx,ody,odz,
+//  frequency, energy, tx_gain, beam_angle, owner_body`
+// id/owner_body 同上用 `f64::from_bits(u64)` 编码。
 jni_space!(int cosmosWorldRadioSubmitSignals(long world, long values, int count) {
     let w = unsafe { (world as isize as *mut CosmosWorld).as_mut() };
     let Some(w) = w else { return 0; };
@@ -2216,7 +2216,7 @@ jni_space!(int cosmosWorldRadioSubmitSignals(long world, long values, int count)
     n as jint
 });
 
-/// 取走本轮传播结果：`out` 指向 `capacity * 4` 个 f64，返回实际条数。
+// 取走本轮传播结果：`out` 指向 `capacity * 4` 个 f64，返回实际条数。
 jni_space!(int cosmosWorldRadioTakeResults(long world, long out, int capacity) {
     mps_cosmos::ffi::cosmos_world_radio_take_results(
         world as isize as *mut CosmosWorld,
@@ -2225,7 +2225,7 @@ jni_space!(int cosmosWorldRadioTakeResults(long world, long out, int capacity) {
     ) as jint
 });
 
-/// 显式推进一轮无线电传播（在天体 step 之后调用）。
+// 显式推进一轮无线电传播（在天体 step 之后调用）。
 jni_space!(boolean cosmosWorldRadioStep(long world) {
     mps_cosmos::ffi::cosmos_world_radio_step(world as isize as *mut CosmosWorld) as jbyte
 });

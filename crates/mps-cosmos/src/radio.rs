@@ -274,10 +274,9 @@ impl RadioWorld {
             }
             if let Some((p_len, att)) =
                 sphere_reflect_path(signal.origin, rx.pos, r.pos, r.radius, bodies, i)
+                && best.is_none_or(|(bl, _)| p_len < bl)
             {
-                if best.map_or(true, |(bl, _)| p_len < bl) {
-                    best = Some((p_len, att));
-                }
+                best = Some((p_len, att));
             }
         }
 
@@ -458,7 +457,7 @@ fn sphere_reflect_path(
                 }
             }
             let theta_opt = 0.5 * (lo + hi);
-            if best_theta.map_or(true, |bt| g(theta_opt).abs() < g(bt).abs()) {
+            if best_theta.is_none_or(|bt| g(theta_opt).abs() < g(bt).abs()) {
                 best_theta = Some(theta_opt);
             }
         }
