@@ -502,9 +502,9 @@ jni-group-cosmos-desc = CosmosWorld 创建 / 天体注册 / n-body 互引力 / V
 jni-group-spaceflight-title = spaceflight_*
 jni-group-spaceflight-desc = 轨道摄动 / 比冲 / 推进剂预算 / 出加速结果到 native 缓冲（out_accel）。
 jni-group-disaster-title = disaster_*
-disaster_add_typhoon / disaster_add_tornado / disaster_add_hail / disaster_apply_forces：台风、龙卷风、冰雹场驱动刚体。
+jni-group-disaster-desc = disaster_add_typhoon / disaster_add_tornado / disaster_add_hail / disaster_apply_forces：台风、龙卷风、冰雹场驱动刚体。
 jni-group-volcano-title = volcano_*
-volcano_add / volcano_apply：火山烟柱流场、火山弹弹射与刚体加热/渐进熔化。
+jni-group-volcano-desc = volcano_add / volcano_apply：火山烟柱流场、火山弹弹射与刚体加热/渐进熔化。
 jni-handle-title = 句柄打包
 jni-handle-lead = RigidBodyHandle 折成单个 jlong：高 32 位存 index，低 32 位存 generation，对应 Rapier 的 into_raw_parts() 顺序。
 jni-handle-note = 不拆成两个 jint 是为了与 RigidBodyHandleRaw 的 ABI（单 u64）对齐，避免 JNI 端两次读之间的 generation race。

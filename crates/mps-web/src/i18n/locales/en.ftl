@@ -502,9 +502,9 @@ jni-group-cosmos-desc = CosmosWorld create / celestial registration / n-body mut
 jni-group-spaceflight-title = spaceflight_*
 jni-group-spaceflight-desc = orbital perturbation / specific impulse / propellant budget / write acceleration output to a native buffer (out_accel).
 jni-group-disaster-title = disaster_*
-disaster_add_typhoon / disaster_add_tornado / disaster_add_hail / disaster_apply_forces: typhoon, tornado and hailstorm fields driving rigid bodies.
+jni-group-disaster-desc = disaster_add_typhoon / disaster_add_tornado / disaster_add_hail / disaster_apply_forces: typhoon, tornado and hailstorm fields driving rigid bodies.
 jni-group-volcano-title = volcano_*
-volcano_add / volcano_apply: eruptive plume flow, lava-bomb ejecta and progressive rigid-body melting.
+jni-group-volcano-desc = volcano_add / volcano_apply: eruptive plume flow, lava-bomb ejecta and progressive rigid-body melting.
 jni-handle-title = Handle packing
 jni-handle-lead = RigidBodyHandle folds into a single jlong: high 32 bits store the index, low 32 bits the generation, matching Rapier's into_raw_parts() order.
 jni-handle-note = Not splitting into two jints keeps ABI alignment with RigidBodyHandleRaw (a single u64) and avoids a generation race between two JNI reads.
