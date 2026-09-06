@@ -13,7 +13,7 @@ External consumers drive the simulation through opaque world/builder pointers an
 ```text
 mps (Motion Physics System)
  └─ Rust workspace (rigid-body repo)
-      ├─ mps-formula — 28 pure physics/engineering formula modules (no Rapier)
+      ├─ mps-formula — 37 pure physics/engineering formula modules (no Rapier)
       ├─ mps-core     — physics world + Rapier wrapper + C ABI surface
       ├─ mps-cosmos   — astrodynamics / flight-dynamics on top of mps-formula
       ├─ mps-jni      — optional Java JNI bindings (consumes the C ABI)
@@ -34,7 +34,7 @@ Rapier is compiled with `rapier3d-f64` (64-bit floats) rather than the default f
 ```text
 crates/
   mps-core/      physics world, bodies, colliders, queries, events, forces, voxel
-  mps-formula/   28 pure physics/engineering formula modules
+  mps-formula/   37 pure physics/engineering formula modules
   mps-cosmos/    astrodynamics & flight dynamics
   mps-jni/       optional Java JNI bindings
   mps-ffm/       optional Java 25 FFM metadata
@@ -50,7 +50,7 @@ rapier/          vendored rapier3d-f64 fork (separate workspace, path dependency
 
 ## Formula Library (mps-formula)
 
-The formula crate provides **28 modules** with 300+ pure Rust functions spanning physics, aerospace, and engineering. It has **zero dependency on Rapier or `WorldHandle`** — pure input→output computation, which keeps it trivially reusable and unit-testable.
+The formula crate provides **37 modules** with 300+ pure Rust functions spanning physics, aerospace, and engineering. It has **zero dependency on Rapier or `WorldHandle`** — pure input→output computation, which keeps it trivially reusable and unit-testable.
 
 | Module | Functions | Domain |
 |--------|-----------|--------|
@@ -81,6 +81,8 @@ The formula crate provides **28 modules** with 300+ pure Rust functions spanning
 | `trajectory` | 6 | 6DOF ballistic/glide trajectory, RK4 integration |
 | `transmission` | 3 | gear ratios, torque distribution |
 | `wave_optics` | 5 | Kirchhoff diffraction, Fresnel propagation, interference |
+| `disasters` | 11 | typhoon/hurricane Rankine vortex, tornado, hail ballistics, wind drag |
+| `volcano` | 7 | eruptive plume flow, thermal exposure, superheat melting, lava bombs |
 
 ## Architecture: two layers
 

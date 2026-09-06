@@ -49,6 +49,10 @@ pub fn Changelog() -> Element {
                     h3 { { t!("changelog-c6-title") } }
                     p { { t!("changelog-c6-desc") } }
                 }
+                div { class: "feature-card feature-card-accent",
+                    h3 { { t!("changelog-c7-title") } }
+                    p { { t!("changelog-c7-desc") } }
+                }
             }
         }
 

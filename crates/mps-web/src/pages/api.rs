@@ -1,7 +1,9 @@
 use dioxus::prelude::*;
 use dioxus_i18n::t;
 
-use crate::metrics::{CORE_FFI_COUNT, FFI_COLLIDER, FFI_QUERY, FFI_RIGID_BODY, FFI_WORLD};
+use crate::metrics::{
+    CORE_FFI_COUNT, FFI_COLLIDER, FFI_DISASTER, FFI_QUERY, FFI_RIGID_BODY, FFI_VOLCANO, FFI_WORLD,
+};
 
 /// API Reference — the C ABI surface of `mps-core` as exported in
 /// `crates/mps-core/include/rigid_body.h` by cbindgen.
@@ -46,6 +48,8 @@ pub fn Api() -> Element {
                         tr { td { "rigid_body_*" } td { { FFI_RIGID_BODY } } td { { t!("api-row-rigid") } } }
                         tr { td { "collider_*" } td { { FFI_COLLIDER } } td { { t!("api-row-collider") } } }
                         tr { td { "query_*" } td { { FFI_QUERY } } td { { t!("api-row-query") } } }
+                        tr { td { "disaster_*" } td { { FFI_DISASTER } } td { { t!("api-row-disaster") } } }
+                        tr { td { "volcano_*" } td { { FFI_VOLCANO } } td { { t!("api-row-volcano") } } }
                     }
                 }
             }

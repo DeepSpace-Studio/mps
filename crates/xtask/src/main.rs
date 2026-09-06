@@ -409,6 +409,8 @@ fn dump_metrics(workspace_root: &Path) -> Result<String, String> {
     let ffi_collider = count_core_ffi_prefix(workspace_root, "collider");
     let ffi_query = count_core_ffi_prefix(workspace_root, "query");
     let ffi_soft_body = count_core_ffi_prefix(workspace_root, "soft_body");
+    let ffi_disaster = count_core_ffi_prefix(workspace_root, "disaster");
+    let ffi_volcano = count_core_ffi_prefix(workspace_root, "volcano");
     let jni_soft_body = count_soft_body_jni(workspace_root);
     let soft_body_tests = count_soft_body_tests(workspace_root);
     let moon_count = count_moons(workspace_root);
@@ -454,6 +456,10 @@ fn dump_metrics(workspace_root: &Path) -> Result<String, String> {
          pub const FFI_QUERY: &str = \"{ffi_query}\";\n\
          /// `pub extern \"C\" fn soft_body_*` declarations in mps-core/rapier.\n\
          pub const FFI_SOFT_BODY: &str = \"{ffi_soft_body}\";\n\
+         /// `pub extern \"C\" fn disaster_*` declarations in mps-core/rapier.\n\
+         pub const FFI_DISASTER: &str = \"{ffi_disaster}\";\n\
+         /// `pub extern \"C\" fn volcano_*` declarations in mps-core/rapier.\n\
+         pub const FFI_VOLCANO: &str = \"{ffi_volcano}\";\n\
          /// `jni!` entries with a `softBody*` method name in mps-jni.\n\
          pub const JNI_SOFT_BODY: &str = \"{jni_soft_body}\";\n\
          /// `#[test]` functions whose name contains `soft_body` in mps-test.\n\
@@ -472,7 +478,7 @@ pub const MOON_COUNT: &str = \"{}\";\n",
     std::fs::write(&out_path, &body).map_err(|e| format!("write {}: {e}", out_path.display()))?;
 
     Ok(format!(
-        "xtask: wrote {out}\n  VERSION           = {version}\n  TEST_COUNT       = {tests}\n  JNI_METHOD_COUNT = {jni_methods}\n  CORE_FFI_COUNT   = {core_ffi}\n  FORMULA_MODULE_COUNT = {formula_modules}\n  CELESTIAL_COUNT  = {celestial}\n  GRAVITY_MODEL_COUNT = {gravity_models}\n  INTEGRATOR_COUNT = {integrators}\n  FFI_WORLD        = {ffi_world}\n  FFI_RIGID_BODY   = {ffi_rigid_body}\n  FFI_COLLIDER     = {ffi_collider}\n  FFI_QUERY        = {ffi_query}\n  FFI_SOFT_BODY    = {ffi_soft_body}\n  JNI_SOFT_BODY    = {jni_soft_body}\n  TEST_SOFT_BODY   = {soft_body_tests}",
+        "xtask: wrote {out}\n  VERSION           = {version}\n  TEST_COUNT       = {tests}\n  JNI_METHOD_COUNT = {jni_methods}\n  CORE_FFI_COUNT   = {core_ffi}\n  FORMULA_MODULE_COUNT = {formula_modules}\n  CELESTIAL_COUNT  = {celestial}\n  GRAVITY_MODEL_COUNT = {gravity_models}\n  INTEGRATOR_COUNT = {integrators}\n  FFI_WORLD        = {ffi_world}\n  FFI_RIGID_BODY   = {ffi_rigid_body}\n  FFI_COLLIDER     = {ffi_collider}\n  FFI_QUERY        = {ffi_query}\n  FFI_SOFT_BODY    = {ffi_soft_body}\n  FFI_DISASTER     = {ffi_disaster}\n  FFI_VOLCANO      = {ffi_volcano}\n  JNI_SOFT_BODY    = {jni_soft_body}\n  TEST_SOFT_BODY   = {soft_body_tests}",
         out = out_path.display()
     ))
 }
