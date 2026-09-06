@@ -2538,6 +2538,153 @@ uint64_t world_get_cross_validate_last_divergence(const struct WorldHandle *worl
 struct CrossValidateGravityConfig world_cross_validate_default_config(void);
 
 /**
+ * Register a tropical cyclone (typhoon / hurricane — the same model covers
+ * both regional names; use `spin = -1` for the southern hemisphere).
+ *
+ * `inflow_fraction` / `height_exponent` / `reference_height` may be 0 to use
+ * the model defaults (0.15 / 0.11 / 10 m). Returns `ERR_OK` and writes the
+ * stable source id to `out_id` (when non-null).
+ *
+ * # Safety
+ *
+ * `world` must be a valid, live world pointer; `out_id`, when non-null, must
+ * be valid for a single `u32` write.
+ */
+uint8_t disaster_add_typhoon(struct WorldHandle *world,
+                             Vec3 center,
+                             double max_wind,
+                             double radius_max_wind,
+                             Vec3 translation,
+                             double spin,
+                             double inflow_fraction,
+                             double height_exponent,
+                             double reference_height,
+                             uint32_t *out_id);
+
+/**
+ * Register a tornado on a vertical axis through `base`.
+ *
+ * Returns `ERR_OK` and writes the stable source id to `out_id` (when
+ * non-null).
+ *
+ * # Safety
+ *
+ * `world` must be a valid, live world pointer; `out_id`, when non-null, must
+ * be valid for a single `u32` write.
+ */
+uint8_t disaster_add_tornado(struct WorldHandle *world,
+                             Vec3 base,
+                             double max_wind,
+                             double core_radius,
+                             double top_height,
+                             Vec3 translation,
+                             double spin,
+                             double updraft_fraction,
+                             uint32_t *out_id);
+
+/**
+ * Register a hailstorm cell: hailstones rain down inside a horizontal disc
+ * of `radius` around `center`. `intensity` is the expected number of
+ * impacts per m² of reference area per second; `disaster_apply_forces`
+ * converts this into capture impulses on dynamic bodies inside the cell.
+ *
+ * # Safety
+ *
+ * `world` must be a valid, live world pointer; `out_id`, when non-null, must
+ * be valid for a single `u32` write.
+ */
+uint8_t disaster_add_hail(struct WorldHandle *world,
+                          Vec3 center,
+                          double radius,
+                          double intensity,
+                          double hail_radius,
+                          uint32_t *out_id);
+
+/**
+ * Remove a disaster source by id (returns `ERR_NOT_FOUND` for a stale id).
+ *
+ * # Safety
+ *
+ * `world` must be a valid, live world pointer.
+ */
+uint8_t disaster_remove(struct WorldHandle *world, uint32_t id);
+
+/**
+ * Remove every disaster source from the world.
+ *
+ * # Safety
+ *
+ * `world` must be a valid, live world pointer.
+ */
+uint8_t disaster_clear(struct WorldHandle *world);
+
+/**
+ * Advance every disaster by `dt` seconds: storm centres translate with their
+ * storm motion, hail RNG clocks tick. Call once per frame before
+ * `disaster_apply_forces`.
+ *
+ * # Safety
+ *
+ * `world` must be a valid, live world pointer.
+ */
+uint8_t disaster_advance(struct WorldHandle *world, double dt);
+
+/**
+ * Sample the combined wind field (m/s) of every registered vortex-type
+ * disaster (typhoons + tornadoes; hail contributes none) at `point`.
+ *
+ * # Safety
+ *
+ * `world` must be a valid, live world pointer; `out_wind` must be valid for
+ * a single `Vec3` write.
+ */
+uint8_t disaster_sample_wind(struct WorldHandle *world, Vec3 point, Vec3 *out_wind);
+
+/**
+ * Sample the summed cyclostrophic pressure deficit (Pa) of all vortex
+ * disasters at `point` (core pressure drop; 0 outside their reach).
+ *
+ * # Safety
+ *
+ * `world` must be a valid, live world pointer; `out_drop` must be valid for
+ * a single `f64` write.
+ */
+uint8_t disaster_sample_pressure_drop(struct WorldHandle *world,
+                                      Vec3 point,
+                                      double air_density,
+                                      double *out_drop);
+
+/**
+ * Apply the combined disaster field to every dynamic rigid body:
+ *
+ * * **wind drag** — for each typhoon/tornado, `F = ½ ρ C_d A |v_rel| v_rel`
+ *   from the wind sampled at the body centre of mass;
+ * * **hail impacts** — for each hail cell containing the body, a
+ *   deterministic (splitmix64) number of perfectly-inelastic capture
+ *   impulses `m_hail · v_terminal`, directed mostly downwards with a small
+ *   lateral scatter; `intensity · reference_area · dt` is the expected
+ *   impact count. The accumulated impulse is delivered as an equivalent
+ *   force over the frame so it flows through the normal step integration.
+ *
+ * `air_density` may be 0 to use the ISA sea-level default (1.225 kg/m³).
+ * Writes the number of bodies that received wind force and the total number
+ * of hail impulses to the optional counters.
+ *
+ * # Safety
+ *
+ * `world` must be a valid, live world pointer; the counter pointers, when
+ * non-null, must be valid for a single `u32` write each.
+ */
+uint8_t disaster_apply_forces(struct WorldHandle *world,
+                              double air_density,
+                              double drag_coefficient,
+                              double reference_area,
+                              double dt,
+                              Bool wake_up,
+                              uint32_t *out_body_count,
+                              uint32_t *out_impact_count);
+
+/**
  * Create a k-DOP collider builder from a point cloud.
  *
  * # Safety

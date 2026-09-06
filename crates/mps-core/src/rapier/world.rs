@@ -191,6 +191,9 @@ pub struct PhysicsWorld {
     /// Mirrors the registered `TerrainGravity` force law so the character
     /// controller can sample local gravity per-frame without re-parsing the law.
     pub(crate) terrain_gravity_source: Option<TerrainGravitySource>,
+    /// Natural-disaster sources (typhoon / tornado / hailstorm) driving the
+    /// `disaster_*` FFI. Keyed by a stable id assigned at creation.
+    pub(crate) disasters: IdRegistry<crate::rapier::disasters::Disaster>,
     pub(crate) shared_arena: Option<Box<crate::rapier::shared_arena::SharedPhysicsArena>>,
     /// Per-collider voxel source grid for in-place voxel edits. Keyed by the
     /// `ColliderHandleRaw` returned at insert time; populated only for
@@ -255,6 +258,7 @@ impl PhysicsWorld {
             query_lock: parking_lot::RwLock::new(()),
             force_registry: ForceRegistry::new(),
             terrain_gravity_source: None,
+            disasters: IdRegistry::new(),
             shared_arena: None,
             voxel_grids: std::collections::HashMap::new(),
             buffers: FrameWorkBuffers::default(),

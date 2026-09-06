@@ -43,6 +43,7 @@
 ## 物理域扩展
 
 - [aerodynamics.md](mps-core/aerodynamics.md) — `aerodynamics.rs`：气动面/体素网格施力 `aero_*` 入口。
+- [disasters.md](mps-core/disasters.md) — `disasters.rs`：自然灾害（台风/龙卷风/冰雹）场模拟 `disaster_*` 入口。
 - [soft_body.md](mps-core/soft_body.md) — `soft_body.rs`：软体 FFI 主模块（骨骼链 + 点质量体 87 个入口、Phase 5f 碰撞代理、蒙皮、撕裂/细分/存档）。
 - [character_body.md](mps-core/character_body.md) — `character_body.rs`：角色体（第三种体，运动学 KCC 驱动，`character_body_*` 入口）。
 - [cloth.md](mps-core/cloth.md) — `cloth.rs`：布料体（矩形网格 + 结构/剪切/弯曲三族弹簧，`soft_cloth_*` 入口）。

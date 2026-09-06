@@ -11,6 +11,7 @@ pub mod chaos;
 pub mod continuum;
 pub mod control_theory;
 pub mod cosmology;
+pub mod disasters;
 pub mod disciplines;
 pub mod electromagnetism;
 pub mod error;

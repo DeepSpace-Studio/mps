@@ -10,6 +10,7 @@ pub mod cosmos {
     pub mod orbit;
     pub mod orbit_diagnostics;
     pub mod perturbation;
+    pub mod radio;
     pub mod world;
 }
 
@@ -37,6 +38,7 @@ pub mod rapier {
     pub mod cosmology;
     pub mod crbtree;
     pub mod cross_validate;
+    pub mod disasters;
     pub mod dop;
     pub mod electromagnetism;
     pub mod emag;

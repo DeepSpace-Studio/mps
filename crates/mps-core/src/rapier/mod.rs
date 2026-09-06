@@ -21,6 +21,7 @@ pub mod character_body;
 pub mod controller;
 pub mod crbtree;
 pub mod cross_validate;
+pub mod disasters;
 pub mod dop;
 pub mod sensor;
 pub mod vehicle;
