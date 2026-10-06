@@ -96,7 +96,7 @@ rapier3d-f64 ← 只有 mps-core 与 mps-cosmos
 | 文件 | 生成命令 | 可否手改 |
 | --- | --- | --- |
 | `crates/mps-core/include/rigid_body.h` | 构建 `mps-core`（cbindgen） | 否。Linux CI 会 diff |
-| `crates/mps-cosmos/include/cosmos.h` | 构建 `mps-cosmos` | 否。CI 目前不 diff 它，仍然不许手改 |
+| `crates/mps-cosmos/include/cosmos.h` | 构建 `mps-cosmos`（cbindgen） | 否。Linux CI 会 diff |
 | `crates/mps-web/src/metrics.rs` | `cargo run -p xtask -- dump-metrics` | 否。守门 `verify_metrics_sync` |
 | xtask `gen-java` 输出 | `cargo run -p xtask -- gen-java [dir]` | 否 |
 

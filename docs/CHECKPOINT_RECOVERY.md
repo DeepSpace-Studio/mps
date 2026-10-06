@@ -16,7 +16,7 @@
 | 若你改了 | 必须再产生 | 怎么确认没漂 |
 | --- | --- | --- |
 | `mps-core` 里 cbindgen 能看见的项 | `crates/mps-core/include/rigid_body.h` | 重新构建后 `git diff` 该文件；Linux CI 会失败如果漏提交 |
-| `mps-cosmos` 里 cbindgen 能看见的项 | `crates/mps-cosmos/include/cosmos.h` | 重新构建后自己 `git diff`。CI **还不会** 检查这个文件 |
+| `mps-cosmos` 里 cbindgen 能看见的项 | `crates/mps-cosmos/include/cosmos.h` | 与上一行同一条 Linux CI diff |
 | 测试数量、`jni!` / `jni_e_c!`、`pub extern "C" fn` | `crates/mps-web/src/metrics.rs` | `cargo run -p xtask -- dump-metrics`，然后 `cargo test -p mps-test verify_metrics` |
 | `#[java_struct]` / `#[java_enum]` | `gen-java` 的输出目录 | 输出头有 “Do NOT edit by hand” |
 | `mps-core` / `cosmos` / `formula` 的子模块增删改名 | `mps-test` 里同名镜像 | `cargo test -p mps-test verify_module_mirror` |

@@ -10,6 +10,7 @@
 - 公式 / 通用世界 / 太空世界三层，太空世界不进入 `mps-core`。
 - 体家族（刚体、软体、布料、绳、气囊、颗粒、铰接、角色、传感器、车辆、伺服）各有模块和测试镜像。
 - 错误码双侧字面声明、模块镜像、metrics、arena ABI、版本常量，都有守门测试。
+- `rigid_body.h` 与 `cosmos.h` 都由 cbindgen 生成；Linux CI 在 release 构建后 diff 这两份。
 - 文档站是 Dioxus 0.7 单页 SSR，计数由 xtask 生成。
 - 默认碰撞体策略、刚体中心 BVH、`world_step` 性能矩阵已有专题文档和测试入口。
 
@@ -18,9 +19,8 @@
 按「不做就会继续伤到边界」排序，不是排期。
 
 1. **数值域迁移没有铺满。** `FormulaError` 只覆盖 [formula-numeric-domains.md](formula-numeric-domains.md) 里列出的 `_checked` API。其余公式仍是旧的直接返回。新公式走 checked 路径；旧函数只有在不改 C 签名和失败哨兵的前提下才加 checked 变体。
-2. **`cosmos.h` 没有进 CI diff。** `rigid_body.h` 在 Linux job 里 `git diff --exit-code`。`cosmos.h` 同样是 cbindgen 产物，手改或漏提交现在不会红。补上同样的检查，而不是改用别的生成器。
-3. **`anvilkit-bridge` 的测试编译是坏的。** `crates/mps-test/src/rapier/anvilkit.rs` 在 `--all-features` 下有既存错误。默认 CI 不编它。要么修到 feature 自己能 `cargo test -p mps-test --features anvilkit-bridge`，要么在 ADR 里写明这个桥冻结；不要把它放进 `default`。
-4. **Java 声明在仓库外。** `world-collision-mode.md` 仍要求宿主手工补 JNI 声明。`xtask gen-java` 只覆盖带 `#[java_struct]` / `#[java_enum]` 的值类型。JNI 方法清单没有生成进本仓库。在边界稳定之前，不把宿主工程并进来。
+2. **`anvilkit-bridge` 的测试编译是坏的。** `crates/mps-test/src/rapier/anvilkit.rs` 在 `--all-features` 下有既存错误。默认 CI 不编它。要么修到 feature 自己能 `cargo test -p mps-test --features anvilkit-bridge`，要么在 ADR 里写明这个桥冻结；不要把它放进 `default`。
+3. **Java 声明在仓库外。** `world-collision-mode.md` 仍要求宿主手工补 JNI 声明。`xtask gen-java` 只覆盖带 `#[java_struct]` / `#[java_enum]` 的值类型。JNI 方法清单没有生成进本仓库。在边界稳定之前，不把宿主工程并进来。
 
 ## 明确不做
 

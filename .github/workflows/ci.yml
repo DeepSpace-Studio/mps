@@ -59,12 +59,12 @@ jobs:
       - name: Build release
         run: cargo build --release
 
-      # cbindgen is pinned in Cargo.lock, so the generated header must be reproducible.
+      # cbindgen is pinned in Cargo.lock, so both generated headers must be reproducible.
       # Skip on Windows: git autocrlf could report spurious line-ending diffs.
-      - name: Check generated C header is up to date
+      - name: Check generated C headers are up to date
         if: matrix.os == 'ubuntu-latest'
         run: |
-          git diff --exit-code crates/mps-core/include/rigid_body.h
+          git diff --exit-code -- crates/mps-core/include/rigid_body.h crates/mps-cosmos/include/cosmos.h
 
   # ==========================================================================
   # Web audit: i18n key parity, anchor integrity, stat-num hygiene

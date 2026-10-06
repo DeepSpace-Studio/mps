@@ -43,7 +43,7 @@
 - 每个 `extern "C"` 入口用 `ffi_guard`（`catch_unwind`）。release profile 的 `panic` 必须保持 `"unwind"`。
 - 句柄：世界和 builder 是不透明指针；刚体、碰撞体、关节是 packed `u64`。不要把 Rapier 类型送过 ABI。
 - 新增 `mps-core` / `mps-cosmos` / `mps-formula` 子模块时，同步加 `mps-test` 镜像文件。守门在 `verify_module_mirror`。
-- 改了会进入头文件的 FFI 后要重新构建，并提交生成的 `rigid_body.h`。CI 只在 Linux 上 `git diff --exit-code` 这一份；`cosmos.h` 同样是生成物，不要手改。
+- 改了会进入头文件的 FFI 后要重新构建，并提交生成的 `rigid_body.h` 和 `cosmos.h`。CI 只在 Linux 上对这两份做 `git diff --exit-code`，不要手改。
 - 改了测试、JNI 或 core FFI 数量后跑 `cargo run -p xtask -- dump-metrics`，提交 `crates/mps-web/src/metrics.rs`。
 - `default = []`。`anvilkit-bridge`、`relative-force`、`profiler` 不进默认集，也不要为了“顺便编译过”去开 `--all-features`。
 - 格式：`rustfmt.toml`（edition 2024，宽 100，4 空格）。文档注释里的缩写跟 `clippy.toml` 的 `doc-valid-idents` 一致，不要展开。

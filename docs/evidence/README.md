@@ -13,4 +13,4 @@
 | [world-step.md](world-step.md) | 步进性能矩阵的命令和 CSV |
 | [numeric-domains.md](numeric-domains.md) | 已迁移的 checked 公式 |
 
-CI 本身（fmt、clippy、`cargo test`、release 构建、Linux 上的 `rigid_body.h` diff、`web_audit.py`）记在 `.github/workflows/ci.yml`，不在这里重复步骤。
+CI 本身（fmt、clippy、`cargo test`、release 构建、Linux 上的 `rigid_body.h` 与 `cosmos.h` diff、`web_audit.py`）记在 `.github/workflows/ci.yml`，不在这里重复步骤。
