@@ -2,6 +2,8 @@
 
 `mps-core` 是 `mps_rigid_body` 的物理世界 + Rapier 封装 + C ABI crate（`crates/mps-core`）。本文档按子模块分区，链接到 `docs/mps-core/` 下每个源文件的作用分析。所有分析基于真实源码。
 
+分层、句柄和不许跨越的边界不在这里重复，见 [ARCHITECTURE.md](ARCHITECTURE.md) 与 [BOUNDARY.md](BOUNDARY.md)。文档索引在 [README.md](README.md)。
+
 源码根: `crates/mps-core/src/`。crate 入口 `lib.rs` 把 `rapier` 模块整体导出。
 
 ---

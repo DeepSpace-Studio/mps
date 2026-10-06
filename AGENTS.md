@@ -1,50 +1,71 @@
-# AGENTS.md — mps_rigid_body
+# AGENTS.md
 
-`mps_rigid_body` 是一个 Rust workspace,把 `rapier3d-f64`(f64 精度)封装成单一原生 `cdylib`,供外部项目通过 JNI(`mps-jni`)和 Foreign Function & Memory API(`mps-ffm`)调用。同时附带一个纯 Rust 物理/航天公式库(`mps-formula`)和一个 Dioxus 文档站(`mps-web`)。Workspace = 10 个 crate,edition 2024,版本 0.1.4。
+给在本仓库里改代码的代理。人读的简要在 [README.md](README.md)；约束的正文在 [docs/](docs/README.md)。
+
+`mps`（Motion Physics System）是 Rust workspace，版本 **0.1.4**，edition **2024**。它把 path 依赖的 `rapier3d-f64` 包进稳定 C ABI，再由 JNI / FFM 给仓库外的 Java 宿主用。workspace 有 10 个 crate。`rapier/` 是独立 workspace，根 `Cargo.toml` 的 `exclude` 已经把它和 `docs/` 排除在外。
+
+## 先读这些
+
+| 文件 | 什么时候读 |
+| --- | --- |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 要动 crate 边界、世界步进、句柄或 FFI 面 |
+| [docs/BOUNDARY.md](docs/BOUNDARY.md) | 要加依赖、错误码、生成物、feature 或测试 |
+| [docs/adr/README.md](docs/adr/README.md) | 要改一条已经记下来的决定 |
+| [docs/evidence/README.md](docs/evidence/README.md) | 要宣称某条行为已被测试或基准钉住 |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | 要判断一件事是现在做还是先别做 |
+| [docs/CHECKPOINT_RECOVERY.md](docs/CHECKPOINT_RECOVERY.md) | 长任务中断后要接着做 |
+| [DESIGN.md](DESIGN.md) / [OPTIMIZATION.md](OPTIMIZATION.md) | 代码注释里的 `§N` 指向这里；章节号是守门测试的锚，不能改号 |
+
+`docs/mps-core/` 是 `mps-core` 每个源文件的导览，索引在 [docs/mps-core.md](docs/mps-core.md)。不要把那一套导览再复制进本文件。
 
 ## Crates
 
-- `mps-formula` — 纯计算,无 Rapier/WorldHandle 依赖。`rlib`。
-- `mps-core` — 物理世界 + Rapier 封装 + C ABI(`src/rapier/ffi/`)。`cdylib`+`rlib`。通过 cbindgen 生成 `include/rigid_body.h`(`build.rs` → `mps-build-common`)。每个源文件的作用分析见 [docs/mps-core.md](docs/mps-core.md)(逐一链接到 [docs/mps-core/](docs/mps-core/))。
-- `mps-cosmos` — 在 `mps-formula` 之上的轨道/飞行动力学。`rlib`。通过 cbindgen 生成 `include/cosmos.h`。
-- 体家族:刚体(`rigid_body`)、软体(`soft_body`)、流体 SPH(`fluid_sph`)、布料(`cloth`)、缆绳(`rope`)、气囊(`balloon`)、颗粒 DEM(`granular`)、铰接体(`articulation`)各有独立模块/FFI;体素挖掘可联动颗粒生成(`granular_link_voxel_dig`)。
-- `mps-jni` — JNI 绑定;lib 名 `mps_rigid_body`。`cdylib`+`rlib`。Java 加载的就是这个。
-- `mps-ffm` — Java 25 FFM 元数据/类型。
-- `mps-test` — 所有集成测试(1000+ 个 `#[test]`)都在这里,不在源 crate 中。
-- `mps-web` — Dioxus 0.7 文档站。`crates/mps-web/src/metrics.rs` 由 xtask 生成(见下)。
-- `mps-build-common` — `mps-core` + `mps-cosmos` 共用的 `run_cbindgen()` 辅助。
-- `xtask` — workspace 自动化;`dump-metrics` 重新生成 `mps-web/src/metrics.rs`。
+| Crate | 产物 | 职责 |
+| --- | --- | --- |
+| `mps-formula` | `rlib` | 纯公式。禁止 Rapier、`WorldHandle`、共享 arena |
+| `mps-core` | `cdylib` + `rlib` | 物理世界、体家族、查询、C ABI。头文件 `include/rigid_body.h` |
+| `mps-cosmos` | `rlib` | 独立太空世界。只用 `mps-formula`，不进 `mps-core` 的世界。头文件 `include/cosmos.h` |
+| `mps-jni` | `cdylib` + `rlib`，库名 `mps_rigid_body` | Java 实际加载的库 |
+| `mps-ffm` | `cdylib` + `rlib` | ABI 版本探针（`abi_version` / `abi_supports_*`） |
+| `mps-test` | lib（测试） | 全部集成测试。源 crate 里不放 `#[cfg(test)]` |
+| `mps-web` | bin | Dioxus 0.7 SSR 文档站。`src/metrics.rs` 由 xtask 生成 |
+| `mps-build-common` | `rlib` | `run_cbindgen()`，只给两个 `build.rs` 用 |
+| `mps-bindgen-macro` | proc-macro | `#[java_struct]` / `#[java_enum]` |
+| `xtask` | bin | `dump-metrics`、`gen-java` |
 
-## 开发环境
+依赖只能沿 `mps-formula → mps-core / mps-cosmos → mps-jni` 走。`mps-cosmos` 不得依赖 `mps-core`。
 
-Rust stable,本机用 GNU 工具链。构建前先 `source ~/.hermes_session_env.sh`(把 `~/.cargo/bin` + mingw64/bin 加入 PATH)。MSVC 工具链在此机无 `link.exe`;MSYS 的 `/usr/bin/link` 会覆盖 MSVC link.exe。
+## 改代码时必须守的
 
-## 构建与测试(从 CI `ci.yml` 核实)
+- 公式函数只做输入到输出。读刚体、施力、步进放在 `mps-core` 或 `mps-cosmos`。
+- C ABI 名用 `模块_动词`，snake_case。已发布的名字、参数、失败哨兵和 `_flag` 变体保持不变；要破坏就新开 ADR。
+- 错误码是 `u32`：`ERR_OK=0` … `ERR_INTERNAL=6`。`mps-formula` 与 `mps-core` **各自字面声明**（cbindgen 不认 `pub use`）。改一边必须改另一边。纯公式的数值域错误走 `FormulaError`，不写线程局部错误槽；FFI 边界再映射成 `ERR_*`。
+- 每个 `extern "C"` 入口用 `ffi_guard`（`catch_unwind`）。release profile 的 `panic` 必须保持 `"unwind"`。
+- 句柄：世界和 builder 是不透明指针；刚体、碰撞体、关节是 packed `u64`。不要把 Rapier 类型送过 ABI。
+- 新增 `mps-core` / `mps-cosmos` / `mps-formula` 子模块时，同步加 `mps-test` 镜像文件。守门在 `verify_module_mirror`。
+- 改了会进入头文件的 FFI 后要重新构建，并提交生成的 `rigid_body.h`。CI 只在 Linux 上 `git diff --exit-code` 这一份；`cosmos.h` 同样是生成物，不要手改。
+- 改了测试、JNI 或 core FFI 数量后跑 `cargo run -p xtask -- dump-metrics`，提交 `crates/mps-web/src/metrics.rs`。
+- `default = []`。`anvilkit-bridge`、`relative-force`、`profiler` 不进默认集，也不要为了“顺便编译过”去开 `--all-features`。
+- 格式：`rustfmt.toml`（edition 2024，宽 100，4 空格）。文档注释里的缩写跟 `clippy.toml` 的 `doc-valid-idents` 一致，不要展开。
 
-```
+## 命令
+
+```text
 cargo fmt --all --check
 cargo clippy --all-targets -- -D warnings
-cargo test                            # 默认 features;全部用例在 mps-test
-cargo build --release                 # 整个 workspace
-cargo build --release -p mps-jni      # Java 加载的 .dll/.so
-cargo run -p xtask -- dump-metrics    # 新增 test/jni/ffi 后重新生成 metrics.rs
+cargo test                              # 默认 features；用例在 mps-test
+cargo test -p mps-test <名称>           # 不要无目的地跑完全部
+cargo build --release -p mps-jni        # Java 加载的库
+cargo run -p xtask -- dump-metrics
 ```
 
-Feature flags:`default = []`。`anvilkit-bridge`(依赖 `anvilkit`+`bevy_ecs`)和 `relative-force` 默认关闭。CI 只跑默认 features。`--all-features`(`anvilkit-bridge`)目前在 `crates/mps-test/src/rapier/anvilkit.rs` 有既存编译错误,与近期改动无关——除非专门修这个桥接,否则避开。
+CI（`.github/workflows/ci.yml`）在 Ubuntu / Windows / macOS 上跑 fmt、clippy、`cargo test`、`cargo build --release`，外加 Linux 头文件 diff 和 `python3 crates/mps-web/scripts/web_audit.py`。
 
-## 约定(从代码观察到)
+本机 Windows 用 GNU 工具链（`stable-x86_64-pc-windows-gnu`）。MSVC 目标在 `.cargo/config.toml` 里有 rustflags，但本机没有可用的 `link.exe` 时不要切过去。
 
-- FFI:`pub extern "C" fn <模块>_<动词>(...)` snake_case,如 `aero_apply_surfaces`。很多动词有 `_flag` 变体(多一个布尔模式参数)。大型/可选库用 `#[cfg(feature = "anvilkit-bridge")]` 门控,绝不进 `default`。
-- C ABI 错误处理:返回 `u32` 状态码,取自 `error.rs` 常量——`ERR_OK=0`、`ERR_NULL_POINTER=1`、`ERR_INVALID_ARGUMENT=2`、`ERR_NOT_FOUND=3`、`ERR_CAPACITY=4`、`ERR_UNSUPPORTED=5`、`ERR_INTERNAL=6`。JNI 层用 `catch_unwind`+`AssertUnwindSafe` 包住函数体,在边界处兜住 panic。
-- Handle:所有权用不透明 `*mut WorldHandle`/builder 指针;Rapier 引用用 packed `u64`(`ColliderHandleRaw`、`RigidBodyHandleRaw`、`JointBuilderHandle`)。JNI 经 `mps-jni/src/lib.rs` 中的 `to_jlong`/`m`/`cp`/`pm` 辅助函数转换。
-- 测试:每个 crate 的测试都放在 `mps-test/src/`,与源码布局对应(`src/rapier/collider.rs` ↔ `mps-test/src/rapier/collider.rs`)。模式:`#[cfg(test)] mod tests { ... }` 里 `#[test] fn <动词>_<场景>`。源 crate 内不放内联 `#[cfg(test)]`。
-- 公式分层:`mps-formula` = 纯函数(入→出,无 WorldHandle);`mps-core` = C ABI 封装,读取刚体状态、调用公式、施力。保持公式函数不触碰 Rapier 状态。
-- 格式化:`rustfmt.toml`——edition 2024、max_width 100、4 空格、soft tabs。`clippy.toml` 抬高了阈值(too-many-args=10、cognitive-complexity=50)以适配 FFI 表面;`doc-valid-idents` 列出项目所用的缩写(FFI、AABB、OBB、SSV、kDOP 等)——文档注释中照原样使用。
+## 不要做
 
-## 易踩的坑
-
-- **生成头文件**:`crates/mps-core/include/rigid_body.h` 和 `crates/mps-cosmos/include/cosmos.h` 是 cbindgen 输出(build.rs 生成)。CI 会校验它们已提交且为最新(`git diff --exit-code`,仅 Linux)。改源码→重新构建→提交重新生成的头文件——切勿手改。
-- **生成 metrics**:`crates/mps-web/src/metrics.rs` 是 xtask 输出(TEST_COUNT/JNI_METHOD_COUNT/CORE_FFI_COUNT)。文件头注明 "Do NOT edit by hand"——新增 test/jni/ffi 后跑 `cargo run -p xtask -- dump-metrics`。
-- **分层规则**:不要给 `mps-formula` 加 Rapier/WorldHandle 依赖——它必须保持纯净以便复用与测试;Rapier 交互一律放 `mps-core`。
-- **Windows 工具链**:本机必须用 `stable-x86_64-pc-windows-gnu`。Commit message 是纯日期戳(如 `2026.8.11.20.8`)或简短描述——无 Conventional Commits 前缀。
-- **测试很重**:1000+ 个测试,冷启动 `cargo check --workspace` 约 2–3 分钟。跑单个用例用 `cargo test -p mps-test <名称>`。
+- 不要把 `rapier/` 并进本 workspace，也不要改它来迁就上层，除非任务明确是修 vendored fork。
+- 不要手改 `include/*.h`、`metrics.rs`、xtask 生成的 Java。
+- 不要静默 `error_consistency`、`verify_module_mirror`、`verify_metrics_sync`、`arena_compat`、`version_consistency`。
+- 不要把提交信息写成 Conventional Commits。本仓库用日期戳（如 `2026.8.11.20.8`）或一句短描述。

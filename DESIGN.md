@@ -1,6 +1,8 @@
 # DESIGN.md — 设计规则索引
 
 > **来源说明**：本文件的原始版本不在本仓库中，但 `crates/mps-test` 的守门测试按章节号引用它（`DESIGN.md §N`）。本文件是对这些引用的**还原**：只收录代码中被实际引用、且可由代码验证的规则。原始正文（总体架构叙述等）已不可考。新增引用时请同步维护本表；工程优化章节见 [OPTIMIZATION.md](OPTIMIZATION.md)。
+>
+> 架构、边界和不可逆决定的正文在 [docs/](docs/README.md)（[ARCHITECTURE.md](docs/ARCHITECTURE.md)、[BOUNDARY.md](docs/BOUNDARY.md)、[adr/](docs/adr/README.md)）。本文件只保留章节锚，不要把叙述搬回来，也不要改已有 `§` 编号。
 
 ### §3.2 — `ERR_*` 错误码双侧独立声明
 `ERR_OK` / `ERR_NULL_POINTER` / `ERR_INVALID_ARGUMENT` / `ERR_NOT_FOUND` / `ERR_CAPACITY` / `ERR_UNSUPPORTED` / `ERR_INTERNAL` 在 `mps-formula::error` 与 `mps_core::rapier::error` **各自独立声明**，且数值必须一致。

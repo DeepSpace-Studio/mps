@@ -1,149 +1,52 @@
 # mps — Motion Physics System
 
-> **mps** is the project name. It is a double entendre:
-> - **m/s** — meters per second, the SI unit of velocity (the quantity this engine ultimately governs);
-> - **M**otion **P**hysics **S**ystem — the engine itself.
->
-> The GitHub repository is named **`rigid-body`** (`Polari-Stars-MC/rigid-body`); within docs and code we refer to the project as **mps**.
+**mps** 既是米每秒（m/s），也是 Motion Physics System。仓库名是 `rigid-body`；文档和代码里的项目名是 **mps**。
 
-`mps` is a Rust-native physics engine built on [`rapier3d-f64`](https://rapier.rs) (double-precision). It wraps Rapier's world state, bodies, colliders, events, and query pipelines behind a single stable native `cdylib` with a C ABI, and keeps all Rapier-owned state inside Rust.
-
-External consumers drive the simulation through opaque world/builder pointers and packed `u64` handles for rigid bodies, colliders, and joints — no Rapier types leak across the boundary.
+它是一套 Rust workspace（0.1.4，edition 2024），用双精度 [`rapier3d-f64`](https://rapier.rs) 做刚体后端，把世界、体、碰撞、查询和事件收在稳定的 C ABI 后面。Java 宿主加载的是 `mps-jni` 产出的 `mps_rigid_body`；Rapier 类型不过边界。公式层没有物理世界，可以单独复用。
 
 ```text
-mps (Motion Physics System)
- └─ Rust workspace (rigid-body repo)
-      ├─ mps-formula — 37 pure physics/engineering formula modules (no Rapier)
-      ├─ mps-core     — physics world + Rapier wrapper + C ABI surface
-      ├─ mps-cosmos   — astrodynamics / flight-dynamics on top of mps-formula
-      ├─ mps-jni      — optional Java JNI bindings (consumes the C ABI)
-      ├─ mps-ffm      — optional Java 25 FFM metadata (consumes the C ABI)
-      ├─ mps-web      — Dioxus 0.7 documentation site (SSR)
-      ├─ mps-test     — integration test suite
-      ├─ mps-build-common — shared cbindgen helper
-      ├─ mps-bindgen-macro — #[java_struct]/#[java_enum] → Java codegen
-      └─ xtask        — workspace automation (metrics, java codegen)
+mps-formula   纯公式（无 Rapier）
+mps-core      通用物理世界 + C ABI（rigid_body.h）
+mps-cosmos    独立太空世界 + C ABI（cosmos.h），只依赖公式
+mps-jni       Java 加载的 cdylib
+mps-ffm       ABI 版本探针
+mps-web       Dioxus 文档站
 ```
 
-## Why f64
+`rapier/` 是 vendored fork，自己的 workspace，通过 path 依赖进来。
 
-Rapier is compiled with `rapier3d-f64` (64-bit floats) rather than the default f32 build. This doubles memory and slows some ops but preserves precision for long-duration orbital, aerospace, and multi-body simulations where f32 drift is unacceptable.
+## 为什么是 f64
 
-## Repository Layout
+长时轨道、航天和多体里，f32 的漂移不可接受。代价是内存和一部分算子更贵。这是默认，不是 feature。
+
+## 两层
+
+| 层 | 做什么 | 不做什么 |
+| --- | --- | --- |
+| `mps-formula` | 数值进、数值出 | 不碰 `WorldHandle`、刚体、Rapier |
+| `mps-core` / `mps-cosmos` | 读状态、调用公式、施力、步进 | 不把求解器类型送过 ABI |
+
+已发布的 C 函数名、参数、错误码和 `_flag` 变体保持兼容。错误码是 `0..6` 的 `ERR_*`；panic 在 FFI 边界收成 `ERR_INTERNAL`。
+
+## 布局
 
 ```text
-crates/
-  mps-core/      physics world, bodies, colliders, queries, events, forces, voxel
-  mps-formula/   37 pure physics/engineering formula modules
-  mps-cosmos/    astrodynamics & flight dynamics
-  mps-jni/       optional Java JNI bindings
-  mps-ffm/       optional Java 25 FFM metadata
-  mps-web/       Dioxus documentation site
-  mps-test/      integration tests
-  mps-build-common/  cbindgen helper shared by mps-core + mps-cosmos
-  mps-bindgen-macro/ #[java_struct]/#[java_enum] → Java source generator
-  xtask/         workspace automation
-
-docs/            legacy docs — moved into crates/mps-web/
-rapier/          vendored rapier3d-f64 fork (separate workspace, path dependency)
+crates/     10 个 crate（公式、核心、太空、JNI、FFM、测试、文档站、构建辅助、宏、xtask）
+docs/       架构、边界、路线、ADR、证据、mps-core 源码导览
+rapier/     vendored rapier3d-f64（独立 workspace）
 ```
 
-## Formula Library (mps-formula)
+源码导览和设计约束从 [docs/README.md](docs/README.md) 进。给代理的操作约定在 [AGENTS.md](AGENTS.md)。
 
-The formula crate provides **37 modules** with 300+ pure Rust functions spanning physics, aerospace, and engineering. It has **zero dependency on Rapier or `WorldHandle`** — pure input→output computation, which keeps it trivially reusable and unit-testable.
-
-| Module | Functions | Domain |
-|--------|-----------|--------|
-| `spaceflight` | 88 | orbital mechanics, attitude control, thermal, propulsion, environment |
-| `material_mechanics` | 26 | elasticity, plasticity, fracture, fatigue, beam theory |
-| `nuclear` | 23 | decay, binding energy, fission/fusion, neutronics |
-| `relativity` | 23 | Lorentz, Schwarzschild, Kerr, ISCO, gravitational redshift |
-| `thermodynamics` | 23 | conduction, radiation, phase change, gas laws, cycles |
-| `quantum` | 20 | wave functions, tunneling, harmonic oscillator, hydrogen atom |
-| `astrophysics` | 19 | N-body, Barnes-Hut, FMM, Lane-Emden, Eddington, Hubble |
-| `fluid` | 18 | buoyancy/drag, SPH, Navier-Stokes, Bernoulli, turbulence |
-| `electromagnetism` | 16 | Lorentz, Faraday, Maxwell, Biot-Savart, Poynting, wave |
-| `aerodynamics` | 5 | surface force, voxel aero, force estimation |
-| `molecular` | 8 | Lennard-Jones, Coulomb, pair interaction |
-| `acoustics` | 7 | modal analysis, wave equation, resonance, spatialization |
-| `biomechanics` | 4 | Hill muscle model, joint constraints |
-| `celestial_data` | 1 | 10 solar system bodies (JPL DE441) |
-| `chaos` | 6 | Lorenz attractor, double pendulum, Lyapunov exponents |
-| `continuum` | 5 | FEM shape functions, strain/stress tensors |
-| `control_theory` | 7 | PID, state-space, MPC, LQR |
-| `gravitational_models` | 6 | spherical harmonics (EGM2008 8×8), ellipsoid, polyhedron |
-| `integrators` | 7 | Leapfrog, Yoshida 4, Forest-Ruth 8, post-Newtonian |
-| `physchem` | 4 | Gray-Scott reaction-diffusion, catalysis |
-| `plasma` | 7 | Debye shielding, Vlasov, PIC, MHD, magnetic reconnection |
-| `softbody` | 5 | XPBD constraints, hyperelastic constitutive models |
-| `superfluidity` | 4 | Gross-Pitaevskii, vortex lattice, quantized circulation |
-| `topology` | 3 | persistent homology, Betti numbers |
-| `trajectory` | 6 | 6DOF ballistic/glide trajectory, RK4 integration |
-| `transmission` | 3 | gear ratios, torque distribution |
-| `wave_optics` | 5 | Kirchhoff diffraction, Fresnel propagation, interference |
-| `disasters` | 11 | typhoon/hurricane Rankine vortex, tornado, hail ballistics, wind drag |
-| `volcano` | 7 | eruptive plume flow, thermal exposure, superheat melting, lava bombs |
-
-## Architecture: two layers
-
-Every physics capability follows a strict two-layer split so the math stays pure and the engine stays encapsulated:
-
-- **mps-formula** — pure computation. Takes values in, returns values out. No `WorldHandle`, no `RigidBody`, no Rapier state.
-- **mps-core** — C ABI surface + Rapier interaction. Reads body state, calls a formula, applies the resulting force/torque back into the world.
-
-All C ABI function names, parameters, error codes, and `_flag` variants are preserved for backward compatibility.
-
-## Native API Surface
-
-The C-compatible ABI lives in `crates/mps-core/src/rapier/ffi/`. Supported areas:
-
-- World creation, stepping, gravity, integration parameters, body snapshots.
-- Rigid body creation, insertion, pose/velocity mutation, forces, impulses, CCD, sleep/wakeup.
-- Collider creation, insertion, runtime material/group/event settings.
-- Air-drag and lift accumulation for surface samples, driven by Rapier rigid body motion.
-- Ray, point, AABB, OBB, sphere, shape-cast, and voxel-shaped queries.
-- Collision and contact-force event queues.
-- Joints and character controller.
-- Compact-tree and RTree spatial indexes.
-- Extended collider builders: capsule, SSV, ellipsoid, prism, cylinder, shell, kDOP, FDH, neural bounds.
-- Voxel collider construction from raw grids, AABB, and OBB.
-
-## Voxel Colliders
-
-Voxel colliders can be created from:
-
-- Raw occupancy grids: native memory or a `byte[]` buffer.
-- Axis-aligned bounding boxes: `collider_builder_create_voxel_aabb`.
-- Oriented bounding boxes: `collider_builder_create_voxel_obb`.
-
-Build modes are controlled by `VoxelColliderOptions`:
-
-- `Auto`: choose from voxel count and dynamic/static body usage.
-- `Cuboids`: one cuboid per solid voxel.
-- `GreedyCuboids`: merge adjacent solid voxels into larger cuboids.
-- `SurfaceMesh`: generate an exterior triangle mesh for large static voxel sets.
-
-`VoxelBuildStats` can be used before building to inspect cell count, solid count, selected mode, estimated parts, estimated vertices/triangles, and generated grid size.
-
-## Building & Testing
+## 构建
 
 ```powershell
-cargo fmt --all --check        # formatting gate (CI)
-cargo clippy --all-targets -- -D warnings   # lint gate (CI)
-cargo test                     # full integration suite (mps-test)
-cargo check --workspace        # full workspace type-check
-cargo build --release          # build everything
+cargo fmt --all --check
+cargo clippy --all-targets -- -D warnings
+cargo test
+cargo build --release -p mps-jni
 ```
 
-CI runs on Ubuntu, Windows, and macOS (`macos-latest`) via `.github/workflows/ci.yml`.
+CI 在 Ubuntu、Windows、macOS 上跑同一套默认 features。可选的 `anvilkit-bridge`、`relative-force`、`profiler` 默认关闭。
 
-## Documentation
-
-Online documentation lives in `crates/mps-web/` — a Rust SSR site built with Dioxus 0.7 + dioxus-i18n (Fluent), published at `https://Polari-Stars-MC.github.io/rigid-body/`.
-
-The `.github/workflows/pages.yml` workflow builds the site with `cargo build -p mps-web --release` (subscribing the Dioxus Router to the GitHub Pages base path via `DIOXUS_ASSET_ROOT`), launches the binary as a local SSR server, and exports each route to `_site/<path>/index.html` for GitHub Pages.
-
-**Forks:** the base path is derived from `${{ steps.configure-pages.outputs.base_path }}`, which auto-adapts to the fork's repository name — no hard-coded `/rigid-body` path in either the Rust code or the workflow. To deploy a fork:
-
-1. Enable Actions in the fork's **Settings → Actions → General**.
-2. Set **Settings → Pages → Source** to *GitHub Actions*.
+在线文档由 `crates/mps-web` 生成，发布到 <https://Polari-Stars-MC.github.io/rigid-body/>。站点基数来自 GitHub Pages 的 `base_path`，fork 不需要改硬编码路径。
